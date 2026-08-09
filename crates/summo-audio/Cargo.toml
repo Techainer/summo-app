@@ -1,5 +1,6 @@
 [package]
 name = "summo-audio"
+description = "Microphone and system-audio capture, resampling and framing"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,3 +9,15 @@ repository.workspace = true
 
 [dependencies]
 summo-core.workspace = true
+
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+parking_lot.workspace = true
+
+cpal.workspace = true
+rubato.workspace = true
+rtrb.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
