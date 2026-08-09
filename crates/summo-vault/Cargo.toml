@@ -1,5 +1,6 @@
 [package]
 name = "summo-vault"
+description = "The Markdown vault: meetings and notes as files the user owns"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,3 +9,13 @@ repository.workspace = true
 
 [dependencies]
 summo-core.workspace = true
+
+serde.workspace = true
+serde_yaml.workspace = true
+serde_json.workspace = true
+time.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true

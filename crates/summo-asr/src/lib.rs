@@ -22,6 +22,9 @@ pub mod hallucination;
 pub mod hybrid;
 pub mod session;
 
+#[cfg(feature = "sherpa")]
+pub mod sherpa;
+
 pub use decoder::{Decoder, Transcript};
 pub use hallucination::{HallucinationFilter, Verdict};
 pub use hybrid::HybridSession;

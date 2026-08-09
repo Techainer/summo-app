@@ -7,6 +7,12 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+# Real transcription: Silero VAD plus a Zipformer transducer. Both link native code, so the
+# default build stays a pure registry client.
+transcribe = ["dep:summo-asr", "dep:summo-vad", "dep:hound", "summo-asr/sherpa", "summo-vad/silero"]
+
 [[bin]]
 name = "summo"
 path = "src/main.rs"
@@ -14,6 +20,9 @@ path = "src/main.rs"
 [dependencies]
 summo-core.workspace = true
 summo-models.workspace = true
+summo-asr = { workspace = true, optional = true }
+summo-vad = { workspace = true, optional = true }
+hound = { workspace = true, optional = true }
 
 anyhow.workspace = true
 clap.workspace = true

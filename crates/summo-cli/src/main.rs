@@ -8,6 +8,9 @@ use clap::{Parser, Subcommand};
 use summo_core::{ModelId, paths::Paths};
 use summo_models::{Downloader, Manifest, ModelStore, Registry, RegistrySource, hw::HwProfile};
 
+#[cfg(feature = "transcribe")]
+mod transcribe;
+
 #[derive(Parser)]
 #[command(name = "summo", version, about)]
 struct Cli {
@@ -40,6 +43,26 @@ enum Command {
     /// Registry maintenance.
     #[command(subcommand)]
     Registry(RegistryCmd),
+
+    /// Transcribe a 16 kHz mono WAV with the full live pipeline.
+    #[cfg(feature = "transcribe")]
+    Transcribe {
+        audio: std::path::PathBuf,
+        /// Directory holding the transducer model files.
+        #[arg(long)]
+        model_dir: std::path::PathBuf,
+        /// Silero VAD ONNX file.
+        #[arg(long)]
+        vad: std::path::PathBuf,
+        #[arg(long, default_value_t = 4)]
+        threads: usize,
+        /// How often the open utterance is re-decoded for partial text.
+        #[arg(long, default_value_t = 150)]
+        partial_step_ms: u32,
+        /// Print partial text as it is produced.
+        #[arg(long)]
+        partials: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -79,6 +102,22 @@ async fn main() -> Result<()> {
         Command::Hw => show_hw(),
         Command::Registry(RegistryCmd::Check { dir }) => check_registry(&dir),
         Command::Registry(RegistryCmd::Ls { registry }) => list_registry(registry.as_deref()).await,
+        #[cfg(feature = "transcribe")]
+        Command::Transcribe {
+            audio,
+            model_dir,
+            vad,
+            threads,
+            partial_step_ms,
+            partials,
+        } => transcribe::run(&transcribe::Options {
+            audio,
+            model_dir,
+            vad_model: vad,
+            threads,
+            partial_step_ms,
+            show_partials: partials,
+        }),
     }
 }
 

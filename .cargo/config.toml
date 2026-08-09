@@ -1,0 +1,9 @@
+# sherpa-onnx ships as shared libraries that land next to the binary in the target directory.
+# Without an rpath the linker records only the file name, and the binary fails to start with
+# "libsherpa-onnx-c-api.so: cannot open shared object file" unless LD_LIBRARY_PATH is set by hand.
+# $ORIGIN resolves relative to the executable, which is also what the packaged app needs.
+[target.'cfg(target_os = "linux")']
+rustflags = ["-C", "link-arg=-Wl,-rpath,$ORIGIN"]
+
+[target.'cfg(target_os = "macos")']
+rustflags = ["-C", "link-arg=-Wl,-rpath,@executable_path"]

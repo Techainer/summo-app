@@ -90,6 +90,7 @@ hound = "3"
 symphonia = { version = "0.5", features = ["all-codecs"] }
 
 # --- ml runtime ---
+sherpa-rs = "0.6"
 ort = { version = "2.0.0-rc.10", default-features = false, features = ["std"] }
 # Must match the version `ort` links against, and must keep `std` on — `ort` uses
 # `ndarray::NdFloat`, which is gated behind it.

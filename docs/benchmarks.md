@@ -52,7 +52,49 @@ cargo run --release -p summo-bench --features silero -- vad \
 * Single machine, single thread. Numbers are for ranking backends, not for predicting a user's
   laptop; per-machine figures come from the autotune pass at install time.
 
-## Speech recognition
+## Speech recognition — end-to-end pipeline
 
-Not yet measured. Candidate list and the metrics to collect are in the implementation plan; the
-harness gains a `summo-bench asr` subcommand alongside the ASR runtimes.
+First real run of the whole chain: WAV → Silero VAD → `PseudoSession` re-decode loop →
+hallucination filter → transcript. Model is `gipformer-65M` (Zipformer RNN-T, INT8 ONNX, 73 MB) via
+sherpa-onnx, 4 threads, on the same Xeon.
+
+| Recording | Length | Segments | Decodes | Suppressed | Wall | RTF | Headroom |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| meeting capture (raw mic) | 34.0 s | 9 | 87 | 0 | 3.62 s | 0.107 | 9× |
+| meeting capture (denoised) | 21.7 s | 5 | 79 | 1 | 3.87 s | 0.178 | 6× |
+
+Read the decode counts: 87 decodes for 9 utterances is the pseudo-streaming multiplier — each open
+utterance is re-decoded roughly ten times so partial text keeps up with the speaker. **That entire
+multiplier costs an RTF of 0.11.** A single pass would be about 0.012, consistent with the 0.017
+measured for this model in the Python prototype, so nine tenths of the cost here buys live text and
+there is still 9× headroom on this machine.
+
+Sample output (raw capture), reproducing the prototype's transcript:
+
+```
+[   4.91s →    5.90s] OK
+[   6.19s →    7.78s] BẠN CÓ THỂ NGHE ĐƯỢC KHÔNG
+[   8.91s →   10.31s] NGHE TỐT CŨNG KHÔNG
+[  12.85s →   15.11s] NẾU MÀ XỬ LÝ TRÊN BỘ ĐỒ NÀY
+[  15.57s →   17.45s] THÌ CÓ VẺ LÀ NGON NHỈ
+```
+
+### Reproduce
+
+```bash
+cargo run --release -p summo-cli --features transcribe -- transcribe recording.wav \
+  --model-dir /path/to/gipformer-65M \
+  --vad /path/to/silero_vad.onnx \
+  --threads 4
+```
+
+Add `--partials` to watch text grow inside an utterance rather than only seeing the committed lines.
+
+### Caveats
+
+* Two short captures from one microphone. These numbers say the pipeline works and roughly what it
+  costs, not what the accuracy is — no reference transcript was scored, so there is no WER here yet.
+* The denoised capture shows a higher RTF because it is shorter, so the fixed cost of the first
+  decodes weighs more; per-utterance cost is the same.
+* WER against Fleurs VI and Common Voice VI, and a comparison across candidate models, still needs a
+  `summo-bench asr` subcommand.
