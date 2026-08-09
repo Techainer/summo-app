@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "id": "ten-vad",
+  "name": "TEN-VAD (user-installed)",
+  "task": "vad",
+  "mode": "live",
+  "runtime": "native/ten-vad",
+  "langs": ["*"],
+  "license": "Apache-2.0-with-additional-conditions",
+  "attribution": "TEN Framework / Agora",
+  "redistributable": false,
+  "size_bytes": 313240,
+  "description": "Lowest release latency measured (38 ms p50) and lowest false-trigger rate, but its licence adds an anti-competition clause on top of Apache-2.0, which is incompatible with Summo's AGPL-3.0. Summo does not host or bundle it; installing it is the user's own act. See docs/adr/0001-vad-backend-licensing.md.",
+  "profile": {
+    "rss_mb": { "idle": 8, "peak": 20 },
+    "min_ram_mb": 128,
+    "rtf": { "cpu_x86_avx512vnni_8t": 0.0096 },
+    "latency_ms": { "first_partial": 32, "finalize_p50": 38, "finalize_p95": 362 },
+    "quality": { "f1_ten_testset": 0.931, "precision_ten_testset": 0.942, "recall_ten_testset": 0.921 },
+    "accel": ["cpu"]
+  },
+  "files": [
+    {
+      "name": "libten_vad.so",
+      "sha256": "5abfe6bf6e9a4fcea6b440240f0a9a0f431ab5006e48a4e16465ebe681ffd90f",
+      "size": 313240,
+      "url": "https://github.com/ten-framework/ten-vad/raw/main/lib/Linux/x64/libten_vad.so",
+      "platform": "linux-x64"
+    }
+  ],
+  "params": { "hop": 256 }
+}

@@ -1,0 +1,35 @@
+Summo
+Copyright (C) 2026 Summo contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See LICENSE.
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+Models are not bundled with Summo. They are fetched at runtime from the registry
+and remain under their own licences, which are recorded in each model manifest
+(`license` and `attribution`) and shown in the app's Models screen.
+
+Currently referenced by the seed registry:
+
+  Silero VAD (MIT)
+    https://github.com/snakers4/silero-vad
+    Redistributable. Mirrored by Summo's CDN.
+
+  TEN-VAD (Apache-2.0 WITH additional conditions — NOT redistributed)
+    https://github.com/ten-framework/ten-vad
+    Summo does NOT host, bundle, or link this library in any release build. Its
+    licence adds an anti-competition clause on top of Apache-2.0 that is
+    incompatible with AGPL-3.0. The `ten-vad` Cargo feature is off by default and
+    refuses to build without SUMMO_TEN_VAD_LIB pointing at a copy the user
+    obtained themselves. TEN-VAD also contains code derived from LPCNet
+    (BSD-2-Clause and BSD-3-Clause, Copyright Mozilla / Jean-Marc Valin /
+    Xiph.Org Foundation / Mark Borgerding).
+    See docs/adr/0001-vad-backend-licensing.md.
+
+Rust dependencies are listed in Cargo.lock with their licences; run
+`cargo license` or `cargo about` to regenerate a full report.

@@ -1,0 +1,62 @@
+name: Benchmarks
+
+# Defaults are chosen from measurements, so a change that quietly degrades them should fail loudly.
+on:
+  pull_request:
+    paths:
+      - 'crates/summo-vad/**'
+      - 'crates/summo-bench/**'
+      - 'registry/**'
+  workflow_dispatch:
+
+jobs:
+  vad:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Fetch labelled dataset
+        run: git clone --depth 1 https://github.com/ten-framework/ten-vad /tmp/ten-vad
+
+      - name: Fetch Silero VAD
+        run: |
+          curl -fsSL -o /tmp/silero_vad.onnx \
+            https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx
+          echo "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3  /tmp/silero_vad.onnx" \
+            | sha256sum -c -
+
+      # Only the licence-clean backend runs here. TEN-VAD is never fetched by our CI, because doing
+      # so as part of building a product would be us deploying it. See ADR 0001.
+      - name: Run VAD benchmark
+        run: |
+          cargo run --release -p summo-bench --features silero -- vad \
+            --dataset /tmp/ten-vad/testset \
+            --backend silero:/tmp/silero_vad.onnx \
+            --sweep --json bench/out/vad.json
+
+      - name: Check for regressions
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          # Floors, not targets: they exist to catch a silent break like feeding the v5 graph the
+          # wrong input width, which scored F1 0.000 without erroring.
+          FLOOR_F1 = 0.90
+          CEIL_RELEASE_P50_MS = 150
+          rows = json.load(open('bench/out/vad.json'))
+          bad = False
+          for r in rows:
+              m = r['metrics']
+              print(f"{r['backend']}: f1={m['f1']:.3f} release_p50={m['release_ms_p50']:.0f}ms")
+              if m['f1'] < FLOOR_F1:
+                  print(f"  FAIL: f1 {m['f1']:.3f} below floor {FLOOR_F1}"); bad = True
+              if m['release_ms_p50'] > CEIL_RELEASE_P50_MS:
+                  print(f"  FAIL: release p50 above {CEIL_RELEASE_P50_MS}ms"); bad = True
+          sys.exit(1 if bad else 0)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vad-benchmark
+          path: bench/out/vad.json

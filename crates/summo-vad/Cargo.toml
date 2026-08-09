@@ -1,0 +1,33 @@
+[package]
+name = "summo-vad"
+description = "Voice activity detection: pluggable backends plus the segment gate that drives ASR"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# Silero VAD via onnxruntime. Off by default so the pure-logic gate builds everywhere,
+# including CI targets without an ONNX Runtime binary.
+silero = ["dep:ort", "dep:ndarray"]
+# TEN-VAD via its C library. Requires the vendored library (see `just vendor-ten-vad`).
+ten-vad = []
+
+[dependencies]
+summo-core.workspace = true
+serde.workspace = true
+tracing.workspace = true
+
+ort = { workspace = true, optional = true, features = [
+    "ndarray",
+    # Fetch a prebuilt ONNX Runtime at build time. `tls-rustls` is required alongside it, and
+    # keeps the build free of a system OpenSSL dependency.
+    "download-binaries",
+    "tls-rustls",
+] }
+ndarray = { workspace = true, optional = true }
+
+[dev-dependencies]
+pretty_assertions.workspace = true

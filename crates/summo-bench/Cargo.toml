@@ -1,0 +1,33 @@
+[package]
+name = "summo-bench"
+description = "Measurement harness: VAD accuracy and latency, ASR WER and RTF"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+silero = ["summo-vad/silero"]
+ten-vad = ["summo-vad/ten-vad"]
+
+[[bin]]
+name = "summo-bench"
+path = "src/main.rs"
+
+[dependencies]
+summo-core.workspace = true
+summo-vad.workspace = true
+
+anyhow.workspace = true
+clap.workspace = true
+hound.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true

@@ -1,0 +1,25 @@
+/target
+**/target
+Cargo.lock.bak
+
+node_modules
+dist
+.vite
+*.tsbuildinfo
+
+# local model + data dirs used by dev runs
+/.summo
+/models
+/bench/out
+/bench/dataset/*.wav
+*.onnx
+*.gguf
+*.bin
+
+.DS_Store
+.env
+.env.local
+*.log
+
+# Tauri
+apps/desktop/src-tauri/gen
