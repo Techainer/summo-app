@@ -1,5 +1,6 @@
 [package]
 name = "summo-asr"
+description = "Decoding sessions: streaming, aggressive pseudo-streaming, and the hybrid of both"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,3 +9,10 @@ repository.workspace = true
 
 [dependencies]
 summo-core.workspace = true
+summo-vad.workspace = true
+
+serde.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
