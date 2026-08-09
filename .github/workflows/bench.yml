@@ -31,6 +31,7 @@ jobs:
       # so as part of building a product would be us deploying it. See ADR 0001.
       - name: Run VAD benchmark
         run: |
+          mkdir -p bench/out
           cargo run --release -p summo-bench --features silero -- vad \
             --dataset /tmp/ten-vad/testset \
             --backend silero:/tmp/silero_vad.onnx \
