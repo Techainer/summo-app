@@ -58,6 +58,29 @@ pub trait Decoder: Send {
     }
 }
 
+/// Lets a boxed decoder be used wherever a concrete one is expected.
+///
+/// Needed because the runtime is chosen at startup from configuration, so the concrete type is not
+/// known until then, while sessions are generic over it for the sake of static dispatch in the hot
+/// loop.
+impl<D: Decoder + ?Sized> Decoder for Box<D> {
+    fn decode(&mut self, pcm: &[f32]) -> Result<Transcript> {
+        (**self).decode(pcm)
+    }
+
+    fn reset(&mut self) {
+        (**self).reset();
+    }
+
+    fn name(&self) -> &str {
+        (**self).name()
+    }
+
+    fn supports_partials(&self) -> bool {
+        (**self).supports_partials()
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod test_support {
     use super::*;
@@ -143,6 +166,15 @@ mod tests {
         assert!(Transcript::new("   ").is_empty());
         assert!(Transcript::default().is_empty());
         assert!(!Transcript::new("xin chào").is_empty());
+    }
+
+    #[test]
+    fn a_boxed_decoder_forwards_every_method() {
+        let mut boxed: Box<dyn Decoder> = Box::new(test_support::FixedDecoder::new("xong"));
+        assert_eq!(boxed.decode(&[0.0; 16]).unwrap().text, "xong");
+        assert_eq!(boxed.name(), "fixed");
+        assert!(boxed.supports_partials());
+        boxed.reset();
     }
 
     #[test]

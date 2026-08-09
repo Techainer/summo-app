@@ -8,7 +8,10 @@
 use std::{path::Path, time::Instant};
 
 use anyhow::{Context, Result, bail};
-use summo_asr::{Decoder, PseudoSession, SessionConfig, sherpa::ZipformerDecoder};
+use summo_asr::{
+    Decoder, PseudoSession, SessionConfig,
+    sherpa::{WhisperDecoder, ZipformerDecoder},
+};
 use summo_core::{
     Event,
     audio::{SAMPLE_RATE, samples_to_secs},
@@ -50,10 +53,22 @@ fn read_wav(path: &Path) -> Result<Vec<f32>> {
     })
 }
 
+/// Which runtime loads the model directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum Engine {
+    /// Zipformer RNN-T. Fast, single-language, does not invent text.
+    Transducer,
+    /// Whisper. 99 languages and code-switching, at the cost of hallucinating over silence.
+    Whisper,
+}
+
 pub struct Options {
     pub audio: std::path::PathBuf,
     pub model_dir: std::path::PathBuf,
     pub vad_model: std::path::PathBuf,
+    pub engine: Engine,
+    /// ISO language code for Whisper; `None` asks it to detect.
+    pub language: Option<String>,
     pub threads: usize,
     pub partial_step_ms: u32,
     /// Print partials as they are produced, to see the live behaviour rather than just the result.
@@ -66,8 +81,16 @@ pub fn run(opts: &Options) -> Result<()> {
 
     let load_start = Instant::now();
     let mut vad = SileroVad::load(&opts.vad_model, 1)?;
-    let decoder = ZipformerDecoder::from_dir(&opts.model_dir, opts.threads)?;
+    let decoder: Box<dyn Decoder> = match opts.engine {
+        Engine::Transducer => Box::new(ZipformerDecoder::from_dir(&opts.model_dir, opts.threads)?),
+        Engine::Whisper => Box::new(WhisperDecoder::from_dir(
+            &opts.model_dir,
+            opts.language.as_deref(),
+            opts.threads,
+        )?),
+    };
     let model_name = decoder.name().to_string();
+    let partials_supported = decoder.supports_partials();
     let load_ms = load_start.elapsed().as_millis();
 
     let cfg = SessionConfig {
@@ -78,9 +101,14 @@ pub fn run(opts: &Options) -> Result<()> {
     let mut session = PseudoSession::new(decoder, cfg);
 
     println!(
-        "audio  {} ({audio_secs:.1}s)\nmodel  {model_name} ({} threads, loaded in {load_ms} ms)\nvad    {}\n",
+        "audio  {} ({audio_secs:.1}s)\nmodel  {model_name} ({} threads, loaded in {load_ms} ms){}\nvad    {}\n",
         opts.audio.display(),
         opts.threads,
+        if partials_supported {
+            ""
+        } else {
+            " — final-only, this model does not do partials"
+        },
         vad.name()
     );
 

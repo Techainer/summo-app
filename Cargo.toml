@@ -7,6 +7,7 @@ members = [
     "crates/summo-audio",
     "crates/summo-asr",
     "crates/summo-diar",
+    "crates/summo-llm",
     "crates/summo-vault",
     "crates/summo-store",
     "crates/summo-agent",
@@ -33,6 +34,7 @@ summo-vad = { path = "crates/summo-vad" }
 summo-audio = { path = "crates/summo-audio" }
 summo-asr = { path = "crates/summo-asr" }
 summo-diar = { path = "crates/summo-diar" }
+summo-llm = { path = "crates/summo-llm" }
 summo-vault = { path = "crates/summo-vault" }
 summo-store = { path = "crates/summo-store" }
 summo-agent = { path = "crates/summo-agent" }

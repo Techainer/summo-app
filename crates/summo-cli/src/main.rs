@@ -54,6 +54,12 @@ enum Command {
         /// Silero VAD ONNX file.
         #[arg(long)]
         vad: std::path::PathBuf,
+        /// Which runtime loads the model directory.
+        #[arg(long, value_enum, default_value_t = transcribe::Engine::Transducer)]
+        engine: transcribe::Engine,
+        /// ISO language code for Whisper, e.g. `en` or `vi`. Omit to let it detect.
+        #[arg(long)]
+        lang: Option<String>,
         #[arg(long, default_value_t = 4)]
         threads: usize,
         /// How often the open utterance is re-decoded for partial text.
@@ -107,6 +113,8 @@ async fn main() -> Result<()> {
             audio,
             model_dir,
             vad,
+            engine,
+            lang,
             threads,
             partial_step_ms,
             partials,
@@ -114,6 +122,8 @@ async fn main() -> Result<()> {
             audio,
             model_dir,
             vad_model: vad,
+            engine,
+            language: lang,
             threads,
             partial_step_ms,
             show_partials: partials,

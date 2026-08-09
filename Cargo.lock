@@ -2279,6 +2279,7 @@ dependencies = [
 name = "summo-asr"
 version = "0.1.0"
 dependencies = [
+ "hound",
  "pretty_assertions",
  "serde",
  "sherpa-rs",
@@ -2358,7 +2359,12 @@ dependencies = [
 name = "summo-diar"
 version = "0.1.0"
 dependencies = [
+ "hound",
+ "pretty_assertions",
+ "serde",
+ "sherpa-rs",
  "summo-core",
+ "tracing",
 ]
 
 [[package]]
@@ -2366,6 +2372,20 @@ name = "summo-engine"
 version = "0.1.0"
 dependencies = [
  "summo-core",
+]
+
+[[package]]
+name = "summo-llm"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "pretty_assertions",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "summo-core",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

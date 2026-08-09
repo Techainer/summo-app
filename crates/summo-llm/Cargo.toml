@@ -1,0 +1,22 @@
+[package]
+name = "summo-llm"
+description = "Language-model client: summaries, translation and question answering"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+summo-core.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true
+futures.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "net", "io-util"] }
+pretty_assertions.workspace = true

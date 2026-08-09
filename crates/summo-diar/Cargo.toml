@@ -1,10 +1,25 @@
 [package]
 name = "summo-diar"
+description = "Speaker attribution: track priors, online clustering, offline refinement"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+# Speaker embedding extraction. Links a native library, so it is opt-in.
+sherpa = ["dep:sherpa-rs"]
+
 [dependencies]
 summo-core.workspace = true
+
+serde.workspace = true
+tracing.workspace = true
+
+sherpa-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+hound.workspace = true
