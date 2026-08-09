@@ -10,16 +10,6 @@
       "size_bytes": 2327524,
       "license": "MIT",
       "description": "Default voice activity detector."
-    },
-    {
-      "id": "ten-vad",
-      "name": "TEN-VAD (user-installed)",
-      "task": "vad",
-      "mode": "live",
-      "langs": ["*"],
-      "size_bytes": 313240,
-      "license": "Apache-2.0-with-additional-conditions",
-      "description": "Faster release latency; not redistributable by Summo."
     }
   ]
 }

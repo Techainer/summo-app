@@ -461,7 +461,7 @@ mod tests {
         assert!(err.contains("our own CDN"), "got: {err}");
 
         // Same model served from upstream is fine.
-        v["files"][0]["url"] = serde_json::json!("https://github.com/ten-framework/ten-vad/x");
+        v["files"][0]["url"] = serde_json::json!("https://github.com/upstream/model/x");
         v["files"][0]["mirror"] = serde_json::json!([]);
         assert!(parse(v).is_ok());
     }

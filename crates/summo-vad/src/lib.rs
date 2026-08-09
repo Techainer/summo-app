@@ -14,9 +14,6 @@ pub mod gate;
 #[cfg(feature = "silero")]
 pub mod silero;
 
-#[cfg(feature = "ten-vad")]
-pub mod ten;
-
 pub use gate::{GateConfig, SpeechEvent, VadGate};
 
 use summo_core::Result;

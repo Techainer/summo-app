@@ -10,6 +10,7 @@ pub mod asr;
 pub mod dataset;
 pub mod report;
 pub mod vad;
+pub mod vault;
 
 pub use dataset::{Clip, Span, load_dataset};
 pub use report::{VadMetrics, VadReport};

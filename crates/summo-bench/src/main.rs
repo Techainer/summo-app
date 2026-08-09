@@ -44,6 +44,17 @@ enum Command {
         markdown: Option<std::path::PathBuf>,
     },
 
+    /// Measure whether a search index earns its complexity against a plain file scan.
+    Vault {
+        /// Vault sizes to try, in meetings.
+        #[arg(long, value_delimiter = ',', default_value = "100,1000")]
+        sizes: Vec<usize>,
+        #[arg(long)]
+        json: Option<std::path::PathBuf>,
+        #[arg(long)]
+        markdown: Option<std::path::PathBuf>,
+    },
+
     /// Score a speech model's word error rate and real-time factor on a labelled dataset.
     #[cfg(feature = "asr")]
     Asr {
@@ -86,6 +97,11 @@ fn main() -> Result<()> {
             json.as_deref(),
             markdown.as_deref(),
         ),
+        Command::Vault {
+            sizes,
+            json,
+            markdown,
+        } => run_vault(&sizes, json.as_deref(), markdown.as_deref()),
         #[cfg(feature = "asr")]
         Command::Asr {
             dataset,
@@ -196,19 +212,9 @@ fn build_backend(spec: &str) -> Result<(Box<dyn summo_vad::Vad>, &'static str, b
             let vad = summo_vad::silero::SileroVad::load(arg, 1)?;
             Ok((Box::new(vad), "MIT", true))
         }
-        #[cfg(feature = "ten-vad")]
-        "ten-vad" => {
-            let hop: usize = if arg.is_empty() {
-                summo_vad::ten::HOP_16MS
-            } else {
-                arg.parse().context("ten-vad hop size must be 160 or 256")?
-            };
-            let vad = summo_vad::ten::TenVad::new(hop)?;
-            Ok((Box::new(vad), "Apache-2.0 + extra conditions", false))
-        }
         other => bail!(
             "unknown or disabled backend `{other}`. Enable the matching cargo feature \
-             (--features silero,ten-vad)."
+             (--features silero)."
         ),
     }
 }
@@ -261,6 +267,40 @@ fn run_asr(
 
     if let Some(path) = json {
         std::fs::write(path, serde_json::to_vec_pretty(&reports)?)
+            .with_context(|| format!("cannot write {}", path.display()))?;
+    }
+    if let Some(path) = markdown {
+        std::fs::write(path, &table).with_context(|| format!("cannot write {}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn run_vault(
+    sizes: &[usize],
+    json: Option<&std::path::Path>,
+    markdown: Option<&std::path::Path>,
+) -> Result<()> {
+    use summo_bench::vault::{VaultMetrics, evaluate};
+
+    let workdir = tempfile::tempdir().context("cannot create a working directory")?;
+    let mut runs = Vec::new();
+
+    for &count in sizes {
+        tracing::info!(meetings = count, "generating vault");
+        let metrics = evaluate(workdir.path(), count)?;
+        tracing::info!(
+            scan_warm_ms = format!("{:.0}", metrics.scan_warm_ms),
+            index_query_ms = format!("{:.1}", metrics.index_query_ms),
+            "measured"
+        );
+        runs.push(metrics);
+    }
+
+    let table = VaultMetrics::to_markdown(&runs);
+    println!("\n{table}");
+
+    if let Some(path) = json {
+        std::fs::write(path, serde_json::to_vec_pretty(&runs)?)
             .with_context(|| format!("cannot write {}", path.display()))?;
     }
     if let Some(path) = markdown {

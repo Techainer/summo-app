@@ -12,8 +12,6 @@ default = []
 # Silero VAD via onnxruntime. Off by default so the pure-logic gate builds everywhere,
 # including CI targets without an ONNX Runtime binary.
 silero = ["dep:ort", "dep:ndarray"]
-# TEN-VAD via its C library. Requires the vendored library (see `just vendor-ten-vad`).
-ten-vad = []
 
 [dependencies]
 summo-core.workspace = true

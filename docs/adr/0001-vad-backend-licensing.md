@@ -1,4 +1,4 @@
-# ADR 0001 — VAD backend: Silero ships, TEN-VAD stays opt-in
+# ADR 0001 — VAD backend: Silero ships, TEN-VAD dropped
 
 **Status:** accepted · **Date:** 2026-08-09 · **Milestone:** M1
 
@@ -90,15 +90,21 @@ runtime dependency most distributions do not install by default.
 1. **Silero v5 (MIT) is the shipped default.** It is both the most accurate backend measured and the
    only permissively licensed one, and its weaker release latency is absorbed by `VadGate`'s 400 ms
    minimum-silence hysteresis. v4 remains loadable for anyone who already has it.
-2. **TEN-VAD stays behind the `ten-vad` Cargo feature, is never bundled, and is not built in
-   release.** `crates/summo-vad/build.rs` refuses to build without `SUMMO_TEN_VAD_LIB`, so nobody
-   links it by accident.
-3. **Its registry manifest is marked `redistributable: false`** and points at upstream. A user who
-   wants it installs it themselves, which keeps the distribution act — and its licence terms — with
-   the user rather than with us.
-4. **Benchmark tables always print the licence and a "shippable" column.** A backend that wins on
+2. **TEN-VAD is removed from the codebase entirely** — not kept behind a feature flag, not listed in
+   the registry. Keeping an unshippable dependency around as an option costs maintenance, invites
+   somebody to enable it later without re-reading this document, and leaves a licence question in
+   the tree for no benefit now that the permissive option also wins on accuracy. The benchmark that
+   produced these numbers is reproducible from the commands above if the comparison ever needs
+   revisiting.
+3. **`Vad` stays a trait with pluggable backends.** The point of the abstraction survives the
+   removal: adding a future detector is one implementation, and the benchmark can rank it against
+   Silero the same day.
+4. **Benchmark tables keep printing licence and a "shippable" column.** A backend that wins on
    latency but cannot legally ship is not a candidate, and that fact belongs next to the number, not
    in a document nobody re-reads.
+
+*Removed in the commit that followed this decision; the TEN-VAD binding and its manifest are in git
+history if the licence ever changes.*
 
 ## Follow-ups
 
@@ -109,3 +115,5 @@ runtime dependency most distributions do not install by default.
   and re-tune `GateConfig::min_speech_s` before concluding the backend is the limit.
 - Add a regression test pinning Silero v5's F1 above 0.9, so the 576-vs-512 class of bug cannot
   return silently.
+- Find a permissively licensed labelled dataset. Every number above comes from TEN's own testset,
+  which is their home turf and now also the testset for a backend we no longer ship.

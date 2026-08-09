@@ -12,7 +12,6 @@ default = []
 silero = ["summo-vad/silero"]
 # ASR benchmarking needs a decoder, which links native code.
 asr = ["dep:summo-asr", "summo-asr/sherpa"]
-ten-vad = ["summo-vad/ten-vad"]
 
 [[bin]]
 name = "summo-bench"
@@ -26,6 +25,9 @@ summo-asr = { workspace = true, optional = true }
 anyhow.workspace = true
 clap.workspace = true
 hound.workspace = true
+rusqlite.workspace = true
+rayon.workspace = true
+tempfile.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

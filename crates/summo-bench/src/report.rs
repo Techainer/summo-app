@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn markdown_marks_unshippable_backends() {
         let report = VadReport {
-            backend: "ten-vad".into(),
+            backend: "some-vendor-vad".into(),
             frame_len: 256,
             threshold: 0.35,
             dataset: "testset".into(),
@@ -129,7 +129,7 @@ mod tests {
                 audio_secs: 262.0,
                 frames: 16_000,
             },
-            license: "Apache-2.0 + conditions".into(),
+            license: "Source-available, non-compete".into(),
             redistributable: false,
         };
         let md = VadReport::to_markdown(&[report]);
@@ -137,6 +137,6 @@ mod tests {
             md.contains("**no**"),
             "licence blockers must be visible in the table"
         );
-        assert!(md.contains("ten-vad"));
+        assert!(md.contains("some-vendor-vad"));
     }
 }

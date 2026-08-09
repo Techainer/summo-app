@@ -135,3 +135,23 @@ Add `--partials` to watch text grow inside an utterance rather than only seeing 
   wired up first.
 * Fleurs is read speech. Meeting audio is harder, and the accuracy gap between the two is the number
   that actually predicts how the app feels.
+
+## Storage: does an index earn its complexity?
+
+Synthetic vault, ~9,000 words per meeting (about an hour of speech). Parallel scan capped at 8
+threads so the comparison reflects a laptop rather than this 64-core machine.
+
+| Meetings | Corpus | Scan 1 thread | Scan 8 threads | List (frontmatter) | Index build | Index query | Index size |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 100 | 7 MB | 21 ms | **4 ms** | 1 ms | 156 ms | 0.1 ms | 8 MB |
+| 1,000 | 65 MB | 209 ms | **30 ms** | 5 ms | 1,600 ms | 0.1 ms | 80 MB |
+| 5,000 | 327 MB | 1,033 ms | **140 ms** | 26 ms | 9,310 ms | 0.2 ms | 402 MB |
+
+**Decision: no database.** 30 ms at 1,000 meetings is fast enough to search per keystroke, listing
+the library costs 5 ms, and the SQLite index is larger than the corpus it indexes. See
+[ADR 0002](adr/0002-no-database.md). The one thing a scan cannot do is semantic search, so a vector
+index arrives with Q&A and nothing sooner.
+
+```bash
+cargo run --release -p summo-bench -- vault --sizes 100,1000,5000
+```

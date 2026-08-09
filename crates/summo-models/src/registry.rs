@@ -233,8 +233,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join("models")).unwrap();
         std::fs::write(
-            tmp.path().join("models/ten-vad.json"),
-            sample_manifest("ten-vad"),
+            tmp.path().join("models/test-vad.json"),
+            sample_manifest("test-vad"),
         )
         .unwrap();
         std::fs::write(
@@ -242,7 +242,7 @@ mod tests {
             serde_json::json!({
                 "schema": 1,
                 "models": [{
-                    "id": "ten-vad", "name": "TEN-VAD", "task": "vad",
+                    "id": "test-vad", "name": "Test VAD", "task": "vad",
                     "mode": "live", "langs": [], "size_bytes": 1024, "license": "Apache-2.0"
                 }]
             })
@@ -284,7 +284,7 @@ mod tests {
     async fn resolves_from_a_local_directory() {
         let (_tmp, reg) = dir_registry();
         let m = reg
-            .manifest(&ModelId::parse("ten-vad").unwrap())
+            .manifest(&ModelId::parse("test-vad").unwrap())
             .await
             .unwrap();
         assert_eq!(m.name, "Test model");
@@ -296,8 +296,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join("models")).unwrap();
         std::fs::write(
-            tmp.path().join("models/ten-vad.json"),
-            sample_manifest("ten-vad"),
+            tmp.path().join("models/test-vad.json"),
+            sample_manifest("test-vad"),
         )
         .unwrap();
 
@@ -310,7 +310,7 @@ mod tests {
         .unwrap();
 
         assert!(
-            reg.manifest(&ModelId::parse("ten-vad").unwrap())
+            reg.manifest(&ModelId::parse("test-vad").unwrap())
                 .await
                 .is_ok()
         );
@@ -320,9 +320,9 @@ mod tests {
     async fn manifest_claiming_another_id_is_rejected() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join("models")).unwrap();
-        // Served as `ten-vad` but declares itself `silero-vad`.
+        // Served as `test-vad` but declares itself `silero-vad`.
         std::fs::write(
-            tmp.path().join("models/ten-vad.json"),
+            tmp.path().join("models/test-vad.json"),
             sample_manifest("silero-vad"),
         )
         .unwrap();
@@ -330,7 +330,7 @@ mod tests {
             Registry::with_sources(vec![RegistrySource::Dir(tmp.path().to_path_buf())]).unwrap();
 
         let err = reg
-            .manifest(&ModelId::parse("ten-vad").unwrap())
+            .manifest(&ModelId::parse("test-vad").unwrap())
             .await
             .unwrap_err();
         assert!(err.to_string().contains("declares id"), "got: {err}");
@@ -339,10 +339,10 @@ mod tests {
     #[tokio::test]
     async fn second_lookup_is_served_from_cache() {
         let (tmp, reg) = dir_registry();
-        let id = ModelId::parse("ten-vad").unwrap();
+        let id = ModelId::parse("test-vad").unwrap();
         reg.manifest(&id).await.unwrap();
         // Remove the backing file: only a cache hit can succeed now.
-        std::fs::remove_file(tmp.path().join("models/ten-vad.json")).unwrap();
+        std::fs::remove_file(tmp.path().join("models/test-vad.json")).unwrap();
         assert!(reg.manifest(&id).await.is_ok());
     }
 
@@ -351,7 +351,7 @@ mod tests {
         let (_tmp, reg) = dir_registry();
         let index = reg.index().await.unwrap();
         assert_eq!(index.models.len(), 1);
-        assert_eq!(index.models[0].id.as_str(), "ten-vad");
+        assert_eq!(index.models[0].id.as_str(), "test-vad");
     }
 
     #[tokio::test]
