@@ -3,8 +3,10 @@
 Meeting notes that run on your machine. Speech recognition and speaker attribution never leave the
 device; only summarisation and translation call out to a language model you configure yourself.
 
-> Status: early. The measurement harness, model registry and VAD layer are implemented and tested.
-> Audio capture, ASR sessions and the desktop app are next. See `docs/adr/` for decisions made so far.
+> Status: the pipeline runs end to end. `summo transcribe` takes a WAV through voice activity
+> detection, pseudo-streaming decode and hallucination filtering to a transcript — 2.4 % WER on
+> Fleurs VI, RTF 0.11 with live partials. Storage, the local daemon and the desktop app are next.
+> See [`docs/benchmarks.md`](docs/benchmarks.md) for numbers and `docs/adr/` for decisions.
 
 ## Why it is built this way
 
@@ -28,10 +30,10 @@ crates/
   summo-models    Ollama-style model registry: manifests, resumable downloads, blob store, hw probe
   summo-vad       voice activity detection: pluggable backends + the segment gate that drives ASR
   summo-bench     measurement harness — every default should come from a number measured here
-  summo-audio     capture (mic + system loopback), resampling, denoise        [in progress]
-  summo-asr       decoding sessions: streaming, pseudo-streaming, hybrid       [in progress]
-  summo-diar      speaker attribution                                          [in progress]
-  summo-vault     Markdown vault                                               [in progress]
+  summo-audio     capture (mic), resampling, framing, device selection
+  summo-asr       decoding sessions: pseudo-streaming, hybrid refine, sherpa runtime
+  summo-vault     the Markdown vault: meetings as files you own
+  summo-diar      speaker attribution                                          [next]
   summo-store     SQLite index (FTS5 + vectors)                                [in progress]
   summo-agent     skills, MCP server and client                                [in progress]
   summo-sync      CRDT + end-to-end-encrypted multi-device sync                [in progress]
@@ -72,6 +74,15 @@ cargo run --release -p summo-bench --features silero -- vad \
 ```
 
 Results and what they changed: [`docs/adr/0001-vad-backend-licensing.md`](docs/adr/0001-vad-backend-licensing.md).
+
+To transcribe a recording with the real pipeline:
+
+```bash
+cargo run --release -p summo-cli --features transcribe -- transcribe recording.wav \
+  --model-dir /path/to/gipformer-65M \
+  --vad /tmp/silero_vad.onnx \
+  --threads 4
+```
 
 ## Licence
 

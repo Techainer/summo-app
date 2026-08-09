@@ -43,6 +43,23 @@ enum Command {
         #[arg(long)]
         markdown: Option<std::path::PathBuf>,
     },
+
+    /// Score a speech model's word error rate and real-time factor on a labelled dataset.
+    #[cfg(feature = "asr")]
+    Asr {
+        /// Directory with `transcripts.json` and the WAVs it names.
+        #[arg(long)]
+        dataset: std::path::PathBuf,
+        /// Transducer model directory, repeatable to compare models.
+        #[arg(long = "model", required = true)]
+        models: Vec<std::path::PathBuf>,
+        #[arg(long, default_value_t = 4)]
+        threads: usize,
+        #[arg(long)]
+        json: Option<std::path::PathBuf>,
+        #[arg(long)]
+        markdown: Option<std::path::PathBuf>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -66,6 +83,20 @@ fn main() -> Result<()> {
             &backends,
             threshold,
             sweep,
+            json.as_deref(),
+            markdown.as_deref(),
+        ),
+        #[cfg(feature = "asr")]
+        Command::Asr {
+            dataset,
+            models,
+            threads,
+            json,
+            markdown,
+        } => run_asr(
+            &dataset,
+            &models,
+            threads,
             json.as_deref(),
             markdown.as_deref(),
         ),
@@ -180,4 +211,60 @@ fn build_backend(spec: &str) -> Result<(Box<dyn summo_vad::Vad>, &'static str, b
              (--features silero,ten-vad)."
         ),
     }
+}
+
+#[cfg(feature = "asr")]
+fn run_asr(
+    dataset: &std::path::Path,
+    models: &[std::path::PathBuf],
+    threads: usize,
+    json: Option<&std::path::Path>,
+    markdown: Option<&std::path::Path>,
+) -> Result<()> {
+    use summo_bench::asr::{AsrReport, evaluate, load_items};
+
+    let items = load_items(dataset)?;
+    let total_secs: f64 = items.iter().map(|i| i.duration_s).sum();
+    tracing::info!(
+        items = items.len(),
+        audio_secs = format!("{total_secs:.1}"),
+        "dataset loaded"
+    );
+
+    let mut reports = Vec::new();
+    for dir in models {
+        let name = dir.file_name().map_or_else(
+            || dir.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        tracing::info!(model = %name, threads, "evaluating");
+
+        let mut decoder = summo_asr::sherpa::ZipformerDecoder::from_dir(dir, threads)?;
+        let metrics = evaluate(&mut decoder, dataset, &items)?;
+        tracing::info!(
+            wer = format!("{:.1}%", metrics.wer * 100.0),
+            cer = format!("{:.1}%", metrics.cer * 100.0),
+            rtf = format!("{:.4}", metrics.rtf),
+            "done"
+        );
+
+        reports.push(AsrReport {
+            model: name,
+            dataset: dataset.display().to_string(),
+            threads,
+            metrics,
+        });
+    }
+
+    let table = AsrReport::to_markdown(&reports);
+    println!("\n{table}");
+
+    if let Some(path) = json {
+        std::fs::write(path, serde_json::to_vec_pretty(&reports)?)
+            .with_context(|| format!("cannot write {}", path.display()))?;
+    }
+    if let Some(path) = markdown {
+        std::fs::write(path, &table).with_context(|| format!("cannot write {}", path.display()))?;
+    }
+    Ok(())
 }

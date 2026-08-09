@@ -10,6 +10,8 @@ repository.workspace = true
 [features]
 default = []
 silero = ["summo-vad/silero"]
+# ASR benchmarking needs a decoder, which links native code.
+asr = ["dep:summo-asr", "summo-asr/sherpa"]
 ten-vad = ["summo-vad/ten-vad"]
 
 [[bin]]
@@ -19,6 +21,7 @@ path = "src/main.rs"
 [dependencies]
 summo-core.workspace = true
 summo-vad.workspace = true
+summo-asr = { workspace = true, optional = true }
 
 anyhow.workspace = true
 clap.workspace = true

@@ -52,6 +52,40 @@ cargo run --release -p summo-bench --features silero -- vad \
 * Single machine, single thread. Numbers are for ranking backends, not for predicting a user's
   laptop; per-machine figures come from the autotune pass at install time.
 
+## Speech recognition — accuracy
+
+Single-pass decode per utterance, scored against reference transcripts. This measures the model;
+the session's re-decode multiplier is measured separately below.
+
+**Dataset:** Fleurs VI test, 15 clips, 146.6 s. **Model:** `gipformer-65M` (Zipformer RNN-T, INT8
+ONNX, 73 MB) via sherpa-onnx, 4 threads.
+
+| Model | Dataset | Threads | WER | CER | RTF | Audio | Empty |
+|---|---|---:|---:|---:|---:|---:|---:|
+| gipformer-65M | fleurs_vi | 4 | **2.4 %** | 1.7 % | 0.0240 | 146.6 s | 0 |
+
+**2.4 % WER is exactly what the Python prototype measured on the same model and dataset.** That
+agreement is the point of running this: it confirms the Rust port feeds the model the same audio and
+reads back the same text, rather than being a plausible-looking reimplementation that quietly
+differs. RTF is higher than the prototype's 0.017 because that run used 16 threads against this one's
+4, not because the decode changed.
+
+Text is normalised before scoring — lowercased, punctuation stripped, whitespace collapsed. A
+transducer emits uppercase without punctuation while the reference has both, and counting that as
+substitutions would add several points of error that nobody hears.
+
+### Reproduce
+
+```bash
+cargo run --release -p summo-bench --features asr -- asr \
+  --dataset /path/to/fleurs_vi \
+  --model /path/to/gipformer-65M \
+  --threads 4
+```
+
+The dataset directory needs a `transcripts.json` of `{wav, text, duration_s}` entries alongside the
+16 kHz mono WAVs it names.
+
 ## Speech recognition — end-to-end pipeline
 
 First real run of the whole chain: WAV → Silero VAD → `PseudoSession` re-decode loop →
@@ -96,5 +130,8 @@ Add `--partials` to watch text grow inside an utterance rather than only seeing 
   costs, not what the accuracy is — no reference transcript was scored, so there is no WER here yet.
 * The denoised capture shows a higher RTF because it is shorter, so the fixed cost of the first
   decodes weighs more; per-utterance cost is the same.
-* WER against Fleurs VI and Common Voice VI, and a comparison across candidate models, still needs a
-  `summo-bench asr` subcommand.
+* Only one model has been scored so far. The comparison across candidates — Whisper turbo,
+  PhoWhisper, SenseVoice, Parakeet — is what decides the shipped default, and needs their runtimes
+  wired up first.
+* Fleurs is read speech. Meeting audio is harder, and the accuracy gap between the two is the number
+  that actually predicts how the app feels.
