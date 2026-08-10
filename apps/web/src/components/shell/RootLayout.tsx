@@ -15,6 +15,7 @@ const NAV: NavItem[] = [
   { key: "/", label: "Ghi", icon: "●" },
   { key: "/library", label: "Thư viện", icon: "▤" },
   { key: "/tasks", label: "Việc", icon: "☑" },
+  { key: "/chat", label: "Hỏi đáp", icon: "◇" },
   { key: "/people", label: "Giọng nói", icon: "◍" },
   { key: "/analytics", label: "Thống kê", icon: "◔" },
   { key: "/settings", label: "Cài đặt", icon: "⚙" },

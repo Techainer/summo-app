@@ -110,6 +110,7 @@ impl Server {
             .route("/report", get(report))
             .route("/tasks", get(tasks))
             .route("/nudges", get(nudges))
+            .route("/ask", post(ask))
             .route("/meetings/{id}/draft", get(get_draft))
             .route("/meetings/{id}/draft/generate", post(generate_draft))
             .route("/meetings/{id}/draft/refine", post(refine_draft))
@@ -823,6 +824,33 @@ async fn create_task(
         body.owner.as_deref(),
         body.due.as_deref(),
     ))
+}
+
+#[derive(Debug, Deserialize)]
+struct AskBody {
+    question: String,
+}
+
+/// Answer a question from the vault, with citations.
+async fn ask(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<AskBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let client = match llm_client(&state) {
+        Ok(client) => client,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+    as_response(crate::ask::ask(state.engine.paths(), &client, &body.question).await)
 }
 
 /// Hand an `@agent` task to the agent and wait for it.
