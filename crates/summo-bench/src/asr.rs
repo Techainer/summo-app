@@ -4,6 +4,11 @@
 //! better and three times slower cannot run live. So every run reports WER, CER and real-time
 //! factor together, measured over the same audio.
 //!
+//! Nor does a single number rank models across languages. Whisper-tiny scores 4.5 % on English and
+//! 65.5 % on Vietnamese; a 73 MB Vietnamese transducer scores 2.4 % on the same Vietnamese audio.
+//! Any ordering that ignores the language is wrong for somebody, which is why the registry is a flat
+//! list of measured models rather than a ladder.
+//!
 //! Text normalisation matters more than it sounds. A transducer emits uppercase without
 //! punctuation while a reference transcript has both; scoring that as substitutions would add
 //! several points of error nobody can hear, and would rank models by how they format rather than by

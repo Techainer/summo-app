@@ -61,9 +61,13 @@ enum Command {
         /// Directory with `transcripts.json` and the WAVs it names.
         #[arg(long)]
         dataset: std::path::PathBuf,
-        /// Transducer model directory, repeatable to compare models.
+        /// Model directory, repeatable to compare models. Prefix with `whisper:` to load it with
+        /// the Whisper runtime instead of the transducer one.
         #[arg(long = "model", required = true)]
-        models: Vec<std::path::PathBuf>,
+        models: Vec<String>,
+        /// ISO language code for Whisper models.
+        #[arg(long)]
+        lang: Option<String>,
         #[arg(long, default_value_t = 4)]
         threads: usize,
         #[arg(long)]
@@ -106,12 +110,14 @@ fn main() -> Result<()> {
         Command::Asr {
             dataset,
             models,
+            lang,
             threads,
             json,
             markdown,
         } => run_asr(
             &dataset,
             &models,
+            lang.as_deref(),
             threads,
             json.as_deref(),
             markdown.as_deref(),
@@ -222,7 +228,8 @@ fn build_backend(spec: &str) -> Result<(Box<dyn summo_vad::Vad>, &'static str, b
 #[cfg(feature = "asr")]
 fn run_asr(
     dataset: &std::path::Path,
-    models: &[std::path::PathBuf],
+    models: &[String],
+    language: Option<&str>,
     threads: usize,
     json: Option<&std::path::Path>,
     markdown: Option<&std::path::Path>,
@@ -238,15 +245,27 @@ fn run_asr(
     );
 
     let mut reports = Vec::new();
-    for dir in models {
+    for spec in models {
+        // `whisper:/path` picks the Whisper runtime; a bare path is a transducer. Cheaper than a
+        // second repeated flag that would have to be kept in step with this one.
+        let (runtime, dir) = match spec.split_once(':') {
+            Some(("whisper", path)) => ("whisper", std::path::Path::new(path)),
+            _ => ("transducer", std::path::Path::new(spec.as_str())),
+        };
         let name = dir.file_name().map_or_else(
             || dir.display().to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        tracing::info!(model = %name, threads, "evaluating");
+        tracing::info!(model = %name, runtime, threads, "evaluating");
 
-        let mut decoder = summo_asr::sherpa::ZipformerDecoder::from_dir(dir, threads)?;
-        let metrics = evaluate(&mut decoder, dataset, &items)?;
+        let mut decoder: Box<dyn summo_asr::Decoder> = if runtime == "whisper" {
+            Box::new(summo_asr::sherpa::WhisperDecoder::from_dir(
+                dir, language, threads,
+            )?)
+        } else {
+            Box::new(summo_asr::sherpa::ZipformerDecoder::from_dir(dir, threads)?)
+        };
+        let metrics = evaluate(decoder.as_mut(), dataset, &items)?;
         tracing::info!(
             wer = format!("{:.1}%", metrics.wer * 100.0),
             cer = format!("{:.1}%", metrics.cer * 100.0),

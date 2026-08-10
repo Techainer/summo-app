@@ -62,7 +62,18 @@ ONNX, 73 MB) via sherpa-onnx, 4 threads.
 
 | Model | Dataset | Threads | WER | CER | RTF | Audio | Empty |
 |---|---|---:|---:|---:|---:|---:|---:|
-| gipformer-65M | fleurs_vi | 4 | **2.4 %** | 1.7 % | 0.0240 | 146.6 s | 0 |
+| gipformer-65M | fleurs_vi (Vietnamese) | 4 | **2.4 %** | 1.7 % | 0.021 | 146.6 s | 0 |
+| whisper-tiny | fleurs_vi (Vietnamese) | 4 | 65.5 % | 47.8 % | 0.116 | 146.6 s | 0 |
+| whisper-tiny | whisper test set (English) | 4 | **4.5 %** | 0.3 % | 0.107 | 23.3 s | 0 |
+
+Those three rows are the argument for a flat registry rather than a "basic / better / best" ladder.
+Whisper-tiny is not a bad model — it scores 4.5 % on English. It is a bad model *for Vietnamese*,
+where it is 27× worse than a 73 MB transducer that also runs five times faster. No single ordering of
+models is correct across languages, so Summo does not impose one: each manifest states which
+languages it was measured on, and the app recommends from that.
+
+The English figure comes from two clips and should be read as "the model works", not as a WER
+measurement. A real English number needs LibriSpeech or Common Voice.
 
 **2.4 % WER is exactly what the Python prototype measured on the same model and dataset.** That
 agreement is the point of running this: it confirms the Rust port feeds the model the same audio and
