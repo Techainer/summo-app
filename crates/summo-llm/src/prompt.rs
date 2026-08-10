@@ -184,6 +184,56 @@ pub fn answer(question: &str, context: &str, language: &str) -> Vec<Message> {
     ]
 }
 
+/// Rewrite one selected passage, and nothing else.
+///
+/// The model is given the whole section for context but asked to return **only** the replacement
+/// for the selected span. That is the difference between "sửa đoạn này" working and being
+/// exhausting: a model asked to rewrite a section it was shown will quietly reword the sentences
+/// nobody complained about, and the user has to re-read the whole thing to find out what changed.
+/// Returning just the span means everything outside it stays byte-identical.
+#[must_use]
+pub fn revise_selection(
+    section: &str,
+    selection: &str,
+    instruction: &str,
+    language: &str,
+) -> Vec<Message> {
+    vec![
+        Message::system(format!(
+            "{GROUND_RULES}\n\nWrite in {language}.\n\nYou are editing one passage of a meeting \
+             summary. You will be shown the whole section for context, then the passage to change \
+             and what to change about it.\n\nReturn ONLY the replacement text for that passage. No \
+             preamble, no explanation, no quotation marks around it, no Markdown heading. Do not \
+             touch anything outside the passage. If the instruction cannot be followed from the \
+             transcript, return the passage unchanged."
+        )),
+        Message::user(format!(
+            "Section:\n\n{section}\n\n---\n\nPassage to change:\n\n{selection}\n\n---\n\n\
+             Instruction: {instruction}"
+        )),
+    ]
+}
+
+/// Revise a whole draft in response to a message in the chat panel.
+///
+/// Unlike [`revise_selection`], the user has not said where — so the model has to decide, and the
+/// contract is that it returns the entire draft again in the same section structure. Anything it
+/// leaves out is a section it deleted, which is why the instruction says so explicitly.
+#[must_use]
+pub fn revise_draft(draft: &str, message: &str, transcript: &str, language: &str) -> Vec<Message> {
+    vec![
+        Message::system(format!(
+            "{GROUND_RULES}\n\nWrite in {language}.\n\nYou are revising a draft summary of a \
+             meeting, in conversation with the person who will publish it.\n\nReturn the COMPLETE \
+             revised draft, using the same `## ` headings. Keep every section the user did not ask \
+             you to change exactly as it is. Do not add a preamble or explain what you changed."
+        )),
+        Message::user(format!(
+            "Transcript:\n\n{transcript}\n\n---\n\nCurrent draft:\n\n{draft}\n\n---\n\n{message}"
+        )),
+    ]
+}
+
 /// Render segments as a transcript for prompting, with timestamps so the model can cite them.
 #[must_use]
 pub fn render_transcript(segments: &[Segment]) -> String {

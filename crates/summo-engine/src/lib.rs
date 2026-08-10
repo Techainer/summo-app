@@ -18,7 +18,9 @@ pub mod audio_stream;
 pub mod auth;
 pub mod board;
 pub mod collaborate;
+pub mod draft;
 pub mod people;
+pub mod nudge;
 pub mod protocol;
 pub mod recorder;
 
