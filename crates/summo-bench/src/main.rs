@@ -13,6 +13,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Compare storage formats for speaker embeddings on the resweep workload.
+    Voices {
+        #[arg(long, default_value_t = 1000)]
+        meetings: usize,
+        #[arg(long, default_value_t = 200)]
+        utterances: usize,
+    },
+
     /// Evaluate VAD backends on a labelled dataset.
     Vad {
         /// Directory of 16 kHz mono WAVs, each with a sibling `.scv` label file.
@@ -101,6 +109,13 @@ fn main() -> Result<()> {
             json.as_deref(),
             markdown.as_deref(),
         ),
+        Command::Voices {
+            meetings,
+            utterances,
+        } => summo_bench::voices::run(&summo_bench::voices::Options {
+            meetings,
+            utterances_per_meeting: utterances,
+        }),
         Command::Vault {
             sizes,
             json,
