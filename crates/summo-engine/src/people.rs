@@ -14,16 +14,13 @@
 //! That is fine at this size: a voice book is a few hundred kilobytes and corrections happen at
 //! human speed, a handful per meeting at most.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use summo_core::{Error, MeetingId, Result, SpeakerId};
-use summo_diar::{VoiceBook, VoiceLog, attribution};
+use summo_diar::{VoiceLog, attribution};
 
-/// File holding the people Summo can recognise.
-fn book_path(voices_dir: &Path) -> PathBuf {
-    voices_dir.join("book.json")
-}
+use crate::voicebook::SharedBook;
 
 /// A person as the interface needs them.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -118,17 +115,22 @@ const SUGGEST_FLOOR: f32 = 0.40;
 const MAX_SUGGESTIONS: usize = 3;
 
 /// Everyone in the book.
-pub fn list(voices_dir: &Path) -> Result<PeopleView> {
-    let book = VoiceBook::load(book_path(voices_dir))?;
-    Ok(PeopleView {
+///
+/// Served from memory: the book is the hot half of ADR 0003's split, consulted for every utterance
+/// of every meeting, so it is loaded once rather than re-read per call.
+pub fn list(book: &SharedBook) -> Result<PeopleView> {
+    Ok(book.read(|book| PeopleView {
         people: book.people().map(PersonView::from).collect(),
         space: book.space().map(ToString::to_string),
-    })
+    }))
 }
 
 /// The unnamed voices in one meeting, with who they might be.
-pub fn unknowns(voices_dir: &Path, meeting: &MeetingId) -> Result<Vec<UnknownVoice>> {
-    let book = VoiceBook::load(book_path(voices_dir))?;
+pub fn unknowns(
+    book: &SharedBook,
+    voices_dir: &Path,
+    meeting: &MeetingId,
+) -> Result<Vec<UnknownVoice>> {
     let Some(log) = VoiceLog::load(&VoiceLog::path_for(voices_dir, meeting))? else {
         return Ok(Vec::new());
     };
@@ -154,19 +156,20 @@ pub fn unknowns(voices_dir: &Path, meeting: &MeetingId) -> Result<Vec<UnknownVoi
             .map(|s| s.duration)
             .sum();
 
-        let mut suggestions: Vec<Suggestion> = book
-            .people()
-            .map(|p| Suggestion {
-                id: p.id.clone(),
-                name: p.name.clone(),
-                // Score against the voice as a whole, not one utterance of it.
-                similarity: embeddings
-                    .iter()
-                    .map(|e| p.similarity(e))
-                    .fold(f32::MIN, f32::max),
-            })
-            .filter(|s| s.similarity >= SUGGEST_FLOOR)
-            .collect();
+        let mut suggestions: Vec<Suggestion> = book.read(|book| {
+            book.people()
+                .map(|p| Suggestion {
+                    id: p.id.clone(),
+                    name: p.name.clone(),
+                    // Score against the voice as a whole, not one utterance of it.
+                    similarity: embeddings
+                        .iter()
+                        .map(|e| p.similarity(e))
+                        .fold(f32::MIN, f32::max),
+                })
+                .filter(|s| s.similarity >= SUGGEST_FLOOR)
+                .collect()
+        });
         suggestions.sort_by(|a, b| b.similarity.total_cmp(&a.similarity));
         suggestions.truncate(MAX_SUGGESTIONS);
 
@@ -194,26 +197,26 @@ pub fn unknowns(voices_dir: &Path, meeting: &MeetingId) -> Result<Vec<UnknownVoi
 /// 2. relabels this meeting's log,
 /// 3. re-sweeps past meetings, because a voice that was unknown last week may be recognisable now.
 pub fn name_voice(
+    book: &SharedBook,
     voices_dir: &Path,
     meeting: &MeetingId,
     label: &str,
     name: &str,
 ) -> Result<CorrectionView> {
-    let mut book = VoiceBook::load(book_path(voices_dir))?;
     let log_path = VoiceLog::path_for(voices_dir, meeting);
     let mut log = VoiceLog::load(&log_path)?
         .ok_or_else(|| Error::Other(format!("no voice log for meeting {meeting}")))?;
 
     let label = SpeakerId::from(label.to_string());
-    let correction = attribution::correct(voices_dir, &mut book, &mut log, &label, name)?;
-
+    let (correction, person) = book.write(|book| {
+        let correction = attribution::correct(voices_dir, book, &mut log, &label, name)?;
+        let person = book
+            .get(&correction.person)
+            .map(PersonView::from)
+            .ok_or_else(|| Error::Other("correction produced no profile".into()))?;
+        Ok((correction, person))
+    })?;
     log.save(&log_path)?;
-    book.save()?;
-
-    let person = book
-        .get(&correction.person)
-        .map(PersonView::from)
-        .ok_or_else(|| Error::Other("correction produced no profile".into()))?;
 
     Ok(CorrectionView {
         person,
@@ -238,46 +241,41 @@ pub fn name_voice(
 }
 
 /// Rename somebody. Their voice is unaffected; only the label changes.
-pub fn rename(voices_dir: &Path, id: &str, name: &str) -> Result<PersonView> {
-    let mut book = VoiceBook::load(book_path(voices_dir))?;
-    book.rename(id, name)?;
-    book.save()?;
-    book.get(id)
-        .map(PersonView::from)
-        .ok_or_else(|| Error::Other(format!("no person with id {id}")))
+pub fn rename(book: &SharedBook, id: &str, name: &str) -> Result<PersonView> {
+    book.write(|book| {
+        book.rename(id, name)?;
+        book.get(id)
+            .map(PersonView::from)
+            .ok_or_else(|| Error::Other(format!("no person with id {id}")))
+    })
 }
 
 /// Attach or clear a picture.
-pub fn set_avatar(voices_dir: &Path, id: &str, avatar: Option<String>) -> Result<PersonView> {
-    let mut book = VoiceBook::load(book_path(voices_dir))?;
-    book.set_avatar(id, avatar)?;
-    book.save()?;
-    book.get(id)
-        .map(PersonView::from)
-        .ok_or_else(|| Error::Other(format!("no person with id {id}")))
+pub fn set_avatar(book: &SharedBook, id: &str, avatar: Option<String>) -> Result<PersonView> {
+    book.write(|book| {
+        book.set_avatar(id, avatar)?;
+        book.get(id)
+            .map(PersonView::from)
+            .ok_or_else(|| Error::Other(format!("no person with id {id}")))
+    })
 }
 
 /// Fold one profile into another, for when the same person was learned twice.
-pub fn merge(voices_dir: &Path, from: &str, into: &str) -> Result<PersonView> {
-    let mut book = VoiceBook::load(book_path(voices_dir))?;
-    book.merge(from, into)?;
-    book.save()?;
-    book.get(into)
-        .map(PersonView::from)
-        .ok_or_else(|| Error::Other(format!("no person with id {into}")))
+pub fn merge(book: &SharedBook, from: &str, into: &str) -> Result<PersonView> {
+    book.write(|book| {
+        book.merge(from, into)?;
+        book.get(into)
+            .map(PersonView::from)
+            .ok_or_else(|| Error::Other(format!("no person with id {into}")))
+    })
 }
 
 /// Forget somebody entirely.
 ///
 /// Transcripts keep the name that was written at the time — this removes the ability to recognise
 /// the voice again, not the record of what was said.
-pub fn forget(voices_dir: &Path, id: &str) -> Result<bool> {
-    let mut book = VoiceBook::load(book_path(voices_dir))?;
-    let removed = book.forget(id);
-    if removed {
-        book.save()?;
-    }
-    Ok(removed)
+pub fn forget(book: &SharedBook, id: &str) -> Result<bool> {
+    book.write(|book| Ok(book.forget(id)))
 }
 
 #[cfg(test)]
@@ -294,10 +292,14 @@ mod tests {
         TempDir::new().expect("tempdir")
     }
 
-    fn seed_book(dir: &Path) -> VoiceBook {
-        let mut book = VoiceBook::load(book_path(dir)).expect("load");
-        book.enroll("Ngọc", &[NGOC.to_vec()], true).expect("enroll");
-        book.save().expect("save");
+    fn open(dir: &Path) -> SharedBook {
+        SharedBook::load(dir).expect("load")
+    }
+
+    fn seed_book(dir: &Path) -> SharedBook {
+        let book = open(dir);
+        book.write(|b| b.enroll("Ngọc", &[NGOC.to_vec()], true))
+            .expect("enroll");
         book
     }
 
@@ -321,7 +323,7 @@ mod tests {
     #[test]
     fn an_empty_vault_has_nobody_rather_than_failing() {
         let dir = voices();
-        let view = list(dir.path()).expect("list");
+        let view = list(&open(dir.path())).expect("list");
         assert!(view.people.is_empty());
         assert!(view.space.is_none());
     }
@@ -330,7 +332,7 @@ mod tests {
     fn a_person_carries_what_the_interface_needs_to_show() {
         let dir = voices();
         seed_book(dir.path());
-        let view = list(dir.path()).expect("list");
+        let view = list(&open(dir.path())).expect("list");
         let ngoc = &view.people[0];
         assert_eq!(ngoc.name, "Ngọc");
         assert_eq!(ngoc.samples, 1);
@@ -340,7 +342,7 @@ mod tests {
     #[test]
     fn a_meeting_with_no_log_has_no_unknowns() {
         let dir = voices();
-        let found = unknowns(dir.path(), &MeetingId::from(String::from("01NOPE"))).expect("unknowns");
+        let found = unknowns(&open(dir.path()), dir.path(), &MeetingId::from(String::from("01NOPE"))).expect("unknowns");
         assert!(found.is_empty());
     }
 
@@ -351,7 +353,7 @@ mod tests {
         let meeting = MeetingId::from(String::from("01A"));
         seed_log(dir.path(), &meeting, "S2", NGOC_ON_A_PHONE, 30.0);
 
-        let found = unknowns(dir.path(), &meeting).expect("unknowns");
+        let found = unknowns(&open(dir.path()), dir.path(), &meeting).expect("unknowns");
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].label, "S2");
         assert_eq!(found[0].utterances, 1);
@@ -369,7 +371,7 @@ mod tests {
         let meeting = MeetingId::from(String::from("01B"));
         seed_log(dir.path(), &meeting, "S3", BINH, 20.0);
 
-        let found = unknowns(dir.path(), &meeting).expect("unknowns");
+        let found = unknowns(&open(dir.path()), dir.path(), &meeting).expect("unknowns");
         assert_eq!(found.len(), 1);
         assert!(
             found[0].suggestions.is_empty(),
@@ -384,7 +386,7 @@ mod tests {
         seed_log(dir.path(), &meeting, "S2", BINH, 5.0);
         seed_log(dir.path(), &meeting, "S3", NGOC, 90.0);
 
-        let found = unknowns(dir.path(), &meeting).expect("unknowns");
+        let found = unknowns(&open(dir.path()), dir.path(), &meeting).expect("unknowns");
         assert_eq!(found[0].label, "S3", "90 seconds outranks 5");
     }
 
@@ -394,13 +396,13 @@ mod tests {
         let meeting = MeetingId::from(String::from("01D"));
         seed_log(dir.path(), &meeting, "S2", BINH, 40.0);
 
-        let result = name_voice(dir.path(), &meeting, "S2", "Bình").expect("name");
+        let result = name_voice(&open(dir.path()), dir.path(), &meeting, "S2", "Bình").expect("name");
         assert_eq!(result.person.name, "Bình");
         assert_eq!(result.relabelled_here, 1);
 
         // And the voice is no longer a question.
-        assert!(unknowns(dir.path(), &meeting).expect("unknowns").is_empty());
-        assert_eq!(list(dir.path()).expect("list").people.len(), 1);
+        assert!(unknowns(&open(dir.path()), dir.path(), &meeting).expect("unknowns").is_empty());
+        assert_eq!(list(&open(dir.path())).expect("list").people.len(), 1);
     }
 
     #[test]
@@ -410,10 +412,10 @@ mod tests {
         let meeting = MeetingId::from(String::from("01E"));
         seed_log(dir.path(), &meeting, "S2", NGOC_ON_A_PHONE, 30.0);
 
-        let result = name_voice(dir.path(), &meeting, "S2", "Ngọc").expect("name");
+        let result = name_voice(&open(dir.path()), dir.path(), &meeting, "S2", "Ngọc").expect("name");
         assert_eq!(result.person.id, "ngoc");
         assert_eq!(
-            list(dir.path()).expect("list").people.len(),
+            list(&open(dir.path())).expect("list").people.len(),
             1,
             "one person, not two"
         );
@@ -428,20 +430,20 @@ mod tests {
         let dir = voices();
         let meeting = MeetingId::from(String::from("01F"));
         seed_log(dir.path(), &meeting, "S2", BINH, 10.0);
-        assert!(name_voice(dir.path(), &meeting, "S9", "Bình").is_err());
+        assert!(name_voice(&open(dir.path()), dir.path(), &meeting, "S9", "Bình").is_err());
     }
 
     #[test]
     fn naming_in_a_meeting_with_no_log_is_an_error() {
         let dir = voices();
-        assert!(name_voice(dir.path(), &MeetingId::from(String::from("01NOPE")), "S2", "Bình").is_err());
+        assert!(name_voice(&open(dir.path()), dir.path(), &MeetingId::from(String::from("01NOPE")), "S2", "Bình").is_err());
     }
 
     #[test]
     fn renaming_keeps_the_voice_and_changes_the_label() {
         let dir = voices();
         seed_book(dir.path());
-        let renamed = rename(dir.path(), "ngoc", "Ngọc Nguyễn").expect("rename");
+        let renamed = rename(&open(dir.path()), "ngoc", "Ngọc Nguyễn").expect("rename");
         assert_eq!(renamed.name, "Ngọc Nguyễn");
         assert_eq!(renamed.samples, 1, "the voice is unaffected");
     }
@@ -449,40 +451,39 @@ mod tests {
     #[test]
     fn renaming_somebody_who_is_not_there_is_an_error() {
         let dir = voices();
-        assert!(rename(dir.path(), "nobody", "X").is_err());
+        assert!(rename(&open(dir.path()), "nobody", "X").is_err());
     }
 
     #[test]
     fn an_avatar_can_be_set_and_cleared() {
         let dir = voices();
         seed_book(dir.path());
-        let with = set_avatar(dir.path(), "ngoc", Some("attachments/ngoc.jpg".into())).expect("set");
+        let with = set_avatar(&open(dir.path()), "ngoc", Some("attachments/ngoc.jpg".into())).expect("set");
         assert_eq!(with.avatar.as_deref(), Some("attachments/ngoc.jpg"));
-        let without = set_avatar(dir.path(), "ngoc", None).expect("clear");
+        let without = set_avatar(&open(dir.path()), "ngoc", None).expect("clear");
         assert!(without.avatar.is_none());
     }
 
     #[test]
     fn merging_folds_one_profile_into_another() {
         let dir = voices();
-        let mut book = VoiceBook::load(book_path(dir.path())).expect("load");
-        book.enroll("Ngọc", &[NGOC.to_vec()], true).expect("a");
-        book.enroll("Ngoc B", &[NGOC_ON_A_PHONE.to_vec()], true)
+        let book = open(dir.path());
+        book.write(|b| b.enroll("Ngọc", &[NGOC.to_vec()], true)).expect("a");
+        book.write(|b| b.enroll("Ngoc B", &[NGOC_ON_A_PHONE.to_vec()], true))
             .expect("b");
-        book.save().expect("save");
 
-        let merged = merge(dir.path(), "ngoc-b", "ngoc").expect("merge");
+        let merged = merge(&open(dir.path()), "ngoc-b", "ngoc").expect("merge");
         assert_eq!(merged.samples, 2);
-        assert_eq!(list(dir.path()).expect("list").people.len(), 1);
+        assert_eq!(list(&open(dir.path())).expect("list").people.len(), 1);
     }
 
     #[test]
     fn forgetting_reports_whether_anything_was_there() {
         let dir = voices();
         seed_book(dir.path());
-        assert!(forget(dir.path(), "ngoc").expect("forget"));
-        assert!(!forget(dir.path(), "ngoc").expect("forget again"));
-        assert!(list(dir.path()).expect("list").people.is_empty());
+        assert!(forget(&open(dir.path()), "ngoc").expect("forget"));
+        assert!(!forget(&open(dir.path()), "ngoc").expect("forget again"));
+        assert!(list(&open(dir.path())).expect("list").people.is_empty());
     }
 
     /// The case that motivated storing samples rather than a running average: a third person is
@@ -490,16 +491,15 @@ mod tests {
     #[test]
     fn correcting_a_false_match_takes_the_samples_back_off_the_wrong_person() {
         let dir = voices();
-        let mut book = VoiceBook::load(book_path(dir.path())).expect("load");
+        let book = open(dir.path());
         // Ngọc's profile has wrongly absorbed a voice that is not hers.
-        book.enroll("Ngọc", &[NGOC.to_vec()], true).expect("real");
-        book.enroll("Ngọc", &[BINH.to_vec()], false).expect("wrong");
-        book.save().expect("save");
-        assert_eq!(list(dir.path()).expect("list").people[0].samples, 2);
+        book.write(|b| b.enroll("Ngọc", &[NGOC.to_vec()], true)).expect("real");
+        book.write(|b| b.enroll("Ngọc", &[BINH.to_vec()], false)).expect("wrong");
+        assert_eq!(list(&open(dir.path())).expect("list").people[0].samples, 2);
 
         let meeting = MeetingId::from(String::from("01G"));
         seed_log(dir.path(), &meeting, "S3", BINH, 25.0);
-        let result = name_voice(dir.path(), &meeting, "S3", "Bình").expect("correct");
+        let result = name_voice(&open(dir.path()), dir.path(), &meeting, "S3", "Bình").expect("correct");
 
         assert_eq!(result.person.name, "Bình");
         assert!(
@@ -508,7 +508,7 @@ mod tests {
             result.corrected_profiles
         );
 
-        let people = list(dir.path()).expect("list").people;
+        let people = list(&open(dir.path())).expect("list").people;
         let ngoc = people.iter().find(|p| p.id == "ngoc").expect("still there");
         assert_eq!(
             ngoc.samples, 1,

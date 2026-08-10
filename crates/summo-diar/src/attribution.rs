@@ -75,42 +75,130 @@ impl VoiceLog {
         }
     }
 
-    /// Where a meeting's vectors live.
+    /// Where a meeting's vectors live, in the binary format of ADR 0003.
     ///
     /// Under `voices/`, not next to the audio: retention deletes recordings after a month, and
     /// these have to outlive that — they are what lets a name applied next year fix last year's
     /// transcripts.
     #[must_use]
     pub fn path_for(voices_dir: &Path, meeting: &MeetingId) -> PathBuf {
-        voices_dir.join("meetings").join(format!("{}.json", meeting.as_str()))
+        voices_dir
+            .join("meetings")
+            .join(format!("{}.vec", meeting.as_str()))
     }
 
+    /// The JSON path a previous release wrote.
+    ///
+    /// Kept for one release so an existing vault is read rather than silently starting empty —
+    /// losing these vectors would cost every past correction.
+    ///
+    /// Public so a migration tool and the tests can name the file the old release wrote; `load`
+    /// finds it on its own.
+    #[must_use]
+    pub fn legacy_path_for(voices_dir: &Path, meeting: &MeetingId) -> PathBuf {
+        voices_dir
+            .join("meetings")
+            .join(format!("{}.json", meeting.as_str()))
+    }
+
+    /// Read a log, in either format.
+    ///
+    /// Dispatches on the file's magic rather than its extension, so a `.vec` that is really JSON —
+    /// which is what a half-finished migration leaves behind — still reads.
     pub fn load(path: &Path) -> Result<Option<Self>> {
-        match std::fs::read_to_string(path) {
-            Ok(text) => {
-                let log: Self = serde_json::from_str(&text)
-                    .map_err(|e| Error::Other(format!("cannot parse {}: {e}", path.display())))?;
-                if log.schema > SCHEMA {
-                    return Err(Error::Other(format!(
-                        "{} was written by a newer build",
-                        path.display()
-                    )));
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Fall back to the JSON a previous release wrote next to it.
+                let legacy = path.with_extension("json");
+                if legacy == path {
+                    return Ok(None);
                 }
-                Ok(Some(log))
+                match std::fs::read(&legacy) {
+                    Ok(bytes) => bytes,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                    Err(e) => return Err(Error::io(&legacy, e)),
+                }
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(Error::io(path, e)),
+            Err(e) => return Err(Error::io(path, e)),
+        };
+
+        if crate::vecfile::is_binary(&bytes) {
+            return Self::from_binary(&bytes, path).map(Some);
         }
+        Self::from_json(&bytes, path).map(Some)
     }
 
-    pub fn save(&self, path: &Path) -> Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+    fn from_binary(bytes: &[u8], path: &Path) -> Result<Self> {
+        let (header, records) = crate::vecfile::read(bytes)
+            .map_err(|e| Error::Other(format!("cannot read {}: {e}", path.display())))?;
+        Ok(Self {
+            meeting: MeetingId::from(header.meeting),
+            schema: SCHEMA,
+            model: header.model,
+            samples: records
+                .into_iter()
+                .map(|r| VoiceSample {
+                    seq: r.seq,
+                    t0: r.t0,
+                    duration: r.duration,
+                    embedding: r.embedding,
+                    person: r.person,
+                    label: SpeakerId::from(r.label),
+                    confirmed: r.confirmed,
+                })
+                .collect(),
+        })
+    }
+
+    fn from_json(bytes: &[u8], path: &Path) -> Result<Self> {
+        let log: Self = serde_json::from_slice(bytes)
+            .map_err(|e| Error::Other(format!("cannot parse {}: {e}", path.display())))?;
+        if log.schema > SCHEMA {
+            return Err(Error::Other(format!(
+                "{} was written by a newer build",
+                path.display()
+            )));
         }
-        let temporary = path.with_extension("json.tmp");
-        std::fs::write(&temporary, serde_json::to_vec(self)?)
-            .map_err(|e| Error::io(&temporary, e))?;
-        std::fs::rename(&temporary, path).map_err(|e| Error::io(path, e))
+        Ok(log)
+    }
+
+    /// Write the log, and clear away the JSON a previous release left.
+    ///
+    /// Removing the legacy file is what makes the migration finish: leaving both would mean a later
+    /// load could pick up stale vectors if the binary one were ever lost.
+    pub fn save(&self, path: &Path) -> Result<()> {
+        let dims = self.samples.first().map_or(1, |s| s.embedding.len());
+        let records: Vec<crate::vecfile::Record> = self
+            .samples
+            .iter()
+            .map(|s| crate::vecfile::Record {
+                seq: s.seq,
+                t0: s.t0,
+                duration: s.duration,
+                confirmed: s.confirmed,
+                label: s.label.to_string(),
+                person: s.person.clone(),
+                embedding: s.embedding.clone(),
+            })
+            .collect();
+
+        let header = crate::vecfile::Header {
+            dims,
+            count: records.len(),
+            model: self.model.clone(),
+            // Revision is not tracked on the log itself yet; the book is where a space is claimed.
+            revision: String::new(),
+            meeting: self.meeting.to_string(),
+        };
+        let bytes = crate::vecfile::write(&header, &records)?;
+        crate::vecfile::write_atomically(path, &bytes)?;
+
+        let legacy = path.with_extension("json");
+        if legacy != path {
+            std::fs::remove_file(&legacy).ok();
+        }
+        Ok(())
     }
 
     /// Distinct labels in this meeting, in first-heard order.
@@ -374,11 +462,26 @@ pub fn resweep(voices_dir: &Path, book: &VoiceBook) -> Result<Vec<(MeetingId, Ve
     let dir = voices_dir.join("meetings");
     let mut out = Vec::new();
 
+    // One entry per meeting, preferring the binary file when a vault is mid-migration and both
+    // exist — otherwise the same meeting would be swept twice and reported twice.
+    let mut candidates: std::collections::BTreeMap<std::ffi::OsString, PathBuf> =
+        std::collections::BTreeMap::new();
     for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
         let path = entry.path();
-        if path.extension().is_none_or(|e| e != "json") {
+        let binary = match path.extension().and_then(|e| e.to_str()) {
+            Some("vec") => true,
+            Some("json") => false,
+            _ => continue,
+        };
+        let Some(stem) = path.file_stem().map(ToOwned::to_owned) else {
             continue;
+        };
+        if binary || !candidates.contains_key(&stem) {
+            candidates.insert(stem, path);
         }
+    }
+
+    for path in candidates.into_values() {
         let Some(mut log) = VoiceLog::load(&path).unwrap_or_else(|e| {
             // One unreadable log must not stop the rest of the history being corrected.
             tracing::warn!(path = %path.display(), error = %e, "skipping a voice log");
@@ -415,6 +518,148 @@ mod tests {
 
     fn log() -> VoiceLog {
         VoiceLog::new(MeetingId::from("01A".to_string()), "campplus-sv")
+    }
+
+    /// A vault written by the previous release must keep its vectors.
+    ///
+    /// Losing them would cost every past correction: the names in old transcripts would survive,
+    /// but Summo would no longer be able to fix them when somebody is renamed.
+    #[test]
+    fn a_json_log_from_a_previous_release_is_still_read() {
+        let dir = TempDir::new().unwrap();
+        let voices = dir.path();
+        let meeting = MeetingId::from("01A".to_string());
+
+        let mut original = log();
+        original.samples.push(VoiceSample {
+            seq: 0,
+            t0: 1.0,
+            duration: 4.0,
+            embedding: NGOC.to_vec(),
+            person: Some("ngoc".into()),
+            label: SpeakerId::from("Ngọc".to_string()),
+            confirmed: true,
+        });
+
+        // Exactly what the old code wrote: JSON, at the `.json` path.
+        let legacy = VoiceLog::legacy_path_for(voices, &meeting);
+        std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        std::fs::write(&legacy, serde_json::to_vec(&original).unwrap()).unwrap();
+
+        let loaded = VoiceLog::load(&VoiceLog::path_for(voices, &meeting))
+            .expect("load")
+            .expect("the old file must be found");
+        assert_eq!(loaded.samples.len(), 1);
+        assert_eq!(loaded.samples[0].embedding, NGOC.to_vec());
+        assert!(loaded.samples[0].confirmed);
+    }
+
+    #[test]
+    fn saving_migrates_the_old_file_away() {
+        let dir = TempDir::new().unwrap();
+        let voices = dir.path();
+        let meeting = MeetingId::from("01A".to_string());
+
+        let mut original = log();
+        original.samples.push(VoiceSample {
+            seq: 0,
+            t0: 0.0,
+            duration: 2.0,
+            embedding: BINH.to_vec(),
+            person: None,
+            label: SpeakerId::from("S2".to_string()),
+            confirmed: false,
+        });
+        let legacy = VoiceLog::legacy_path_for(voices, &meeting);
+        std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        std::fs::write(&legacy, serde_json::to_vec(&original).unwrap()).unwrap();
+
+        let path = VoiceLog::path_for(voices, &meeting);
+        let loaded = VoiceLog::load(&path).unwrap().unwrap();
+        loaded.save(&path).unwrap();
+
+        assert!(path.exists(), "the binary file must be written");
+        assert!(
+            !legacy.exists(),
+            "the old file must go, or a later load could resurrect stale vectors"
+        );
+
+        // And the migrated file still says the same thing.
+        let back = VoiceLog::load(&path).unwrap().unwrap();
+        assert_eq!(back.samples[0].embedding, BINH.to_vec());
+        assert_eq!(back.meeting.as_str(), "01A");
+        assert_eq!(back.model, "campplus-sv");
+    }
+
+    #[test]
+    fn a_resweep_covers_both_formats_and_counts_each_meeting_once() {
+        let dir = TempDir::new().unwrap();
+        let voices = dir.path();
+        let meetings = voices.join("meetings");
+        std::fs::create_dir_all(&meetings).unwrap();
+
+        // One meeting still in JSON, one already migrated.
+        for (id, binary) in [("01OLD", false), ("01NEW", true)] {
+            let meeting = MeetingId::from(id.to_string());
+            let mut log = VoiceLog::new(meeting.clone(), "campplus-sv");
+            log.samples.push(VoiceSample {
+                seq: 0,
+                t0: 0.0,
+                duration: 5.0,
+                embedding: NGOC.to_vec(),
+                person: None,
+                label: SpeakerId::from("S2".to_string()),
+                confirmed: false,
+            });
+            if binary {
+                log.save(&VoiceLog::path_for(voices, &meeting)).unwrap();
+            } else {
+                std::fs::write(
+                    VoiceLog::legacy_path_for(voices, &meeting),
+                    serde_json::to_vec(&log).unwrap(),
+                )
+                .unwrap();
+            }
+        }
+
+        let mut book = VoiceBook::default();
+        book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
+
+        let swept = resweep(voices, &book).unwrap();
+        assert_eq!(swept.len(), 2, "both formats must be swept: {swept:?}");
+        let ids: Vec<&str> = swept.iter().map(|(m, _)| m.as_str()).collect();
+        assert_eq!(ids, vec!["01NEW", "01OLD"]);
+    }
+
+    #[test]
+    fn a_half_migrated_meeting_is_swept_once_not_twice() {
+        let dir = TempDir::new().unwrap();
+        let voices = dir.path();
+        let meeting = MeetingId::from("01A".to_string());
+
+        let mut log = VoiceLog::new(meeting.clone(), "campplus-sv");
+        log.samples.push(VoiceSample {
+            seq: 0,
+            t0: 0.0,
+            duration: 5.0,
+            embedding: NGOC.to_vec(),
+            person: None,
+            label: SpeakerId::from("S2".to_string()),
+            confirmed: false,
+        });
+        // Both files present, as an interrupted migration would leave them.
+        log.save(&VoiceLog::path_for(voices, &meeting)).unwrap();
+        std::fs::write(
+            VoiceLog::legacy_path_for(voices, &meeting),
+            serde_json::to_vec(&log).unwrap(),
+        )
+        .unwrap();
+
+        let mut book = VoiceBook::default();
+        book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
+
+        let swept = resweep(voices, &book).unwrap();
+        assert_eq!(swept.len(), 1, "one meeting, one entry: {swept:?}");
     }
 
     #[test]

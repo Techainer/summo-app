@@ -297,6 +297,7 @@ mod tests {
                 license: "Apache-2.0".into(),
                 attribution: None,
                 redistributable: true,
+            gated: false,
                 size_bytes: files.iter().map(|f| f.size).sum(),
                 profile: crate::manifest::Profile::default(),
                 params: [("encoder".to_string(), serde_json::json!("encoder.onnx"))]

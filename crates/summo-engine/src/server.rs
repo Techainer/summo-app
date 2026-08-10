@@ -62,6 +62,9 @@ pub struct Handshake {
 #[derive(Clone)]
 struct AppState {
     engine: EngineState,
+    /// Loaded once and shared: the book answers "who just spoke?" for every utterance, so it is
+    /// held in memory rather than re-read per request. See `crate::voicebook`.
+    book: crate::voicebook::SharedBook,
     library: Library,
     token: SessionToken,
     allow_loopback_origins: bool,
@@ -79,6 +82,7 @@ impl Server {
     pub async fn start(engine: EngineState, cfg: ServerConfig) -> Result<Self> {
         let token = SessionToken::generate();
         let state = AppState {
+            book: crate::voicebook::SharedBook::load(&engine.paths().voices())?,
             library: Library::new(engine.paths().clone()),
             engine: engine.clone(),
             token: token.clone(),
@@ -650,7 +654,7 @@ async fn people(
     ) {
         return rejection.into_response();
     }
-    as_response(crate::people::list(&state.engine.paths().voices()))
+    as_response(crate::people::list(&state.book))
 }
 
 #[derive(Debug, Deserialize)]
@@ -673,11 +677,7 @@ async fn rename_person(
     ) {
         return rejection.into_response();
     }
-    as_response(crate::people::rename(
-        &state.engine.paths().voices(),
-        &id,
-        &body.name,
-    ))
+    as_response(crate::people::rename(&state.book, &id, &body.name))
 }
 
 #[derive(Debug, Deserialize)]
@@ -702,11 +702,7 @@ async fn set_person_avatar(
     ) {
         return rejection.into_response();
     }
-    as_response(crate::people::set_avatar(
-        &state.engine.paths().voices(),
-        &id,
-        body.avatar,
-    ))
+    as_response(crate::people::set_avatar(&state.book, &id, body.avatar))
 }
 
 #[derive(Debug, Deserialize)]
@@ -730,11 +726,7 @@ async fn merge_person(
     ) {
         return rejection.into_response();
     }
-    as_response(crate::people::merge(
-        &state.engine.paths().voices(),
-        &body.from,
-        &id,
-    ))
+    as_response(crate::people::merge(&state.book, &body.from, &id))
 }
 
 async fn forget_person(
@@ -752,7 +744,7 @@ async fn forget_person(
         return rejection.into_response();
     }
     as_response(
-        crate::people::forget(&state.engine.paths().voices(), &id)
+        crate::people::forget(&state.book, &id)
             .map(|removed| serde_json::json!({ "removed": removed })),
     )
 }
@@ -773,6 +765,7 @@ async fn unknown_voices(
         return rejection.into_response();
     }
     as_response(crate::people::unknowns(
+        &state.book,
         &state.engine.paths().voices(),
         &summo_core::MeetingId::from(id),
     ))
@@ -795,6 +788,7 @@ async fn name_voice(
         return rejection.into_response();
     }
     as_response(crate::people::name_voice(
+        &state.book,
         &state.engine.paths().voices(),
         &summo_core::MeetingId::from(id),
         &label,

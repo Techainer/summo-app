@@ -23,6 +23,7 @@ pub mod recorder;
 pub mod runner;
 pub mod server;
 pub mod state;
+pub mod voicebook;
 
 pub use auth::SessionToken;
 pub use protocol::{Command, SessionSpec, decode_frame, encode_frame};

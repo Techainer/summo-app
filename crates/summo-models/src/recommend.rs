@@ -275,6 +275,7 @@ mod tests {
             license: "MIT".into(),
             attribution: None,
             redistributable: true,
+            gated: false,
             size_bytes: 1,
             profile,
             files: vec![FileEntry {

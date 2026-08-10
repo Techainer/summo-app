@@ -18,6 +18,7 @@
 pub mod attribution;
 pub mod cluster;
 pub mod space;
+pub mod vecfile;
 pub mod voices;
 
 #[cfg(feature = "sherpa")]

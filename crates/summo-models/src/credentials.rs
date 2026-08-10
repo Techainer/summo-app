@@ -245,3 +245,41 @@ mod tests {
         assert!(rendered.contains("<set>"));
     }
 }
+
+#[cfg(test)]
+mod live {
+    //! Talks to HuggingFace. Ignored by default: a test that needs the network and a credential
+    //! must not fail a build on a machine that has neither.
+    //!
+    //! Run with `HF_TOKEN=… cargo test -p summo-models -- --ignored live`.
+
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "needs the network and HF_TOKEN"]
+    async fn a_token_opens_a_gated_repository() {
+        let Some(creds) = hf_from_env().map(|t| Credentials::none().with_huggingface(t)) else {
+            eprintln!("HF_TOKEN not set; skipping");
+            return;
+        };
+
+        let url = "https://huggingface.co/pyannote/segmentation-3.0/resolve/main/config.yaml";
+        let client = reqwest::Client::new();
+
+        // Without the credential the gate is closed...
+        let anonymous = client.get(url).send().await.expect("request");
+        assert_eq!(anonymous.status(), 401, "the repository should be gated");
+
+        // ...and with it, open.
+        let authorised = client
+            .get(url)
+            .header(
+                reqwest::header::AUTHORIZATION,
+                creds.header_for(url).expect("the host is allowlisted"),
+            )
+            .send()
+            .await
+            .expect("request");
+        assert!(authorised.status().is_success(), "got {}", authorised.status());
+    }
+}

@@ -154,6 +154,17 @@ pub struct Manifest {
     /// [`Manifest::validate`] so a mirroring job cannot quietly make us the distributor.
     #[serde(default = "default_true")]
     pub redistributable: bool,
+    /// Whether the upstream host serves these files only to an authenticated account.
+    ///
+    /// Distinct from `redistributable`, and the two are independent. pyannote's checkpoints are
+    /// MIT — freely redistributable — but *gated*: HuggingFace serves them only after the user has
+    /// accepted the model's conditions and supplied a token. Recording it here is what lets the
+    /// app say "open the model page and accept the terms, then add a token" instead of surfacing a
+    /// bare `401` from a download the user cannot diagnose.
+    ///
+    /// See [`crate::credentials`] for how the token is supplied and which hosts may receive it.
+    #[serde(default)]
+    pub gated: bool,
     #[serde(default)]
     pub size_bytes: u64,
     #[serde(default)]
@@ -255,6 +266,23 @@ impl Manifest {
                         return Err(bad(format!(
                             "`{}` is not redistributable but `{}` points at our own CDN",
                             f.name, url
+                        )));
+                    }
+                }
+            }
+        }
+
+        // A gated model has to come from the host that does the gating. Mirroring it onto our CDN
+        // would route around the access control its authors deliberately put in place — technically
+        // possible under a permissive licence, and not ours to decide on their behalf.
+        if self.gated {
+            for f in &self.files {
+                for url in std::iter::once(&f.url).chain(&f.mirror) {
+                    if url.contains("summo.app") {
+                        return Err(bad(format!(
+                            "`{}` is gated upstream but `{url}` points at our own CDN, which would \
+                             route around the access control its authors chose",
+                            f.name
                         )));
                     }
                 }
@@ -464,6 +492,41 @@ mod tests {
         v["files"][0]["url"] = serde_json::json!("https://github.com/upstream/model/x");
         v["files"][0]["mirror"] = serde_json::json!([]);
         assert!(parse(v).is_ok());
+    }
+
+    #[test]
+    fn models_are_not_gated_by_default() {
+        assert!(!parse(base()).unwrap().gated);
+    }
+
+    /// pyannote is the case: MIT, so redistributable, but served only to accounts that have
+    /// accepted its conditions. Mirroring it would route around that.
+    #[test]
+    fn a_gated_model_may_not_point_at_our_cdn_even_when_its_licence_allows_it() {
+        let mut v = base();
+        v["gated"] = serde_json::json!(true);
+        v["license"] = serde_json::json!("MIT");
+        v["redistributable"] = serde_json::json!(true);
+
+        let err = parse(v.clone()).unwrap_err().to_string();
+        assert!(err.contains("gated"), "got: {err}");
+
+        v["files"][0]["url"] = serde_json::json!("https://huggingface.co/pyannote/x/resolve/main/y");
+        v["files"][0]["mirror"] = serde_json::json!([]);
+        assert!(parse(v).is_ok(), "upstream is where a gated model must come from");
+    }
+
+    #[test]
+    fn the_gated_flag_survives_a_round_trip() {
+        let mut v = base();
+        v["gated"] = serde_json::json!(true);
+        v["files"][0]["url"] = serde_json::json!("https://huggingface.co/pyannote/x/resolve/main/y");
+        v["files"][0]["mirror"] = serde_json::json!([]);
+
+        let parsed = parse(v).expect("parse");
+        let text = serde_json::to_string(&parsed).expect("serialise");
+        let back: Manifest = serde_json::from_str(&text).expect("deserialise");
+        assert!(back.gated);
     }
 
     #[test]
