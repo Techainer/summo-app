@@ -31,5 +31,13 @@ Currently referenced by the seed registry:
     Xiph.Org Foundation / Mark Borgerding).
     See docs/adr/0001-vad-backend-licensing.md.
 
+aionrs — https://github.com/iOfficeAI/aionrs
+    Copyright the aionrs authors. Licensed under the Apache License, Version 2.0.
+    Summo uses aionrs as its agent core: the streaming agent loop, tool dispatch,
+    context compaction, session persistence, the provider layer and the MCP client
+    all come from it. Pinned at revision f7b000e1253909060ad565b6eb4a3869bc322d86.
+    Apache-2.0 is one-way compatible with AGPL-3.0, so this composes and may be
+    sold. See docs/adr/0004-agent-core.md.
+
 Rust dependencies are listed in Cargo.lock with their licences; run
 `cargo license` or `cargo about` to regenerate a full report.

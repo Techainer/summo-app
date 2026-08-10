@@ -1,5 +1,6 @@
 [package]
 name = "summo-agent"
+description = "Summo's tools and task runner, on top of the aionrs agent engine"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,3 +9,25 @@ repository.workspace = true
 
 [dependencies]
 summo-core.workspace = true
+summo-vault.workspace = true
+
+# The agent loop, tool registry, MCP client and provider layer come from aionrs (Apache-2.0).
+# Pinned to a commit: this is a dependency we do not control, and an agent that changes behaviour
+# because upstream moved is not something to discover in a user's meeting notes.
+# See `docs/adr/0004-agent-core.md` for why this is a dependency rather than a rewrite.
+aion-agent = { git = "https://github.com/iOfficeAI/aionrs", rev = "f7b000e1253909060ad565b6eb4a3869bc322d86" }
+aion-tools = { git = "https://github.com/iOfficeAI/aionrs", rev = "f7b000e1253909060ad565b6eb4a3869bc322d86" }
+aion-types = { git = "https://github.com/iOfficeAI/aionrs", rev = "f7b000e1253909060ad565b6eb4a3869bc322d86" }
+aion-protocol = { git = "https://github.com/iOfficeAI/aionrs", rev = "f7b000e1253909060ad565b6eb4a3869bc322d86" }
+aion-config = { git = "https://github.com/iOfficeAI/aionrs", rev = "f7b000e1253909060ad565b6eb4a3869bc322d86" }
+
+anyhow.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+pretty_assertions.workspace = true

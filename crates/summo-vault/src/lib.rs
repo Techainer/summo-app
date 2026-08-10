@@ -20,6 +20,7 @@ pub mod report;
 pub mod slug;
 pub mod storage;
 pub mod tasks;
+pub mod tasks_io;
 pub mod template;
 pub mod write;
 
