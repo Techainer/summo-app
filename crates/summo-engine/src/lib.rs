@@ -33,6 +33,7 @@ pub mod runner;
 pub mod server;
 pub mod state;
 pub mod summarize;
+pub mod translate;
 pub mod voicebook;
 
 pub use auth::SessionToken;

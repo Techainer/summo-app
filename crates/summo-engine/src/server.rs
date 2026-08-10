@@ -125,6 +125,10 @@ impl Server {
             .route("/meetings/{id}/tasks", post(create_task))
             .route("/templates", get(templates))
             .route("/meetings/{id}/summarize", post(summarize_meeting))
+            .route("/meetings/{id}/translate", post(translate_meeting))
+            .route("/meetings/{id}/translations", get(meeting_translations))
+            .route("/meetings/{id}/translations/{lang}", get(meeting_translation))
+            .route("/meetings/{id}/subtitles", get(meeting_subtitles))
             .route("/people", get(people))
             .route("/people/{id}/name", post(rename_person))
             .route("/people/{id}/avatar", post(set_person_avatar))
@@ -1358,6 +1362,214 @@ async fn summarize_meeting(
     as_response(result)
 }
 
+#[derive(Debug, Deserialize)]
+struct TranslateBody {
+    /// Target language tag: `en`, `ja`, `vi`.
+    lang: String,
+    /// Re-translate lines that already have a translation. For when the glossary changed and the
+    /// old output is wrong rather than merely missing.
+    #[serde(default)]
+    force: bool,
+    /// Terms that must be translated a particular way, as `source => target` pairs.
+    #[serde(default)]
+    glossary: std::collections::BTreeMap<String, String>,
+}
+
+/// Translate a meeting into another language, writing a file beside it.
+async fn translate_meeting(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<TranslateBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let client = match llm_client(&state) {
+        Ok(client) => client,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+
+    let meeting = summo_core::MeetingId::from(id);
+    let doc = match load_meeting_doc(&state, &meeting) {
+        Ok(doc) => doc,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+
+    let mut glossary = summo_llm::prompt::Glossary::default();
+    for (from, to) in body.glossary {
+        glossary.terms.push((from, to));
+    }
+
+    let result = crate::translate::translate(
+        state.engine.paths(),
+        &client,
+        &meeting,
+        &doc,
+        &body.lang,
+        &glossary,
+        body.force,
+    )
+    .await
+    .map(|outcome| {
+        serde_json::json!({
+            "lang": outcome.lang,
+            "translated": outcome.translated,
+            "missing": outcome.missing,
+            "requests": outcome.requests,
+            "complete": outcome.complete(),
+        })
+    });
+    as_response(result)
+}
+
+/// Which languages a meeting already exists in.
+async fn meeting_translations(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let langs =
+        summo_vault::translation::languages(state.engine.paths(), &summo_core::MeetingId::from(id));
+    as_response(Ok::<_, summo_core::Error>(langs))
+}
+
+/// One translation, as lines aligned to the transcript by `seq`.
+async fn meeting_translation(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((id, lang)): Path<(String, String)>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let meeting = summo_core::MeetingId::from(id);
+    let result = summo_vault::translation::load(state.engine.paths(), &meeting, &lang).and_then(
+        |found| {
+            let translation = found.ok_or_else(|| {
+                summo_core::Error::Other(format!("chưa dịch buổi họp này sang `{lang}`"))
+            })?;
+            Ok(serde_json::json!({
+                "lang": translation.lang,
+                "model": translation.model,
+                "lines": translation.lines.iter().map(|l| serde_json::json!({
+                    "seq": l.seq,
+                    "t0": l.t0,
+                    "text": l.text,
+                })).collect::<Vec<_>>(),
+            }))
+        },
+    );
+    as_response(result)
+}
+
+#[derive(Debug, Deserialize)]
+struct SubtitleQuery {
+    #[serde(default)]
+    token: Option<String>,
+    /// `srt` or `vtt`; anything `summo_vault::export` knows is accepted.
+    #[serde(default = "default_subtitle_format")]
+    format: String,
+    /// Omit for the original language.
+    #[serde(default)]
+    lang: Option<String>,
+}
+
+fn default_subtitle_format() -> String {
+    "srt".into()
+}
+
+/// A meeting as a subtitle file, optionally in a language it was translated into.
+///
+/// Served as text rather than JSON: the caller saves it or feeds it to a player, and wrapping a
+/// subtitle file in a JSON string only means somebody has to unescape it again.
+async fn meeting_subtitles(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<SubtitleQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+
+    let meeting = summo_core::MeetingId::from(id);
+    let doc = match load_meeting_doc(&state, &meeting) {
+        Ok(doc) => doc,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+
+    let doc = match &q.lang {
+        Some(lang) => {
+            match summo_vault::translation::load(state.engine.paths(), &meeting, lang) {
+                Ok(Some(translation)) => crate::translate::applied(&doc, &translation),
+                Ok(None) => {
+                    return as_response(Err::<serde_json::Value, _>(summo_core::Error::Other(
+                        format!("chưa dịch buổi họp này sang `{lang}`"),
+                    )));
+                }
+                Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+            }
+        }
+        None => doc,
+    };
+
+    let Some(format) = summo_vault::export::Format::parse(&q.format) else {
+        return as_response(Err::<serde_json::Value, _>(summo_core::Error::Other(
+            format!("không biết định dạng `{}`", q.format),
+        )));
+    };
+
+    match summo_vault::export::export(&doc, format, summo_vault::export::Options::default()) {
+        Ok(text) => (
+            [(
+                axum::http::header::CONTENT_TYPE,
+                "text/plain; charset=utf-8",
+            )],
+            text,
+        )
+            .into_response(),
+        Err(e) => as_response(Err::<serde_json::Value, _>(e)),
+    }
+}
+
+/// Read one meeting's document off disk.
+fn load_meeting_doc(
+    state: &AppState,
+    meeting: &summo_core::MeetingId,
+) -> summo_core::Result<summo_vault::MeetingDoc> {
+    let path = crate::summarize::find_meeting_file(&state.engine.paths().vault(), meeting)?;
+    let markdown =
+        std::fs::read_to_string(&path).map_err(|e| summo_core::Error::io(&path, e))?;
+    summo_vault::MeetingDoc::parse(&markdown)
+}
+
 /// Everyone Summo can recognise.
 async fn people(
     State(state): State<AppState>,
@@ -2500,6 +2712,110 @@ mod tests {
             resp.json::<serde_json::Value>().await.unwrap()["status"],
             "ok"
         );
+        server.shutdown();
+    }
+
+    /// Writes one meeting into the vault and returns its id.
+    fn seed_meeting(paths: &Paths) -> summo_core::MeetingId {
+        use summo_core::segment::{Lane, Segment};
+        use summo_vault::meeting::{Frontmatter, MeetingDoc};
+
+        let id = summo_core::MeetingId::new();
+        let mut doc = MeetingDoc::new(Frontmatter::new(id.clone(), "2026-08-10"), "Họp ngân sách");
+        doc.transcript
+            .push(Segment::new(1, Lane::System, "xin chào", 0.0, 2.0));
+        doc.transcript
+            .push(Segment::new(2, Lane::System, "cảm ơn", 3.0, 4.0));
+
+        let dir = paths.meetings();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hop.md"), doc.to_markdown().unwrap()).unwrap();
+        id
+    }
+
+    #[tokio::test]
+    async fn a_meeting_with_no_translation_lists_no_languages() {
+        let (tmp, server) = running().await;
+        let id = seed_meeting(&Paths::at(tmp.path()));
+
+        let langs: Vec<String> = client()
+            .get(format!("http://{}/meetings/{id}/translations", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(langs.is_empty());
+        server.shutdown();
+    }
+
+    /// Subtitles in a language nobody translated into must say so, not silently hand back the
+    /// original — a user who asked for English and got Vietnamese has no way to tell it failed.
+    #[tokio::test]
+    async fn subtitles_in_an_untranslated_language_are_refused() {
+        let (tmp, server) = running().await;
+        let id = seed_meeting(&Paths::at(tmp.path()));
+
+        let resp = client()
+            .get(format!(
+                "http://{}/meetings/{id}/subtitles?format=srt&lang=en",
+                server.addr()
+            ))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_client_error() || resp.status().is_server_error());
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn subtitles_come_back_as_a_subtitle_file_not_as_json() {
+        let (tmp, server) = running().await;
+        let paths = Paths::at(tmp.path());
+        let id = seed_meeting(&paths);
+
+        let mut translation = summo_vault::translation::Translation::new("en");
+        translation.set(1, 0.0, "hello");
+        summo_vault::translation::save(&paths, &id, &translation).unwrap();
+
+        let resp = client()
+            .get(format!(
+                "http://{}/meetings/{id}/subtitles?format=srt&lang=en",
+                server.addr()
+            ))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let body = resp.text().await.unwrap();
+        assert!(body.contains("-->"), "not an srt: {body}");
+        assert!(body.contains("hello"), "{body}");
+        // The line the model did not return keeps its original text rather than leaving a hole.
+        assert!(body.contains("cảm ơn"), "{body}");
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn an_unknown_subtitle_format_is_named_in_the_error() {
+        let (tmp, server) = running().await;
+        let id = seed_meeting(&Paths::at(tmp.path()));
+
+        let resp = client()
+            .get(format!(
+                "http://{}/meetings/{id}/subtitles?format=wat",
+                server.addr()
+            ))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_client_error() || resp.status().is_server_error());
+        assert!(resp.text().await.unwrap().contains("wat"));
         server.shutdown();
     }
 

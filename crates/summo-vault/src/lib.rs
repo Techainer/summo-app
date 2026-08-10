@@ -24,6 +24,7 @@ pub mod storage;
 pub mod tasks;
 pub mod tasks_io;
 pub mod template;
+pub mod translation;
 pub mod write;
 
 pub use export::{Format, Options as ExportOptions, export};

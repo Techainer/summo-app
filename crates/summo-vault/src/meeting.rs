@@ -255,18 +255,36 @@ fn split_frontmatter(markdown: &str) -> Option<(&str, &str)> {
     Some((yaml, body))
 }
 
-/// `**[00:12:04] Bạn** — text`
+/// `**[00:12:04] Bạn** — text <!-- seq:7 end:735.20 -->`
+///
+/// The trailing comment carries the two things the visible line cannot.
+///
+/// **`seq`** is the segment's identity. Without it, a segment is identified by its position in the
+/// file, so inserting a line while correcting a typo silently renumbers everything after it — and
+/// anything keyed on `seq`, such as a translation or a dubbed take, reattaches to the wrong
+/// sentence. That is a corruption that *looks* correct, which is the worst kind.
+///
+/// **`end`** is where the utterance stopped. The stamp at the front is the start, to the second,
+/// because that is what a human reads. Subtitles and dubbing need the end and need it exactly: a
+/// subtitle whose duration is guessed flashes, and a dubbed line synthesised to fit a guessed slot
+/// drifts a little further out of sync with every line.
+///
+/// Both are HTML comments, so Obsidian and every other Markdown reader render the line unchanged.
 fn render_segment(segment: &Segment) -> String {
     let speaker = segment.speaker.as_ref().map_or("?", SpeakerId::as_str);
     format!(
-        "**[{}] {}** — {}",
+        "**[{}] {}** — {} <!-- seq:{} end:{:.2} -->",
         format_timestamp(segment.t0),
         speaker,
-        segment.text.trim()
+        segment.text.trim(),
+        segment.seq,
+        segment.t1.max(segment.t0)
     )
 }
 
-fn parse_segment(line: &str, seq: u64) -> Option<Segment> {
+/// `fallback_seq` is the line's position, used only for a file written before segments carried
+/// their own id — or hand-written by someone who did not add one.
+fn parse_segment(line: &str, fallback_seq: u64) -> Option<Segment> {
     let line = line.trim();
     let rest = line.strip_prefix("**[")?;
     let (timestamp, rest) = rest.split_once("] ")?;
@@ -282,10 +300,36 @@ fn parse_segment(line: &str, seq: u64) -> Option<Segment> {
         Lane::System
     };
 
-    let mut segment = Segment::new(seq, lane, text.trim(), t0, t0);
+    let meta = segment_meta(text);
+    let text = text.split("<!--").next().unwrap_or(text);
+    // An end before the start would make a negative-duration subtitle; clamped rather than
+    // rejected, because the line's text is still worth keeping.
+    let t1 = meta.1.filter(|t| *t >= t0).unwrap_or(t0);
+
+    let mut segment = Segment::new(meta.0.unwrap_or(fallback_seq), lane, text.trim(), t0, t1);
     segment.speaker = Some(speaker);
     segment.source = summo_core::segment::SegmentSource::Final;
     Some(segment)
+}
+
+/// `seq` and `end` out of a trailing `<!-- … -->`, if it has one.
+fn segment_meta(text: &str) -> (Option<u64>, Option<f64>) {
+    let Some(start) = text.find("<!--") else {
+        return (None, None);
+    };
+    let comment = &text[start + 4..];
+    let comment = comment.split("-->").next().unwrap_or(comment);
+
+    let mut seq = None;
+    let mut end = None;
+    for field in comment.split_whitespace() {
+        match field.split_once(':') {
+            Some(("seq", value)) => seq = value.parse().ok(),
+            Some(("end", value)) => end = value.parse().ok(),
+            _ => {}
+        }
+    }
+    (seq, end)
 }
 
 /// Seconds to `HH:MM:SS`.
@@ -333,6 +377,71 @@ pub fn extract_links(text: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The bug this exists to prevent: `seq` used to be the line's position, so anything keyed on
+    /// it — a translation, a dubbed take — reattached to the wrong sentence the moment somebody
+    /// inserted a line while fixing a typo.
+    #[test]
+    fn a_segment_keeps_its_id_across_a_save_and_load() {
+        use summo_core::segment::{Lane, Segment};
+
+        let mut doc = MeetingDoc::new(Frontmatter::new(MeetingId::new(), "2026-08-10"), "Họp");
+        doc.transcript
+            .push(Segment::new(41, Lane::System, "xin chào", 0.0, 2.5));
+        doc.transcript
+            .push(Segment::new(42, Lane::System, "cảm ơn", 3.0, 4.0));
+
+        let parsed = MeetingDoc::parse(&doc.to_markdown().unwrap()).unwrap();
+        assert_eq!(parsed.transcript[0].seq, 41);
+        assert_eq!(parsed.transcript[1].seq, 42);
+    }
+
+    /// A subtitle whose duration is guessed flashes; a dubbed line synthesised into a guessed slot
+    /// drifts further out of sync with every line.
+    #[test]
+    fn a_segment_keeps_when_it_ended_not_only_when_it_started() {
+        use summo_core::segment::{Lane, Segment};
+
+        let mut doc = MeetingDoc::new(Frontmatter::new(MeetingId::new(), "2026-08-10"), "Họp");
+        doc.transcript
+            .push(Segment::new(1, Lane::System, "xin chào", 12.0, 14.5));
+
+        let parsed = MeetingDoc::parse(&doc.to_markdown().unwrap()).unwrap();
+        assert_eq!(parsed.transcript[0].t0, 12.0);
+        assert_eq!(parsed.transcript[0].t1, 14.5);
+    }
+
+    /// Files written before segments carried their own id must still parse, and a hand-written line
+    /// is allowed to omit the comment entirely.
+    #[test]
+    fn a_line_without_the_comment_falls_back_to_its_position() {
+        let markdown = "---\nid: 01J\ndate: 2026-08-10\n---\n\n# Họp\n\n## Transcript\n**[00:00:00] ?** — xin chào\n**[00:00:03] ?** — cảm ơn\n";
+        let doc = MeetingDoc::parse(markdown).unwrap();
+        assert_eq!(doc.transcript.len(), 2);
+        assert_eq!(doc.transcript[0].seq, 0);
+        assert_eq!(doc.transcript[1].seq, 1);
+    }
+
+    /// The comment is machine state; it must never end up in the text a person or a model reads.
+    #[test]
+    fn the_metadata_comment_is_not_part_of_the_transcript_text() {
+        use summo_core::segment::{Lane, Segment};
+
+        let mut doc = MeetingDoc::new(Frontmatter::new(MeetingId::new(), "2026-08-10"), "Họp");
+        doc.transcript
+            .push(Segment::new(1, Lane::System, "xin chào", 0.0, 2.0));
+
+        let parsed = MeetingDoc::parse(&doc.to_markdown().unwrap()).unwrap();
+        assert_eq!(parsed.transcript[0].text, "xin chào");
+    }
+
+    /// A hand-edited `end` before the start would render a negative-duration subtitle.
+    #[test]
+    fn an_end_before_the_start_is_clamped_rather_than_trusted() {
+        let markdown = "---\nid: 01J\ndate: 2026-08-10\n---\n\n# Họp\n\n## Transcript\n**[00:00:10] ?** — xin chào <!-- seq:1 end:2.00 -->\n";
+        let doc = MeetingDoc::parse(markdown).unwrap();
+        assert_eq!(doc.transcript[0].t1, 10.0);
+    }
     use summo_core::segment::SegmentSource;
 
     fn sample() -> MeetingDoc {

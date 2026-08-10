@@ -227,7 +227,12 @@ fn split_sections(markdown: &str) -> std::collections::BTreeMap<&str, String> {
 ///
 /// Meetings move between folders, so the path is not derivable from the id — it has to be looked
 /// up. The index already scans heads only, so this is cheap.
-fn find_meeting_file(vault: &Path, meeting: &MeetingId) -> Result<std::path::PathBuf> {
+/// Locate a meeting's Markdown file by id.
+///
+/// Shared rather than duplicated: translation and export need the same lookup, and two scans that
+/// disagree about which file is which meeting is the kind of bug that only shows up once somebody
+/// renames a note.
+pub fn find_meeting_file(vault: &Path, meeting: &MeetingId) -> Result<std::path::PathBuf> {
     let index = summo_vault::index::MeetingIndex::scan(vault)?;
     index
         .entries()
