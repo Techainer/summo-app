@@ -479,6 +479,24 @@ impl VoiceBook {
     }
 
     /// Attach a picture, so the transcript can show a face rather than a letter.
+    /// Change what somebody is called, keeping their voice and their id.
+    ///
+    /// The id is deliberately *not* recomputed from the new name. It appears in wikilinks and file
+    /// names across the vault, and rewriting it would break every existing reference to fix a label
+    /// the user can already read.
+    pub fn rename(&mut self, id: &str, name: &str) -> Result<()> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(Error::Other("a person needs a name".into()));
+        }
+        let person = self
+            .people
+            .get_mut(id)
+            .ok_or_else(|| Error::Other(format!("no person with id {id}")))?;
+        person.name = name.to_string();
+        Ok(())
+    }
+
     pub fn set_avatar(&mut self, id: &str, avatar: Option<String>) -> Result<()> {
         self.people
             .get_mut(id)

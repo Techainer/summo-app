@@ -13,7 +13,6 @@ default = []
 models = [
     "dep:summo-vad",
     "dep:summo-asr",
-    "dep:summo-diar",
     "summo-vad/silero",
     "summo-asr/sherpa",
     "summo-diar/sherpa",
@@ -35,7 +34,7 @@ summo-llm.workspace = true
 summo-vault.workspace = true
 summo-vad = { workspace = true, optional = true }
 summo-asr = { workspace = true, optional = true }
-summo-diar = { workspace = true, optional = true }
+summo-diar.workspace = true
 
 anyhow.workspace = true
 axum.workspace = true

@@ -64,16 +64,22 @@ enough — indexes are how search normally gets fast, so the objection deserved 
 | 10 | 80 | 19 µs | 89 µs | 684 µs | 100.0% | 97 ms | 2.7 MB |
 | 200 | 1,600 | 302 µs | 953 µs | 5,692 µs | **99.0%** | 7.3 s | 53.1 MB |
 | 1,000 | 8,000 | 1,506 µs | 5,847 µs | 7,744 µs | **96.5%** | 37.4 s | 265.5 MB |
+| 10,000 | 80,000 | 16,293 µs | 62,230 µs | **8,227 µs** | **74.0%** | 406.6 s | 2,654 MB |
 
-The index is slower than the scan at every size tested — 36× at ten people, 5× at a thousand — and
-it is the only option that returns wrong answers. Recall is measured against the exact scan, so
-96.5% means one utterance in twenty-nine was attributed to a different person than the correct one.
+The index is slower than the scan at every size that matters — 36× at ten people, 5× at a thousand.
+It finally wins on latency at ten thousand people, by 2×, and that is exactly where the answer stops
+being usable: recall 74% means **one voice in four is attributed to the wrong person**. The index
+buys 8 ms by getting a quarter of the answers wrong, after a 6.8-minute build and 2.65 GB on disk.
+
+Recall is measured against the exact scan, so these are not "slightly worse matches" — they are
+different people. At a thousand people, 96.5% is already one utterance in twenty-nine.
 
 This is not a defect in Turso. It is what an ANN index *is*: an approximation that trades exactness
-for asymptotics, and it wins by that trade only once N is large enough for the asymptotics to pay
-for the constant factor. Summo never gets there. A voice book is bounded by how many people a person
-meets, and each contributes eight centroids; ten thousand people is 80,000 vectors, which a scan
-handles in 16 ms. The crossover is somewhere past the point where the product stops making sense.
+for asymptotics, and the trade only pays once N is large enough to cover the constant factor. The
+measurement locates that crossover precisely — it is at ten thousand people, and by then the
+approximation has degraded to the point where the speed is worthless. A voice book is bounded by how
+many people one user actually meets; ten thousand of them is not a scale Summo needs to serve, and
+it is the *first* size where the index is even faster.
 
 The recall column is the decisive one. Elsewhere an approximate index costs a slightly worse search
 result. Here it puts the wrong name on a sentence somebody said, in a document the user will send to
@@ -84,7 +90,7 @@ vault as the source of truth (see `docs/sync-protocol.md`). A hosted database th
 is the architecture this product exists to avoid. If embeddings sync one day they travel as
 ciphertext like everything else.
 
-*(Reproduce: `cargo run --release -p summo-bench --no-default-features --features turso -- turso`.
+*(Reproduce: `cargo run --release -p summo-bench --no-default-features --features turso -- turso --people 10,200,1000,10000`.
 The feature is off by default because libsql and rusqlite each bundle a SQLite amalgamation and
 cannot link together.)*
 

@@ -103,6 +103,13 @@ impl Server {
             .route("/settings", get(settings))
             .route("/settings/llm", post(set_llm))
             .route("/settings/llm/test", post(test_llm))
+            .route("/people", get(people))
+            .route("/people/{id}/name", post(rename_person))
+            .route("/people/{id}/avatar", post(set_person_avatar))
+            .route("/people/{id}/merge", post(merge_person))
+            .route("/people/{id}", axum::routing::delete(forget_person))
+            .route("/meetings/{id}/voices", get(unknown_voices))
+            .route("/meetings/{id}/voices/{label}", post(name_voice))
             .route("/library", get(library))
             .route("/library/search", get(search))
             .route("/meetings/{id}", get(meeting))
@@ -312,7 +319,12 @@ async fn models(
 /// refresh the list" from "that request was wrong", and a blanket 500 would hide both.
 fn vault_error(e: &Error) -> (StatusCode, String) {
     let message = e.to_string();
-    let status = if message.contains("no meeting with id") {
+    // "Not there" and "you asked for something impossible" are different answers, and an interface
+    // that shows a stale person should be told to drop them rather than shown a validation error.
+    let status = if message.contains("no meeting with id")
+        || message.contains("no person with id")
+        || message.contains("no voice log for meeting")
+    {
         StatusCode::NOT_FOUND
     } else {
         StatusCode::BAD_REQUEST
@@ -578,6 +590,172 @@ async fn forget_audio(
         summo_vault::storage::forget_audio(state.engine.paths(), &summo_core::MeetingId::from(id))
             .map(|freed| serde_json::json!({ "freed_bytes": freed })),
     )
+}
+
+/// Everyone Summo can recognise.
+async fn people(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(crate::people::list(&state.engine.paths().voices()))
+}
+
+#[derive(Debug, Deserialize)]
+struct NameBody {
+    name: String,
+}
+
+async fn rename_person(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<NameBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(crate::people::rename(
+        &state.engine.paths().voices(),
+        &id,
+        &body.name,
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct AvatarBody {
+    /// Vault-relative path, or absent to clear the picture.
+    #[serde(default)]
+    avatar: Option<String>,
+}
+
+async fn set_person_avatar(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<AvatarBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(crate::people::set_avatar(
+        &state.engine.paths().voices(),
+        &id,
+        body.avatar,
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct MergeBody {
+    /// The profile to fold in. It disappears; `id` in the path survives.
+    from: String,
+}
+
+async fn merge_person(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<MergeBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(crate::people::merge(
+        &state.engine.paths().voices(),
+        &body.from,
+        &id,
+    ))
+}
+
+async fn forget_person(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(
+        crate::people::forget(&state.engine.paths().voices(), &id)
+            .map(|removed| serde_json::json!({ "removed": removed })),
+    )
+}
+
+/// The voices in one meeting that nobody has named yet, with who they might be.
+async fn unknown_voices(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(crate::people::unknowns(
+        &state.engine.paths().voices(),
+        &summo_core::MeetingId::from(id),
+    ))
+}
+
+/// Name a voice, and fix every meeting that guessed it wrong.
+async fn name_voice(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((id, label)): Path<(String, String)>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<NameBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(crate::people::name_voice(
+        &state.engine.paths().voices(),
+        &summo_core::MeetingId::from(id),
+        &label,
+        &body.name,
+    ))
 }
 
 /// The whole settings file.
@@ -1054,6 +1232,158 @@ mod tests {
 
     fn client() -> reqwest::Client {
         reqwest::Client::new()
+    }
+
+    /// Put one unnamed voice in a meeting, the way a real session would have.
+    fn seed_voice(tmp: &tempfile::TempDir, meeting: &str, label: &str, embedding: [f32; 4]) {
+        let voices = Paths::at(tmp.path()).voices();
+        let id = summo_core::MeetingId::from(meeting.to_string());
+        let path = summo_diar::VoiceLog::path_for(&voices, &id);
+        let mut log = summo_diar::VoiceLog::load(&path)
+            .unwrap()
+            .unwrap_or_else(|| summo_diar::VoiceLog::new(id, "campplus-sv"));
+        log.samples.push(summo_diar::VoiceSample {
+            seq: log.samples.len() as u64,
+            t0: 0.0,
+            duration: 30.0,
+            label: summo_core::SpeakerId::from(label.to_string()),
+            person: None,
+            confirmed: false,
+            embedding: embedding.to_vec(),
+        });
+        log.save(&path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn people_needs_a_token_like_everything_else() {
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .get(format!("http://{}/people", server.addr()))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn a_fresh_vault_knows_nobody() {
+        let (_tmp, server) = running().await;
+        let body: serde_json::Value = client()
+            .get(format!("http://{}/people", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(body["people"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn naming_a_voice_creates_a_person_and_stops_asking() {
+        let (tmp, server) = running().await;
+        seed_voice(&tmp, "01A", "S2", [0.0, 1.0, 0.0, 0.0]);
+        let base = format!("http://{}", server.addr());
+
+        let unknown: serde_json::Value = client()
+            .get(format!("{base}/meetings/01A/voices"))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(unknown.as_array().unwrap().len(), 1);
+        assert_eq!(unknown[0]["label"], "S2");
+
+        let named: serde_json::Value = client()
+            .post(format!("{base}/meetings/01A/voices/S2"))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "name": "Bình" }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(named["person"]["name"], "Bình");
+        assert_eq!(named["relabelled_here"], 1);
+
+        // The question is answered, so it is no longer asked.
+        let after: serde_json::Value = client()
+            .get(format!("{base}/meetings/01A/voices"))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(after.as_array().unwrap().len(), 0);
+
+        // And they are somebody the app can now list and rename.
+        let renamed: serde_json::Value = client()
+            .post(format!("{base}/people/binh/name"))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "name": "Bình Trần" }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(renamed["name"], "Bình Trần");
+    }
+
+    #[tokio::test]
+    async fn a_person_who_is_not_there_is_a_404_not_a_400() {
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .post(format!("http://{}/people/nobody/name", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "name": "X" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn forgetting_somebody_says_whether_they_were_there() {
+        let (tmp, server) = running().await;
+        seed_voice(&tmp, "01B", "S2", [0.0, 1.0, 0.0, 0.0]);
+        let base = format!("http://{}", server.addr());
+        client()
+            .post(format!("{base}/meetings/01B/voices/S2"))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "name": "Bình" }))
+            .send()
+            .await
+            .unwrap();
+
+        let first: serde_json::Value = client()
+            .delete(format!("{base}/people/binh"))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(first["removed"], true);
+
+        let second: serde_json::Value = client()
+            .delete(format!("{base}/people/binh"))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(second["removed"], false);
     }
 
     #[tokio::test]

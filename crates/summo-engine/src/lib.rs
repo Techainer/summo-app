@@ -15,6 +15,7 @@
 
 pub mod archive;
 pub mod auth;
+pub mod people;
 pub mod protocol;
 pub mod recorder;
 

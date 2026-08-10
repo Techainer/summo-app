@@ -4,7 +4,9 @@ import { RecordButton } from "./components/RecordButton";
 import { StatusBar } from "./components/StatusBar";
 import { Waveform } from "./components/Waveform";
 import { Library } from "./components/Library";
+import { People } from "./components/People";
 import { LibraryClient } from "./lib/library";
+import { PeopleClient } from "./lib/people";
 import { Settings } from "./components/Settings";
 import { apply, empty, type TranscriptState } from "./lib/transcript";
 import { Session, deviceWarning, handshakeFromLocation, type SessionState } from "./lib/session";
@@ -36,7 +38,7 @@ export function App() {
   const [stat, setStat] = useState<{ rtf: number; rss_mb: number; queue_ms: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
-  const [screen, setScreen] = useState<"record" | "library" | "settings">("record");
+  const [screen, setScreen] = useState<"record" | "library" | "people" | "settings">("record");
 
   const timer = useRef<number | null>(null);
   const controller = useRef<Session | null>(null);
@@ -62,6 +64,7 @@ export function App() {
     [],
   );
   const library = useMemo(() => new LibraryClient(handshake), [handshake]);
+  const people = useMemo(() => new PeopleClient(handshake), [handshake]);
 
   if (controller.current === null) {
     controller.current = new Session(handshake, {
@@ -161,6 +164,13 @@ export function App() {
           </button>
           <button
             type="button"
+            className={screen === "people" ? "on" : ""}
+            onClick={() => setScreen("people")}
+          >
+            Giọng nói
+          </button>
+          <button
+            type="button"
             className={screen === "settings" ? "on" : ""}
             onClick={() => setScreen("settings")}
           >
@@ -188,6 +198,8 @@ export function App() {
       <main className="app-main">
         {screen === "settings" ? (
           <Settings handshake={handshake} />
+        ) : screen === "people" ? (
+          <People client={people} />
         ) : screen === "library" ? (
           <Library client={library} onRecord={() => void start()} />
         ) : transcript.segments.length === 0 ? (

@@ -282,3 +282,53 @@ body {
 .settings-actions { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
 .settings-actions .field-hint { margin: 0; }
 .banner.ok { border-left: 3px solid var(--accent); }
+
+/* ---- People ------------------------------------------------------------- */
+
+.people { max-width: 680px; padding: 24px 28px; }
+.people h2 { margin: 0 0 10px; font-size: 20px; letter-spacing: -0.02em; }
+.people h2 + .muted { margin: -4px 0 14px; font-size: 12px; }
+.people .empty { margin-top: 24px; }
+
+.voice-list, .person-list { list-style: none; margin: 0 0 28px; padding: 0; }
+
+.voice {
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 10px; background: var(--bg-soft);
+}
+.voice-head { display: flex; align-items: baseline; gap: 10px; }
+.voice-head strong { font-size: 15px; }
+.voice-head .muted { font-size: 12px; }
+.suggestion-hint { margin: 6px 0 0; font-size: 12px; line-height: 1.5; }
+
+/* Wraps rather than scrolls: the list of colleagues is short, and a hidden name is an unusable
+   name. */
+.voice-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.voice-actions button {
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+}
+.voice-actions button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.voice-actions button:disabled { opacity: 0.5; cursor: default; }
+
+.new-person { display: flex; gap: 6px; }
+.new-person input {
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 999px; width: 140px;
+}
+
+.person { display: flex; align-items: center; gap: 12px; padding: 9px 2px; border-bottom: 1px solid var(--line); }
+.person:last-child { border-bottom: 0; }
+.avatar {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--bg-soft); border: 1px solid var(--line);
+  font-size: 15px; font-weight: 560; color: var(--fg-dim);
+}
+.person-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.person-body .muted { font-size: 12px; }
+.person-body input {
+  border: 1px solid var(--accent); background: var(--bg); color: var(--fg);
+  font: inherit; font-size: 14px; padding: 3px 8px; border-radius: 6px; width: 100%;
+}
+.link.name { font-size: 14px; font-weight: 560; text-align: left; padding: 0; }
