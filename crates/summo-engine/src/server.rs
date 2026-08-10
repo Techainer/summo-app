@@ -9,18 +9,19 @@ use std::net::SocketAddr;
 use axum::{
     Json, Router,
     extract::{
-        Query, State,
+        Path, Query, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::{HeaderMap, StatusCode, header},
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
 use summo_core::{Error, Event, Result};
 
 use crate::{
     auth::{SessionToken, origin_is_allowed, token_path},
+    library::{Library, LibraryQuery},
     protocol::{Command, decode_frame},
     state::EngineState,
 };
@@ -60,6 +61,7 @@ pub struct Handshake {
 #[derive(Clone)]
 struct AppState {
     engine: EngineState,
+    library: Library,
     token: SessionToken,
     allow_loopback_origins: bool,
 }
@@ -76,6 +78,7 @@ impl Server {
     pub async fn start(engine: EngineState, cfg: ServerConfig) -> Result<Self> {
         let token = SessionToken::generate();
         let state = AppState {
+            library: Library::new(engine.paths().clone()),
             engine: engine.clone(),
             token: token.clone(),
             allow_loopback_origins: cfg.allow_loopback_origins,
@@ -93,6 +96,13 @@ impl Server {
             .route("/hw", get(hardware))
             .route("/models", get(models))
             .route("/status", get(status))
+            .route("/library", get(library))
+            .route("/library/search", get(search))
+            .route("/meetings/{id}", get(meeting))
+            .route("/meetings/{id}/folder", post(set_folder))
+            .route("/meetings/{id}/tags", post(set_tags))
+            .route("/meetings/{id}/title", post(set_title))
+            .route("/meetings/{id}/trash", post(trash))
             .route("/ws", get(websocket))
             .with_state(state);
 
@@ -240,6 +250,204 @@ async fn models(
         return rejection.into_response();
     }
     Json(state.engine.store().list()).into_response()
+}
+
+/// Turn a vault failure into a status a client can act on.
+///
+/// A missing meeting is a 404 and everything else a 400: the app distinguishes "this is gone,
+/// refresh the list" from "that request was wrong", and a blanket 500 would hide both.
+fn vault_error(e: &Error) -> (StatusCode, String) {
+    let message = e.to_string();
+    let status = if message.contains("no meeting with id") {
+        StatusCode::NOT_FOUND
+    } else {
+        StatusCode::BAD_REQUEST
+    };
+    (status, message)
+}
+
+fn as_response(result: Result<impl Serialize>) -> axum::response::Response {
+    match result {
+        Ok(value) => Json(value).into_response(),
+        Err(e) => {
+            let (status, message) = vault_error(&e);
+            (status, Json(serde_json::json!({ "error": message }))).into_response()
+        }
+    }
+}
+
+async fn library(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<LibraryQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    // The clock is read here rather than inside the vault so "the last seven days" is anchored to
+    // the machine the user is looking at, in its own offset.
+    let now = time::OffsetDateTime::now_local()
+        .unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    as_response(state.library.view(&q, now))
+}
+
+#[derive(Debug, Deserialize)]
+struct SearchQuery {
+    token: Option<String>,
+    #[serde(default)]
+    q: String,
+    limit: Option<usize>,
+}
+
+async fn search(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<SearchQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        query.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    // A search box sends a request per keystroke; the cap keeps the worst case bounded no matter
+    // what a client asks for.
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    as_response(state.library.search(&query.q, limit))
+}
+
+async fn meeting(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(state.library.detail(&summo_core::MeetingId::from(id)))
+}
+
+#[derive(Debug, Deserialize)]
+struct FolderBody {
+    folder: String,
+}
+
+async fn set_folder(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<FolderBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let id = summo_core::MeetingId::from(id);
+    as_response(
+        state
+            .library
+            .move_to_folder(&id, &body.folder)
+            .map(|_| serde_json::json!({ "folder": body.folder })),
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct TagsBody {
+    tags: Vec<String>,
+}
+
+async fn set_tags(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<TagsBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let id = summo_core::MeetingId::from(id);
+    as_response(
+        state
+            .library
+            .set_tags(&id, body.tags)
+            .map(|tags| serde_json::json!({ "tags": tags })),
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct TitleBody {
+    title: String,
+}
+
+async fn set_title(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<TitleBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let id = summo_core::MeetingId::from(id);
+    as_response(
+        state
+            .library
+            .rename(&id, &body.title)
+            .map(|title| serde_json::json!({ "title": title })),
+    )
+}
+
+async fn trash(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let id = summo_core::MeetingId::from(id);
+    as_response(
+        state
+            .library
+            .trash(&id)
+            .map(|_| serde_json::json!({ "trashed": true })),
+    )
 }
 
 async fn websocket(
@@ -587,7 +795,7 @@ mod tests {
     #[tokio::test]
     async fn everything_else_requires_the_token() {
         let (_tmp, server) = running().await;
-        for path in ["hw", "models", "status"] {
+        for path in ["hw", "models", "status", "library", "library/search"] {
             let resp = client()
                 .get(format!("http://{}/{path}", server.addr()))
                 .send()
@@ -675,6 +883,164 @@ mod tests {
             .unwrap();
         assert_eq!(remote.status(), 403);
 
+        server.shutdown();
+    }
+
+    /// Write a meeting into a running server's vault.
+    fn seed(tmp: &tempfile::TempDir, id: &str, date: &str, title: &str) {
+        let paths = Paths::at(tmp.path());
+        let dir = paths.meetings();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.md")),
+            format!(
+                "---\nid: {id}\ndate: {date}\nduration: 600\ntags: [weekly]\n---\n\
+                 # {title}\n\n## Tóm tắt\nChốt dùng Rust.\n\n## Transcript\n\
+                 **[00:12:04] Bạn** — Mình họp về ngân sách nhé\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_library_lists_what_is_in_the_vault() {
+        let (tmp, server) = running().await;
+        seed(&tmp, "01A", "2026-08-09T10:00:00+07:00", "Weekly Sync");
+
+        let body: serde_json::Value = client()
+            .get(format!("http://{}/library", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(body["total"], 1);
+        assert_eq!(body["groups"][0]["key"], "2026-08-09");
+        assert_eq!(body["groups"][0]["meetings"][0]["title"], "Weekly Sync");
+        assert_eq!(body["stats"]["meetings"], 1);
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn search_reaches_the_transcript_without_tone_marks() {
+        let (tmp, server) = running().await;
+        seed(&tmp, "01A", "2026-08-09T10:00:00+07:00", "Weekly Sync");
+
+        let body: serde_json::Value = client()
+            .get(format!("http://{}/library/search?q=ngan+sach", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(body[0]["meeting"]["id"], "01A");
+        assert_eq!(body[0]["excerpts"][0]["t0"], 724.0);
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn a_missing_meeting_is_a_404_not_a_500() {
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .get(format!("http://{}/meetings/nope", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 404);
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn a_meeting_can_be_filed_renamed_and_trashed_over_http() {
+        let (tmp, server) = running().await;
+        seed(&tmp, "01A", "2026-08-09T10:00:00+07:00", "Weekly Sync");
+        let base = format!("http://{}/meetings/01A", server.addr());
+        let token = server.token().as_str().to_string();
+
+        let resp = client()
+            .post(format!("{base}/folder"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "folder": "khach-hang" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let resp = client()
+            .post(format!("{base}/title"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "title": "Họp sản phẩm" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let detail: serde_json::Value = client()
+            .get(&base)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(detail["summary"]["title"], "Họp sản phẩm");
+        assert_eq!(detail["summary"]["folder"], "khach-hang");
+        assert_eq!(detail["transcript"].as_array().unwrap().len(), 1);
+
+        let resp = client()
+            .post(format!("{base}/trash"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let body: serde_json::Value = client()
+            .get(format!("http://{}/library", server.addr()))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(body["total"], 0, "a trashed meeting must leave the library");
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn a_folder_that_escapes_the_vault_is_refused() {
+        let (tmp, server) = running().await;
+        seed(&tmp, "01A", "2026-08-09T10:00:00+07:00", "Weekly Sync");
+
+        let resp = client()
+            .post(format!("http://{}/meetings/01A/folder", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "folder": "../../etc" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 400);
+
+        // And it is still listed where it was.
+        let body: serde_json::Value = client()
+            .get(format!("http://{}/library", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(body["total"], 1);
         server.shutdown();
     }
 

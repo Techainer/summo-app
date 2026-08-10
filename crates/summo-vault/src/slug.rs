@@ -11,7 +11,7 @@
 ///
 /// Latin-1 accents fold naturally through NFD-style rules, but `đ`/`Đ` and the vowels carrying two
 /// marks do not, so the mapping is explicit.
-fn fold_char(c: char) -> Option<char> {
+pub(crate) fn fold_char(c: char) -> Option<char> {
     let folded = match c {
         'à' | 'á' | 'ạ' | 'ả' | 'ã' | 'â' | 'ầ' | 'ấ' | 'ậ' | 'ẩ' | 'ẫ' | 'ă' | 'ằ' | 'ắ' | 'ặ'
         | 'ẳ' | 'ẵ' => 'a',

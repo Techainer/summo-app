@@ -190,7 +190,7 @@ impl Recorder {
 ///
 /// The rename is the point: it is atomic, so a reader either sees the previous complete file or the
 /// new complete one, never a half-written meeting.
-fn write_atomically(path: &Path, contents: &[u8]) -> Result<()> {
+pub fn write_atomically(path: &Path, contents: &[u8]) -> Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| Error::Vault(format!("{} has no parent directory", path.display())))?;
