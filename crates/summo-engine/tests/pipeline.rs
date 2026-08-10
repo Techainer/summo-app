@@ -160,6 +160,100 @@ async fn a_recording_pushed_through_the_socket_comes_back_as_transcript() {
     server.shutdown();
 }
 
+/// The promise this guards: your data is a folder of files you own. A recording that only ever
+/// existed in the app's memory does not keep it.
+#[tokio::test]
+async fn a_finished_recording_is_written_into_the_vault() {
+    let Some(fx) = fixtures() else {
+        eprintln!("skipping: set the pipeline fixtures");
+        return;
+    };
+    let meetings = fx.home.join("vault/meetings");
+    let before: Vec<_> = std::fs::read_dir(&meetings)
+        .map(|d| d.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+
+    let (server, mut socket) = connect(&fx.home).await;
+
+    socket
+        .send(Message::Text(
+            serde_json::json!({"cmd": "session_start", "live_model": fx.model})
+                .to_string()
+                .into(),
+        ))
+        .await
+        .unwrap();
+    let ack = socket.next().await.unwrap().unwrap();
+    let ack: Event = serde_json::from_str(ack.to_text().unwrap()).unwrap();
+    assert!(
+        matches!(ack, Event::Info { .. }),
+        "session did not start: {ack:?}"
+    );
+
+    let pcm = read_wav(&fx.wav);
+    for frame in pcm.chunks(FRAME_LEN) {
+        socket
+            .send(Message::Binary(encode_frame(Lane::Mic, frame).into()))
+            .await
+            .unwrap();
+        // Drain one pending event if there is one; this test cares about the file, not the stream.
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(1), socket.next()).await;
+    }
+
+    socket
+        .send(Message::Text(r#"{"cmd":"session_stop"}"#.into()))
+        .await
+        .unwrap();
+
+    let mut saved_path = None;
+    while let Ok(Some(Ok(message))) =
+        tokio::time::timeout(std::time::Duration::from_secs(30), socket.next()).await
+    {
+        let Ok(text) = message.to_text() else {
+            continue;
+        };
+        match serde_json::from_str::<Event>(text) {
+            Ok(Event::Info { text }) if text.starts_with("saved to ") => {
+                saved_path = Some(std::path::PathBuf::from(
+                    text.trim_start_matches("saved to ").to_string(),
+                ));
+            }
+            Ok(Event::Info { text }) if text.contains("stopped") => break,
+            _ => {}
+        }
+    }
+
+    let path = saved_path.expect("stopping a session should report where it was saved");
+    assert!(
+        path.exists(),
+        "the daemon reported a path it did not write: {path:?}"
+    );
+    assert!(
+        !before.contains(&path),
+        "a new file should have been created"
+    );
+
+    let body = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        body.starts_with("---"),
+        "the saved file should lead with frontmatter"
+    );
+    assert!(
+        body.contains("## Transcript"),
+        "no transcript section: {body}"
+    );
+    assert!(
+        body.lines().any(|l| l.starts_with("**[")),
+        "the transcript section is empty:\n{body}"
+    );
+    assert!(
+        body.contains(&fx.model),
+        "the model used should be recorded"
+    );
+
+    server.shutdown();
+}
+
 #[tokio::test]
 async fn audio_before_the_session_starts_is_reported_not_swallowed() {
     let Some(fx) = fixtures() else {

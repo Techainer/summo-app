@@ -15,6 +15,7 @@
 
 pub mod auth;
 pub mod protocol;
+pub mod recorder;
 
 #[cfg(feature = "models")]
 pub mod runner;
@@ -23,5 +24,6 @@ pub mod state;
 
 pub use auth::SessionToken;
 pub use protocol::{Command, SessionSpec, decode_frame, encode_frame};
+pub use recorder::Recorder;
 pub use server::{Server, ServerConfig};
 pub use state::{EngineState, SessionStatus};

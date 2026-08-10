@@ -32,6 +32,7 @@ summo-core.workspace = true
 summo-models.workspace = true
 summo-audio.workspace = true
 summo-llm.workspace = true
+summo-vault.workspace = true
 summo-vad = { workspace = true, optional = true }
 summo-asr = { workspace = true, optional = true }
 summo-diar = { workspace = true, optional = true }
@@ -48,6 +49,7 @@ tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
+time.workspace = true
 getrandom.workspace = true
 
 [dev-dependencies]

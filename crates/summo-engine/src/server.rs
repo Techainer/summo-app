@@ -236,24 +236,24 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
         Message::Text(json.into())
     };
 
-    // The recognition pipeline for this connection, created on `session_start`. Held here rather
-    // than in shared state because it is not `Sync` and belongs to exactly one client.
+    // The pipeline and the file it writes into, created on `session_start`. Held here rather than
+    // in shared state because neither is `Sync` and both belong to exactly one client.
     #[cfg(feature = "models")]
-    let mut runner: Option<crate::runner::SessionRunner> = None;
+    let mut session: Option<ActiveSession> = None;
 
     while let Some(Ok(message)) = socket.recv().await {
         let reply = match message {
             #[cfg(feature = "models")]
             Message::Text(text) => {
-                let (events, next) = handle_command_with_models(&text, &engine, runner.take());
-                runner = next;
+                let (events, next) = handle_command_with_models(&text, &engine, session.take());
+                session = next;
                 events
             }
             #[cfg(not(feature = "models"))]
             Message::Text(text) => handle_command(&text, &engine),
 
             #[cfg(feature = "models")]
-            Message::Binary(bytes) => handle_audio_with_models(&bytes, &engine, runner.as_mut()),
+            Message::Binary(bytes) => handle_audio_with_models(&bytes, &engine, session.as_mut()),
             #[cfg(not(feature = "models"))]
             Message::Binary(bytes) => handle_audio(&bytes, &engine),
 
@@ -305,15 +305,34 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
             engine.end();
             vec![Event::info("session stopped")]
         }
-        Command::ModelLoad { id } | Command::ModelSwap { id } | Command::ModelPull { id } => {
-            // Model management lands with the `models` feature; refusing clearly beats accepting
-            // and silently doing nothing.
+        Command::ModelPull { id } => {
+            // Downloading is a long, cancellable, resumable operation with its own progress
+            // reporting, and it does not belong on a socket that is also carrying live audio.
+            // The CLI owns it, so point there rather than accepting and doing nothing.
             vec![Event::Error {
-                message: format!("model management is not built into this binary (requested {id})"),
+                message: format!(
+                    "the daemon does not download models. Run `summo pull {id}`, or \
+                     `summo setup` to install what this machine needs."
+                ),
                 transient: false,
             }]
         }
+        Command::ModelLoad { id } | Command::ModelSwap { id } => vec![Event::Error {
+            message: format!(
+                "cannot load `{id}`: this binary was built without recognition support. \
+                 Rebuild with `--features models`."
+            ),
+            transient: false,
+        }],
     }
+}
+
+/// A running recording: the pipeline, the file it is being written into, and when it started.
+#[cfg(feature = "models")]
+struct ActiveSession {
+    runner: crate::runner::SessionRunner,
+    recorder: crate::recorder::Recorder,
+    started: std::time::Instant,
 }
 
 /// Command handling when recognition is compiled in: owns creating and tearing down the pipeline.
@@ -321,8 +340,8 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
 fn handle_command_with_models(
     text: &str,
     engine: &EngineState,
-    runner: Option<crate::runner::SessionRunner>,
-) -> (Vec<Event>, Option<crate::runner::SessionRunner>) {
+    session: Option<ActiveSession>,
+) -> (Vec<Event>, Option<ActiveSession>) {
     let command: Command = match serde_json::from_str(text) {
         Ok(c) => c,
         Err(e) => {
@@ -331,7 +350,7 @@ fn handle_command_with_models(
                     message: format!("malformed command: {e}"),
                     transient: false,
                 }],
-                runner,
+                session,
             );
         }
     };
@@ -339,18 +358,22 @@ fn handle_command_with_models(
     match command {
         Command::SessionStart(spec) => {
             if let Err(e) = engine.begin(&spec) {
-                return (vec![Event::error(&e)], runner);
+                return (vec![Event::error(&e)], session);
             }
-            match crate::runner::SessionRunner::new(&spec, &engine.store(), engine.hardware()) {
-                Ok(new_runner) => (
-                    vec![Event::info(format!(
-                        "session started with {}",
-                        spec.live_model
-                    ))],
-                    Some(new_runner),
-                ),
+            match start_session(&spec, engine) {
+                Ok(active) => {
+                    let path = active.recorder.path().display().to_string();
+                    (
+                        vec![Event::info(format!(
+                            "session started with {} — writing to {path}",
+                            spec.live_model
+                        ))],
+                        Some(active),
+                    )
+                }
                 Err(e) => {
-                    // Loading failed, so the engine must not be left believing it is recording.
+                    // Loading failed, so the engine must not be left believing it is recording, or
+                    // the next attempt would be refused as already in progress.
                     engine.end();
                     (vec![Event::error(&e)], None)
                 }
@@ -358,9 +381,22 @@ fn handle_command_with_models(
         }
         Command::SessionStop => {
             let mut events = Vec::new();
-            if let Some(mut runner) = runner {
-                match runner.flush() {
-                    Ok(flushed) => events.extend(flushed),
+            if let Some(mut active) = session {
+                match active.runner.flush() {
+                    Ok(flushed) => {
+                        for event in &flushed {
+                            active.recorder.apply(event);
+                        }
+                        events.extend(flushed);
+                    }
+                    Err(e) => events.push(Event::error(&e)),
+                }
+
+                let elapsed = active.started.elapsed().as_secs_f64();
+                match active.recorder.finish(elapsed) {
+                    Ok(path) => events.push(Event::info(format!("saved to {}", path.display()))),
+                    // The transcript is still on screen, so say the save failed rather than
+                    // pretending the meeting was filed away.
                     Err(e) => events.push(Event::error(&e)),
                 }
             }
@@ -370,9 +406,49 @@ fn handle_command_with_models(
         }
         other => {
             let events = handle_command(&serde_json::to_string(&other).unwrap_or_default(), engine);
-            (events, runner)
+            (events, session)
         }
     }
+}
+
+/// Load the models and open the file this session writes into.
+#[cfg(feature = "models")]
+fn start_session(
+    spec: &crate::protocol::SessionSpec,
+    engine: &EngineState,
+) -> summo_core::Result<ActiveSession> {
+    use time::OffsetDateTime;
+
+    let runner = crate::runner::SessionRunner::new(spec, &engine.store(), engine.hardware())?;
+
+    // Local time rather than UTC: a meeting belongs to the day it happened on where the user was.
+    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    let date = format!(
+        "{:04}-{:02}-{:02}",
+        now.year(),
+        u8::from(now.month()),
+        now.day()
+    );
+    let title = format!("Họp {:02}:{:02}", now.hour(), now.minute());
+
+    let mut models = vec![("live".to_string(), spec.live_model.clone())];
+    if let Some(refine) = &spec.refine_model {
+        models.push(("refine".to_string(), refine.clone()));
+    }
+
+    let recorder = crate::recorder::Recorder::start(
+        engine.paths(),
+        summo_core::MeetingId::new(),
+        &title,
+        &date,
+        models,
+    )?;
+
+    Ok(ActiveSession {
+        runner,
+        recorder,
+        started: std::time::Instant::now(),
+    })
 }
 
 /// Audio handling when recognition is compiled in.
@@ -380,7 +456,7 @@ fn handle_command_with_models(
 fn handle_audio_with_models(
     bytes: &[u8],
     engine: &EngineState,
-    runner: Option<&mut crate::runner::SessionRunner>,
+    session: Option<&mut ActiveSession>,
 ) -> Vec<Event> {
     let (lane, samples) = match decode_frame(bytes) {
         Ok(frame) => frame,
@@ -388,7 +464,7 @@ fn handle_audio_with_models(
     };
     engine.advance(summo_core::audio::samples_to_secs(samples.len()), 0);
 
-    let Some(runner) = runner else {
+    let Some(active) = session else {
         // Audio before `session_start`. Saying so beats discarding it silently, which looks
         // identical to a microphone that is not working.
         return vec![Event::Error {
@@ -397,13 +473,21 @@ fn handle_audio_with_models(
         }];
     };
 
-    match runner.accept(lane, &samples) {
+    match active.runner.accept(lane, &samples) {
         Ok(events) => {
             let finals = events
                 .iter()
                 .filter(|e| matches!(e, Event::Final(_)))
                 .count();
             engine.advance(0.0, finals as u64);
+
+            for event in &events {
+                active.recorder.apply(event);
+            }
+            // Flushes on its own interval, so a crash costs seconds rather than the meeting.
+            if let Err(e) = active.recorder.maybe_save() {
+                tracing::error!(error = %e, "autosave failed");
+            }
             events
         }
         Err(e) => vec![Event::error(&e)],
@@ -600,7 +684,7 @@ mod tests {
     }
 
     #[test]
-    fn model_commands_refuse_clearly_when_not_compiled_in() {
+    fn a_download_request_points_at_the_command_that_performs_it() {
         // Accepting and doing nothing would look like a hung download.
         let (_tmp, engine) = engine();
         let events = handle_command(r#"{"cmd":"model_pull","id":"x"}"#, &engine);
@@ -608,8 +692,8 @@ mod tests {
             panic!("expected an error")
         };
         assert!(
-            message.contains("not built into this binary"),
-            "got: {message}"
+            message.contains("summo pull x"),
+            "the message should name the command that does work: {message}"
         );
     }
 
