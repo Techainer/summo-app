@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Transcript } from "../components/Transcript";
 import { ImportPanel } from "../components/import/ImportPanel";
 import { SegmentedControl } from "../components/ui";
+import { useT } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
 
 type Source = "record" | "upload";
@@ -21,18 +22,19 @@ type Source = "record" | "upload";
 export function RecordScreen() {
   const { transcript, session } = useEngine();
   const [source, setSource] = useState<Source>("record");
+  const t = useT();
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex justify-center px-4 pt-4">
         <SegmentedControl
-          label="Nguồn"
+          label={t("record.source")}
           size="sm"
           value={source}
           onChange={setSource}
           options={[
-            { value: "record", label: "Ghi" },
-            { value: "upload", label: "Nhập file" },
+            { value: "record", label: t("record.tab_record") },
+            { value: "upload", label: t("record.tab_upload") },
           ]}
         />
       </div>
@@ -42,7 +44,7 @@ export function RecordScreen() {
           <ImportPanel />
         ) : transcript.segments.length === 0 ? (
           <p className="mt-24 text-center text-fg-faint">
-            {session.recording ? "Đang nghe…" : "Bấm ghi để bắt đầu. Mọi thứ chạy trên máy bạn."}
+            {session.recording ? t("record.listening") : t("record.idle")}
           </p>
         ) : (
           <Transcript segments={transcript.segments} />

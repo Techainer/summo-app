@@ -124,6 +124,7 @@ impl Server {
             .route("/tasks/{id}/run", post(run_task))
             .route("/meetings/{id}/tasks", post(create_task))
             .route("/templates", get(templates))
+            .route("/locales", get(locales))
             .route("/meetings/{id}/summarize", post(summarize_meeting))
             .route("/meetings/{id}/translate", post(translate_meeting))
             .route("/meetings/{id}/translations", get(meeting_translations))
@@ -1568,6 +1569,29 @@ fn load_meeting_doc(
     let markdown =
         std::fs::read_to_string(&path).map_err(|e| summo_core::Error::io(&path, e))?;
     summo_vault::MeetingDoc::parse(&markdown)
+}
+
+/// Interface translations the user dropped into `~/.summo/locales/`.
+///
+/// Unauthenticated content in the sense that anyone who can write to that directory can change it —
+/// but so can they change the binary, so this adds no reach. It is still behind the token like
+/// everything else.
+async fn locales(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(Ok::<_, summo_core::Error>(crate::locales::load(
+        state.engine.paths(),
+    )))
 }
 
 /// Everyone Summo can recognise.

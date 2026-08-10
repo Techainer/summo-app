@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useT } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import {
   ImportClient,
@@ -31,6 +32,7 @@ export function ImportPanel() {
   const { handshake } = useEngine();
   const client = useMemo(() => new ImportClient(handshake), [handshake]);
   const navigate = useNavigate();
+  const t = useT();
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [path, setPath] = useState("");
@@ -56,6 +58,10 @@ export function ImportPanel() {
     return () => window.clearInterval(timer);
   }, [busy, refresh]);
 
+  // A `Described` is either a key to translate or the daemon's own text.
+  const say = (described: ReturnType<typeof describe>) =>
+    "text" in described ? described.text : t(described.key, described.values);
+
   const submit = async (chosen: string) => {
     const trimmed = chosen.trim();
     if (!trimmed) return;
@@ -73,11 +79,11 @@ export function ImportPanel() {
   };
 
   const browse = async () => {
-    const chosen = await pickFile();
+    const chosen = await pickFile(t("import.file_filter"));
     // Outside Tauri there is no dialog; the text field stays the way in, so say so once rather
     // than failing silently on a button that appears to do nothing.
     if (chosen === null) {
-      setError("Không mở được hộp thoại chọn file — dán đường dẫn vào ô bên dưới.");
+      setError(t("import.no_dialog"));
       return;
     }
     await submit(chosen);
@@ -85,9 +91,9 @@ export function ImportPanel() {
 
   return (
     <div className="mx-auto mt-10 w-full max-w-xl px-4">
-      <h2 className="text-lg font-medium">Nhập bản ghi có sẵn</h2>
+      <h2 className="text-lg font-medium">{t("import.title")}</h2>
       <p className="mt-1 text-sm text-fg-dim">
-        File ghi âm hoặc video. Âm thanh được tách ra và nhận dạng ngay trên máy bạn.
+        {t("import.hint")}
       </p>
 
       <div className="mt-4 flex gap-2">
@@ -97,15 +103,15 @@ export function ImportPanel() {
           onKeyDown={(e) => {
             if (e.key === "Enter") void submit(path);
           }}
-          placeholder="/duong/dan/toi/file.mp4"
-          aria-label="Đường dẫn file"
+          placeholder={t("import.path_placeholder")}
+          aria-label={t("import.path_label")}
           className="min-w-0 flex-1 rounded-xl border border-line bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent"
         />
         <Button onClick={() => void browse()} variant="ghost">
-          Chọn file
+          {t("import.browse")}
         </Button>
         <Button onClick={() => void submit(path)} disabled={!path.trim() || starting}>
-          Nhập
+          {t("import.submit")}
         </Button>
       </div>
 
@@ -136,7 +142,7 @@ export function ImportPanel() {
                       job.state === "failed" ? "text-[13px] text-danger" : "text-[13px] text-fg-dim"
                     }
                   >
-                    {describe(job)}
+                    {say(describe(job))}
                   </span>
                 </div>
 
@@ -147,7 +153,7 @@ export function ImportPanel() {
                     aria-valuenow={pct ?? undefined}
                     aria-valuemin={0}
                     aria-valuemax={100}
-                    aria-label={`Tiến độ nhập ${job.title}`}
+                    aria-label={t("import.progress_label", { title: job.title })}
                   >
                     {/* Length unknown: an indeterminate sweep, because a bar frozen at 0% is the
                         one thing a five-minute job must not look like. */}
@@ -175,7 +181,7 @@ export function ImportPanel() {
                     }
                     className="mt-2 text-[13px] font-medium text-accent hover:underline"
                   >
-                    Mở bản ghi
+                    {t("import.open_meeting")}
                   </button>
                 )}
               </motion.li>

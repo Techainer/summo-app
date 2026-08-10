@@ -106,23 +106,42 @@ export function percent(job: Job): number | null {
   return Math.round(Math.min(1, Math.max(0, fraction)) * 100);
 }
 
-/** One line describing where a job is, in the user's language. */
-export function describe(job: Job): string {
+/**
+ * Where a job is, as something a component can render.
+ *
+ * Either a key to translate, or literal text — the daemon's own error message is more useful than
+ * any wording this could invent ("không có âm thanh" says what to fix), and it arrives already
+ * written in whatever language the daemon speaks.
+ */
+export type Described =
+  | { key: string; values: Record<string, string | number> }
+  | { text: string };
+
+/**
+ * Describe a job as a key rather than as text.
+ *
+ * This module has no translator and should not have one: it is transport and arithmetic, tested
+ * without React. Returning a key keeps the decision — which of five states, with or without a
+ * percentage — here where it can be tested, and leaves the wording to the component.
+ */
+export function describe(job: Job): Described {
   switch (job.state) {
     case "queued":
-      return "Đang chờ";
+      return { key: "import.state_queued", values: {} };
     case "extracting":
-      return "Đang tách âm thanh";
+      return { key: "import.state_extracting", values: {} };
     case "running": {
       const pct = percent(job);
-      const found = job.segments ?? 0;
-      const head = pct === null ? "Đang nhận dạng" : `Đang nhận dạng — ${pct}%`;
-      return found > 0 ? `${head}, ${found} câu` : head;
+      return pct === null
+        ? { key: "import.state_running", values: {} }
+        : { key: "import.state_running_pct", values: { percent: pct } };
     }
     case "done":
-      return `Xong — ${job.segments ?? 0} câu`;
+      return { key: "import.state_done", values: { count: job.segments ?? 0 } };
     case "failed":
-      return job.error ?? "Lỗi";
+      // The daemon's own message beats any generic wording, so it is passed through as text under
+      // a key the catalog does not have to translate.
+      return job.error ? { text: job.error } : { key: "import.state_failed", values: {} };
   }
 }
 
@@ -158,14 +177,14 @@ export const SUGGESTED = [
  * should not have to tell them apart. The import is loaded lazily so a browser build never pulls in
  * the plugin.
  */
-export async function pickFile(): Promise<string | null> {
+export async function pickFile(filterLabel = "Audio & video"): Promise<string | null> {
   const tauri = (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
   if (!tauri) return null;
   try {
     const { open } = await import("@tauri-apps/plugin-dialog");
     const chosen = await open({
       multiple: false,
-      filters: [{ name: "Ghi âm & video", extensions: [...SUGGESTED] }],
+      filters: [{ name: filterLabel, extensions: [...SUGGESTED] }],
     });
     return typeof chosen === "string" ? chosen : null;
   } catch {

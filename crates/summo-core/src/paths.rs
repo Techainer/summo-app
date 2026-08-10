@@ -141,6 +141,16 @@ impl Paths {
         self.root.join("voices")
     }
 
+    /// Extra interface translations the user dropped in.
+    ///
+    /// Outside the vault on purpose: a translation is a property of this installation, not of the
+    /// notes, and syncing it between machines would mean one person's wording choice following
+    /// their colleague around.
+    #[must_use]
+    pub fn locales(&self) -> PathBuf {
+        self.root.join("locales")
+    }
+
     /// Summary shapes the user can edit. See `summo_vault::template`.
     #[must_use]
     pub fn templates(&self) -> PathBuf {

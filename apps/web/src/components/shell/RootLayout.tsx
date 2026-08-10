@@ -1,6 +1,7 @@
 import { useMatchRoute, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { useT } from "../../i18n/context";
 import { useIsNarrow } from "../../lib/breakpoint";
 import { useEngine } from "../../lib/engine-context";
 import { deviceWarning } from "../../lib/session";
@@ -9,16 +10,17 @@ import { StatusBar } from "../StatusBar";
 import { Waveform } from "../Waveform";
 import { AppShell } from "./AppShell";
 import { NudgeBar } from "./NudgeBar";
-import type { NavItem } from "./Sidebar";
 
-const NAV: NavItem[] = [
-  { key: "/", label: "Ghi", icon: "●" },
-  { key: "/library", label: "Thư viện", icon: "▤" },
-  { key: "/tasks", label: "Việc", icon: "☑" },
-  { key: "/chat", label: "Hỏi đáp", icon: "◇" },
-  { key: "/people", label: "Giọng nói", icon: "◍" },
-  { key: "/analytics", label: "Thống kê", icon: "◔" },
-  { key: "/settings", label: "Cài đặt", icon: "⚙" },
+/// Labels are translation keys, resolved at render — a module-level array is built once, before a
+/// provider exists, so baking the text in here would freeze the first language forever.
+const NAV: { key: string; labelKey: string; icon: string }[] = [
+  { key: "/", labelKey: "nav.record", icon: "●" },
+  { key: "/library", labelKey: "nav.library", icon: "▤" },
+  { key: "/tasks", labelKey: "nav.tasks", icon: "☑" },
+  { key: "/chat", labelKey: "nav.chat", icon: "◇" },
+  { key: "/people", labelKey: "nav.people", icon: "◍" },
+  { key: "/analytics", labelKey: "nav.analytics", icon: "◔" },
+  { key: "/settings", labelKey: "nav.settings", icon: "⚙" },
 ];
 
 /**
@@ -32,6 +34,11 @@ export function RootLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const matchRoute = useMatchRoute();
   const narrow = useIsNarrow();
+  const t = useT();
+  const navItems = useMemo(
+    () => NAV.map((item) => ({ key: item.key, label: t(item.labelKey), icon: item.icon })),
+    [t],
+  );
   // Initialised from the breakpoint rather than defaulting open and correcting in an effect: on a
   // phone that would paint the sidebar over the whole app for one frame before closing it.
   const [navOpen, setNavOpen] = useState(() => !narrow);
@@ -98,13 +105,13 @@ export function RootLayout({ children }: { children: ReactNode }) {
   const header = (
     <>
       <header
-        aria-label="Thanh trên cùng"
+        aria-label={t("status.top_bar")}
         className="drag-region flex items-center gap-3 border-b border-line px-3 py-2.5"
       >
         <button
           type="button"
           onClick={() => setNavOpen((open) => !open)}
-          aria-label={navOpen ? "Ẩn thanh bên" : "Hiện thanh bên"}
+          aria-label={navOpen ? t("nav.hide_sidebar") : t("nav.show_sidebar")}
           aria-expanded={navOpen}
           className="rounded-lg px-2 py-1.5 text-fg-faint hover:bg-bg-soft hover:text-fg"
         >
@@ -156,7 +163,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
     <div className="flex h-full flex-col">
       <div className="min-h-0 flex-1">
         <AppShell
-          items={NAV}
+          items={navItems}
           active={active}
           onNavigate={(key) => void navigate({ to: key })}
           folders={folders}

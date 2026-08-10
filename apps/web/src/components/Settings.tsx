@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+
+import { useI18n } from "../i18n/context";
 import { url } from "../lib/library";
 import type { Handshake } from "../lib/engine";
 
@@ -102,6 +104,8 @@ export function Settings({ handshake }: { handshake: Handshake }) {
 
   return (
     <div className="settings" data-testid="settings">
+      <LanguagePicker />
+
       <h2>Mô hình ngôn ngữ</h2>
       <p className="hint">
         Nhận dạng giọng nói và tách người nói <b>luôn chạy trên máy bạn</b>. Chỉ tóm tắt, dịch và hỏi
@@ -199,5 +203,39 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Which language the interface is in.
+ *
+ * Listed by each language's own name — someone looking for their language cannot read a list
+ * written in a language they do not read, which is why "Tiếng Việt" is not "Vietnamese".
+ *
+ * The hint about `~/.summo/locales/` is the whole contribution process, so it belongs on screen
+ * rather than in a document nobody opens.
+ */
+function LanguagePicker() {
+  const { locale, setLocale, languages, t } = useI18n();
+
+  return (
+    <>
+      <h2>{t("settings.language")}</h2>
+      <label className="field">
+        <span>{t("settings.language")}</span>
+        <select
+          value={locale}
+          aria-label={t("settings.language")}
+          onChange={(e) => setLocale(e.target.value)}
+        >
+          {languages.map((language) => (
+            <option key={language.code} value={language.code}>
+              {language.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="hint">{t("settings.language_hint")}</p>
+    </>
   );
 }

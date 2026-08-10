@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
 
+import { useT } from "../../i18n/context";
 import { useIsNarrow } from "../../lib/breakpoint";
 import { Sheet } from "../ui";
 import { Sidebar, type NavItem } from "./Sidebar";
@@ -40,6 +41,7 @@ export function AppShell({
   sidebarFooter,
   children,
 }: Props) {
+  const t = useT();
   const narrow = useIsNarrow();
 
   // On a sheet, choosing something should close it — the user has finished navigating.
@@ -89,8 +91,8 @@ export function AppShell({
           open={navOpen}
           onOpenChange={onNavOpenChange}
           side="left"
-          title="Điều hướng"
-          description="Chọn màn hình hoặc thư mục"
+          title={t("nav.label")}
+          description={t("record.pick_screen")}
         >
           {sidebar}
         </Sheet>

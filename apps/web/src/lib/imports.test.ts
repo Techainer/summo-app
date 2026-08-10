@@ -36,26 +36,39 @@ group("percent", () => {
 });
 
 group("describe", () => {
-  it("mentions how many sentences have landed, so a slow import still looks alive", () => {
-    const text = describe(job({ state: "running", done_s: 60, total_s: 120, segments: 42 }));
-    expect(text).toContain("50%");
-    expect(text).toContain("42");
+  it("reports a percentage once the length is known", () => {
+    expect(describe(job({ state: "running", done_s: 60, total_s: 120, segments: 42 }))).toEqual({
+      key: "import.state_running_pct",
+      values: { percent: 50 },
+    });
   });
 
-  it("omits the count before the first sentence rather than saying 0 câu", () => {
-    expect(describe(job({ state: "running", done_s: 1, total_s: 120, segments: 0 }))).toBe(
-      "Đang nhận dạng — 1%",
-    );
+  it("drops to the plain running key when the length is unknown", () => {
+    expect(describe(job({ state: "running", done_s: 1, total_s: 0 }))).toEqual({
+      key: "import.state_running",
+      values: {},
+    });
   });
 
-  it("shows the daemon's own error rather than a generic one", () => {
-    expect(describe(job({ state: "failed", error: "không có âm thanh" }))).toBe(
-      "không có âm thanh",
-    );
+  // "không có âm thanh" tells the user what to fix; "Lỗi" does not.
+  it("passes the daemon's own message through instead of a generic one", () => {
+    expect(describe(job({ state: "failed", error: "không có âm thanh" }))).toEqual({
+      text: "không có âm thanh",
+    });
   });
 
   it("still says something when a failure arrived with no message", () => {
-    expect(describe(job({ state: "failed" }))).toBe("Lỗi");
+    expect(describe(job({ state: "failed" }))).toEqual({
+      key: "import.state_failed",
+      values: {},
+    });
+  });
+
+  it("carries the sentence count once done", () => {
+    expect(describe(job({ state: "done", segments: 7 }))).toEqual({
+      key: "import.state_done",
+      values: { count: 7 },
+    });
   });
 });
 

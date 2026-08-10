@@ -2,6 +2,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { AppI18n } from "./i18n/AppI18n";
 import { EngineProvider } from "./lib/engine-context";
 import { router } from "./router";
 import "./styles/theme.css";
@@ -15,7 +16,9 @@ if (!root) throw new Error("missing #root");
 createRoot(root).render(
   <StrictMode>
     <EngineProvider>
-      <RouterProvider router={router} />
+      <AppI18n>
+        <RouterProvider router={router} />
+      </AppI18n>
     </EngineProvider>
   </StrictMode>,
 );

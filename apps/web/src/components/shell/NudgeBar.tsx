@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useT } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { NudgeClient, POLL_MS, canNotify, iconFor, notify, type Nudge } from "../../lib/nudges";
 
@@ -20,6 +21,7 @@ export function NudgeBar() {
   const client = useMemo(() => new NudgeClient(handshake), [handshake]);
   const navigate = useNavigate();
   const [queue, setQueue] = useState<Nudge[]>([]);
+  const t = useT();
 
   const go = useCallback(
     (route: string) => {
@@ -78,12 +80,12 @@ export function NudgeBar() {
               }}
               className="rounded-full px-2.5 py-1 text-[13px] font-medium text-accent hover:bg-accent/10"
             >
-              Xem
+              {t("nudge.view")}
             </button>
             <button
               type="button"
               onClick={() => dismiss(nudge.key)}
-              aria-label={`Bỏ qua: ${nudge.title}`}
+              aria-label={t("nudge.dismiss", { title: nudge.title })}
               className="rounded-lg px-2 py-1 text-fg-faint hover:text-fg"
             >
               ✕
