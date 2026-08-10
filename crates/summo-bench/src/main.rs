@@ -13,6 +13,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Measure how identification scales with the number of people known.
+    Identify,
+
     /// Compare storage formats for speaker embeddings on the resweep workload.
     Voices {
         #[arg(long, default_value_t = 1000)]
@@ -109,6 +112,10 @@ fn main() -> Result<()> {
             json.as_deref(),
             markdown.as_deref(),
         ),
+        Command::Identify => {
+            summo_bench::voices::identify_scaling();
+            Ok(())
+        }
         Command::Voices {
             meetings,
             utterances,

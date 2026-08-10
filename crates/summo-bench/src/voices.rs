@@ -32,6 +32,43 @@ pub struct Options {
     pub utterances_per_meeting: usize,
 }
 
+/// Centroids one person accumulates — one per way their voice reaches the microphone.
+const CENTROIDS_PER_PERSON: usize = 8;
+
+/// How long it takes to ask "who is this?" as the voice book grows.
+///
+/// This is the question an index would answer, so it has to be measured separately from the sweep:
+/// identification compares against *centroids*, of which there are a few thousand, not against the
+/// history log, of which there are hundreds of thousands. Confusing the two is what makes an ANN
+/// index look necessary.
+pub fn identify_scaling() {
+    println!("{:>8}  {:>10}  {:>14}  {:>12}", "people", "centroids", "per utterance", "in a meeting");
+
+    for people in [10usize, 50, 200, 1_000, 10_000] {
+        let centroids: Vec<Vec<f32>> = (0..people * CENTROIDS_PER_PERSON)
+            .map(|i| vector(i as u64 * 31))
+            .collect();
+        let probe = vector(999_983);
+
+        // Enough repetitions that the timer is measuring the work rather than itself.
+        let reps = if people > 1_000 { 200 } else { 2_000 };
+        let start = Instant::now();
+        let mut checksum = 0.0f32;
+        for _ in 0..reps {
+            checksum += best_similarity(&probe, &centroids);
+        }
+        std::hint::black_box(checksum);
+        let per_call_us = start.elapsed().as_secs_f64() * 1e6 / reps as f64;
+
+        // A busy hour is on the order of 300 utterances long enough to embed.
+        println!(
+            "{people:>8}  {:>10}  {per_call_us:>11.1} µs  {:>9.0} ms",
+            centroids.len(),
+            per_call_us * 300.0 / 1000.0
+        );
+    }
+}
+
 #[derive(Debug)]
 struct Measurement {
     name: &'static str,
