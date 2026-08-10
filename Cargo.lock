@@ -4808,6 +4808,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "summo-tts"
+version = "0.1.0"
+dependencies = [
+ "hound",
+ "ndarray",
+ "ort",
+ "serde",
+ "summo-core",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
 name = "summo-vad"
 version = "0.1.0"
 dependencies = [

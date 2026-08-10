@@ -1,0 +1,25 @@
+[package]
+name = "summo-tts"
+description = "Speech synthesis and dubbing: fitting a translated line back into the slot it came from"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# The VieNeu-TTS backend. Off by default so the planning and mixing half builds anywhere, the same
+# way `summo-vad` keeps Silero optional.
+vieneu = ["dep:ort", "dep:ndarray"]
+
+[dependencies]
+summo-core.workspace = true
+hound.workspace = true
+serde.workspace = true
+tracing.workspace = true
+ort = { workspace = true, optional = true }
+ndarray = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
