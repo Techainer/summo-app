@@ -17,7 +17,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{hw::HwProfile, manifest::{Manifest, Mode, Task}};
+use crate::{
+    hw::HwProfile,
+    manifest::{Manifest, Mode, Task},
+};
 
 /// Real-time factor above which a model cannot drive live transcription.
 ///
@@ -143,7 +146,11 @@ pub fn recommend(candidates: &[Manifest], hw: &HwProfile, language: &str) -> Rec
         ranked.push(score(manifest, &hw_key, language));
     }
 
-    ranked.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    ranked.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     Recommendation { ranked, rejected }
 }
 
@@ -158,7 +165,10 @@ fn covers_language(manifest: &Manifest, language: &str) -> bool {
 
 /// Memory a model needs, taking the larger of its declared minimum and its measured peak.
 fn required_ram_mb(manifest: &Manifest) -> u32 {
-    manifest.profile.min_ram_mb.max(manifest.profile.rss_mb.peak)
+    manifest
+        .profile
+        .min_ram_mb
+        .max(manifest.profile.rss_mb.peak)
 }
 
 /// Quality on the benchmark closest to the requested language.
@@ -166,7 +176,11 @@ fn required_ram_mb(manifest: &Manifest) -> u32 {
 /// Falls back to any quality metric present, because a model measured only on another language is
 /// still better evidence than none — but a language-specific number always wins.
 fn accuracy_for(manifest: &Manifest, language: &str) -> Option<f32> {
-    let language = language.split('-').next().unwrap_or(language).to_lowercase();
+    let language = language
+        .split('-')
+        .next()
+        .unwrap_or(language)
+        .to_lowercase();
     let specific = manifest
         .profile
         .quality
@@ -239,7 +253,10 @@ mod tests {
 
     fn manifest(id: &str, langs: &[&str], rtf: f32, wer_key: &str, wer: f32, ram: u32) -> Manifest {
         let mut profile = Profile {
-            rss_mb: RssProfile { idle: 100, peak: ram },
+            rss_mb: RssProfile {
+                idle: 100,
+                peak: ram,
+            },
             min_ram_mb: ram,
             ..Profile::default()
         };
@@ -296,7 +313,14 @@ mod tests {
     #[test]
     fn a_model_that_does_not_cover_the_language_is_excluded_not_ranked_low() {
         let candidates = vec![
-            manifest("parakeet-en", &["en"], 0.01, "wer_librispeech_en", 0.05, 600),
+            manifest(
+                "parakeet-en",
+                &["en"],
+                0.01,
+                "wer_librispeech_en",
+                0.05,
+                600,
+            ),
             manifest("gipformer-65m", &["vi"], 0.021, "wer_fleurs_vi", 0.024, 800),
         ];
         let out = recommend(&candidates, &hw(8000), "vi");
@@ -325,14 +349,25 @@ mod tests {
         let out = recommend(&candidates, &hw(2000), "vi");
 
         assert!(out.ranked.is_empty());
-        assert!(out.rejected[0].reason.contains("4000 MB"), "got: {}", out.rejected[0].reason);
+        assert!(
+            out.rejected[0].reason.contains("4000 MB"),
+            "got: {}",
+            out.rejected[0].reason
+        );
         assert!(out.rejected[0].reason.contains("2000 MB"));
     }
 
     #[test]
     fn headroom_is_kept_free_rather_than_filling_memory_exactly() {
         // 1500 MB needed and 1600 available is a fit on paper and a disaster in practice.
-        let candidates = vec![manifest("tight", &["vi"], 0.05, "wer_fleurs_vi", 0.01, 1500)];
+        let candidates = vec![manifest(
+            "tight",
+            &["vi"],
+            0.05,
+            "wer_fleurs_vi",
+            0.01,
+            1500,
+        )];
         assert!(recommend(&candidates, &hw(1600), "vi").ranked.is_empty());
         assert_eq!(recommend(&candidates, &hw(4000), "vi").ranked.len(), 1);
     }
@@ -375,7 +410,10 @@ mod tests {
         let (live, refine) = out.pair();
 
         assert_eq!(live.unwrap().id, "best");
-        assert!(refine.is_none(), "refining with a worse model would be a downgrade");
+        assert!(
+            refine.is_none(),
+            "refining with a worse model would be a downgrade"
+        );
     }
 
     #[test]

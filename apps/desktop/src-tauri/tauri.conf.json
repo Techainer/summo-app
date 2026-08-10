@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "app.summo.desktop",
   "build": {
-    "frontendDist": "../dist",
+    "frontendDist": "../../web/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeDevCommand": "pnpm --filter @summo/web dev",
+    "beforeBuildCommand": "pnpm --filter @summo/web build"
   },
   "app": {
     "windows": [
@@ -27,9 +27,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "msi", "deb", "appimage"],
-    "icon": ["icons/icon.png"],
-    "externalBin": ["binaries/summo-engine"],
+    "targets": [
+      "dmg",
+      "msi",
+      "deb",
+      "appimage"
+    ],
+    "icon": [
+      "icons/icon.png"
+    ],
+    "externalBin": [
+      "binaries/summo-engine"
+    ],
     "shortDescription": "Meeting notes that run on your machine",
     "longDescription": "Speech recognition and speaker attribution run locally. Audio never leaves the device."
   }

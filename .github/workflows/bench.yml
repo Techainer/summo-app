@@ -6,7 +6,6 @@ on:
     paths:
       - 'crates/summo-vad/**'
       - 'crates/summo-bench/**'
-      - 'registry/**'
   workflow_dispatch:
 
 jobs:

@@ -367,10 +367,7 @@ async fn list_registry(spec: Option<&str>) -> Result<()> {
 }
 
 /// Gather every manifest worth considering: installed ones plus, optionally, the registry.
-async fn candidates(
-    paths: &Paths,
-    registry: Option<&str>,
-) -> Result<Vec<summo_models::Manifest>> {
+async fn candidates(paths: &Paths, registry: Option<&str>) -> Result<Vec<summo_models::Manifest>> {
     let store = ModelStore::new(paths.clone());
     let mut manifests = store.list();
 
@@ -390,7 +387,9 @@ async fn candidates(
             }
             // A registry that cannot be reached should not stop the app ranking what is already
             // installed — offline is a supported state, not an error.
-            Err(e) => tracing::warn!(error = %e, "registry unavailable; ranking installed models only"),
+            Err(e) => {
+                tracing::warn!(error = %e, "registry unavailable; ranking installed models only")
+            }
         }
     }
     Ok(manifests)
@@ -401,14 +400,24 @@ async fn show_recommendation(paths: &Paths, lang: &str, registry: Option<&str>) 
     let manifests = candidates(paths, registry).await?;
     let out = summo_models::recommend(&manifests, &hw, lang);
 
-    println!("machine  {} · {} cores · {} MB free\n", hw.key(), hw.cores, hw.available_ram_mb);
+    println!(
+        "machine  {} · {} cores · {} MB free\n",
+        hw.key(),
+        hw.cores,
+        hw.available_ram_mb
+    );
 
     if out.ranked.is_empty() {
         println!("No model can run {lang} on this machine.");
     }
     for (rank, scored) in out.ranked.iter().enumerate() {
         let marker = if scored.live_capable { "live" } else { "batch" };
-        println!("{}. {:<24} [{marker}]  {}", rank + 1, scored.id, scored.reason);
+        println!(
+            "{}. {:<24} [{marker}]  {}",
+            rank + 1,
+            scored.id,
+            scored.reason
+        );
     }
 
     if !out.rejected.is_empty() {
@@ -434,7 +443,12 @@ async fn setup(paths: &Paths, lang: &str, registry: Option<&str>, dry_run: bool)
     let hw = HwProfile::detect();
     let store = ModelStore::new(paths.clone());
 
-    println!("machine  {} · {} cores · {} MB free", hw.key(), hw.cores, hw.available_ram_mb);
+    println!(
+        "machine  {} · {} cores · {} MB free",
+        hw.key(),
+        hw.cores,
+        hw.available_ram_mb
+    );
 
     let manifests = candidates(paths, registry).await?;
     let out = summo_models::recommend(&manifests, &hw, lang);
@@ -494,10 +508,7 @@ async fn setup(paths: &Paths, lang: &str, registry: Option<&str>, dry_run: bool)
 
     println!("\nready. Start a session with:");
     match refine {
-        Some(refine) => println!(
-            "  live model {} refined by {}",
-            live.id, refine.id
-        ),
+        Some(refine) => println!("  live model {} refined by {}", live.id, refine.id),
         None => println!("  live model {}", live.id),
     }
     Ok(())

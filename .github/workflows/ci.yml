@@ -76,14 +76,18 @@ jobs:
             -p summo-core -p summo-models -p summo-vad -p summo-bench
 
   registry:
-    name: validate model manifests
+    name: validate the live registry
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The catalogue is a separate repository. Checking it out here catches the case that matters:
+      # a change to the manifest rules in this repo that would reject manifests already published.
+      - uses: actions/checkout@v4
+        with:
+          repository: summo-app/summo-registry
+          path: registry
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # Every manifest must parse and pass validation: licence present, digests well formed, and
-      # non-redistributable models never pointing at our own CDN.
       - run: cargo test -p summo-models
-      - name: Parse seed registry
+      - name: Validate every published manifest against this build
         run: cargo run --quiet -p summo-cli -- registry check registry

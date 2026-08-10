@@ -142,7 +142,9 @@ impl SessionRunner {
 
         let mut closed = false;
         for event in events.iter_mut() {
-            let Event::Final(segment) = event else { continue };
+            let Event::Final(segment) = event else {
+                continue;
+            };
             closed = true;
 
             // Embedding failure is not worth losing a transcript line over; the utterance simply
@@ -154,7 +156,9 @@ impl SessionRunner {
                         segment.speaker = Some(speaker.clone());
                     }
                 }
-                Err(e) => tracing::warn!(error = %e, "speaker embedding failed; leaving unlabelled"),
+                Err(e) => {
+                    tracing::warn!(error = %e, "speaker embedding failed; leaving unlabelled")
+                }
             }
         }
 
@@ -164,7 +168,9 @@ impl SessionRunner {
     /// Speakers discovered so far in the remote lane.
     #[must_use]
     pub fn speaker_count(&self) -> usize {
-        self.diarizer.as_ref().map_or(0, |d| d.clusterer.speaker_count())
+        self.diarizer
+            .as_ref()
+            .map_or(0, |d| d.clusterer.speaker_count())
     }
 
     /// Close every lane, emitting any utterance still open.
@@ -236,9 +242,7 @@ fn resolve_speaker_model(store: &ModelStore) -> Result<std::path::PathBuf> {
         .param_path("model")
         .or_else(|| installed.files.values().next())
         .cloned()
-        .ok_or_else(|| {
-            Error::ModelNotFound("the installed speaker model has no model file".into())
-        })
+        .ok_or_else(|| Error::ModelNotFound("the installed speaker model has no model file".into()))
 }
 
 /// Resolve a `params` key to a concrete blob path, naming what is missing when it is not there.

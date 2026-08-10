@@ -160,7 +160,10 @@ fn to_text(doc: &MeetingDoc, options: Options) -> String {
 
         let mut line = String::new();
         if options.timestamps {
-            line.push_str(&format!("[{}] ", crate::meeting::format_timestamp(first.t0)));
+            line.push_str(&format!(
+                "[{}] ",
+                crate::meeting::format_timestamp(first.t0)
+            ));
         }
         if options.speakers {
             line.push_str(&format!("{}: ", speaker_of(first)));
@@ -320,8 +323,14 @@ mod tests {
     #[test]
     fn vtt_carries_the_header_and_a_voice_span() {
         let vtt = to_vtt(&doc().transcript, Options::default());
-        assert!(vtt.starts_with("WEBVTT\n\n"), "a missing header renders no subtitles");
-        assert!(vtt.contains("00:00:01.000 --> 00:00:03.500"), "vtt uses a period");
+        assert!(
+            vtt.starts_with("WEBVTT\n\n"),
+            "a missing header renders no subtitles"
+        );
+        assert!(
+            vtt.contains("00:00:01.000 --> 00:00:03.500"),
+            "vtt uses a period"
+        );
         assert!(vtt.contains("<v me>"));
     }
 
@@ -352,7 +361,10 @@ mod tests {
             text.contains("me: Anh nghĩ mình nên dùng Rust cho phần lõi"),
             "fragments should have been joined: {text}"
         );
-        assert!(!text.contains('['), "readable output should carry no timestamps");
+        assert!(
+            !text.contains('['),
+            "readable output should carry no timestamps"
+        );
     }
 
     #[test]
@@ -376,7 +388,10 @@ mod tests {
         let csv = to_csv(&segments);
         let line = csv.lines().nth(1).unwrap();
 
-        assert!(line.contains(r#""anh nói ""được"", rồi đi""#), "got: {line}");
+        assert!(
+            line.contains(r#""anh nói ""được"", rồi đi""#),
+            "got: {line}"
+        );
         assert_eq!(csv.lines().count(), 4, "header plus three rows");
     }
 

@@ -37,12 +37,13 @@ crates/
   summo-diar      speaker attribution: track priors, online clustering, refinement
   summo-llm       summaries, translation and Q&A — the only part that leaves the machine
   summo-store     vector index for semantic Q&A                                 [not needed yet]
-  summo-agent     skills, MCP server and client                                [in progress]
-  summo-sync      CRDT + end-to-end-encrypted multi-device sync                [in progress]
-  summo-engine    local daemon: HTTP + WebSocket on 127.0.0.1                  [in progress]
-  summo-cli       `summo pull | list | serve | transcribe`                     [in progress]
-registry/         seed model manifests (moves to its own repository)
-web/              landing page (moves to the cloud repository)
+  summo-engine    the local daemon: capture, recognition and events over loopback
+  summo-cli       `summo setup | pull | list | recommend | transcribe`
+  summo-agent     skills, MCP server and client                                [next]
+  summo-sync      CRDT + end-to-end-encrypted multi-device sync                [next]
+apps/
+  web/            the application interface — React, embedded by the shell
+  desktop/        the Tauri shell: window, tray, global shortcut
 docs/adr/         decision records
 ```
 
@@ -96,6 +97,27 @@ To check whether a search index would be worth it on your own corpus size:
 ```bash
 cargo run --release -p summo-bench -- vault --sizes 100,1000,5000
 ```
+
+## The three repositories
+
+Summo is split along the line that matters for its promise: the app runs locally, so nothing you
+need may live behind something we operate.
+
+| Repository | Licence | What it is |
+|---|---|---|
+| **summo** (here) | AGPL-3.0 | The application and everything it needs to run |
+| [summo-registry](https://github.com/summo-app/summo-registry) | MIT | The model catalogue — static JSON, forkable, mirrorable |
+| summo-cloud | proprietary | summo.app, the CDN, billing, sync |
+
+The dependency runs one way. This repository imports nothing from summo-cloud, and CI builds and
+tests it without that repository present. The app reaches our infrastructure for three optional
+things — a faster registry mirror, update manifests, and sync for whoever pays — and each falls back
+to something we do not operate. Delete summo-cloud tomorrow and Summo keeps recording,
+transcribing, installing models and exporting; only sync stops.
+
+The registry is separate for a different reason: it has to outlive us. A model resolves through
+`SUMMO_REGISTRY` → our CDN → the registry repository on GitHub → the URL inside the manifest, which
+points at whoever published the weights.
 
 ## Licence
 
