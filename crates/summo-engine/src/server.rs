@@ -103,6 +103,7 @@ impl Server {
             .route("/settings", get(settings))
             .route("/settings/llm", post(set_llm))
             .route("/settings/llm/test", post(test_llm))
+            .route("/report", get(report))
             .route("/people", get(people))
             .route("/people/{id}/name", post(rename_person))
             .route("/people/{id}/avatar", post(set_person_avatar))
@@ -590,6 +591,49 @@ async fn forget_audio(
         summo_vault::storage::forget_audio(state.engine.paths(), &summo_core::MeetingId::from(id))
             .map(|freed| serde_json::json!({ "freed_bytes": freed })),
     )
+}
+
+#[derive(Debug, Deserialize)]
+struct ReportQuery {
+    #[serde(default)]
+    token: Option<String>,
+    /// Inclusive `YYYY-MM-DD` start. Defaults to `to`, making a single-day report.
+    #[serde(default)]
+    from: Option<String>,
+    /// Inclusive `YYYY-MM-DD` end. Defaults to today in the daemon's local offset.
+    #[serde(default)]
+    to: Option<String>,
+}
+
+/// What a day, or a range of days, contained.
+///
+/// No model runs: this is arithmetic over the vault, so it is instant, works offline, and cannot be
+/// wrong the way a generated summary can.
+async fn report(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<ReportQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    // The daemon's own day. A report asked for "today" means the user's today.
+    let today = time::OffsetDateTime::now_local()
+        .unwrap_or_else(|_| time::OffsetDateTime::now_utc())
+        .date()
+        .to_string();
+    let to = q.to.unwrap_or(today);
+    let from = q.from.unwrap_or_else(|| to.clone());
+    as_response(summo_vault::report::between(
+        &state.engine.paths().vault(),
+        &from,
+        &to,
+    ))
 }
 
 /// Everyone Summo can recognise.

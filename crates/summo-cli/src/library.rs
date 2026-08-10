@@ -75,6 +75,18 @@ pub enum MeetingCmd {
 
     /// Delete one meeting's audio, keeping its transcript.
     ForgetAudio { id: String },
+
+    /// What a day contained: hours, who with, and what is still open.
+    ///
+    /// No model runs — this is arithmetic over the vault, so it works offline and costs nothing.
+    Report {
+        /// `YYYY-MM-DD`, or `today` / `yesterday`. Defaults to today.
+        #[arg(default_value = "today")]
+        day: String,
+        /// Report a whole ISO week ending on `day` instead of a single day.
+        #[arg(long)]
+        week: bool,
+    },
 }
 
 pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
@@ -273,6 +285,17 @@ pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
             Ok(())
         }
 
+        MeetingCmd::Report { day, week } => {
+            let today = now().date().to_string();
+            let to = match day.as_str() {
+                "today" => today,
+                "yesterday" => shift(&today, -1),
+                explicit => explicit.to_string(),
+            };
+            let from = if week { shift(&to, -6) } else { to.clone() };
+            print_report(&summo_vault::report::between(&paths.vault(), &from, &to)?);
+            Ok(())
+        }
         MeetingCmd::Stats => {
             let index = library.scan()?;
             let stats = index.stats(now());
@@ -355,6 +378,66 @@ fn parse_group(name: &str) -> Result<GroupBy> {
 ///
 /// `now_local` fails in a multi-threaded process on some Unixes; a wrong "last seven days" boundary
 /// by a few hours is better than refusing to print the library.
+/// Shift a `YYYY-MM-DD` by whole days, leaving it alone if it will not parse.
+fn shift(day: &str, days: i64) -> String {
+    let Ok(date) = time::Date::parse(
+        day,
+        &time::format_description::well_known::Iso8601::DATE,
+    ) else {
+        return day.to_string();
+    };
+    (date + time::Duration::days(days)).to_string()
+}
+
+fn print_report(report: &summo_vault::report::Report) {
+    if report.from == report.to {
+        println!("{}", report.from);
+    } else {
+        println!("{} → {}", report.from, report.to);
+    }
+
+    if report.meetings.is_empty() {
+        println!("\nKhông có buổi họp nào.");
+        return;
+    }
+
+    println!(
+        "\n{} buổi họp · {}",
+        report.meetings.len(),
+        duration(report.total_seconds)
+    );
+    for meeting in &report.meetings {
+        println!(
+            "  {:>6}  {}{}",
+            duration(meeting.duration),
+            meeting.title,
+            if meeting.has_summary { "" } else { "  (chưa tóm tắt)" }
+        );
+    }
+
+    if !report.people.is_empty() {
+        println!("\nThời gian với ai");
+        for person in report.people.iter().take(8) {
+            println!("  {:>6}  {}", duration(person.seconds), person.name);
+        }
+    }
+
+    if !report.open_actions.is_empty() {
+        // The only part of a vault that decays: a task nobody looked at again.
+        println!("\nCòn phải làm ({})", report.open_actions.len());
+        for action in &report.open_actions {
+            println!("  [ ] {}  — {}", action.text, action.meeting_title);
+        }
+    }
+    if report.done_actions > 0 {
+        println!("\nĐã xong: {}", report.done_actions);
+    }
+
+    if !report.quiet_days.is_empty() && report.from != report.to {
+        println!("\nKhông họp: {}", report.quiet_days.join(", "));
+    }
+}
+
 fn now() -> OffsetDateTime {
     OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc())
 }
