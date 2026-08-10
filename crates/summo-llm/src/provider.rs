@@ -106,6 +106,35 @@ impl Provider {
     /// Surfaced in the UI next to the endpoint: the whole product promise is that recordings stay
     /// local, and a user pointing summaries at a hosted model should see that they have opted into
     /// sending transcript text away.
+    /// Build a provider from what a user configured: a well-known name, or a base URL.
+    ///
+    /// One copy of this, shared by the CLI, the daemon and the settings screen. The alternative was
+    /// three lists of default model names that would agree until one of them was updated.
+    ///
+    /// The key is never stored — it is read from the environment or the keychain at the moment it
+    /// is needed, so it cannot end up in a settings file, a backup or a support bundle.
+    pub fn resolve(name: &str, model: Option<&str>, api_key: Option<&str>) -> Result<Self> {
+        let key = |who: &str| -> Result<&str> {
+            api_key
+                .filter(|k| !k.trim().is_empty())
+                .ok_or_else(|| Error::Config(format!("{who} needs an API key: set SUMMO_API_KEY")))
+        };
+        Ok(match name.trim() {
+            "" | "ollama" => Self::ollama(model.unwrap_or("qwen3:8b")),
+            "lm-studio" => Self::lm_studio(model.unwrap_or("local-model")),
+            "openai" => Self::openai(model.unwrap_or("gpt-5"), key("openai")?),
+            "anthropic" => Self::anthropic(model.unwrap_or("claude-opus-5"), key("anthropic")?),
+            url if url.starts_with("http://") || url.starts_with("https://") => {
+                Self::custom("custom", url, model.unwrap_or("default"))
+            }
+            other => {
+                return Err(Error::Config(format!(
+                    "unknown provider `{other}`. Use ollama, lm-studio, openai, anthropic, or a base URL."
+                )));
+            }
+        })
+    }
+
     #[must_use]
     pub fn is_local(&self) -> bool {
         let host = self

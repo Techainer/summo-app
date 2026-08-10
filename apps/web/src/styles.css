@@ -264,3 +264,21 @@ body {
   .library { grid-template-columns: 1fr; }
   .library-side { border-right: 0; border-bottom: 1px solid var(--line); max-height: 45%; }
 }
+
+/* ---- Settings ----------------------------------------------------------- */
+
+.settings { max-width: 560px; padding: 24px 28px; }
+.settings h2 { margin: 0 0 8px; font-size: 20px; letter-spacing: -0.02em; }
+.field { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: 13px; color: var(--fg-dim); }
+.field > span { flex: none; width: 150px; }
+.field select, .field input[type="text"], .field input:not([type]) {
+  flex: 1; border: 1px solid var(--line); background: var(--bg-soft); color: var(--fg);
+  font: inherit; font-size: 14px; padding: 7px 10px; border-radius: 8px;
+}
+.field.checkbox { gap: 9px; }
+.field.checkbox > span { width: auto; }
+.field-hint { margin: 6px 0 0 162px; font-size: 12px; color: var(--fg-faint); line-height: 1.55; }
+.field-hint.warn { color: #e0a458; }
+.settings-actions { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
+.settings-actions .field-hint { margin: 0; }
+.banner.ok { border-left: 3px solid var(--accent); }

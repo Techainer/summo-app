@@ -97,6 +97,9 @@ impl Server {
             .route("/hw", get(hardware))
             .route("/models", get(models))
             .route("/status", get(status))
+            .route("/settings", get(settings))
+            .route("/settings/llm", post(set_llm))
+            .route("/settings/llm/test", post(test_llm))
             .route("/library", get(library))
             .route("/library/search", get(search))
             .route("/meetings/{id}", get(meeting))
@@ -496,6 +499,132 @@ async fn trash(
             .trash(&id)
             .map(|_| serde_json::json!({ "trashed": true })),
     )
+}
+
+/// The whole settings file.
+///
+/// Safe to hand to the interface as-is: by construction it holds no secrets. API keys live in the
+/// environment or the OS keychain precisely so that this endpoint can exist without a redaction
+/// step that someone would eventually forget to update.
+async fn settings(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let path = state.engine.paths().settings();
+    as_response(summo_core::Settings::load(&path).map(|settings| {
+        serde_json::json!({
+            "settings": settings,
+            // Whether a key is present, never the key. The screen needs to say "set" or "not set"
+            // and nothing more.
+            "api_key_present": api_key().is_some(),
+        })
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct LlmBody {
+    provider: String,
+    model: Option<String>,
+    language: Option<String>,
+    summarize_on_stop: Option<bool>,
+}
+
+/// The API key, from the environment.
+///
+/// Read at the moment it is used rather than held, so a key rotated in the shell that launched the
+/// daemon does not require a restart to take effect on the next call.
+fn api_key() -> Option<String> {
+    std::env::var("SUMMO_API_KEY").ok().filter(|k| !k.trim().is_empty())
+}
+
+async fn set_llm(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<LlmBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+
+    let path = state.engine.paths().settings();
+    as_response((|| {
+        // Refuse a provider that cannot be resolved rather than writing it and failing later, when
+        // the user has moved on and the error has nothing to do with what they are doing.
+        summo_llm::Provider::resolve(&body.provider, body.model.as_deref(), Some("probe"))?;
+
+        let mut settings = summo_core::Settings::load(&path)?;
+        settings.llm.provider = body.provider.trim().to_string();
+        settings.llm.model = body.model.filter(|m| !m.trim().is_empty());
+        if let Some(language) = body.language.filter(|l| !l.trim().is_empty()) {
+            settings.llm.language = language;
+        }
+        if let Some(on_stop) = body.summarize_on_stop {
+            settings.llm.summarize_on_stop = on_stop;
+        }
+        settings.save(&path)?;
+        Ok(settings)
+    })())
+}
+
+async fn test_llm(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<LlmBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+
+    let provider =
+        match summo_llm::Provider::resolve(&body.provider, body.model.as_deref(), api_key().as_deref()) {
+            Ok(provider) => provider,
+            Err(e) => return as_response(Err::<(), _>(e)),
+        };
+    let local = provider.is_local();
+    let base_url = provider.base_url.clone();
+
+    match summo_llm::LlmClient::new(provider) {
+        Ok(client) => match client.health_check().await {
+            Ok(detail) => Json(serde_json::json!({
+                "ok": true,
+                "base_url": base_url,
+                // The screen says this out loud: it is the one setting that decides whether
+                // transcript text leaves the machine.
+                "local": local,
+                "detail": detail,
+            }))
+            .into_response(),
+            Err(e) => Json(serde_json::json!({
+                "ok": false,
+                "base_url": base_url,
+                "local": local,
+                "detail": e.to_string(),
+            }))
+            .into_response(),
+        },
+        Err(e) => as_response(Err::<(), _>(e)),
+    }
 }
 
 async fn websocket(
@@ -1169,6 +1298,92 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), 403);
         assert!(resp.headers().get("access-control-allow-origin").is_none());
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn settings_are_readable_and_carry_no_secret() {
+        let (_tmp, server) = running().await;
+        let body: serde_json::Value = client()
+            .get(format!("http://{}/settings", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(body["settings"]["llm"]["provider"], "ollama");
+        // The key is reported as present or absent, never returned. If this ever starts serialising
+        // a key, the settings file has grown a field it must not have.
+        assert!(body["settings"]["llm"].get("api_key").is_none());
+        assert!(body["api_key_present"].is_boolean());
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn the_llm_provider_can_be_changed_and_is_persisted() {
+        let (tmp, server) = running().await;
+        let resp = client()
+            .post(format!("http://{}/settings/llm", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({
+                "provider": "http://127.0.0.1:1234/v1",
+                "model": "qwen3-8b",
+                "language": "Vietnamese",
+                "summarize_on_stop": true
+            }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+
+        let saved =
+            summo_core::Settings::load(&Paths::at(tmp.path()).settings()).unwrap();
+        assert_eq!(saved.llm.provider, "http://127.0.0.1:1234/v1");
+        assert_eq!(saved.llm.model.as_deref(), Some("qwen3-8b"));
+        assert!(saved.llm.summarize_on_stop);
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn an_unusable_provider_is_refused_before_it_is_written() {
+        let (tmp, server) = running().await;
+        let resp = client()
+            .post(format!("http://{}/settings/llm", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "provider": "wishful-thinking" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 400);
+
+        let saved =
+            summo_core::Settings::load(&Paths::at(tmp.path()).settings()).unwrap();
+        assert_eq!(saved.llm.provider, "ollama", "a bad provider must not be written");
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn testing_a_provider_that_is_not_running_reports_it_rather_than_failing() {
+        // Port 1 has nothing on it. A user pointing at a dead endpoint should see "cannot reach
+        // it", not a 500 that looks like the app is broken.
+        let (_tmp, server) = running().await;
+        let body: serde_json::Value = client()
+            .post(format!("http://{}/settings/llm/test", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "provider": "http://127.0.0.1:1/v1", "model": "x" }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(body["ok"], false);
+        assert_eq!(body["local"], true, "a loopback endpoint is local");
+        assert!(body["detail"].as_str().is_some_and(|d| !d.is_empty()));
         server.shutdown();
     }
 

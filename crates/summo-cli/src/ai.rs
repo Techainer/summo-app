@@ -34,31 +34,11 @@ pub struct ProviderArgs {
 impl ProviderArgs {
     /// Build a client, defaulting to whatever the named provider usually runs.
     pub fn client(&self) -> Result<LlmClient> {
-        let model = self.model.clone();
-        let provider = match self.provider.as_str() {
-            "ollama" => Provider::ollama(&model.unwrap_or_else(|| "qwen3:8b".into())),
-            "lm-studio" => Provider::lm_studio(&model.unwrap_or_else(|| "local-model".into())),
-            "openai" => {
-                let key = self
-                    .api_key
-                    .clone()
-                    .context("openai needs an API key: --api-key or SUMMO_API_KEY")?;
-                Provider::openai(&model.unwrap_or_else(|| "gpt-5".into()), &key)
-            }
-            "anthropic" => {
-                let key = self
-                    .api_key
-                    .clone()
-                    .context("anthropic needs an API key: --api-key or SUMMO_API_KEY")?;
-                Provider::anthropic(&model.unwrap_or_else(|| "claude-opus-5".into()), &key)
-            }
-            url if url.starts_with("http") => {
-                Provider::custom("custom", url, &model.unwrap_or_else(|| "default".into()))
-            }
-            other => bail!(
-                "unknown provider `{other}`. Use ollama, lm-studio, openai, anthropic, or a base URL."
-            ),
-        };
+        let provider = Provider::resolve(
+            &self.provider,
+            self.model.as_deref(),
+            self.api_key.as_deref(),
+        )?;
 
         // Worth saying out loud rather than burying: this is the moment transcript text leaves the
         // machine, and the user should know before it does, not afterwards.

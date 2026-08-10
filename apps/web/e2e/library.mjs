@@ -86,6 +86,22 @@ console.log(`tags after edit: ${tags.join(' ')}`);
 if (!tags.some((t) => t.includes('product'))) fail(`the new tag did not reach the facets: ${JSON.stringify(tags)}`);
 
 await page.screenshot({ path: '/tmp/shots/library-edited.png' });
+
+// Settings is only the language model, and it has to say plainly where words go.
+await page.getByRole('button', { name: 'Cài đặt' }).click();
+await page.locator('[data-testid="settings"]').waitFor({ timeout: 5000 });
+await page.getByLabel('Mô hình').fill('qwen3:8b');
+await page.getByLabel('Mô hình').blur();
+await page.waitForTimeout(400);
+await page.getByRole('button', { name: /Thử kết nối/ }).click();
+await page.locator('[data-testid="test-result"]').waitFor({ timeout: 15000 });
+const verdict = await page.locator('[data-testid="test-result"]').innerText();
+console.log(`connection test: ${verdict.split('\n')[0]}`);
+if (!/không có gì rời khỏi máy/i.test(verdict)) {
+  fail(`the settings screen did not say where transcript text goes: ${JSON.stringify(verdict)}`);
+}
+await page.screenshot({ path: '/tmp/shots/settings.png' });
+
 await browser.close();
 
 console.log(problems.length ? `\nPROBLEMS:\n  ${problems.join('\n  ')}` : '\nno problems');

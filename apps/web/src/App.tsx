@@ -5,6 +5,7 @@ import { StatusBar } from "./components/StatusBar";
 import { Waveform } from "./components/Waveform";
 import { Library } from "./components/Library";
 import { LibraryClient } from "./lib/library";
+import { Settings } from "./components/Settings";
 import { apply, empty, type TranscriptState } from "./lib/transcript";
 import { Session, deviceWarning, handshakeFromLocation, type SessionState } from "./lib/session";
 import type { Event } from "./lib/protocol";
@@ -35,7 +36,7 @@ export function App() {
   const [stat, setStat] = useState<{ rtf: number; rss_mb: number; queue_ms: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
-  const [screen, setScreen] = useState<"record" | "library">("record");
+  const [screen, setScreen] = useState<"record" | "library" | "settings">("record");
 
   const timer = useRef<number | null>(null);
   const controller = useRef<Session | null>(null);
@@ -158,6 +159,13 @@ export function App() {
           >
             Thư viện
           </button>
+          <button
+            type="button"
+            className={screen === "settings" ? "on" : ""}
+            onClick={() => setScreen("settings")}
+          >
+            Cài đặt
+          </button>
         </nav>
         <div className="header-actions">
           <Waveform level={level} active={session.recording} />
@@ -178,7 +186,9 @@ export function App() {
       {warning && <div className="banner warn">{warning}</div>}
 
       <main className="app-main">
-        {screen === "library" ? (
+        {screen === "settings" ? (
+          <Settings handshake={handshake} />
+        ) : screen === "library" ? (
           <Library client={library} onRecord={() => void start()} />
         ) : transcript.segments.length === 0 ? (
           <p className="empty">
