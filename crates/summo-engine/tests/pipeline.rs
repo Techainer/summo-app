@@ -48,6 +48,7 @@ async fn connect(
         ServerConfig {
             port: 0,
             write_token_file: false,
+            allow_loopback_origins: false,
         },
     )
     .await

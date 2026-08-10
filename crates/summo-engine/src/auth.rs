@@ -113,20 +113,47 @@ pub fn token_path(root: &Path) -> PathBuf {
 
 /// Whether a request's `Origin` header should be refused.
 ///
-/// A native app sends no origin. A browser always sends one, and cannot forge it. So any origin at
-/// all means the request came from a web page, and the only reason a web page would be talking to
-/// this daemon is to do something the user did not ask for.
+/// A native app sends no origin. A browser always sends one and cannot forge it, so an origin at
+/// all means a web page is calling — and the only reason a web page would talk to this daemon is to
+/// do something the user did not ask for.
+///
+/// `allow_loopback` widens this to pages served from loopback, which is how the interface is
+/// developed and how it is driven in a browser test. It is off unless the daemon was started with
+/// `--dev`, because the protection it removes is the entire reason this check exists: a page on the
+/// open internet must never reach the microphone, and "it is only for development" is how that ends
+/// up shipped.
 #[must_use]
-pub fn origin_is_allowed(origin: Option<&str>) -> bool {
-    match origin {
-        None => true,
-        // Tauri's webview identifies itself with these schemes rather than an http origin.
-        Some(o) => {
-            o.starts_with("tauri://")
-                || o.starts_with("summo://")
-                || o.starts_with("http://tauri.localhost")
-        }
+pub fn origin_is_allowed(origin: Option<&str>, allow_loopback: bool) -> bool {
+    let Some(origin) = origin else {
+        return true;
+    };
+
+    // Tauri's webview identifies itself with these schemes rather than an http origin.
+    if origin.starts_with("tauri://")
+        || origin.starts_with("summo://")
+        || origin.starts_with("http://tauri.localhost")
+    {
+        return true;
     }
+
+    allow_loopback && is_loopback_origin(origin)
+}
+
+/// Whether an origin names this machine.
+///
+/// Matched on the host alone. A remote host is refused even in development, so a page at
+/// `https://evil.example` cannot reach a developer's daemon while they have it open.
+fn is_loopback_origin(origin: &str) -> bool {
+    let Some(rest) = origin
+        .strip_prefix("http://")
+        .or_else(|| origin.strip_prefix("https://"))
+    else {
+        return false;
+    };
+    let host = rest.split('/').next().unwrap_or("");
+    let host = host.rsplit_once(':').map_or(host, |(name, _)| name);
+
+    host == "localhost" || host == "127.0.0.1" || host == "[::1]" || host == "::1"
 }
 
 #[cfg(test)]
@@ -200,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn requests_from_a_web_page_are_refused() {
+    fn requests_from_a_web_page_are_refused_by_default() {
         // The attack this blocks: a page in a background tab opening ws://127.0.0.1 and recording.
         for origin in [
             "https://evil.example",
@@ -209,7 +236,7 @@ mod tests {
             "null",
         ] {
             assert!(
-                !origin_is_allowed(Some(origin)),
+                !origin_is_allowed(Some(origin), false),
                 "origin `{origin}` should have been refused"
             );
         }
@@ -217,8 +244,43 @@ mod tests {
 
     #[test]
     fn native_and_webview_clients_are_allowed() {
-        assert!(origin_is_allowed(None), "a native client sends no origin");
-        assert!(origin_is_allowed(Some("tauri://localhost")));
-        assert!(origin_is_allowed(Some("http://tauri.localhost")));
+        assert!(
+            origin_is_allowed(None, false),
+            "a native client sends no origin"
+        );
+        assert!(origin_is_allowed(Some("tauri://localhost"), false));
+        assert!(origin_is_allowed(Some("http://tauri.localhost"), false));
+    }
+
+    #[test]
+    fn development_mode_admits_a_page_served_from_this_machine() {
+        for origin in [
+            "http://localhost:5173",
+            "http://127.0.0.1:8903",
+            "http://[::1]:5173",
+        ] {
+            assert!(
+                origin_is_allowed(Some(origin), true),
+                "origin `{origin}` should be allowed in development"
+            );
+        }
+    }
+
+    #[test]
+    fn development_mode_still_refuses_a_remote_page() {
+        // Widening this to any origin would mean a developer with the daemon running could be
+        // recorded by any site they visit — the exact attack the check exists for.
+        for origin in [
+            "https://evil.example",
+            "http://evil.example:5173",
+            "null",
+            "http://127.0.0.1.evil.example",
+            "http://notlocalhost",
+        ] {
+            assert!(
+                !origin_is_allowed(Some(origin), true),
+                "origin `{origin}` must be refused even in development"
+            );
+        }
     }
 }

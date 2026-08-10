@@ -20,6 +20,13 @@ struct Cli {
     /// Print the address and token and exit, instead of serving. For scripting.
     #[arg(long)]
     print_handshake: bool,
+
+    /// Accept requests from pages served on this machine.
+    ///
+    /// For developing the interface against a Vite server, and for browser tests. A shipped build
+    /// must never run this way: it is the check that stops a web page reaching your microphone.
+    #[arg(long)]
+    dev: bool,
 }
 
 #[tokio::main]
@@ -43,6 +50,7 @@ async fn main() -> Result<()> {
         ServerConfig {
             port: cli.port,
             write_token_file: true,
+            allow_loopback_origins: cli.dev,
         },
     )
     .await

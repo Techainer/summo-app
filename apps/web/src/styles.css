@@ -89,3 +89,47 @@ body {
 }
 .chip.warn { border-color: var(--rec); color: var(--rec); }
 .notice { color: var(--fg-dim); }
+
+/* --- header actions, waveform, banners, compact mode --- */
+
+.header-actions { display: flex; align-items: center; gap: 10px; }
+
+.icon-button {
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg-soft); color: var(--fg-dim);
+  font-size: 0.85rem; cursor: pointer; line-height: 1;
+}
+.icon-button:hover { color: var(--fg); border-color: var(--fg-faint); }
+
+/* The fastest way to tell that the microphone is actually picking you up. "Recording but hears
+   nothing" and "working" look identical without it. */
+.waveform { display: flex; align-items: center; gap: 2px; height: 20px; }
+.waveform i {
+  display: block; width: 2.5px; height: 100%; border-radius: 2px;
+  background: var(--fg-faint); transform: scaleY(0.06);
+  transform-origin: center; transition: transform 90ms linear;
+}
+.waveform.active i { background: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .waveform i { transition: none; } }
+
+.banner {
+  padding: 9px 18px; font-size: 0.86rem; line-height: 1.5;
+  border-bottom: 1px solid var(--line);
+}
+.banner.error { background: color-mix(in srgb, var(--rec) 12%, transparent); color: var(--fg); }
+.banner.warn { background: color-mix(in srgb, #f0b866 14%, transparent); color: var(--fg); }
+
+/* Compact mode: what the window becomes during a meeting. Small enough to leave on top of a call
+   without covering a face, and still showing the two things that matter — that it is recording, and
+   the words it just heard. */
+.mini {
+  display: flex; align-items: center; gap: 10px;
+  height: 100%; padding: 0 12px;
+  -webkit-app-region: drag;
+}
+.mini button { -webkit-app-region: no-drag; }
+.mini-text {
+  flex: 1; min-width: 0; margin: 0;
+  font-size: 0.86rem; color: var(--fg-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}

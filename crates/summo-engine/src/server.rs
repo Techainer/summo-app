@@ -31,6 +31,11 @@ pub struct ServerConfig {
     pub port: u16,
     /// Publish the port and token where the app can find them.
     pub write_token_file: bool,
+    /// Accept requests from pages served on this machine.
+    ///
+    /// Off in anything shipped. It exists so the interface can be developed against a Vite server
+    /// and driven in a browser test; see [`crate::auth::origin_is_allowed`] for why it is opt-in.
+    pub allow_loopback_origins: bool,
 }
 
 impl Default for ServerConfig {
@@ -38,6 +43,7 @@ impl Default for ServerConfig {
         Self {
             port: 0,
             write_token_file: true,
+            allow_loopback_origins: false,
         }
     }
 }
@@ -55,6 +61,7 @@ pub struct Handshake {
 struct AppState {
     engine: EngineState,
     token: SessionToken,
+    allow_loopback_origins: bool,
 }
 
 /// A running daemon.
@@ -71,7 +78,15 @@ impl Server {
         let state = AppState {
             engine: engine.clone(),
             token: token.clone(),
+            allow_loopback_origins: cfg.allow_loopback_origins,
         };
+
+        if cfg.allow_loopback_origins {
+            tracing::warn!(
+                "development mode: pages served from this machine may reach the daemon. \
+                 Do not run a shipped build this way."
+            );
+        }
 
         let app = Router::new()
             .route("/health", get(health))
@@ -139,9 +154,10 @@ fn authorize(
     headers: &HeaderMap,
     query_token: Option<&str>,
     expected: &SessionToken,
+    allow_loopback_origins: bool,
 ) -> std::result::Result<(), (StatusCode, &'static str)> {
     let origin = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok());
-    if !origin_is_allowed(origin) {
+    if !origin_is_allowed(origin, allow_loopback_origins) {
         // A web page cannot forge this header, so an origin at all means a browser is calling.
         return Err((
             StatusCode::FORBIDDEN,
@@ -183,7 +199,12 @@ async fn hardware(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(&headers, q.token.as_deref(), &state.token) {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
         return rejection.into_response();
     }
     Json(state.engine.hardware().clone()).into_response()
@@ -194,7 +215,12 @@ async fn status(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(&headers, q.token.as_deref(), &state.token) {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
         return rejection.into_response();
     }
     Json(state.engine.status()).into_response()
@@ -205,7 +231,12 @@ async fn models(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(&headers, q.token.as_deref(), &state.token) {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
         return rejection.into_response();
     }
     Json(state.engine.store().list()).into_response()
@@ -217,7 +248,12 @@ async fn websocket(
     Query(q): Query<TokenQuery>,
     upgrade: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(&headers, q.token.as_deref(), &state.token) {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
         return rejection.into_response();
     }
     upgrade
@@ -518,6 +554,7 @@ mod tests {
             ServerConfig {
                 port: 0,
                 write_token_file: true,
+                allow_loopback_origins: false,
             },
         )
         .await
@@ -600,6 +637,44 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), 403);
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn development_mode_admits_a_page_from_this_machine() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = EngineState::new(Paths::at(tmp.path())).unwrap();
+        let server = Server::start(
+            engine,
+            ServerConfig {
+                port: 0,
+                write_token_file: false,
+                allow_loopback_origins: true,
+            },
+        )
+        .await
+        .unwrap();
+
+        let resp = client()
+            .get(format!("http://{}/hw", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .header("Origin", "http://localhost:5173")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+
+        // Even then, a remote page is refused: a developer with the daemon running must not be
+        // recordable by any site they happen to visit.
+        let remote = client()
+            .get(format!("http://{}/hw", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .header("Origin", "https://evil.example")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(remote.status(), 403);
+
         server.shutdown();
     }
 
