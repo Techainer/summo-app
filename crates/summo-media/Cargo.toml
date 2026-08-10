@@ -1,0 +1,17 @@
+[package]
+name = "summo-media"
+description = "Decoding whatever the user has into what the recogniser wants, via an ffmpeg sidecar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+summo-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

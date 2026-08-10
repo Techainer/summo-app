@@ -44,6 +44,17 @@ enum Command {
     /// Show what this machine looks like to the model picker.
     Hw,
 
+    /// Turn recordings you already have into meetings.
+    ///
+    /// Takes a file or a folder. Video is fine — the audio is extracted and the video left alone.
+    Import {
+        /// A media file, or a folder of them.
+        path: std::path::PathBuf,
+        /// Report what would be imported without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Rank the models available for a language on this machine, and say why.
     Recommend {
         /// ISO language code, e.g. `vi` or `en`.
@@ -179,6 +190,7 @@ async fn main() -> Result<()> {
         Command::List => list(&paths),
         Command::Rm { id } => remove(&paths, &id),
         Command::Gc => gc(&paths),
+        Command::Import { path, dry_run } => import(&paths, &path, dry_run),
         Command::Hw => show_hw(),
         Command::Recommend { lang, registry } => {
             show_recommendation(&paths, &lang, registry.as_deref()).await
@@ -642,4 +654,85 @@ fn human_bytes(bytes: u64) -> String {
     } else {
         format!("{value:.1} {}", UNITS[unit])
     }
+}
+
+/// A duration a person reads. Seconds under a minute, because "0 phút" for a voice memo reads as
+/// a bug rather than as a short file.
+fn length_of(seconds: f64) -> String {
+    if seconds < 60.0 {
+        return format!("{} giây", seconds.round() as u64);
+    }
+    let minutes = (seconds / 60.0).round() as u64;
+    if minutes < 60 {
+        return format!("{minutes} phút");
+    }
+    format!("{} giờ {} phút", minutes / 60, minutes % 60)
+}
+
+/// Turn recordings the user already has into meetings.
+///
+/// Extracting the audio is the easy half; the half worth being careful about is that importing a
+/// folder of forty files should not stop on the one that is corrupt. Each file is reported on its
+/// own line and a failure moves to the next.
+fn import(paths: &Paths, path: &std::path::Path, dry_run: bool) -> Result<()> {
+    let tools = summo_media::probe()?;
+    tracing::debug!(version = %tools.version, "found ffmpeg");
+
+    let files = if path.is_dir() {
+        summo_media::importable_in(path)?
+    } else {
+        vec![path.to_path_buf()]
+    };
+
+    if files.is_empty() {
+        println!("Không có file nào để nhập trong {}", path.display());
+        return Ok(());
+    }
+
+    let mut imported = 0usize;
+    let mut skipped = 0usize;
+
+    for file in &files {
+        let title = summo_media::title_from(file);
+        match tools.info(file) {
+            Ok(info) if !info.has_audio => {
+                println!("  bỏ qua  {title} — không có âm thanh");
+                skipped += 1;
+            }
+            Ok(info) => {
+                let length = length_of(info.duration_s);
+                if dry_run {
+                    println!("  sẽ nhập {title} — {length}");
+                    imported += 1;
+                    continue;
+                }
+
+                let id = summo_core::MeetingId::new();
+                let wav = paths.audio_for(&id).join("import.wav");
+                match tools.to_wav(file, &wav) {
+                    Ok(()) => {
+                        println!("  đã nhập {title} — {length} → {id}");
+                        imported += 1;
+                    }
+                    Err(e) => {
+                        println!("  lỗi     {title} — {e}");
+                        skipped += 1;
+                    }
+                }
+            }
+            Err(e) => {
+                println!("  lỗi     {title} — {e}");
+                skipped += 1;
+            }
+        }
+    }
+
+    println!(
+        "\n{imported} file, {skipped} bỏ qua{}",
+        if dry_run { " (chạy thử)" } else { "" }
+    );
+    if !dry_run && imported > 0 {
+        println!("Chạy `summo transcribe` để chuyển thành transcript.");
+    }
+    Ok(())
 }

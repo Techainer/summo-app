@@ -19,6 +19,7 @@ path = "src/main.rs"
 
 [dependencies]
 summo-core.workspace = true
+summo-media.workspace = true
 summo-models.workspace = true
 summo-llm.workspace = true
 summo-vault.workspace = true

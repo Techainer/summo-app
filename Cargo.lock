@@ -4670,6 +4670,7 @@ dependencies = [
  "summo-asr",
  "summo-core",
  "summo-llm",
+ "summo-media",
  "summo-models",
  "summo-vad",
  "summo-vault",
@@ -4754,6 +4755,17 @@ dependencies = [
  "serde_json",
  "summo-core",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "summo-media"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "summo-core",
+ "tempfile",
  "tracing",
 ]
 

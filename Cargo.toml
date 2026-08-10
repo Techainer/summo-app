@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/summo-core",
+    "crates/summo-media",
     "crates/summo-models",
     "crates/summo-vad",
     "crates/summo-audio",
@@ -29,6 +30,7 @@ authors = ["Summo contributors"]
 [workspace.dependencies]
 # --- internal ---
 summo-core = { path = "crates/summo-core" }
+summo-media = { path = "crates/summo-media" }
 summo-models = { path = "crates/summo-models" }
 summo-vad = { path = "crates/summo-vad" }
 summo-audio = { path = "crates/summo-audio" }
