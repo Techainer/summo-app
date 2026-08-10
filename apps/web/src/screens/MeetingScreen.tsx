@@ -1,10 +1,12 @@
 import { Link, useParams } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { DraftPanel } from "../components/meeting/DraftPanel";
 import { Player, type PlayerHandle } from "../components/meeting/Player";
 import { TranscriptChips } from "../components/meeting/TranscriptChips";
 import { Button, Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
 import { useEngine } from "../lib/engine-context";
+import { DraftClient, readable, type Draft } from "../lib/draft";
 import { url, type MeetingDetail } from "../lib/library";
 import { duration } from "../lib/report";
 
@@ -30,7 +32,33 @@ export function MeetingScreen() {
   const [pane, setPane] = useState<Pane>("notes");
   const [at, setAt] = useState(0);
   const [summarising, setSummarising] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const player = useRef<PlayerHandle>(null);
+  const drafts = useMemo(() => new DraftClient(handshake), [handshake]);
+
+  // One place to apply whatever the draft endpoints return, so the note and the panel cannot drift.
+  const applyDraft = useCallback(
+    async (next: Draft | null) => {
+      setDraft(next);
+      setDetail(await library.detail(meetingId));
+      setError(null);
+    },
+    [library, meetingId],
+  );
+
+  const run = useCallback(
+    async (work: () => Promise<Draft | null>) => {
+      setSummarising(true);
+      try {
+        await applyDraft(await work());
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSummarising(false);
+      }
+    },
+    [applyDraft],
+  );
 
   // The daemon reports file names (`mic.opus`); the route takes lane names. Strip the extension
   // here rather than teaching the player about container formats.
@@ -52,27 +80,7 @@ export function MeetingScreen() {
     [detail?.transcript],
   );
 
-  const summarise = async () => {
-    setSummarising(true);
-    try {
-      await fetch(url(handshake, `/meetings/${encodeURIComponent(meetingId)}/summarize`), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
-      }).then(async (r) => {
-        if (!r.ok) {
-          const body = (await r.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(body?.error ?? `${r.status}`);
-        }
-      });
-      setDetail(await library.detail(meetingId));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSummarising(false);
-    }
-  };
+  const summarise = () => void run(() => drafts.generate(meetingId));
 
   useEffect(() => {
     let cancelled = false;
@@ -83,10 +91,15 @@ export function MeetingScreen() {
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       });
+    // A meeting may already have a summary nobody has agreed to.
+    drafts
+      .get(meetingId)
+      .then((d) => !cancelled && setDraft(d))
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [library, meetingId]);
+  }, [library, drafts, meetingId]);
 
   if (error) {
     return (
@@ -130,6 +143,25 @@ export function MeetingScreen() {
         <div className="space-y-4">
           <Player lanes={lanes} marks={marks} onTime={setAt} ref={player} />
 
+          {draft && (
+            <DraftPanel
+              draft={draft}
+              busy={summarising}
+              onRefine={(heading, selection, instruction) =>
+                void run(() => drafts.refine(meetingId, heading, selection, instruction))
+              }
+              onChat={(message) => void run(() => drafts.chat(meetingId, message))}
+              onConfirm={() => void run(async () => {
+                await drafts.confirm(meetingId);
+                return null;
+              })}
+              onDiscard={() => void run(async () => {
+                await drafts.discard(meetingId);
+                return null;
+              })}
+            />
+          )}
+
           {sections.length === 0 ? (
             <Card>
               <CardBody className="pt-4 text-center">
@@ -145,11 +177,15 @@ export function MeetingScreen() {
               </CardBody>
             </Card>
           ) : (
-            sections.map((section) => (
+            sections
+              // Unapproved sections belong to the draft panel; drawing them here as well would
+              // show the same paragraph twice.
+              .filter((section) => !section.draft)
+              .map((section) => (
               <Card key={section.heading}>
                 <CardHeader title={section.heading} />
                 <CardBody>
-                  <p className="whitespace-pre-wrap leading-relaxed">{section.body}</p>
+                  <p className="whitespace-pre-wrap leading-relaxed">{readable(section.body)}</p>
                 </CardBody>
               </Card>
             ))

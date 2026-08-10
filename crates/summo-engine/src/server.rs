@@ -109,6 +109,13 @@ impl Server {
             .route("/settings/llm/test", post(test_llm))
             .route("/report", get(report))
             .route("/tasks", get(tasks))
+            .route("/nudges", get(nudges))
+            .route("/meetings/{id}/draft", get(get_draft))
+            .route("/meetings/{id}/draft/generate", post(generate_draft))
+            .route("/meetings/{id}/draft/refine", post(refine_draft))
+            .route("/meetings/{id}/draft/chat", post(chat_draft))
+            .route("/meetings/{id}/draft/confirm", post(confirm_draft))
+            .route("/meetings/{id}/draft", axum::routing::delete(discard_draft))
             .route("/tasks/{id}", post(update_task))
             .route("/meetings/{id}/tasks", post(create_task))
             .route("/templates", get(templates))
@@ -815,6 +822,228 @@ async fn create_task(
         body.owner.as_deref(),
         body.due.as_deref(),
     ))
+}
+
+/// Build an LLM client from settings, or say why not.
+fn llm_client(state: &AppState) -> Result<summo_llm::LlmClient> {
+    let settings = summo_core::settings::Settings::load(&state.engine.paths().settings())?;
+    let provider = summo_llm::Provider::resolve(
+        &settings.llm.provider,
+        settings.llm.model.as_deref(),
+        api_key().as_deref(),
+    )?;
+    summo_llm::LlmClient::new(provider)
+}
+
+/// The unapproved summary of a meeting, if there is one.
+async fn get_draft(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(crate::draft::load(
+        state.engine.paths(),
+        &summo_core::MeetingId::from(id),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct GenerateBody {
+    #[serde(default)]
+    template: Option<String>,
+}
+
+async fn generate_draft(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<GenerateBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let client = match llm_client(&state) {
+        Ok(client) => client,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+    as_response(
+        crate::draft::generate(
+            state.engine.paths(),
+            &client,
+            &summo_core::MeetingId::from(id),
+            body.template.as_deref(),
+        )
+        .await,
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct RefineBody {
+    heading: String,
+    /// The passage the user selected, verbatim.
+    selection: String,
+    instruction: String,
+}
+
+/// Rewrite one selected passage. Everything outside it stays byte-identical.
+async fn refine_draft(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<RefineBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let client = match llm_client(&state) {
+        Ok(client) => client,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+    as_response(
+        crate::draft::refine(
+            state.engine.paths(),
+            &client,
+            &summo_core::MeetingId::from(id),
+            &body.heading,
+            &body.selection,
+            &body.instruction,
+        )
+        .await,
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct ChatBody {
+    message: String,
+}
+
+async fn chat_draft(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<ChatBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let client = match llm_client(&state) {
+        Ok(client) => client,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+    as_response(
+        crate::draft::chat(
+            state.engine.paths(),
+            &client,
+            &summo_core::MeetingId::from(id),
+            &body.message,
+        )
+        .await,
+    )
+}
+
+async fn confirm_draft(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(
+        crate::draft::confirm(state.engine.paths(), &summo_core::MeetingId::from(id))
+            .map(|sections| serde_json::json!({ "confirmed": sections })),
+    )
+}
+
+async fn discard_draft(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(
+        crate::draft::discard(state.engine.paths(), &summo_core::MeetingId::from(id))
+            .map(|removed| serde_json::json!({ "removed": removed })),
+    )
+}
+
+/// What the agent wants to tell the user right now.
+///
+/// The daemon decides *whether* to speak; the shell decides how. Keeping the decision here means
+/// the same rules apply to a desktop notification, a badge and a mobile push.
+async fn nudges(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+
+    let now = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    let today = now.date().to_string();
+    let paths = state.engine.paths();
+
+    let result = (|| {
+        let mut seen = crate::nudge::load(paths)?;
+        let due = crate::nudge::due(
+            paths,
+            &seen,
+            &today,
+            now.hour(),
+            now.date().weekday().number_from_monday(),
+            state.engine.status().is_recording(),
+        )?;
+        crate::nudge::record(paths, &mut seen, &due, &today)?;
+        Ok(due)
+    })();
+    as_response(result)
 }
 
 /// The summary shapes installed, so the interface can offer a choice.

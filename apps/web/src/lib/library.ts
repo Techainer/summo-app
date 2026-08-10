@@ -74,7 +74,7 @@ export interface Segment {
 
 export interface MeetingDetail {
   summary: MeetingSummary;
-  sections: { heading: string; body: string }[];
+  sections: { heading: string; body: string; draft: boolean }[];
   transcript: Segment[];
   audio: string[];
 }

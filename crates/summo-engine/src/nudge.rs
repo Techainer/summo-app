@@ -233,16 +233,21 @@ fn summary_line(report: &summo_vault::report::Report) -> String {
 }
 
 /// Meetings whose summary was written but never confirmed.
+///
+/// Reads the notes, not the `drafts/` sidecar. The sidecar holds the refinement conversation; a
+/// draft that was generated and never discussed has no sidecar at all, and looking there was a bug
+/// that made exactly the case worth nudging about invisible.
 fn unread_drafts(paths: &Paths) -> Result<Vec<String>> {
-    let dir = paths.root().join("drafts");
+    let vault = paths.vault();
+    let index = summo_vault::index::MeetingIndex::scan(&vault)?;
+
     let mut out = Vec::new();
-    for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
-        let path = entry.path();
-        if path.extension().is_none_or(|e| e != "json") {
+    for entry in index.entries() {
+        let Ok(body) = std::fs::read_to_string(vault.join(&entry.path)) else {
             continue;
-        }
-        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-            out.push(stem.to_string());
+        };
+        if body.contains(summo_vault::pending::MARKER) {
+            out.push(entry.id.to_string());
         }
     }
     out.sort();
@@ -280,10 +285,15 @@ mod tests {
         (dir, paths)
     }
 
+    /// Mark a meeting's summary as the agent's, unapproved — the way `draft::generate` does.
     fn with_draft(paths: &Paths, id: &str) {
-        let dir = paths.root().join("drafts");
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join(format!("{id}.json")), "{}").unwrap();
+        let path = paths.meetings().join(format!("{id}.md"));
+        let body = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(
+            &path,
+            body.replace("## Tóm tắt", "## Tóm tắt <!-- summo:draft -->"),
+        )
+        .unwrap();
     }
 
     const TODAY: &str = "2026-08-10";

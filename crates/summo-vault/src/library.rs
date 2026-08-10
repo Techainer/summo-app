@@ -153,8 +153,14 @@ pub struct MeetingDetail {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SectionView {
+    /// The heading a person reads. The draft marker is storage, not content, so it is stripped
+    /// here and reported as `draft` instead — a client that had to know about HTML comments to
+    /// render a heading would be a client that eventually forgets to.
     pub heading: String,
     pub body: String,
+    /// Written by the agent and not yet approved. See `crate::pending`.
+    #[serde(default)]
+    pub draft: bool,
 }
 
 /// Read-only access to the vault.
@@ -268,7 +274,8 @@ impl Library {
                 .sections
                 .into_iter()
                 .map(|s| SectionView {
-                    heading: s.heading,
+                    draft: crate::pending::is_draft(&s.heading),
+                    heading: crate::pending::strip(&s.heading).to_string(),
                     body: s.body,
                 })
                 .collect(),
