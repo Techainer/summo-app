@@ -3,6 +3,8 @@ import { Transcript } from "./components/Transcript";
 import { RecordButton } from "./components/RecordButton";
 import { StatusBar } from "./components/StatusBar";
 import { Waveform } from "./components/Waveform";
+import { Library } from "./components/Library";
+import { LibraryClient } from "./lib/library";
 import { apply, empty, type TranscriptState } from "./lib/transcript";
 import { Session, deviceWarning, handshakeFromLocation, type SessionState } from "./lib/session";
 import type { Event } from "./lib/protocol";
@@ -33,6 +35,7 @@ export function App() {
   const [stat, setStat] = useState<{ rtf: number; rss_mb: number; queue_ms: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
+  const [screen, setScreen] = useState<"record" | "library">("record");
 
   const timer = useRef<number | null>(null);
   const controller = useRef<Session | null>(null);
@@ -53,8 +56,13 @@ export function App() {
     }
   }, []);
 
+  const handshake = useMemo(
+    () => handshakeFromLocation(window.location.search) ?? DEV_HANDSHAKE,
+    [],
+  );
+  const library = useMemo(() => new LibraryClient(handshake), [handshake]);
+
   if (controller.current === null) {
-    const handshake = handshakeFromLocation(window.location.search) ?? DEV_HANDSHAKE;
     controller.current = new Session(handshake, {
       onEvent,
       onState: setSession,
@@ -64,6 +72,7 @@ export function App() {
 
   const start = useCallback(async () => {
     setElapsed(0);
+    setScreen("record");
     timer.current = window.setInterval(() => setElapsed((e) => e + 1), 1000);
     await controller.current?.start({ live_model: "gipformer-65m", lanes: ["mic"] });
   }, []);
@@ -134,6 +143,22 @@ export function App() {
           </span>
           Summo
         </div>
+        <nav className="tabs" aria-label="Màn hình">
+          <button
+            type="button"
+            className={screen === "record" ? "on" : ""}
+            onClick={() => setScreen("record")}
+          >
+            Ghi
+          </button>
+          <button
+            type="button"
+            className={screen === "library" ? "on" : ""}
+            onClick={() => setScreen("library")}
+          >
+            Thư viện
+          </button>
+        </nav>
         <div className="header-actions">
           <Waveform level={level} active={session.recording} />
           <RecordButton recording={session.recording} elapsed={elapsed} onToggle={toggle} />
@@ -153,7 +178,9 @@ export function App() {
       {warning && <div className="banner warn">{warning}</div>}
 
       <main className="app-main">
-        {transcript.segments.length === 0 ? (
+        {screen === "library" ? (
+          <Library client={library} onRecord={() => void start()} />
+        ) : transcript.segments.length === 0 ? (
           <p className="empty">
             {session.recording ? "Đang nghe…" : "Bấm ghi để bắt đầu. Mọi thứ chạy trên máy bạn."}
           </p>

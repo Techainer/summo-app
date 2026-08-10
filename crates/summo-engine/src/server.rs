@@ -12,8 +12,9 @@ use axum::{
         Path, Query, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
-    http::{HeaderMap, StatusCode, header},
-    response::IntoResponse,
+    http::{HeaderMap, HeaderValue, Method, Request, StatusCode, header},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
@@ -104,6 +105,7 @@ impl Server {
             .route("/meetings/{id}/title", post(set_title))
             .route("/meetings/{id}/trash", post(trash))
             .route("/ws", get(websocket))
+            .layer(middleware::from_fn_with_state(state.clone(), cors))
             .with_state(state);
 
         // Loopback only. Binding 0.0.0.0 would expose a user's microphone to their network.
@@ -155,6 +157,52 @@ impl Server {
     pub fn shutdown(self) {
         self.handle.abort();
     }
+}
+
+/// Tell the browser what the daemon already decided.
+///
+/// [`origin_is_allowed`] governs whether a request is served at all; this reports that same
+/// decision back as CORS headers, because a browser blocks a cross-origin reply it was not
+/// explicitly promised — the daemon would answer 200 and the app would still see a network error.
+/// The two must never drift, so this asks the same function rather than keeping its own list.
+///
+/// In a shipped build no origin is allowed, so no page gets these headers.
+async fn cors(State(state): State<AppState>, request: Request<axum::body::Body>, next: Next) -> Response {
+    let origin = request
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+
+    let allowed = origin
+        .as_deref()
+        .is_some_and(|o| origin_is_allowed(Some(o), state.allow_loopback_origins));
+
+    // A preflight carries no token — it is the browser asking whether it may send one — so it is
+    // answered before authorization rather than rejected for lacking it.
+    let mut response = if request.method() == Method::OPTIONS && allowed {
+        StatusCode::NO_CONTENT.into_response()
+    } else {
+        next.run(request).await
+    };
+
+    if let Some(origin) = origin {
+        let headers = response.headers_mut();
+        // Vary regardless of the outcome: a cache must not serve one origin's answer to another.
+        headers.insert(header::VARY, HeaderValue::from_static("origin"));
+        if allowed && let Ok(value) = HeaderValue::from_str(&origin) {
+            headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, value);
+            headers.insert(
+                header::ACCESS_CONTROL_ALLOW_HEADERS,
+                HeaderValue::from_static("authorization, content-type"),
+            );
+            headers.insert(
+                header::ACCESS_CONTROL_ALLOW_METHODS,
+                HeaderValue::from_static("GET, POST, OPTIONS"),
+            );
+        }
+    }
+    response
 }
 
 /// Reject anything that is not an authenticated native client.
@@ -1041,6 +1089,86 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(body["total"], 1);
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn a_shipped_build_promises_nothing_to_a_web_page() {
+        // No CORS headers, so even if a page somehow held the token the browser would block the
+        // reply. This is the layer that must never quietly become permissive.
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .get(format!("http://{}/library", server.addr()))
+            .header("Origin", "http://localhost:5199")
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 403);
+        assert!(resp.headers().get("access-control-allow-origin").is_none());
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn development_mode_tells_the_browser_what_it_already_allowed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = EngineState::new(Paths::at(tmp.path())).unwrap();
+        let server = Server::start(
+            engine,
+            ServerConfig {
+                port: 0,
+                write_token_file: false,
+                allow_loopback_origins: true,
+            },
+        )
+        .await
+        .unwrap();
+
+        let resp = client()
+            .get(format!("http://{}/library", server.addr()))
+            .header("Origin", "http://localhost:5199")
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+        assert_eq!(
+            resp.headers().get("access-control-allow-origin").unwrap(),
+            "http://localhost:5199"
+        );
+
+        // A POST with a JSON body is preflighted, and the preflight carries no token.
+        let resp = client()
+            .request(
+                reqwest::Method::OPTIONS,
+                format!("http://{}/meetings/01A/title", server.addr()),
+            )
+            .header("Origin", "http://localhost:5199")
+            .header("Access-Control-Request-Method", "POST")
+            .header("Access-Control-Request-Headers", "content-type")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 204);
+        assert!(
+            resp.headers()
+                .get("access-control-allow-headers")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .contains("content-type")
+        );
+
+        // A remote origin is still refused, dev mode or not.
+        let resp = client()
+            .get(format!("http://{}/library", server.addr()))
+            .header("Origin", "https://evil.example")
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 403);
+        assert!(resp.headers().get("access-control-allow-origin").is_none());
         server.shutdown();
     }
 

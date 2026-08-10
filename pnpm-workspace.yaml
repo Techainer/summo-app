@@ -1,2 +1,7 @@
 packages:
   - "apps/*"
+
+# esbuild ships a prebuilt binary and its install script is what puts it in place. Without this
+# pnpm refuses to run that script and every Vite command fails on a missing binary.
+allowBuilds:
+  esbuild: true
