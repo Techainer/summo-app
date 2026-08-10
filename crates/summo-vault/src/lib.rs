@@ -17,6 +17,7 @@ pub mod export;
 pub mod index;
 pub mod library;
 pub mod meeting;
+pub mod pending;
 pub mod report;
 pub mod slug;
 pub mod storage;

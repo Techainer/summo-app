@@ -11,9 +11,18 @@
 //!                             └─ chat ─────────────┴──► new draft ──► read again
 //! ```
 //!
-//! **Nothing reaches the vault until confirm.** A draft lives in `~/.summo/drafts/`, outside the
-//! vault entirely, so a summary the user never looked at cannot end up in a file they sync, back up
-//! or open in Obsidian. It also means "discard" is a delete rather than an undo.
+//! **The draft goes straight into the note, marked.** `## Tóm tắt <!-- summo:draft -->` — an HTML
+//! comment, so it vanishes when the Markdown is rendered and the note reads as finished in
+//! Obsidian, while Summo can still tint the parts nobody has approved. Confirming removes the mark;
+//! that is the whole gesture.
+//!
+//! Keeping the draft in a separate file was the first attempt and it is worse in a way that only
+//! shows up in use: a note whose summary lives somewhere else *looks like a note with no summary*,
+//! so the user opens it, sees nothing, and wonders whether the app worked. Marking beats hiding.
+//!
+//! Only the conversation is kept beside the note, in `~/.summo/drafts/<id>.json` — reopening the
+//! panel should show what was already asked, and that is not something to leave in the user's
+//! prose.
 //!
 //! **Confirm is one action for the whole draft**, not a decision per section. Reviewing a summary is
 //! reading it once and saying yes; making somebody approve four sections separately turns a
@@ -46,10 +55,15 @@ pub struct Turn {
 }
 
 /// A summary waiting to be confirmed.
+///
+/// Assembled rather than stored: `sections` are read out of the note, and only `turns` and
+/// `revisions` come from the sidecar. That way the text has exactly one home, and editing the note
+/// by hand cannot leave the draft disagreeing with the file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Draft {
     pub meeting: MeetingId,
     pub template: String,
+    /// The unapproved sections, in document order.
     pub sections: Vec<Section>,
     /// The refinement conversation, so reopening the panel shows what was already asked.
     #[serde(default)]
@@ -57,6 +71,17 @@ pub struct Draft {
     /// How many times it has been revised. Shown so a user can tell a fresh draft from a worked one.
     #[serde(default)]
     pub revisions: u32,
+}
+
+/// What is kept beside the note: the conversation, never the prose.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct Sidecar {
+    #[serde(default)]
+    template: String,
+    #[serde(default)]
+    turns: Vec<Turn>,
+    #[serde(default)]
+    revisions: u32,
 }
 
 impl Draft {
@@ -112,62 +137,103 @@ impl Draft {
 }
 
 fn path_for(paths: &Paths, meeting: &MeetingId) -> std::path::PathBuf {
-    // Outside the vault: an unreviewed summary must not appear in the user's synced notes.
+    // Outside the vault, and holding only the conversation. The prose lives in the note.
     paths
         .root()
         .join("drafts")
         .join(format!("{}.json", meeting.as_str()))
 }
 
+fn read_sidecar(paths: &Paths, meeting: &MeetingId) -> Sidecar {
+    // A missing or unreadable conversation costs the history panel, not the draft.
+    std::fs::read_to_string(path_for(paths, meeting))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+fn write_sidecar(paths: &Paths, meeting: &MeetingId, sidecar: &Sidecar) -> Result<()> {
+    let path = path_for(paths, meeting);
+    summo_vault::write::write_atomically(&path, serde_json::to_vec_pretty(sidecar)?.as_slice())
+}
+
+fn clear_sidecar(paths: &Paths, meeting: &MeetingId) {
+    std::fs::remove_file(path_for(paths, meeting)).ok();
+}
+
+/// The unapproved summary of a meeting, if there is one.
 pub fn load(paths: &Paths, meeting: &MeetingId) -> Result<Option<Draft>> {
-    let path = path_for(paths, meeting);
-    match std::fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str(&text)
-            .map(Some)
-            .map_err(|e| Error::Other(format!("cannot parse {}: {e}", path.display()))),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(Error::io(&path, e)),
+    let (_, markdown) = read_note(paths, meeting)?;
+    let doc = MeetingDoc::parse(&markdown)?;
+
+    let sections: Vec<Section> = doc
+        .sections
+        .iter()
+        .filter(|s| summo_vault::pending::is_draft(&s.heading))
+        .map(|s| Section {
+            heading: summo_vault::pending::strip(&s.heading).to_string(),
+            body: s.body.clone(),
+        })
+        .collect();
+
+    if sections.is_empty() {
+        return Ok(None);
     }
+    let sidecar = read_sidecar(paths, meeting);
+    Ok(Some(Draft {
+        meeting: meeting.clone(),
+        template: sidecar.template,
+        sections,
+        turns: sidecar.turns,
+        revisions: sidecar.revisions,
+    }))
 }
 
-pub fn save(paths: &Paths, draft: &Draft) -> Result<()> {
-    let path = path_for(paths, &draft.meeting);
-    summo_vault::write::write_atomically(&path, serde_json::to_vec_pretty(draft)?.as_slice())
-}
-
-/// Throw a draft away without writing anything.
+/// Remove every unapproved section, leaving anything a human wrote.
 pub fn discard(paths: &Paths, meeting: &MeetingId) -> Result<bool> {
-    let path = path_for(paths, meeting);
-    match std::fs::remove_file(&path) {
-        Ok(()) => Ok(true),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(Error::io(&path, e)),
-    }
-}
-
-/// Write the draft into the meeting's note, and delete the draft.
-///
-/// This is the only path by which a generated summary reaches the vault.
-pub fn confirm(paths: &Paths, meeting: &MeetingId) -> Result<Vec<String>> {
-    let draft = load(paths, meeting)?
-        .ok_or_else(|| Error::Other(format!("no draft for meeting {meeting}")))?;
-    if draft.sections.is_empty() {
-        return Err(Error::Other("the draft is empty".into()));
-    }
-
     let (path, markdown) = read_note(paths, meeting)?;
     let mut doc = MeetingDoc::parse(&markdown)?;
-    let mut written = Vec::new();
-    for section in &draft.sections {
-        doc.set_section(&section.heading, section.body.trim());
-        written.push(section.heading.clone());
+
+    let headings = summo_vault::pending::in_document(&doc);
+    if headings.is_empty() {
+        clear_sidecar(paths, meeting);
+        return Ok(false);
+    }
+    for heading in &headings {
+        summo_vault::pending::reject(&mut doc, heading);
     }
     summo_vault::write::write_atomically(&path, doc.to_markdown()?.as_bytes())?;
+    clear_sidecar(paths, meeting);
+    Ok(true)
+}
 
-    // Only after the note is safely on disk. A crash between the two leaves the draft, which the
-    // user can confirm again — the reverse would lose the summary.
-    discard(paths, meeting)?;
-    Ok(written)
+/// Approve the draft: the text stays exactly where it is, the marks come off.
+///
+/// One gesture for the whole summary. Reviewing is reading it once and saying yes; approving four
+/// sections separately turns a two-second job into four.
+pub fn confirm(paths: &Paths, meeting: &MeetingId) -> Result<Vec<String>> {
+    let (path, markdown) = read_note(paths, meeting)?;
+    let mut doc = MeetingDoc::parse(&markdown)?;
+
+    let approved = summo_vault::pending::approve_all(&mut doc);
+    if approved.is_empty() {
+        return Err(Error::Other(format!(
+            "meeting {meeting} has nothing waiting to be confirmed"
+        )));
+    }
+    summo_vault::write::write_atomically(&path, doc.to_markdown()?.as_bytes())?;
+    clear_sidecar(paths, meeting);
+    Ok(approved)
+}
+
+/// Write sections into the note, marked as the agent's and unapproved.
+fn put(paths: &Paths, meeting: &MeetingId, sections: &[Section]) -> Result<()> {
+    let (path, markdown) = read_note(paths, meeting)?;
+    let mut doc = MeetingDoc::parse(&markdown)?;
+    for section in sections {
+        summo_vault::pending::set_draft(&mut doc, &section.heading, section.body.trim());
+    }
+    summo_vault::write::write_atomically(&path, doc.to_markdown()?.as_bytes())
 }
 
 /// Produce the first draft.
@@ -207,15 +273,23 @@ pub async fn generate(
         ));
     }
 
-    let draft = Draft {
+    put(paths, meeting, &sections)?;
+    write_sidecar(
+        paths,
+        meeting,
+        &Sidecar {
+            template: template.id.clone(),
+            turns: Vec::new(),
+            revisions: 0,
+        },
+    )?;
+    Ok(Draft {
         meeting: meeting.clone(),
         template: template.id.clone(),
         sections,
         turns: Vec::new(),
         revisions: 0,
-    };
-    save(paths, &draft)?;
-    Ok(draft)
+    })
 }
 
 /// Rewrite one selected passage, leaving the rest of the draft untouched.
@@ -265,8 +339,21 @@ pub async fn refine(
         role: "agent".into(),
         text: format!("Đã sửa trong mục {heading}."),
     });
-    save(paths, &draft)?;
+    persist(paths, &draft)?;
     Ok(draft)
+}
+
+fn persist(paths: &Paths, draft: &Draft) -> Result<()> {
+    put(paths, &draft.meeting, &draft.sections)?;
+    write_sidecar(
+        paths,
+        &draft.meeting,
+        &Sidecar {
+            template: draft.template.clone(),
+            turns: draft.turns.clone(),
+            revisions: draft.revisions,
+        },
+    )
 }
 
 /// Revise the whole draft in response to a chat message.
@@ -305,7 +392,7 @@ pub async fn chat(
         role: "agent".into(),
         text: "Đã cập nhật bản nháp.".into(),
     });
-    save(paths, &draft)?;
+    persist(paths, &draft)?;
     Ok(draft)
 }
 
@@ -365,110 +452,195 @@ mod tests {
         std::fs::write(
             paths.meetings().join("01A.md"),
             "---\nid: 01A\ndate: 2026-08-10T09:00:00+07:00\nduration: 600\n\
-             participants: []\ntags: []\n---\n# Họp\n\n## Tóm tắt\nBản cũ trong note.\n",
+             participants: []\ntags: []\n---\n# Họp\n\n## Ghi chú của tôi\nTôi tự viết.\n",
         )
         .unwrap();
         (dir, paths)
     }
 
-    fn draft() -> Draft {
-        Draft {
-            meeting: MeetingId::from("01A".to_string()),
-            template: "standard".into(),
-            sections: vec![
-                Section {
-                    heading: "Tóm tắt".into(),
-                    body: "Câu một. Câu hai. Câu ba.".into(),
-                },
-                Section {
-                    heading: "Quyết định".into(),
-                    body: "- Dùng Rust".into(),
-                },
+    fn meeting() -> MeetingId {
+        MeetingId::from("01A".to_string())
+    }
+
+    fn drafted(paths: &Paths) {
+        put(
+            paths,
+            &meeting(),
+            &[
+                Section { heading: "Tóm tắt".into(), body: "Câu một. Câu hai.".into() },
+                Section { heading: "Quyết định".into(), body: "- Dùng Rust".into() },
             ],
-            turns: Vec::new(),
-            revisions: 0,
-        }
+        )
+        .expect("put");
+    }
+
+    fn note(paths: &Paths) -> String {
+        std::fs::read_to_string(paths.meetings().join("01A.md")).unwrap()
     }
 
     #[test]
-    fn a_draft_lives_outside_the_vault() {
+    fn a_meeting_with_no_draft_has_none() {
         let (_d, paths) = vault();
-        save(&paths, &draft()).expect("save");
-        let inside = paths.vault().join("drafts");
-        assert!(!inside.exists(), "an unreviewed summary must not be in the user's notes");
-        assert!(paths.root().join("drafts").join("01A.json").exists());
+        assert!(load(&paths, &meeting()).expect("load").is_none());
     }
 
+    /// The change from the first design: the text is in the note straight away, marked.
     #[test]
-    fn a_meeting_without_a_draft_has_none() {
+    fn a_draft_is_written_into_the_note_marked() {
         let (_d, paths) = vault();
-        assert!(load(&paths, &MeetingId::from("01A".to_string())).unwrap().is_none());
-    }
+        drafted(&paths);
 
-    #[test]
-    fn a_draft_survives_a_round_trip() {
-        let (_d, paths) = vault();
-        let original = draft();
-        save(&paths, &original).expect("save");
-        let back = load(&paths, &original.meeting).expect("load").expect("some");
-        assert_eq!(back, original);
-    }
-
-    /// The whole point: reading the draft changes nothing until confirm.
-    #[test]
-    fn a_draft_does_not_touch_the_note_until_confirmed() {
-        let (_d, paths) = vault();
-        save(&paths, &draft()).expect("save");
-
-        let body = std::fs::read_to_string(paths.meetings().join("01A.md")).unwrap();
-        assert!(body.contains("Bản cũ trong note."));
-        assert!(!body.contains("Câu một."));
-    }
-
-    #[test]
-    fn confirming_writes_every_section_and_removes_the_draft() {
-        let (_d, paths) = vault();
-        let d = draft();
-        save(&paths, &d).expect("save");
-
-        let written = confirm(&paths, &d.meeting).expect("confirm");
-        assert_eq!(written, vec!["Tóm tắt", "Quyết định"]);
-
-        let body = std::fs::read_to_string(paths.meetings().join("01A.md")).unwrap();
+        let body = note(&paths);
         assert!(body.contains("Câu một."), "{body}");
-        assert!(body.contains("Dùng Rust"));
-        assert!(!body.contains("Bản cũ trong note."), "the old section should be replaced");
+        assert!(body.contains("## Tóm tắt <!-- summo:draft -->"), "{body}");
+        assert!(body.contains("Tôi tự viết."), "a human's section is untouched");
+    }
 
-        assert!(load(&paths, &d.meeting).unwrap().is_none(), "the draft is gone");
+    #[test]
+    fn loading_reads_the_marked_sections_back() {
+        let (_d, paths) = vault();
+        drafted(&paths);
+
+        let draft = load(&paths, &meeting()).expect("load").expect("some");
+        assert_eq!(draft.sections.len(), 2);
+        assert_eq!(draft.sections[0].heading, "Tóm tắt", "the mark is not part of the heading");
+        assert_eq!(draft.sections[1].body, "- Dùng Rust");
+    }
+
+    #[test]
+    fn a_humans_own_section_is_never_part_of_the_draft() {
+        let (_d, paths) = vault();
+        drafted(&paths);
+        let draft = load(&paths, &meeting()).expect("load").expect("some");
+        assert!(
+            !draft.sections.iter().any(|s| s.heading == "Ghi chú của tôi"),
+            "{:?}",
+            draft.sections
+        );
+    }
+
+    #[test]
+    fn confirming_keeps_the_text_and_removes_the_marks() {
+        let (_d, paths) = vault();
+        drafted(&paths);
+
+        let approved = confirm(&paths, &meeting()).expect("confirm");
+        assert_eq!(approved, vec!["Tóm tắt", "Quyết định"]);
+
+        let body = note(&paths);
+        assert!(body.contains("Câu một."), "the text stays: {body}");
+        assert!(!body.contains("summo:draft"), "the marks go: {body}");
+        assert!(load(&paths, &meeting()).expect("load").is_none());
+    }
+
+    #[test]
+    fn confirming_when_there_is_nothing_waiting_is_an_error() {
+        let (_d, paths) = vault();
+        assert!(confirm(&paths, &meeting()).is_err());
     }
 
     #[test]
     fn confirming_twice_is_an_error_not_a_second_write() {
         let (_d, paths) = vault();
-        let d = draft();
-        save(&paths, &d).expect("save");
-        confirm(&paths, &d.meeting).expect("first");
-        assert!(confirm(&paths, &d.meeting).is_err());
+        drafted(&paths);
+        confirm(&paths, &meeting()).expect("first");
+        assert!(confirm(&paths, &meeting()).is_err());
+    }
+
+    /// Rejecting the agent must never delete something a person wrote.
+    #[test]
+    fn discarding_removes_only_the_agents_sections() {
+        let (_d, paths) = vault();
+        drafted(&paths);
+
+        assert!(discard(&paths, &meeting()).expect("discard"));
+        let body = note(&paths);
+        assert!(!body.contains("Câu một."), "{body}");
+        assert!(body.contains("Tôi tự viết."), "{body}");
+        assert!(!discard(&paths, &meeting()).expect("again"), "nothing left to discard");
     }
 
     #[test]
-    fn discarding_leaves_the_note_alone() {
+    fn redrafting_replaces_rather_than_stacking() {
         let (_d, paths) = vault();
-        let d = draft();
-        save(&paths, &d).expect("save");
+        drafted(&paths);
+        put(
+            &paths,
+            &meeting(),
+            &[Section { heading: "Tóm tắt".into(), body: "Bản hai.".into() }],
+        )
+        .expect("put");
 
-        assert!(discard(&paths, &d.meeting).expect("discard"));
-        assert!(!discard(&paths, &d.meeting).expect("again"), "already gone");
+        let draft = load(&paths, &meeting()).expect("load").expect("some");
+        let summaries: Vec<_> = draft.sections.iter().filter(|s| s.heading == "Tóm tắt").collect();
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].body, "Bản hai.");
+    }
 
-        let body = std::fs::read_to_string(paths.meetings().join("01A.md")).unwrap();
-        assert!(body.contains("Bản cũ trong note."));
+    #[test]
+    fn the_conversation_survives_but_lives_beside_the_note() {
+        let (_d, paths) = vault();
+        drafted(&paths);
+        write_sidecar(
+            &paths,
+            &meeting(),
+            &Sidecar {
+                template: "standard".into(),
+                turns: vec![Turn { role: "you".into(), text: "ngắn hơn".into() }],
+                revisions: 1,
+            },
+        )
+        .expect("sidecar");
+
+        let draft = load(&paths, &meeting()).expect("load").expect("some");
+        assert_eq!(draft.revisions, 1);
+        assert_eq!(draft.turns.len(), 1);
+        assert!(!note(&paths).contains("ngắn hơn"), "the conversation is not in the user's prose");
+    }
+
+    #[test]
+    fn confirming_clears_the_conversation_too() {
+        let (_d, paths) = vault();
+        drafted(&paths);
+        write_sidecar(
+            &paths,
+            &meeting(),
+            &Sidecar { template: "standard".into(), turns: vec![], revisions: 3 },
+        )
+        .expect("sidecar");
+
+        confirm(&paths, &meeting()).expect("confirm");
+        assert!(!path_for(&paths, &meeting()).exists());
+    }
+
+    #[test]
+    fn a_corrupt_conversation_does_not_hide_the_draft() {
+        let (_d, paths) = vault();
+        drafted(&paths);
+        let path = path_for(&paths, &meeting());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "{ not json").unwrap();
+
+        // Losing the history panel is a smaller loss than losing the summary.
+        let draft = load(&paths, &meeting()).expect("load").expect("some");
+        assert_eq!(draft.sections.len(), 2);
+        assert!(draft.turns.is_empty());
     }
 
     #[test]
     fn markdown_round_trips_through_sections() {
-        let d = draft();
-        let parsed = Draft::sections_from(&d.to_markdown());
-        assert_eq!(parsed, d.sections);
+        let sections = vec![
+            Section { heading: "A".into(), body: "một".into() },
+            Section { heading: "B".into(), body: "hai".into() },
+        ];
+        let draft = Draft {
+            meeting: meeting(),
+            template: "standard".into(),
+            sections: sections.clone(),
+            turns: Vec::new(),
+            revisions: 0,
+        };
+        assert_eq!(Draft::sections_from(&draft.to_markdown()), sections);
     }
 
     #[test]
