@@ -17,6 +17,7 @@
 
 pub mod attribution;
 pub mod cluster;
+pub mod space;
 pub mod voices;
 
 #[cfg(feature = "sherpa")]
@@ -26,6 +27,7 @@ pub use cluster::{Assignment, ClusterConfig, OnlineClusterer};
 pub use attribution::{
     Attributor, Correction, Relabel, VoiceLog, VoiceSample, correct, relabel, resweep,
 };
+pub use space::{EmbeddingSpace, Migration};
 pub use voices::{Match, Person, Reassignment, Sample, VoiceBook};
 
 use summo_core::{SpeakerId, segment::Lane};

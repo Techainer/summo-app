@@ -28,6 +28,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use summo_core::{Error, Result, SpeakerId};
 
+use crate::space::EmbeddingSpace;
+
 /// Samples kept per person.
 ///
 /// Bounded because a profile is a description of a voice, not a recording of everything it ever
@@ -104,6 +106,16 @@ impl Person {
     #[must_use]
     pub fn sample_count(&self) -> usize {
         self.samples.len()
+    }
+
+    /// Forget what this voice sounded like, keeping who it belongs to.
+    ///
+    /// Used when the embedding model changes: the vectors were coordinates in a space that no
+    /// longer exists, but the person, their name and their avatar are still correct.
+    pub(crate) fn clear_vectors(&mut self) {
+        self.samples.clear();
+        self.centroids.clear();
+        self.next_age = 0;
     }
 
     /// How many were asserted by a person rather than guessed.
@@ -260,6 +272,13 @@ pub struct Reassignment {
 /// Everyone Summo can recognise.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VoiceBook {
+    /// The model whose coordinate system every vector in this book belongs to.
+    ///
+    /// `None` on a book that has never stored a vector, and on books written before this was
+    /// recorded — in both cases the first model to enrol claims the space. See [`crate::space`] for
+    /// why a dimension check alone is not enough.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    space: Option<EmbeddingSpace>,
     #[serde(default)]
     people: BTreeMap<String, Person>,
     #[serde(skip)]
@@ -295,6 +314,46 @@ impl VoiceBook {
         let temporary = path.with_extension("json.tmp");
         std::fs::write(&temporary, json).map_err(|e| Error::io(&temporary, e))?;
         std::fs::rename(&temporary, path).map_err(|e| Error::io(path, e))
+    }
+
+    /// The coordinate system this book's vectors live in, if it holds any.
+    #[must_use]
+    pub fn space(&self) -> Option<&EmbeddingSpace> {
+        self.space.as_ref()
+    }
+
+    /// Claim the book for `space`, or refuse if it already belongs to an incompatible one.
+    ///
+    /// Call this once, before any comparison. An empty book adopts whatever model runs first; a
+    /// populated one rejects a different model rather than comparing across coordinate systems and
+    /// producing similarities that look like numbers but mean nothing.
+    ///
+    /// The caller decides what to do next — re-embed from kept audio, or discard the vectors — via
+    /// [`crate::space::plan`].
+    pub fn adopt(&mut self, space: &EmbeddingSpace) -> Result<()> {
+        match &self.space {
+            Some(existing) if !existing.compatible_with(space) => Err(Error::Other(format!(
+                "embedding space mismatch: {}",
+                existing.describe_mismatch(space)
+            ))),
+            Some(_) => Ok(()),
+            None => {
+                self.space = Some(space.clone());
+                Ok(())
+            }
+        }
+    }
+
+    /// Drop every vector while keeping who exists and what they are called.
+    ///
+    /// This is the recovery path when the embedding model changes and the audio needed to
+    /// regenerate the vectors has already been pruned. Names, ids and avatars survive, so the user
+    /// sees the same list of people and Summo relearns their voices as they speak again.
+    pub fn reset_vectors(&mut self, space: &EmbeddingSpace) {
+        for person in self.people.values_mut() {
+            person.clear_vectors();
+        }
+        self.space = Some(space.clone());
     }
 
     pub fn people(&self) -> impl Iterator<Item = &Person> {
@@ -717,6 +776,79 @@ mod tests {
         // centroids derived from them.
         reloaded.reassign("Bình", &[BINH.to_vec()]).unwrap();
         assert_eq!(reloaded.get("ngoc").unwrap().sample_count(), 1);
+    }
+
+    #[test]
+    fn an_empty_book_adopts_whichever_model_runs_first() {
+        let mut book = VoiceBook::default();
+        assert!(book.space().is_none());
+        book.adopt(&EmbeddingSpace::new("campplus-sv", 192)).unwrap();
+        assert_eq!(book.space().unwrap().model, "campplus-sv");
+    }
+
+    #[test]
+    fn adopting_the_same_space_twice_is_fine() {
+        let mut book = VoiceBook::default();
+        let space = EmbeddingSpace::new("campplus-sv", 192);
+        book.adopt(&space).unwrap();
+        book.adopt(&space).unwrap();
+    }
+
+    /// Both models emit 192 dimensions, so nothing but the model name catches this.
+    #[test]
+    fn a_book_refuses_a_different_model_of_the_same_width() {
+        let mut book = VoiceBook::default();
+        book.adopt(&EmbeddingSpace::new("campplus-sv", 192)).unwrap();
+
+        let error = book
+            .adopt(&EmbeddingSpace::new("eres2netv2-sv", 192))
+            .expect_err("comparing across coordinate systems must be refused");
+        let message = error.to_string();
+        assert!(message.contains("campplus-sv"), "{message}");
+        assert!(message.contains("eres2netv2-sv"), "{message}");
+    }
+
+    #[test]
+    fn resetting_vectors_keeps_the_people_and_their_names() {
+        let mut book = VoiceBook::default();
+        book.adopt(&EmbeddingSpace::new("campplus-sv", 192)).unwrap();
+        book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
+        book.set_avatar("ngoc", Some("attachments/ngoc.jpg".into()))
+            .unwrap();
+
+        let next = EmbeddingSpace::new("eres2netv2-sv", 192);
+        book.reset_vectors(&next);
+
+        let ngoc = book.get("ngoc").expect("the person survives");
+        assert_eq!(ngoc.name, "Ngọc");
+        assert_eq!(ngoc.avatar.as_deref(), Some("attachments/ngoc.jpg"));
+        assert_eq!(ngoc.sample_count(), 0, "stale vectors must not survive");
+        assert!(ngoc.centroids.is_empty());
+
+        // And the book now belongs to the new model, so enrolling again works.
+        book.adopt(&next).unwrap();
+        book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
+        assert_eq!(book.get("ngoc").unwrap().sample_count(), 1);
+    }
+
+    #[test]
+    fn the_space_survives_a_round_trip() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("voices.json");
+        let mut book = VoiceBook::load(&path).unwrap();
+        book.adopt(&EmbeddingSpace::new("campplus-sv", 192).with_revision("2026-01"))
+            .unwrap();
+        book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
+        book.save().unwrap();
+
+        let mut reloaded = VoiceBook::load(&path).unwrap();
+        assert_eq!(reloaded.space().unwrap().revision.as_deref(), Some("2026-01"));
+        assert!(
+            reloaded
+                .adopt(&EmbeddingSpace::new("eres2netv2-sv", 192))
+                .is_err(),
+            "a reloaded book must still refuse a foreign space"
+        );
     }
 
     #[test]

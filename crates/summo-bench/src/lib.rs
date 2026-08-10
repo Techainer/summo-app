@@ -9,8 +9,13 @@
 pub mod asr;
 pub mod dataset;
 pub mod report;
+#[cfg(feature = "turso")]
+pub mod turso;
 pub mod vad;
+// Both link a bundled SQLite, which cannot coexist with libsql's. See the feature table.
+#[cfg(feature = "sqlite")]
 pub mod vault;
+#[cfg(feature = "sqlite")]
 pub mod voices;
 
 pub use dataset::{Clip, Span, load_dataset};

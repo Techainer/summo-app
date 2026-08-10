@@ -14,9 +14,22 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Measure how identification scales with the number of people known.
+    #[cfg(feature = "sqlite")]
     Identify,
 
+    /// Compare a Turso/libSQL vector index against a linear scan on identification.
+    ///
+    /// Reports recall against the exact answer alongside latency, because an index that is fast
+    /// and wrong attributes a sentence to the wrong person.
+    #[cfg(feature = "turso")]
+    Turso {
+        /// Voice-book sizes to try, in people.
+        #[arg(long, value_delimiter = ',', default_value = "10,200,1000,10000")]
+        people: Vec<usize>,
+    },
+
     /// Compare storage formats for speaker embeddings on the resweep workload.
+    #[cfg(feature = "sqlite")]
     Voices {
         #[arg(long, default_value_t = 1000)]
         meetings: usize,
@@ -56,6 +69,7 @@ enum Command {
     },
 
     /// Measure whether a search index earns its complexity against a plain file scan.
+    #[cfg(feature = "sqlite")]
     Vault {
         /// Vault sizes to try, in meetings.
         #[arg(long, value_delimiter = ',', default_value = "100,1000")]
@@ -112,10 +126,16 @@ fn main() -> Result<()> {
             json.as_deref(),
             markdown.as_deref(),
         ),
+        #[cfg(feature = "sqlite")]
         Command::Identify => {
             summo_bench::voices::identify_scaling();
             Ok(())
         }
+        #[cfg(feature = "turso")]
+        Command::Turso { people } => {
+            summo_bench::turso::run(&summo_bench::turso::Options { people })
+        }
+        #[cfg(feature = "sqlite")]
         Command::Voices {
             meetings,
             utterances,
@@ -123,6 +143,7 @@ fn main() -> Result<()> {
             meetings,
             utterances_per_meeting: utterances,
         }),
+        #[cfg(feature = "sqlite")]
         Command::Vault {
             sizes,
             json,
@@ -316,6 +337,7 @@ fn run_asr(
     Ok(())
 }
 
+#[cfg(feature = "sqlite")]
 fn run_vault(
     sizes: &[usize],
     json: Option<&std::path::Path>,

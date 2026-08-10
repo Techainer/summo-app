@@ -9,6 +9,7 @@
 //! resolve(id) → manifest → download blobs (resumable, sha256-verified) → install → load
 //! ```
 
+pub mod credentials;
 pub mod download;
 pub mod hw;
 pub mod manifest;
@@ -16,6 +17,7 @@ pub mod recommend;
 pub mod registry;
 pub mod store;
 
+pub use credentials::Credentials;
 pub use download::{DownloadProgress, Downloader};
 pub use hw::{Accel, CpuFeatures, HwProfile};
 pub use manifest::{FileEntry, Manifest, Mode, Profile, Task};

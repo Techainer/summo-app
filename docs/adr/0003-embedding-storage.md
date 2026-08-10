@@ -52,16 +52,56 @@ Two consequences follow:
 * 200,000 utterances is several years of heavy use. At the scale a real user reaches this year, a
   correction is imperceptible whatever the storage.
 
-### Why not Turso
+### Turso, measured rather than argued
 
-Turso/libSQL offers two things worth wanting: sync, and ANN vector search. Neither applies.
+The first version of this ADR dismissed a vector index by reasoning about it. That was not good
+enough — indexes are how search normally gets fast, so the objection deserved an experiment.
+`summo-bench turso` builds the same voice book in libSQL, creates a DiskANN index with
+`libsql_vector_idx()`, and queries it with `vector_top_k()`:
 
-The ANN index answers "find the nearest among millions". Summo asks "score these against eighty",
-which a linear scan already does at the FLOP floor — an index would add work, not remove it. And
-sync is real, but Summo's sync has to be end-to-end encrypted with the vault as the source of truth
-(see `docs/sync-protocol.md`); a hosted database that can read the rows is the architecture this
-product exists to avoid. If embeddings sync one day they will travel as ciphertext like everything
-else.
+| people | centroids | scan | libSQL scan | **indexed** | **recall@1** | index build | on disk |
+|---|---|---|---|---|---|---|---|
+| 10 | 80 | 19 µs | 89 µs | 684 µs | 100.0% | 97 ms | 2.7 MB |
+| 200 | 1,600 | 302 µs | 953 µs | 5,692 µs | **99.0%** | 7.3 s | 53.1 MB |
+| 1,000 | 8,000 | 1,506 µs | 5,847 µs | 7,744 µs | **96.5%** | 37.4 s | 265.5 MB |
+
+The index is slower than the scan at every size tested — 36× at ten people, 5× at a thousand — and
+it is the only option that returns wrong answers. Recall is measured against the exact scan, so
+96.5% means one utterance in twenty-nine was attributed to a different person than the correct one.
+
+This is not a defect in Turso. It is what an ANN index *is*: an approximation that trades exactness
+for asymptotics, and it wins by that trade only once N is large enough for the asymptotics to pay
+for the constant factor. Summo never gets there. A voice book is bounded by how many people a person
+meets, and each contributes eight centroids; ten thousand people is 80,000 vectors, which a scan
+handles in 16 ms. The crossover is somewhere past the point where the product stops making sense.
+
+The recall column is the decisive one. Elsewhere an approximate index costs a slightly worse search
+result. Here it puts the wrong name on a sentence somebody said, in a document the user will send to
+their team.
+
+Sync is Turso's other draw, and it is real — but Summo's sync must be end-to-end encrypted with the
+vault as the source of truth (see `docs/sync-protocol.md`). A hosted database that can read the rows
+is the architecture this product exists to avoid. If embeddings sync one day they travel as
+ciphertext like everything else.
+
+*(Reproduce: `cargo run --release -p summo-bench --no-default-features --features turso -- turso`.
+The feature is off by default because libsql and rusqlite each bundle a SQLite amalgamation and
+cannot link together.)*
+
+### Vectors are only comparable within one model's space
+
+An embedding means nothing on its own — only next to other embeddings from the *same* model. The
+trap is that CAM++ and ERes2NetV2 both emit **192 dimensions**, so a dimension check passes while
+the vectors describe unrelated coordinate systems. Similarities would scatter around zero, Summo
+would quietly stop recognising people it had been taught, and would occasionally score a stranger
+high by chance.
+
+So a book records the *identity* of the model that produced its vectors, not just their width
+(`summo_diar::space::EmbeddingSpace`: model id, revision, dims). `VoiceBook::adopt` is called before
+any comparison and refuses a mismatch instead of approximating through it. Recovery is
+`summo_diar::space::plan`: re-embed from the audio if retention kept it, otherwise
+`reset_vectors`, which drops the vectors but keeps every person, name and avatar. Losing recognition
+is recoverable — the user's voices are relearned as they speak. Silent misattribution is not.
 
 ### What stays a file for a different reason
 
@@ -73,5 +113,8 @@ is not a performance decision and this measurement does not touch it.
 * `VoiceLog` gains a binary encoding; the JSON reader stays for one release so existing vaults are
   read, then migrated on write.
 * The vectors remain deletable. Removing `~/.summo/voices/` costs recognition, never a transcript.
-* If a future embedding model changes dimension, the header records it, so a mismatch is detected
-  rather than silently compared.
+* The header records the embedding space — model, revision and dimension — so a mismatch is detected
+  rather than silently compared. Dimension alone is not enough; see above.
+* Identification stays a linear scan. If a future Summo ever holds enough vectors for that to hurt,
+  the fix is to scan fewer of them (compare against the centroids of plausible people first), not to
+  accept an approximate answer.

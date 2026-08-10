@@ -21,6 +21,7 @@ use sha2::{Digest, Sha256};
 use summo_core::{Error, Result};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
+use crate::credentials::Credentials;
 use crate::manifest::FileEntry;
 
 /// Bytes hashed per read when verifying an existing partial file.
@@ -50,6 +51,7 @@ pub struct Downloader {
     client: reqwest::Client,
     staging: PathBuf,
     max_retries: u32,
+    credentials: Credentials,
 }
 
 impl Downloader {
@@ -66,12 +68,24 @@ impl Downloader {
             client,
             staging: staging.into(),
             max_retries: 3,
+            credentials: Credentials::none(),
         })
     }
 
     #[must_use]
     pub fn with_max_retries(mut self, retries: u32) -> Self {
         self.max_retries = retries;
+        self
+    }
+
+    /// Supply tokens for gated hosts.
+    ///
+    /// The downloader does not decide which requests get a credential; [`Credentials::header_for`]
+    /// does, per URL, against a host allowlist. A manifest naming an arbitrary mirror therefore
+    /// cannot cause the token to be sent anywhere it does not belong.
+    #[must_use]
+    pub fn with_credentials(mut self, credentials: Credentials) -> Self {
+        self.credentials = credentials;
         self
     }
 
@@ -162,6 +176,9 @@ impl Downloader {
             let mut req = self.client.get(url);
             if done > 0 {
                 req = req.header(reqwest::header::RANGE, format!("bytes={done}-"));
+            }
+            if let Some(auth) = self.credentials.header_for(url) {
+                req = req.header(reqwest::header::AUTHORIZATION, auth);
             }
             let resp = req.send().await.map_err(|e| Error::Download {
                 url: url.to_string(),
