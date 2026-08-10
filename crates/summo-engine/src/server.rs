@@ -97,6 +97,9 @@ impl Server {
             .route("/hw", get(hardware))
             .route("/models", get(models))
             .route("/status", get(status))
+            .route("/storage", get(storage))
+            .route("/storage/prune", post(prune_storage))
+            .route("/meetings/{id}/audio", axum::routing::delete(forget_audio))
             .route("/settings", get(settings))
             .route("/settings/llm", post(set_llm))
             .route("/settings/llm/test", post(test_llm))
@@ -501,6 +504,82 @@ async fn trash(
     )
 }
 
+async fn storage(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(summo_vault::storage::usage(state.engine.paths()))
+}
+
+#[derive(Debug, Deserialize)]
+struct PruneQuery {
+    token: Option<String>,
+    /// Report what would go without deleting it. Defaults to true, so a mistyped request cannot
+    /// delete anything.
+    #[serde(default = "yes")]
+    dry_run: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+async fn prune_storage(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<PruneQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let paths = state.engine.paths();
+    as_response((|| {
+        let settings = summo_core::Settings::load(&paths.settings())?;
+        let now = time::OffsetDateTime::now_local()
+            .unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+        summo_vault::storage::prune(
+            paths,
+            settings.storage.audio_retention_days,
+            &now.date().to_string(),
+            q.dry_run,
+        )
+    })())
+}
+
+async fn forget_audio(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(
+        summo_vault::storage::forget_audio(state.engine.paths(), &summo_core::MeetingId::from(id))
+            .map(|freed| serde_json::json!({ "freed_bytes": freed })),
+    )
+}
+
 /// The whole settings file.
 ///
 /// Safe to hand to the interface as-is: by construction it holds no secrets. API keys live in the
@@ -753,6 +832,7 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
 struct ActiveSession {
     runner: crate::runner::SessionRunner,
     recorder: crate::recorder::Recorder,
+    archive: crate::archive::AudioArchive,
     started: std::time::Instant,
 }
 
@@ -814,6 +894,20 @@ fn handle_command_with_models(
                 }
 
                 let elapsed = active.started.elapsed().as_secs_f64();
+
+                // Close the audio first: the transcript's save is the operation allowed to fail
+                // loudly, and it should not run while encoder buffers are still unflushed.
+                let archived = active.archive.finish();
+                if !archived.is_empty() {
+                    let bytes: u64 = archived.iter().map(|f| f.bytes).sum();
+                    events.push(Event::info(format!(
+                        "kept {} of audio in {} file{}",
+                        summo_vault::storage::human_bytes(bytes),
+                        archived.len(),
+                        if archived.len() == 1 { "" } else { "s" }
+                    )));
+                }
+
                 match active.recorder.finish(elapsed) {
                     Ok(path) => events.push(Event::info(format!("saved to {}", path.display()))),
                     // The transcript is still on screen, so say the save failed rather than
@@ -857,17 +951,22 @@ fn start_session(
         models.push(("refine".to_string(), refine.clone()));
     }
 
-    let recorder = crate::recorder::Recorder::start(
-        engine.paths(),
-        summo_core::MeetingId::new(),
-        &title,
-        &date,
-        models,
-    )?;
+    let id = summo_core::MeetingId::new();
+
+    // Read the setting at the start of the meeting rather than per frame: changing it mid-recording
+    // would leave a file with a hole in it, which is worse than either answer.
+    let keep_audio = summo_core::Settings::load(&engine.paths().settings())
+        .map(|s| s.storage.keep_audio)
+        .unwrap_or(true);
+    let archive = crate::archive::AudioArchive::new(engine.paths(), &id, keep_audio);
+
+    let recorder =
+        crate::recorder::Recorder::start(engine.paths(), id, &title, &date, models)?;
 
     Ok(ActiveSession {
         runner,
         recorder,
+        archive,
         started: std::time::Instant::now(),
     })
 }
@@ -893,6 +992,12 @@ fn handle_audio_with_models(
             transient: true,
         }];
     };
+
+    // Archive before decoding. If recognition fails or the model is wrong, the audio is still on
+    // disk and the meeting can be transcribed again; the reverse is not true.
+    if let Err(e) = active.archive.write(lane, &samples) {
+        tracing::error!(error = %e, "could not archive audio");
+    }
 
     match active.runner.accept(lane, &samples) {
         Ok(events) => {
@@ -1384,6 +1489,55 @@ mod tests {
         assert_eq!(body["ok"], false);
         assert_eq!(body["local"], true, "a loopback endpoint is local");
         assert!(body["detail"].as_str().is_some_and(|d| !d.is_empty()));
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn storage_is_reported_and_pruning_defaults_to_a_dry_run() {
+        let (tmp, server) = running().await;
+        seed(&tmp, "01A", "2020-01-01T10:00:00+07:00", "Rất cũ");
+        let audio = Paths::at(tmp.path()).audio_for(&summo_core::MeetingId::from("01A".to_string()));
+        std::fs::create_dir_all(&audio).unwrap();
+        std::fs::write(audio.join("mic.opus"), vec![0u8; 2_048]).unwrap();
+
+        let body: serde_json::Value = client()
+            .get(format!("http://{}/storage", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(body["audio_bytes"], 2_048);
+        assert_eq!(body["recordings"][0]["title"], "Rất cũ");
+
+        // No `dry_run` parameter at all must not delete: a mistyped request is not consent.
+        let body: serde_json::Value = client()
+            .post(format!("http://{}/storage/prune", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(body["dry_run"], true);
+        assert_eq!(body["freed_bytes"], 2_048);
+        assert!(audio.exists(), "a default prune deleted audio");
+
+        let resp = client()
+            .post(format!("http://{}/storage/prune?dry_run=false", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+        assert!(!audio.exists());
+        assert!(
+            Paths::at(tmp.path()).meetings().join("01A.md").exists(),
+            "pruning deleted a transcript"
+        );
         server.shutdown();
     }
 

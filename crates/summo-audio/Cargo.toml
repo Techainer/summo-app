@@ -18,6 +18,9 @@ parking_lot.workspace = true
 cpal.workspace = true
 rubato.workspace = true
 rtrb.workspace = true
+audiopus = { version = "0.2.0", default-features = false, features = ["encoder", "coder"] }
+ogg = "0.9"
 
 [dev-dependencies]
+tempfile.workspace = true
 pretty_assertions.workspace = true

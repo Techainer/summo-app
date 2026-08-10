@@ -12,6 +12,7 @@
 //! * **The audio callback must never block.** It cannot allocate, decode, or wait on a lock, so
 //!   captured frames go into a lock-free queue and the pipeline runs on another thread.
 
+pub mod record;
 pub mod capture;
 pub mod convert;
 pub mod device;
@@ -21,3 +22,4 @@ pub use capture::{Capture, CaptureConfig, CaptureStats};
 pub use convert::{Framer, Resampling, to_mono};
 pub use device::{DeviceInfo, NARROWBAND_HZ, looks_bluetooth, pick_best};
 pub use loopback::{looks_like_loopback, pick_loopback, setup_hint};
+pub use record::OpusRecorder;

@@ -62,6 +62,19 @@ pub enum MeetingCmd {
 
     /// Counters for the whole vault.
     Stats,
+
+    /// What Summo is using on disk.
+    Storage {
+        /// Delete recordings older than the retention setting, and audio with no meeting left.
+        #[arg(long)]
+        prune: bool,
+        /// Show what pruning would remove without removing it.
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Delete one meeting's audio, keeping its transcript.
+    ForgetAudio { id: String },
 }
 
 pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
@@ -198,6 +211,65 @@ pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
             let path = library.trash(&MeetingId::from(id))?;
             println!("moved to {}", path.display());
             println!("nothing was deleted — remove that file yourself if you are sure");
+            Ok(())
+        }
+
+        MeetingCmd::Storage { prune, dry_run } => {
+            let usage = summo_vault::storage::usage(paths)?;
+            let mb = summo_vault::human_bytes;
+            println!("transcripts  {:>10}", mb(usage.vault_bytes));
+            println!("recordings   {:>10}", mb(usage.audio_bytes));
+            println!("models       {:>10}", mb(usage.model_bytes));
+            println!("total        {:>10}", mb(usage.total_bytes));
+
+            if !usage.recordings.is_empty() {
+                println!("\nlargest recordings");
+                for r in usage.recordings.iter().take(10) {
+                    println!("  {:>9}  {}  {}", mb(r.bytes), r.day, truncate(&r.title, 40));
+                }
+            }
+            if !usage.orphaned.is_empty() {
+                println!(
+                    "\n{} recording(s) with no meeting left, {} — `--prune` reclaims them",
+                    usage.orphaned.len(),
+                    mb(usage.orphaned.iter().map(|r| r.bytes).sum())
+                );
+            }
+
+            if prune || dry_run {
+                let settings = summo_core::Settings::load(&paths.settings())?;
+                let today = now().date().to_string();
+                let pruned = summo_vault::storage::prune(
+                    paths,
+                    settings.storage.audio_retention_days,
+                    &today,
+                    dry_run,
+                )?;
+                println!(
+                    "\n{} {} recording(s), {}",
+                    if dry_run { "would remove" } else { "removed" },
+                    pruned.removed.len(),
+                    mb(pruned.freed_bytes)
+                );
+                for r in &pruned.removed {
+                    // An orphan has no meeting to name it; saying so beats printing a blank line
+                    // that reads like a bug.
+                    if r.title.is_empty() {
+                        println!("  {:<10} (cuộc họp đã bị xoá) {}", "", r.id.as_str());
+                    } else {
+                        println!("  {} {}", r.day, truncate(&r.title, 48));
+                    }
+                }
+                if settings.storage.audio_retention_days == 0 {
+                    println!("retention is off (storage.audio_retention_days = 0), so nothing ages out");
+                }
+            }
+            Ok(())
+        }
+
+        MeetingCmd::ForgetAudio { id } => {
+            let freed = summo_vault::storage::forget_audio(paths, &MeetingId::from(id))?;
+            println!("freed {}", summo_vault::human_bytes(freed));
             Ok(())
         }
 
