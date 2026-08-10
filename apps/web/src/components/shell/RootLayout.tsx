@@ -8,6 +8,7 @@ import { RecordButton } from "../RecordButton";
 import { StatusBar } from "../StatusBar";
 import { Waveform } from "../Waveform";
 import { AppShell } from "./AppShell";
+import { NudgeBar } from "./NudgeBar";
 import type { NavItem } from "./Sidebar";
 
 const NAV: NavItem[] = [
@@ -134,6 +135,8 @@ export function RootLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
       </header>
+
+      <NudgeBar />
 
       {engine.session.error && (
         <p className="border-b border-rec/30 bg-rec-soft px-4 py-2 text-[13px] text-rec">
