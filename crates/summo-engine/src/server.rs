@@ -236,10 +236,27 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
         Message::Text(json.into())
     };
 
+    // The recognition pipeline for this connection, created on `session_start`. Held here rather
+    // than in shared state because it is not `Sync` and belongs to exactly one client.
+    #[cfg(feature = "models")]
+    let mut runner: Option<crate::runner::SessionRunner> = None;
+
     while let Some(Ok(message)) = socket.recv().await {
         let reply = match message {
+            #[cfg(feature = "models")]
+            Message::Text(text) => {
+                let (events, next) = handle_command_with_models(&text, &engine, runner.take());
+                runner = next;
+                events
+            }
+            #[cfg(not(feature = "models"))]
             Message::Text(text) => handle_command(&text, &engine),
+
+            #[cfg(feature = "models")]
+            Message::Binary(bytes) => handle_audio_with_models(&bytes, &engine, runner.as_mut()),
+            #[cfg(not(feature = "models"))]
             Message::Binary(bytes) => handle_audio(&bytes, &engine),
+
             Message::Close(_) => break,
             Message::Ping(_) | Message::Pong(_) => continue,
         };
@@ -299,6 +316,101 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
     }
 }
 
+/// Command handling when recognition is compiled in: owns creating and tearing down the pipeline.
+#[cfg(feature = "models")]
+fn handle_command_with_models(
+    text: &str,
+    engine: &EngineState,
+    runner: Option<crate::runner::SessionRunner>,
+) -> (Vec<Event>, Option<crate::runner::SessionRunner>) {
+    let command: Command = match serde_json::from_str(text) {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                vec![Event::Error {
+                    message: format!("malformed command: {e}"),
+                    transient: false,
+                }],
+                runner,
+            );
+        }
+    };
+
+    match command {
+        Command::SessionStart(spec) => {
+            if let Err(e) = engine.begin(&spec) {
+                return (vec![Event::error(&e)], runner);
+            }
+            match crate::runner::SessionRunner::new(&spec, &engine.store(), engine.hardware()) {
+                Ok(new_runner) => (
+                    vec![Event::info(format!(
+                        "session started with {}",
+                        spec.live_model
+                    ))],
+                    Some(new_runner),
+                ),
+                Err(e) => {
+                    // Loading failed, so the engine must not be left believing it is recording.
+                    engine.end();
+                    (vec![Event::error(&e)], None)
+                }
+            }
+        }
+        Command::SessionStop => {
+            let mut events = Vec::new();
+            if let Some(mut runner) = runner {
+                match runner.flush() {
+                    Ok(flushed) => events.extend(flushed),
+                    Err(e) => events.push(Event::error(&e)),
+                }
+            }
+            engine.end();
+            events.push(Event::info("session stopped"));
+            (events, None)
+        }
+        other => {
+            let events = handle_command(&serde_json::to_string(&other).unwrap_or_default(), engine);
+            (events, runner)
+        }
+    }
+}
+
+/// Audio handling when recognition is compiled in.
+#[cfg(feature = "models")]
+fn handle_audio_with_models(
+    bytes: &[u8],
+    engine: &EngineState,
+    runner: Option<&mut crate::runner::SessionRunner>,
+) -> Vec<Event> {
+    let (lane, samples) = match decode_frame(bytes) {
+        Ok(frame) => frame,
+        Err(e) => return vec![Event::error(&e)],
+    };
+    engine.advance(summo_core::audio::samples_to_secs(samples.len()), 0);
+
+    let Some(runner) = runner else {
+        // Audio before `session_start`. Saying so beats discarding it silently, which looks
+        // identical to a microphone that is not working.
+        return vec![Event::Error {
+            message: "audio received before the session was started".into(),
+            transient: true,
+        }];
+    };
+
+    match runner.accept(lane, &samples) {
+        Ok(events) => {
+            let finals = events
+                .iter()
+                .filter(|e| matches!(e, Event::Final(_)))
+                .count();
+            engine.advance(0.0, finals as u64);
+            events
+        }
+        Err(e) => vec![Event::error(&e)],
+    }
+}
+
+#[cfg_attr(feature = "models", allow(dead_code))]
 fn handle_audio(bytes: &[u8], engine: &EngineState) -> Vec<Event> {
     match decode_frame(bytes) {
         Ok((_lane, samples)) => {

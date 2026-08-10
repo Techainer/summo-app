@@ -15,6 +15,9 @@
 
 pub mod auth;
 pub mod protocol;
+
+#[cfg(feature = "models")]
+pub mod runner;
 pub mod server;
 pub mod state;
 
