@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Summo",
+  "version": "0.1.0",
+  "identifier": "app.summo.desktop",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Summo",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 720,
+        "minHeight": 480,
+        "decorations": false,
+        "transparent": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "msi", "deb", "appimage"],
+    "icon": ["icons/icon.png"],
+    "externalBin": ["binaries/summo-engine"],
+    "shortDescription": "Meeting notes that run on your machine",
+    "longDescription": "Speech recognition and speaker attribution run locally. Audio never leaves the device."
+  }
+}

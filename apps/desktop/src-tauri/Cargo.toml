@@ -1,0 +1,22 @@
+[package]
+name = "summo-desktop"
+description = "The Summo desktop shell"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "AGPL-3.0-or-later"
+
+# Excluded from the workspace: building this needs platform webview libraries (webkit2gtk on Linux,
+# WebView2 on Windows), and requiring them to run `cargo test` on the core crates would make the
+# workspace unbuildable on a plain CI runner or a headless server.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "process", "time"] }

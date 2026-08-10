@@ -15,7 +15,9 @@
 pub mod capture;
 pub mod convert;
 pub mod device;
+pub mod loopback;
 
 pub use capture::{Capture, CaptureConfig, CaptureStats};
 pub use convert::{Framer, Resampling, to_mono};
 pub use device::{DeviceInfo, NARROWBAND_HZ, looks_bluetooth, pick_best};
+pub use loopback::{looks_like_loopback, pick_loopback, setup_hint};

@@ -1,0 +1,91 @@
+/* The app shell. Dark by default, light where the system asks for it.
+   Fonts are self-hosted in the packaged build; the stacks below are the OS faces that render
+   Vietnamese tone marks without collision, which is the constraint that rules most of them out. */
+:root {
+  --bg: #0b0c0e;
+  --bg-soft: #111317;
+  --line: #23272f;
+  --fg: #e9ecf1;
+  --fg-dim: #9aa3b2;
+  --fg-faint: #6b7484;
+  --accent: #64e3a1;
+  --rec: #f2585b;
+  --sans: "Inter var", "Inter", "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #fbfbfc; --bg-soft: #f3f4f6; --line: #e4e7ec;
+    --fg: #14171c; --fg-dim: #525c6b; --fg-faint: #8a93a3; --accent: #12855a;
+  }
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--sans);
+  font-size: 15px; -webkit-font-smoothing: antialiased;
+}
+.app { display: flex; flex-direction: column; height: 100%; }
+
+.app-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px; border-bottom: 1px solid var(--line);
+  /* Tauri draws no title bar, so the header doubles as the drag region. */
+  -webkit-app-region: drag;
+}
+.app-header button { -webkit-app-region: no-drag; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 620; letter-spacing: -0.02em; }
+.bars { display: flex; align-items: flex-end; gap: 2.5px; height: 15px; }
+.bars i { width: 3px; background: var(--accent); border-radius: 2px; }
+.bars i:nth-child(1) { height: 8px; }
+.bars i:nth-child(2) { height: 15px; }
+.bars i:nth-child(3) { height: 6px; }
+
+.record {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--bg-soft); color: var(--fg); font: inherit; font-weight: 560;
+  cursor: pointer; transition: 0.15s;
+}
+.record:hover { border-color: var(--fg-faint); }
+.record-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--rec); }
+.record.recording { border-color: var(--rec); }
+.record.recording .record-dot { animation: pulse 1.6s ease-in-out infinite; }
+.record-time { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .record.recording .record-dot { animation: none; } }
+
+.app-main { flex: 1; min-height: 0; }
+.empty { color: var(--fg-faint); text-align: center; margin-top: 22vh; }
+
+.transcript { height: 100%; overflow-y: auto; padding: 14px 18px; }
+.line { padding: 9px 0; }
+.line-meta { display: flex; gap: 10px; align-items: baseline; }
+.time {
+  font-family: var(--mono); font-size: 0.76rem; color: var(--fg-faint);
+  /* Tabular figures stop the timestamp column shifting as the digits change. */
+  font-variant-numeric: tabular-nums;
+}
+.speaker { font-size: 0.8rem; font-weight: 600; }
+.lane-mic { color: var(--accent); }
+.lane-system { color: var(--fg-dim); }
+.line-text { margin: 3px 0 0; line-height: 1.65; }
+
+/* Partial text is dimmed rather than hidden, so the eye can follow it without trusting it. */
+.line.partial .line-text { color: var(--fg-dim); }
+.line.revised .line-text { color: var(--fg); }
+.line.manual .line-text { border-left: 2px solid var(--accent); padding-left: 9px; }
+
+.status {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 18px; border-top: 1px solid var(--line);
+  font-size: 0.78rem; color: var(--fg-faint);
+}
+.status .spacer { flex: 1; }
+.chip {
+  padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+}
+.chip.warn { border-color: var(--rec); color: var(--rec); }
+.notice { color: var(--fg-dim); }

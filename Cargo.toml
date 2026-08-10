@@ -32,6 +32,7 @@ summo-core = { path = "crates/summo-core" }
 summo-models = { path = "crates/summo-models" }
 summo-vad = { path = "crates/summo-vad" }
 summo-audio = { path = "crates/summo-audio" }
+summo-engine = { path = "crates/summo-engine" }
 summo-asr = { path = "crates/summo-asr" }
 summo-diar = { path = "crates/summo-diar" }
 summo-llm = { path = "crates/summo-llm" }
@@ -72,6 +73,9 @@ blake3 = "1"
 clap = { version = "4", features = ["derive", "env"] }
 directories = "6"
 uuid = { version = "1", features = ["v7", "serde"] }
+# Used for the daemon's session token; a credential deserves an explicit CSPRNG rather than
+# relying on whatever a convenience crate happens to use underneath.
+getrandom = "0.3"
 time = { version = "0.3", features = ["serde", "formatting", "parsing", "macros", "local-offset"] }
 parking_lot = "0.12"
 once_cell = "1"
