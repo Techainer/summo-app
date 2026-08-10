@@ -20,8 +20,8 @@ Three rules follow from that, and they decide most of the design:
 1. **Speech recognition and diarization are always local.** There is no cloud-ASR fallback.
 2. **Recording starts in under a second**, with no dialog. Summaries run after the meeting ends,
    because that is when you want them.
-3. **Your data is a folder of Markdown files** you can open in Obsidian. The SQLite index is derived
-   and can be deleted at any time.
+3. **Your data is `~/.summo/vault`** — Markdown files you can open in Obsidian, grep, back up or
+   delete. Same path on every platform, typeable from memory.
 
 ## Layout
 

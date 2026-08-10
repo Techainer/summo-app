@@ -1,8 +1,16 @@
 //! Where Summo keeps things on disk.
 //!
-//! The layout is deliberately boring and inspectable: a Markdown vault the user can open in
-//! Obsidian, a content-addressed model blob store, and a SQLite index that can be deleted and
-//! rebuilt from the vault at any time.
+//! Everything lives under `~/.summo`, and the layout is deliberately boring and inspectable: a
+//! Markdown vault the user can open in Obsidian, and a content-addressed model blob store.
+//!
+//! ```text
+//! ~/.summo/
+//!   vault/meetings/2026-08-10-weekly-sync.md   the meeting, and the only source of truth
+//!   vault/notes/  vault/people/
+//!   audio/<meeting-id>/{mic,system}.opus
+//!   models/blobs/sha256/…                      shared between models that reference one file
+//!   settings.json  hw.json  engine.json
+//! ```
 
 use std::path::{Path, PathBuf};
 
@@ -20,18 +28,25 @@ pub struct Paths {
 }
 
 impl Paths {
-    /// Resolve from `SUMMO_HOME`, else the platform data directory.
+    /// Resolve from `SUMMO_HOME`, else `~/.summo`.
     ///
-    /// * Linux: `~/.local/share/summo` (XDG)
-    /// * macOS: `~/Library/Application Support/Summo`
-    /// * Windows: `%APPDATA%\Summo\data`
+    /// A dotfolder in the home directory rather than each platform's data location, which would put
+    /// it in `~/Library/Application Support/Summo` on macOS and `%APPDATA%` on Windows. Those are
+    /// the conventional answers and they are wrong for this product.
+    ///
+    /// Summo's claim is that your meetings are files you own. A user has to be able to *find* them
+    /// — to back the folder up, sync it, open it in Obsidian, grep it, or delete one. `~/.summo` is
+    /// the same sentence on every platform, it is what `git`, `ollama` and `docker` do, and it can
+    /// be typed from memory. An application-support directory is somewhere data is kept *from* you,
+    /// which is the opposite of what is being promised.
     pub fn discover() -> Result<Self> {
         if let Some(dir) = std::env::var_os(ENV_DATA_DIR) {
             return Ok(Self::at(PathBuf::from(dir)));
         }
-        let dirs = directories::ProjectDirs::from("app", "Summo", "Summo")
+        let home = directories::UserDirs::new()
+            .map(|dirs| dirs.home_dir().to_path_buf())
             .ok_or_else(|| Error::Config("cannot determine a home directory".into()))?;
-        Ok(Self::at(dirs.data_dir().to_path_buf()))
+        Ok(Self::at(home.join(".summo")))
     }
 
     /// Root an instance at an explicit directory.
@@ -205,6 +220,28 @@ mod tests {
         assert!(
             paths.blob(&"g".repeat(64)).is_err(),
             "non-hex must be rejected"
+        );
+    }
+
+    #[test]
+    fn the_vault_lives_where_a_person_can_find_it() {
+        // The product's claim is that meetings are files you own; a path nobody can type from
+        // memory quietly makes that untrue.
+        // SAFETY: single-threaded test section; no other thread reads the environment here.
+        unsafe { std::env::remove_var(ENV_DATA_DIR) };
+        let paths = Paths::discover().unwrap();
+
+        assert!(
+            paths.root().ends_with(".summo"),
+            "expected ~/.summo, got {}",
+            paths.root().display()
+        );
+        assert!(
+            !paths
+                .root()
+                .to_string_lossy()
+                .contains("Application Support"),
+            "an application-support directory is somewhere data is kept from you"
         );
     }
 
