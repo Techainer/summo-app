@@ -111,6 +111,9 @@ impl Server {
             .route("/tasks", get(tasks))
             .route("/nudges", get(nudges))
             .route("/ask", post(ask))
+            .route("/imports", get(list_imports).post(start_import))
+            .route("/imports/clear", post(clear_imports))
+            .route("/imports/{id}", get(get_import))
             .route("/meetings/{id}/draft", get(get_draft))
             .route("/meetings/{id}/draft/generate", post(generate_draft))
             .route("/meetings/{id}/draft/refine", post(refine_draft))
@@ -851,6 +854,168 @@ async fn ask(
         Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
     };
     as_response(crate::ask::ask(state.engine.paths(), &client, &body.question).await)
+}
+
+/// Without recognition the fields are still parsed — a caller should get "this build cannot
+/// transcribe" rather than "malformed body" — but nothing reads them.
+#[cfg_attr(not(feature = "models"), allow(dead_code))]
+#[derive(Debug, Deserialize)]
+struct ImportBody {
+    /// Absolute path to a media file on this machine.
+    path: String,
+    /// Model to decode with. Omitted means "whatever the app is configured to record with".
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    language: Option<String>,
+    /// Attribute speakers. On by default: an imported recording is usually a room, and a wall of
+    /// unattributed text is the thing people complain about first.
+    #[serde(default = "yes")]
+    diarize: bool,
+}
+
+/// Start importing a recording. Returns immediately with a job to poll.
+async fn start_import(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<ImportBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(spawn_import(&state, body))
+}
+
+#[cfg(feature = "models")]
+fn spawn_import(state: &AppState, body: ImportBody) -> summo_core::Result<crate::imports::Job> {
+    use summo_core::segment::Lane;
+
+    let source = std::path::PathBuf::from(&body.path);
+    crate::imports::check(&source)?;
+
+    let model = match body.model {
+        Some(model) => model,
+        None => default_import_model(state)?,
+    };
+    let mut spec = crate::protocol::SessionSpec::new(model);
+    // The offline path decodes on the system lane; the spec has to open the lane it will be fed.
+    spec.lanes = vec![Lane::System];
+    spec.language = body.language;
+    spec.diarize = body.diarize;
+    spec.validate()?;
+
+    let title = summo_media::title_from(&source);
+    let imports = state.engine.imports().clone();
+    let id = imports.add(title, &source);
+    let job = imports.get(&id).expect("just added");
+
+    let paths = state.engine.paths().clone();
+    let store = state.engine.store();
+    let hw = state.engine.hardware().clone();
+
+    // Its own thread, not a tokio task: decoding is CPU-bound for minutes at a time and would
+    // otherwise starve the runtime that is serving this daemon's other requests.
+    std::thread::spawn(move || {
+        crate::imports::run(&imports, &id, &paths, &store, &hw, &spec, &source);
+    });
+
+    Ok(job)
+}
+
+/// Without recognition compiled in there is nothing to decode with, and pretending otherwise would
+/// leave a job that sits at "queued" forever.
+#[cfg(not(feature = "models"))]
+fn spawn_import(_state: &AppState, _body: ImportBody) -> summo_core::Result<crate::imports::Job> {
+    Err(summo_core::Error::Other(
+        "bản build này không có nhận dạng giọng nói".into(),
+    ))
+}
+
+/// The model an import should use when the caller did not name one.
+///
+/// The most recently installed transcription model, so "import this" works before the user has
+/// opened settings — and fails with advice rather than a silent no-op when nothing is installed.
+#[cfg(feature = "models")]
+fn default_import_model(state: &AppState) -> summo_core::Result<String> {
+    state
+        .engine
+        .store()
+        .list()
+        .into_iter()
+        .find(|m| m.task == summo_models::Task::Asr)
+        .map(|m| m.id.to_string())
+        .ok_or_else(|| {
+            summo_core::Error::Other(
+                "chưa cài mô hình nhận dạng nào; chạy `summo setup` trước".into(),
+            )
+        })
+}
+
+/// Every import this daemon has run, newest first.
+async fn list_imports(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(Ok::<_, summo_core::Error>(state.engine.imports().list()))
+}
+
+/// One import's progress.
+async fn get_import(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(
+        state
+            .engine
+            .imports()
+            .get(&id)
+            .ok_or_else(|| summo_core::Error::Other(format!("không có lần nhập nào tên {id}"))),
+    )
+}
+
+/// Forget the jobs that have finished, leaving the ones still running.
+async fn clear_imports(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let cleared = state.engine.imports().clear_finished();
+    as_response(Ok::<_, summo_core::Error>(
+        serde_json::json!({ "cleared": cleared }),
+    ))
 }
 
 /// Hand an `@agent` task to the agent and wait for it.
@@ -2339,9 +2504,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_fresh_daemon_has_imported_nothing() {
+        let (_tmp, server) = running().await;
+        let jobs: Vec<serde_json::Value> = client()
+            .get(format!("http://{}/imports", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(jobs.is_empty());
+        server.shutdown();
+    }
+
+    /// A path that is not there has to fail at the request, not as a job that appears and then
+    /// dies — otherwise a typo shows up in the UI as a broken import rather than as a typo.
+    #[tokio::test]
+    async fn importing_a_file_that_is_not_there_fails_without_creating_a_job() {
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .post(format!("http://{}/imports", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "path": "/definitely/not/here.mp4" }))
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_client_error() || resp.status().is_server_error());
+
+        let jobs: Vec<serde_json::Value> = client()
+            .get(format!("http://{}/imports", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(jobs.is_empty(), "a rejected import must leave no job behind");
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn asking_after_an_import_that_never_existed_says_so() {
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .get(format!("http://{}/imports/nope", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_client_error() || resp.status().is_server_error());
+        server.shutdown();
+    }
+
+    #[tokio::test]
     async fn everything_else_requires_the_token() {
         let (_tmp, server) = running().await;
-        for path in ["hw", "models", "status", "library", "library/search"] {
+        for path in ["hw", "models", "status", "library", "library/search", "imports"] {
             let resp = client()
                 .get(format!("http://{}/{path}", server.addr()))
                 .send()

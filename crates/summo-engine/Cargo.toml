@@ -36,6 +36,9 @@ summo-vad = { workspace = true, optional = true }
 summo-asr = { workspace = true, optional = true }
 summo-diar.workspace = true
 summo-agent.workspace = true
+summo-media.workspace = true
+
+hound.workspace = true
 
 anyhow.workspace = true
 axum.workspace = true

@@ -44,6 +44,7 @@ struct Inner {
     paths: Paths,
     hw: HwProfile,
     status: RwLock<SessionStatus>,
+    imports: crate::imports::Imports,
 }
 
 impl EngineState {
@@ -54,8 +55,16 @@ impl EngineState {
                 paths,
                 hw: HwProfile::detect(),
                 status: RwLock::new(SessionStatus::Idle),
+                imports: crate::imports::Imports::new(),
             }),
         })
+    }
+
+    /// Imports running in this daemon. Shared, so a job started from one window is visible in
+    /// every other one and in the CLI.
+    #[must_use]
+    pub fn imports(&self) -> &crate::imports::Imports {
+        &self.inner.imports
     }
 
     #[must_use]

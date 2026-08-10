@@ -9,6 +9,7 @@ use summo_core::{ModelId, paths::Paths};
 use summo_models::{Downloader, Manifest, ModelStore, Registry, RegistrySource, hw::HwProfile};
 
 mod ai;
+mod importer;
 mod library;
 
 #[cfg(feature = "transcribe")]
@@ -50,9 +51,15 @@ enum Command {
     Import {
         /// A media file, or a folder of them.
         path: std::path::PathBuf,
-        /// Report what would be imported without writing anything.
+        /// Report what would be imported without queueing anything.
         #[arg(long)]
         dry_run: bool,
+        /// ISO language code for the recogniser. Omit to let the model detect.
+        #[arg(long)]
+        lang: Option<String>,
+        /// Queue the files and exit instead of waiting for them.
+        #[arg(long)]
+        detach: bool,
     },
 
     /// Rank the models available for a language on this machine, and say why.
@@ -190,7 +197,12 @@ async fn main() -> Result<()> {
         Command::List => list(&paths),
         Command::Rm { id } => remove(&paths, &id),
         Command::Gc => gc(&paths),
-        Command::Import { path, dry_run } => import(&paths, &path, dry_run),
+        Command::Import {
+            path,
+            dry_run,
+            lang,
+            detach,
+        } => import(&paths, &path, dry_run, lang.as_deref(), detach).await,
         Command::Hw => show_hw(),
         Command::Recommend { lang, registry } => {
             show_recommendation(&paths, &lang, registry.as_deref()).await
@@ -671,68 +683,77 @@ fn length_of(seconds: f64) -> String {
 
 /// Turn recordings the user already has into meetings.
 ///
-/// Extracting the audio is the easy half; the half worth being careful about is that importing a
-/// folder of forty files should not stop on the one that is corrupt. Each file is reported on its
-/// own line and a failure moves to the next.
-fn import(paths: &Paths, path: &std::path::Path, dry_run: bool) -> Result<()> {
-    let tools = summo_media::probe()?;
-    tracing::debug!(version = %tools.version, "found ffmpeg");
-
-    let files = if path.is_dir() {
-        summo_media::importable_in(path)?
-    } else {
-        vec![path.to_path_buf()]
-    };
-
+/// The work happens in the daemon: it owns the models, and a second implementation here would drift
+/// from the one the app uses. This queues the files and follows them.
+///
+/// Importing a folder of forty files must not stop on the one that is corrupt, so each file is
+/// reported on its own line and a failure moves to the next.
+async fn import(
+    paths: &Paths,
+    path: &std::path::Path,
+    dry_run: bool,
+    lang: Option<&str>,
+    detach: bool,
+) -> Result<()> {
+    let files = importer::targets(path)?;
     if files.is_empty() {
         println!("Không có file nào để nhập trong {}", path.display());
         return Ok(());
     }
 
-    let mut imported = 0usize;
-    let mut skipped = 0usize;
+    if dry_run {
+        // ffmpeg is probed here and only here on this path: a dry run should still fail loudly if
+        // the thing that does the decoding is missing.
+        let tools = summo_media::probe()?;
+        for file in &files {
+            let title = summo_media::title_from(file);
+            match tools.info(file) {
+                Ok(info) if !info.has_audio => println!("  bỏ qua  {title} — không có âm thanh"),
+                Ok(info) => println!("  sẽ nhập {title} — {}", length_of(info.duration_s)),
+                Err(e) => println!("  lỗi     {title} — {e}"),
+            }
+        }
+        println!("\n{} file (chạy thử)", files.len());
+        return Ok(());
+    }
 
+    let handshake = importer::handshake(paths)?;
+    let client = reqwest::Client::new();
+
+    let mut jobs = Vec::new();
     for file in &files {
         let title = summo_media::title_from(file);
-        match tools.info(file) {
-            Ok(info) if !info.has_audio => {
-                println!("  bỏ qua  {title} — không có âm thanh");
-                skipped += 1;
+        match importer::start(&client, &handshake, file, lang).await {
+            Ok(job) => {
+                println!("  xếp hàng {title}");
+                jobs.push(job);
             }
-            Ok(info) => {
-                let length = length_of(info.duration_s);
-                if dry_run {
-                    println!("  sẽ nhập {title} — {length}");
-                    imported += 1;
-                    continue;
-                }
-
-                let id = summo_core::MeetingId::new();
-                let wav = paths.audio_for(&id).join("import.wav");
-                match tools.to_wav(file, &wav) {
-                    Ok(()) => {
-                        println!("  đã nhập {title} — {length} → {id}");
-                        imported += 1;
-                    }
-                    Err(e) => {
-                        println!("  lỗi     {title} — {e}");
-                        skipped += 1;
-                    }
-                }
-            }
-            Err(e) => {
-                println!("  lỗi     {title} — {e}");
-                skipped += 1;
-            }
+            Err(e) => println!("  lỗi     {title} — {e}"),
         }
     }
 
-    println!(
-        "\n{imported} file, {skipped} bỏ qua{}",
-        if dry_run { " (chạy thử)" } else { "" }
-    );
-    if !dry_run && imported > 0 {
-        println!("Chạy `summo transcribe` để chuyển thành transcript.");
+    if jobs.is_empty() {
+        bail!("không nhập được file nào");
     }
+    if detach {
+        println!("\n{} file đang chạy trong nền.", jobs.len());
+        return Ok(());
+    }
+
+    println!();
+    let mut failed = 0usize;
+    for job in &jobs {
+        let mut current = importer::poll(&client, &handshake, &job.id).await?;
+        while !current.finished() {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            current = importer::poll(&client, &handshake, &job.id).await?;
+        }
+        if current.state == "failed" {
+            failed += 1;
+        }
+        println!("  {} — {}", current.title, current.line());
+    }
+
+    println!("\n{} xong, {failed} lỗi", jobs.len() - failed);
     Ok(())
 }

@@ -20,11 +20,14 @@ pub mod auth;
 pub mod board;
 pub mod collaborate;
 pub mod draft;
+pub mod imports;
 pub mod people;
 pub mod nudge;
 pub mod protocol;
 pub mod recorder;
 
+#[cfg(feature = "models")]
+pub mod offline;
 #[cfg(feature = "models")]
 pub mod runner;
 pub mod server;

@@ -25,6 +25,10 @@ const RECORD_SHORTCUT: Shortcut = Shortcut::new(
 
 fn main() {
     tauri::Builder::default()
+        // The file dialog for `Nhập file`. The webview only ever gets a *path* back, never the
+        // bytes: the daemon reads the file itself, so a two-hour video never crosses the IPC
+        // boundary.
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {

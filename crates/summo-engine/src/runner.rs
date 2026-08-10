@@ -344,6 +344,7 @@ mod tests {
             license: "MIT".into(),
             attribution: None,
             redistributable: true,
+            gated: false,
             size_bytes: 0,
             profile: summo_models::Profile::default(),
             files: vec![],
