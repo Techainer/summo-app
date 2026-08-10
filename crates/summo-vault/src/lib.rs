@@ -12,6 +12,7 @@
 //!
 //! The cost is that parsing must be forgiving: these files *will* be edited by other tools.
 
+pub mod annotate;
 pub mod export;
 pub mod index;
 pub mod library;
