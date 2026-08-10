@@ -12,6 +12,7 @@ import { LibraryScreen } from "./screens/LibraryScreen";
 import { MeetingScreen } from "./screens/MeetingScreen";
 import { PeopleScreen } from "./screens/PeopleScreen";
 import { RecordScreen } from "./screens/RecordScreen";
+import { TasksScreen } from "./screens/TasksScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 
 /**
@@ -64,6 +65,12 @@ const meetingRoute = createRoute({
   component: MeetingScreen,
 });
 
+const tasksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/tasks",
+  component: TasksScreen,
+});
+
 const peopleRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/people",
@@ -86,6 +93,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   libraryRoute,
   meetingRoute,
+  tasksRoute,
   peopleRoute,
   analyticsRoute,
   settingsRoute,

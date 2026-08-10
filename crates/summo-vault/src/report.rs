@@ -76,9 +76,6 @@ pub struct Report {
     pub quiet_days: Vec<String>,
 }
 
-/// Headings an action-item list can live under, in either language.
-const ACTION_HEADINGS: [&str; 4] = ["action items", "việc cần làm", "hành động", "todo"];
-
 /// Build a report for `from..=to`, inclusive.
 ///
 /// Both bounds are `YYYY-MM-DD`. A range where `to` precedes `from` yields an empty report rather
@@ -122,14 +119,16 @@ pub fn between(vault: &std::path::Path, from: &str, to: &str) -> Result<Report> 
         // not on the listing path, so paying for a full read here is the right trade.
         let path = vault.join(&entry.path);
         if let Ok(body) = std::fs::read_to_string(&path) {
-            for (text, owner, done) in actions_in(&body) {
-                if done {
+            // One parser, in `tasks.rs`. A second copy here drifted from it the moment the task
+            // format grew ids, statuses and agent steps.
+            for task in crate::tasks::parse(&body, &entry.path.display().to_string()) {
+                if task.status.is_finished() {
                     done_actions += 1;
                     continue;
                 }
                 open_actions.push(ActionItem {
-                    text,
-                    owner,
+                    text: task.text,
+                    owner: task.owner,
                     meeting: entry.id.to_string(),
                     meeting_title: entry.title.clone(),
                     day: entry.day.clone(),
@@ -179,60 +178,6 @@ pub fn between(vault: &std::path::Path, from: &str, to: &str) -> Result<Report> 
 /// One day.
 pub fn day(vault: &std::path::Path, day: &str) -> Result<Report> {
     between(vault, day, day)
-}
-
-/// Every checkbox under an action-items heading.
-///
-/// Scoped to the heading rather than taken from the whole document, because a transcript can
-/// contain a line that looks like a task without being one, and a summary may list decisions as
-/// checkboxes that were already made.
-fn actions_in(body: &str) -> Vec<(String, Option<String>, bool)> {
-    let mut out = Vec::new();
-    let mut inside = false;
-
-    for line in body.lines() {
-        let trimmed = line.trim();
-
-        if let Some(heading) = trimmed.strip_prefix('#') {
-            let title = heading.trim_start_matches('#').trim().to_lowercase();
-            inside = ACTION_HEADINGS.iter().any(|h| title.contains(h));
-            continue;
-        }
-        if !inside {
-            continue;
-        }
-
-        let Some(rest) = trimmed
-            .strip_prefix("- [")
-            .or_else(|| trimmed.strip_prefix("* ["))
-        else {
-            continue;
-        };
-        let Some((mark, text)) = rest.split_at_checked(1) else {
-            continue;
-        };
-        let Some(text) = text.strip_prefix(']') else {
-            continue;
-        };
-
-        let done = mark.eq_ignore_ascii_case("x");
-        let text = text.trim();
-        if text.is_empty() {
-            continue;
-        }
-        out.push((text.to_string(), owner_of(text), done));
-    }
-    out
-}
-
-/// The `@name` an item opens with, if any.
-fn owner_of(text: &str) -> Option<String> {
-    let name: String = text
-        .strip_prefix('@')?
-        .chars()
-        .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
-        .collect();
-    (!name.is_empty()).then_some(name)
 }
 
 /// Every `YYYY-MM-DD` from `from` to `to`, inclusive.
@@ -527,10 +472,42 @@ mod tests {
         assert!(days_between("2026-13-01", "2026-14-01").is_empty());
     }
 
+    /// Owner parsing itself is tested in `tasks.rs`; this pins that the report still surfaces it,
+    /// which is the part a caller depends on.
     #[test]
-    fn an_owner_is_read_only_from_a_leading_mention() {
-        assert_eq!(owner_of("@Ngọc chốt spec"), Some("Ngọc".to_string()));
-        assert_eq!(owner_of("hỏi @Ngọc về spec"), None);
-        assert_eq!(owner_of("@ trống"), None);
+    fn an_owner_survives_into_the_report() {
+        let dir = vault_with(&[(
+            "a.md",
+            &meeting(
+                "01A",
+                "2026-08-10T09:00:00+07:00",
+                "Họp",
+                "## Việc cần làm\n- [ ] @Ngọc chốt spec\n- [ ] hỏi @Ngọc về spec\n",
+            ),
+        )]);
+        let report = day(dir.path(), "2026-08-10").expect("report");
+        assert_eq!(report.open_actions.len(), 2);
+        let owners: Vec<Option<&str>> =
+            report.open_actions.iter().map(|a| a.owner.as_deref()).collect();
+        assert!(owners.contains(&Some("Ngọc")), "{owners:?}");
+        assert!(owners.contains(&None), "a mid-line mention is not an owner: {owners:?}");
+    }
+
+    /// The report and the board must agree about what is finished.
+    #[test]
+    fn a_task_marked_done_by_status_counts_as_done() {
+        let dir = vault_with(&[(
+            "a.md",
+            &meeting(
+                "01A",
+                "2026-08-10T09:00:00+07:00",
+                "Họp",
+                "## Việc cần làm\n- [ ] xong rồi <!-- id:1 status:done -->\n- [ ] chưa\n",
+            ),
+        )]);
+        let report = day(dir.path(), "2026-08-10").expect("report");
+        assert_eq!(report.done_actions, 1);
+        assert_eq!(report.open_actions.len(), 1);
+        assert_eq!(report.open_actions[0].text, "chưa");
     }
 }

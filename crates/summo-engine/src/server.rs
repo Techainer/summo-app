@@ -108,6 +108,9 @@ impl Server {
             .route("/settings/llm", post(set_llm))
             .route("/settings/llm/test", post(test_llm))
             .route("/report", get(report))
+            .route("/tasks", get(tasks))
+            .route("/tasks/{id}", post(update_task))
+            .route("/meetings/{id}/tasks", post(create_task))
             .route("/templates", get(templates))
             .route("/meetings/{id}/summarize", post(summarize_meeting))
             .route("/people", get(people))
@@ -331,6 +334,8 @@ fn vault_error(e: &Error) -> (StatusCode, String) {
     // that shows a stale person should be told to drop them rather than shown a validation error.
     let status = if message.contains("no meeting with id")
         || message.contains("no person with id")
+        || message.contains("no task with id")
+        || message.contains("no template with id")
         || message.contains("no voice log for meeting")
     {
         StatusCode::NOT_FOUND
@@ -715,6 +720,101 @@ async fn meeting_audio(
 fn vault_error_response(e: &Error) -> Response {
     let (status, message) = vault_error(e);
     (status, Json(serde_json::json!({ "error": message }))).into_response()
+}
+
+/// Every task in the vault, grouped into columns.
+async fn tasks(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(crate::board::read(state.engine.paths()))
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskUpdateBody {
+    #[serde(default)]
+    status: Option<summo_vault::tasks::Status>,
+    /// `Some(None)` clears the owner; absent leaves it alone. Serde gives us both from
+    /// `Option<Option<T>>` only when the field is explicitly `null`, which is what we want.
+    #[serde(default, deserialize_with = "double_option")]
+    owner: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    due: Option<Option<String>>,
+}
+
+/// Distinguish "field absent" from "field set to null".
+fn double_option<'de, D, T>(deserializer: D) -> std::result::Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
+}
+
+async fn update_task(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<TaskUpdateBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(crate::board::update(
+        state.engine.paths(),
+        &id,
+        body.status,
+        body.owner,
+        body.due,
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskCreateBody {
+    text: String,
+    #[serde(default)]
+    owner: Option<String>,
+    #[serde(default)]
+    due: Option<String>,
+}
+
+async fn create_task(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<TaskCreateBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(crate::board::create(
+        state.engine.paths(),
+        &summo_core::MeetingId::from(id),
+        &body.text,
+        body.owner.as_deref(),
+        body.due.as_deref(),
+    ))
 }
 
 /// The summary shapes installed, so the interface can offer a choice.
@@ -1567,6 +1667,130 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_board_groups_tasks_and_keeps_agent_work_apart() {
+        let (tmp, server) = running().await;
+        seed_with_body(
+            &tmp,
+            "01A",
+            "2026-08-10T09:00:00+07:00",
+            "Họp",
+            concat!(
+                "## Việc cần làm\n",
+                "- [ ] @ngoc Chốt spec <!-- id:T1 status:doing -->\n",
+                "- [ ] @binh Gọi khách <!-- id:T2 -->\n",
+                "- [ ] @agent Tạo lịch <!-- id:T3 status:running -->\n",
+                "  - [x] Quét ghi chú\n",
+            ),
+        );
+
+        let body: serde_json::Value = client()
+            .get(format!("http://{}/tasks", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(body["doing"].as_array().unwrap().len(), 1);
+        assert_eq!(body["todo"].as_array().unwrap().len(), 1);
+        assert_eq!(body["agent"].as_array().unwrap().len(), 1);
+        assert_eq!(body["agent"][0]["steps"].as_array().unwrap().len(), 1);
+        assert_eq!(body["owners"].as_array().unwrap().len(), 2, "the agent is not an owner");
+    }
+
+    #[tokio::test]
+    async fn moving_a_task_persists_and_leaves_the_notes_alone() {
+        let (tmp, server) = running().await;
+        seed_with_body(
+            &tmp,
+            "01A",
+            "2026-08-10T09:00:00+07:00",
+            "Họp",
+            "## Tóm tắt\nGiữ nguyên câu này.\n\n## Việc cần làm\n- [ ] @ngoc Chốt spec <!-- id:T1 -->\n",
+        );
+
+        let resp = client()
+            .post(format!("http://{}/tasks/T1", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "status": "done" }))
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_success(), "got {}", resp.status());
+
+        let board: serde_json::Value = client()
+            .get(format!("http://{}/tasks", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(board["done"].as_array().unwrap().len(), 1);
+
+        let path = Paths::at(tmp.path()).meetings().join("01A.md");
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert!(body.contains("Giữ nguyên câu này."), "the notes were rewritten: {body}");
+    }
+
+    #[tokio::test]
+    async fn a_summary_bullet_can_become_a_task() {
+        let (tmp, server) = running().await;
+        seed_with_body(&tmp, "01A", "2026-08-10T09:00:00+07:00", "Họp", "## Tóm tắt\nX.\n");
+
+        let created: serde_json::Value = client()
+            .post(format!("http://{}/meetings/01A/tasks", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "text": "Gửi báo giá", "owner": "binh" }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(created["text"], "Gửi báo giá");
+        assert_eq!(created["owner"], "binh");
+
+        let board: serde_json::Value = client()
+            .get(format!("http://{}/tasks", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(board["todo"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_task_that_is_not_there_is_a_404() {
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .post(format!("http://{}/tasks/NOPE", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "status": "done" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn tasks_need_a_token() {
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .get(format!("http://{}/tasks", server.addr()))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
     async fn templates_are_seeded_and_listed() {
         let (_tmp, server) = running().await;
         let body: serde_json::Value = client()
@@ -1871,6 +2095,20 @@ mod tests {
     }
 
     /// Write a meeting into a running server's vault.
+    /// Seed a meeting whose body the test controls, for the parts that care about its contents.
+    fn seed_with_body(tmp: &tempfile::TempDir, id: &str, date: &str, title: &str, body: &str) {
+        let paths = Paths::at(tmp.path());
+        let dir = paths.meetings();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.md")),
+            format!(
+                "---\nid: {id}\ndate: {date}\nduration: 600\ntags: []\n---\n# {title}\n\n{body}"
+            ),
+        )
+        .unwrap();
+    }
+
     fn seed(tmp: &tempfile::TempDir, id: &str, date: &str, title: &str) {
         let paths = Paths::at(tmp.path());
         let dir = paths.meetings();

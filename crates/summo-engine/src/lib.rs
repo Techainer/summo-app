@@ -16,6 +16,7 @@
 pub mod archive;
 pub mod audio_stream;
 pub mod auth;
+pub mod board;
 pub mod people;
 pub mod protocol;
 pub mod recorder;

@@ -12,7 +12,8 @@
     "e2e": "node e2e/full-flow.mjs",
     "e2e:library": "node e2e/library.mjs",
     "e2e:shell": "node e2e/shell.mjs",
-    "e2e:meeting": "node e2e/meeting.mjs"
+    "e2e:meeting": "node e2e/meeting.mjs",
+    "e2e:tasks": "node e2e/tasks.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",
