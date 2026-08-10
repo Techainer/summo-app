@@ -108,6 +108,8 @@ impl Server {
             .route("/settings/llm", post(set_llm))
             .route("/settings/llm/test", post(test_llm))
             .route("/report", get(report))
+            .route("/templates", get(templates))
+            .route("/meetings/{id}/summarize", post(summarize_meeting))
             .route("/people", get(people))
             .route("/people/{id}/name", post(rename_person))
             .route("/people/{id}/avatar", post(set_person_avatar))
@@ -640,6 +642,81 @@ async fn report(
     ))
 }
 
+/// The summary shapes installed, so the interface can offer a choice.
+async fn templates(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(
+        summo_vault::template::Templates::load_or_seed(&state.engine.paths().templates())
+            .map(|t| t.all().to_vec()),
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct SummarizeBody {
+    /// Template id, or absent to let the meeting's tags and title choose.
+    #[serde(default)]
+    template: Option<String>,
+}
+
+/// Write, or rewrite, one meeting's summary.
+///
+/// Synchronous, unlike the automatic run on stop: the user asked and is waiting for the answer, so
+/// a failure should reach them rather than a log file.
+async fn summarize_meeting(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<SummarizeBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+
+    let settings = match summo_core::settings::Settings::load(&state.engine.paths().settings()) {
+        Ok(settings) => settings,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+    let provider = match summo_llm::Provider::resolve(
+        &settings.llm.provider,
+        settings.llm.model.as_deref(),
+        api_key().as_deref(),
+    ) {
+        Ok(provider) => provider,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+    let client = match summo_llm::LlmClient::new(provider) {
+        Ok(client) => client,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+
+    let result = crate::summarize::run(
+        state.engine.paths(),
+        &client,
+        &summo_core::MeetingId::from(id),
+        body.template.as_deref(),
+    )
+    .await
+    .map(|done| serde_json::json!({ "template": done.template, "sections": done.sections }));
+    as_response(result)
+}
+
 /// Everyone Summo can recognise.
 async fn people(
     State(state): State<AppState>,
@@ -1124,8 +1201,15 @@ fn handle_command_with_models(
                     )));
                 }
 
+                // Captured before `finish` consumes the recorder.
+                let meeting = active.recorder.document().frontmatter.id.clone();
                 match active.recorder.finish(elapsed) {
-                    Ok(path) => events.push(Event::info(format!("saved to {}", path.display()))),
+                    Ok(path) => {
+                        events.push(Event::info(format!("saved to {}", path.display())));
+                        // Detached: the transcript is already saved and correct, and a user who
+                        // stops recording and closes the lid should still find a summary later.
+                        crate::summarize::spawn(engine.paths().clone(), meeting);
+                    }
                     // The transcript is still on screen, so say the save failed rather than
                     // pretending the meeting was filed away.
                     Err(e) => events.push(Event::error(&e)),
@@ -1290,6 +1374,66 @@ mod tests {
             embedding: embedding.to_vec(),
         });
         log.save(&path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn templates_are_seeded_and_listed() {
+        let (_tmp, server) = running().await;
+        let body: serde_json::Value = client()
+            .get(format!("http://{}/templates", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        let ids: Vec<&str> = body
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["id"].as_str().unwrap())
+            .collect();
+        assert!(ids.contains(&"standard"), "got {ids:?}");
+        assert!(ids.contains(&"standup"), "got {ids:?}");
+
+        // Every template must describe at least one section, or it summarises nothing.
+        for template in body.as_array().unwrap() {
+            assert!(
+                !template["sections"].as_array().unwrap().is_empty(),
+                "template {} has no sections",
+                template["id"]
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn summarising_a_meeting_that_is_not_there_is_reported() {
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .post(format!("http://{}/meetings/01NOPE/summarize", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .unwrap();
+        // Either no model is configured or the meeting is missing; both are the caller's problem
+        // and both must come back as a 4xx with a message rather than a 500.
+        assert!(resp.status().is_client_error(), "got {}", resp.status());
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert!(body["error"].is_string(), "expected an explanation, got {body}");
+    }
+
+    #[tokio::test]
+    async fn templates_need_a_token() {
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .get(format!("http://{}/templates", server.addr()))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]

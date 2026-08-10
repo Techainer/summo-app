@@ -141,6 +141,12 @@ impl Paths {
         self.root.join("voices")
     }
 
+    /// Summary shapes the user can edit. See `summo_vault::template`.
+    #[must_use]
+    pub fn templates(&self) -> PathBuf {
+        self.root.join("templates")
+    }
+
     #[must_use]
     pub fn skills(&self) -> PathBuf {
         self.root.join("skills")

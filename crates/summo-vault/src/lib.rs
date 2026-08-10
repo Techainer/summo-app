@@ -19,6 +19,7 @@ pub mod meeting;
 pub mod report;
 pub mod slug;
 pub mod storage;
+pub mod template;
 pub mod write;
 
 pub use export::{Format, Options as ExportOptions, export};

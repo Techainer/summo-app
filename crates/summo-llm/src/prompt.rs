@@ -100,6 +100,23 @@ pub fn summarize(transcript: &str, style: SummaryStyle, language: &str) -> Vec<M
     ]
 }
 
+/// Build the messages for a summary whose shape comes from a user-written template.
+///
+/// [`summarize`] covers the three built-in styles; this covers the case the templates exist for —
+/// a standup, a sales call and an interview want different write-ups, and the user is allowed to
+/// describe theirs in their own words. The ground rules are the same either way: they are what
+/// stops a model smoothing a messy transcript into confident fiction, and a user editing a template
+/// must not be able to switch them off by accident.
+#[must_use]
+pub fn summarize_with(transcript: &str, instructions: &str, language: &str) -> Vec<Message> {
+    vec![
+        Message::system(format!(
+            "{GROUND_RULES}\n\nWrite the summary in {language}.\n\n{instructions}"
+        )),
+        Message::user(format!("Transcript:\n\n{transcript}")),
+    ]
+}
+
 /// Build the messages for translating a run of utterances.
 ///
 /// Several lines go in one request rather than one line per request. A sentence translated without
