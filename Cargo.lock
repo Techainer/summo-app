@@ -2572,8 +2572,10 @@ dependencies = [
  "hound",
  "pretty_assertions",
  "serde",
+ "serde_json",
  "sherpa-rs",
  "summo-core",
+ "tempfile",
  "tracing",
 ]
 

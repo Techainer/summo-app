@@ -15,12 +15,16 @@
 //! far more and buys accuracy on a case — two people talking at once — where the transcript is
 //! unreliable anyway.
 
+pub mod attribution;
 pub mod cluster;
+pub mod voices;
 
 #[cfg(feature = "sherpa")]
 pub mod embed;
 
 pub use cluster::{Assignment, ClusterConfig, OnlineClusterer};
+pub use attribution::{Attributor, Relabel, VoiceLog, VoiceSample, relabel, resweep};
+pub use voices::{Match, Person, VoiceBook};
 
 use summo_core::{SpeakerId, segment::Lane};
 

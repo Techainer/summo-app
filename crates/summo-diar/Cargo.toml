@@ -16,10 +16,12 @@ sherpa = ["dep:sherpa-rs"]
 summo-core.workspace = true
 
 serde.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
 
 sherpa-rs = { workspace = true, optional = true }
 
 [dev-dependencies]
+tempfile.workspace = true
 pretty_assertions.workspace = true
 hound.workspace = true
