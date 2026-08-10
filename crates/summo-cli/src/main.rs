@@ -9,6 +9,7 @@ use summo_core::{ModelId, paths::Paths};
 use summo_models::{Downloader, Manifest, ModelStore, Registry, RegistrySource, hw::HwProfile};
 
 mod ai;
+mod library;
 
 #[cfg(feature = "transcribe")]
 mod transcribe;
@@ -16,7 +17,7 @@ mod transcribe;
 #[derive(Parser)]
 #[command(name = "summo", version, about)]
 struct Cli {
-    /// Data directory. Defaults to the platform application-data path, or `SUMMO_HOME`.
+    /// Data directory. Defaults to `~/.summo`, or `SUMMO_HOME`.
     #[arg(long, global = true)]
     home: Option<std::path::PathBuf>,
 
@@ -98,6 +99,10 @@ enum Command {
         #[command(flatten)]
         provider: ai::ProviderArgs,
     },
+
+    /// Browse and organise the meetings on disk.
+    #[command(subcommand, alias = "vault")]
+    Meetings(library::MeetingCmd),
 
     /// Convert a meeting to another format.
     Export {
@@ -206,6 +211,7 @@ async fn main() -> Result<()> {
             limit,
             provider,
         } => ai::ask(&paths, &question, &language, limit, &provider).await,
+        Command::Meetings(cmd) => library::run(&paths, cmd),
         Command::Export {
             meeting,
             format,

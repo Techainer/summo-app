@@ -18,10 +18,10 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use summo_core::{Error, Event, Result};
+use summo_vault::library::{Library, LibraryQuery};
 
 use crate::{
     auth::{SessionToken, origin_is_allowed, token_path},
-    library::{Library, LibraryQuery},
     protocol::{Command, decode_frame},
     state::EngineState,
 };

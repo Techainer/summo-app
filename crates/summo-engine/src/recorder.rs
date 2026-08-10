@@ -21,6 +21,7 @@ use std::{
 };
 
 use summo_core::{Error, Event, MeetingId, Result, SpeakerId, paths::Paths, segment::Segment};
+use summo_vault::write_atomically;
 use summo_vault::{MeetingDoc, meeting::Frontmatter, slug::meeting_stem};
 
 /// How often the document is flushed while recording.
@@ -184,24 +185,6 @@ impl Recorder {
         self.save()?;
         Ok(self.path)
     }
-}
-
-/// Write through a temporary file and rename over the target.
-///
-/// The rename is the point: it is atomic, so a reader either sees the previous complete file or the
-/// new complete one, never a half-written meeting.
-pub fn write_atomically(path: &Path, contents: &[u8]) -> Result<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| Error::Vault(format!("{} has no parent directory", path.display())))?;
-    std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
-
-    // Same directory, so the rename stays on one filesystem — across a boundary it would fall back
-    // to a copy and stop being atomic.
-    let temporary = path.with_extension("md.tmp");
-    std::fs::write(&temporary, contents).map_err(|e| Error::io(&temporary, e))?;
-    std::fs::rename(&temporary, path).map_err(|e| Error::io(path, e))?;
-    Ok(())
 }
 
 /// A path that does not collide with an existing meeting.

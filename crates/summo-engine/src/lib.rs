@@ -14,7 +14,6 @@
 //! token and an origin check.
 
 pub mod auth;
-pub mod library;
 pub mod protocol;
 pub mod recorder;
 

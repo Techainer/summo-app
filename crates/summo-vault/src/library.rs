@@ -10,10 +10,11 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use summo_core::{Error, MeetingId, Result, Segment, paths::Paths};
-use summo_vault::{
-    Filter, MeetingEntry, MeetingIndex,
-    index::{Excerpt, Skipped, load},
+use crate::{
+    index::{Excerpt, Filter, MeetingEntry, MeetingIndex, Skipped, Stats, load},
     meeting::Frontmatter,
+    slug::slugify,
+    write::write_atomically,
 };
 use time::OffsetDateTime;
 
@@ -110,7 +111,7 @@ pub struct SummaryGroup {
 pub struct LibraryView {
     pub groups: Vec<SummaryGroup>,
     pub total: usize,
-    pub stats: summo_vault::Stats,
+    pub stats: Stats,
     pub folders: Vec<String>,
     pub tags: Vec<TagCount>,
     pub people: Vec<PersonCount>,
@@ -329,7 +330,7 @@ impl Library {
         tags.dedup();
 
         doc.frontmatter.tags.clone_from(&tags);
-        crate::recorder::write_atomically(&entry.path, doc.to_markdown()?.as_bytes())?;
+        write_atomically(&entry.path, doc.to_markdown()?.as_bytes())?;
         Ok(tags)
     }
 
@@ -346,7 +347,7 @@ impl Library {
             .ok_or_else(|| Error::Vault(format!("no meeting with id {}", id.as_str())))?;
         let mut doc = load(entry)?;
         doc.title = title.to_string();
-        crate::recorder::write_atomically(&entry.path, doc.to_markdown()?.as_bytes())?;
+        write_atomically(&entry.path, doc.to_markdown()?.as_bytes())?;
         Ok(title.to_string())
     }
 
@@ -394,7 +395,7 @@ impl Library {
 }
 
 fn grouped(
-    groups: Vec<summo_vault::Group<'_>>,
+    groups: Vec<crate::index::Group<'_>>,
     filter: &Filter,
     root: &Path,
 ) -> Vec<SummaryGroup> {
@@ -432,7 +433,7 @@ fn safe_folder(folder: &str) -> Result<PathBuf> {
                 "folder name {part:?} is not allowed inside the vault"
             )));
         }
-        out.push(summo_vault::slugify(part));
+        out.push(slugify(part));
     }
     if out.as_os_str().is_empty() {
         return Err(Error::Vault("folder name is empty".into()));

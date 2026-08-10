@@ -22,6 +22,7 @@ summo-core.workspace = true
 summo-models.workspace = true
 summo-llm.workspace = true
 summo-vault.workspace = true
+time.workspace = true
 summo-asr = { workspace = true, optional = true }
 summo-vad = { workspace = true, optional = true }
 hound = { workspace = true, optional = true }
