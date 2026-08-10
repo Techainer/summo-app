@@ -23,8 +23,10 @@ pub mod voices;
 pub mod embed;
 
 pub use cluster::{Assignment, ClusterConfig, OnlineClusterer};
-pub use attribution::{Attributor, Relabel, VoiceLog, VoiceSample, relabel, resweep};
-pub use voices::{Match, Person, VoiceBook};
+pub use attribution::{
+    Attributor, Correction, Relabel, VoiceLog, VoiceSample, correct, relabel, resweep,
+};
+pub use voices::{Match, Person, Reassignment, Sample, VoiceBook};
 
 use summo_core::{SpeakerId, segment::Lane};
 

@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use summo_core::{Error, MeetingId, Result, SpeakerId};
 
-use crate::voices::{Match, VoiceBook, unknown_speaker};
+use crate::voices::{Match, Person, Reassignment, VoiceBook, unknown_speaker};
 
 /// Schema version, so a future embedding model can be detected rather than compared against.
 const SCHEMA: u32 = 1;
@@ -153,7 +153,11 @@ pub struct Attributor {
     book: VoiceBook,
     log: VoiceLog,
     /// Voices in this meeting nobody has named, in the order they were first heard.
-    unknown: Vec<Vec<f32>>,
+    ///
+    /// Full profiles rather than one vector each, for the same reason named people get several
+    /// centroids: an unnamed voice varies exactly as much as a named one does, and a single
+    /// drifting average loses that spread precisely when it is still being established.
+    unknown: Vec<Person>,
     min_duration_s: f64,
     same_voice: f32,
 }
@@ -184,10 +188,7 @@ impl Attributor {
 
         let (person, label) = match self.book.identify(embedding) {
             Match::Known { person, .. } => {
-                let name = self
-                    .book
-                    .get(&person)
-                    .map_or_else(|| person.clone(), |p| p.name.clone());
+                let name = self.book.name_of(&person);
                 (Some(person), SpeakerId::from(name))
             }
             // Unsure and Unknown are treated alike on purpose: both mean "do not put a name on
@@ -216,21 +217,26 @@ impl Attributor {
             .unknown
             .iter()
             .enumerate()
-            .map(|(i, c)| (i, cosine(c, embedding)))
+            .map(|(i, p)| (i, p.similarity(embedding)))
             .max_by(|a, b| a.1.total_cmp(&b.1));
 
         if let Some((i, similarity)) = best
             && similarity >= self.same_voice
         {
-            // Drift the centroid slowly: one utterance recorded while somebody leaned away from
-            // the microphone should not drag the whole voice with it.
-            for (slot, sample) in self.unknown[i].iter_mut().zip(embedding) {
-                *slot = *slot * 0.85 + sample * 0.15;
-            }
+            self.unknown[i].absorb(embedding, false);
             return i;
         }
-        self.unknown.push(embedding.to_vec());
+        let n = self.unknown.len() + 1;
+        let mut person = Person::new(format!("unknown-{n}"), unknown_speaker(n).as_str().to_string());
+        person.absorb(embedding, false);
+        self.unknown.push(person);
         self.unknown.len() - 1
+    }
+
+    /// The provisional profiles of this meeting's unnamed voices.
+    #[must_use]
+    pub fn unknown_voices(&self) -> &[Person] {
+        &self.unknown
     }
 
     #[must_use]
@@ -259,10 +265,7 @@ pub fn relabel(log: &VoiceLog, book: &VoiceBook) -> Vec<Relabel> {
             continue;
         }
         if let Match::Known { person, .. } = book.identify(&sample.embedding) {
-            let name = book
-                .get(&person)
-                .map_or_else(|| person.clone(), |p| p.name.clone());
-            let to = SpeakerId::from(name);
+            let to = SpeakerId::from(book.name_of(&person));
             if to != sample.label {
                 changes.push(Relabel {
                     seq: sample.seq,
@@ -292,13 +295,74 @@ pub fn apply(log: &mut VoiceLog, book: &VoiceBook, changes: &[Relabel]) {
 ///
 /// Confirmed samples are the ground truth the book learns from, and they are immune to later
 /// matching — the whole point of asking a person is that their answer wins.
-pub fn confirm(log: &mut VoiceLog, label: &SpeakerId, person_id: &str, name: &str) {
+pub fn confirm(log: &mut VoiceLog, label: &SpeakerId, person_id: &str, name: &str) -> usize {
     let to = SpeakerId::from(name.to_string());
+    let mut count = 0;
     for sample in log.samples.iter_mut().filter(|s| &s.label == label) {
         sample.label = to.clone();
         sample.person = Some(person_id.to_string());
         sample.confirmed = true;
+        count += 1;
     }
+    count
+}
+
+/// Everything one correction changed.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Correction {
+    /// The person the utterances now belong to.
+    pub person: String,
+    /// Which profiles gave samples up, and which disappeared entirely.
+    pub reassignment: Reassignment,
+    /// Lines fixed in the meeting the user was looking at.
+    pub in_this_meeting: usize,
+    /// Lines fixed in every other meeting on disk.
+    pub swept: Vec<(MeetingId, Vec<Relabel>)>,
+}
+
+/// A user says the utterances labelled `label` are `name`. Do all of it.
+///
+/// This is the whole correction in one call, because doing only part of it is what makes voice
+/// recognition feel broken:
+///
+/// 1. Move the samples to the right person, **taking them out of the profile that wrongly claimed
+///    them**. Without the removal, the next meeting repeats the mistake.
+/// 2. Mark this meeting's lines as confirmed, so no later match overturns a human.
+/// 3. Sweep every other meeting, because the same voice was probably misattributed there too.
+///
+/// Step three is affordable only because the vectors were kept: it is a loop and a dot product over
+/// stored numbers, not a re-run of anything.
+pub fn correct(
+    voices_dir: &Path,
+    book: &mut VoiceBook,
+    log: &mut VoiceLog,
+    label: &SpeakerId,
+    name: &str,
+) -> Result<Correction> {
+    let embeddings = log.embeddings_for(label);
+    if embeddings.is_empty() {
+        return Err(Error::Other(format!(
+            "no utterances in this meeting are labelled {}",
+            label.as_str()
+        )));
+    }
+
+    let reassignment = book.reassign(name, &embeddings)?;
+    book.save()?;
+
+    let in_this_meeting = confirm(log, label, &reassignment.person, name);
+    log.save(&VoiceLog::path_for(voices_dir, &log.meeting))?;
+
+    // The current meeting is already correct on disk, so the sweep finds nothing left to do in it
+    // and reports only the others.
+    let swept = resweep(voices_dir, book)?;
+
+    Ok(Correction {
+        person: reassignment.person.clone(),
+        reassignment,
+        in_this_meeting,
+        swept,
+    })
 }
 
 /// Relabel every meeting on disk against the current book.
@@ -336,19 +400,6 @@ pub fn resweep(voices_dir: &Path, book: &VoiceBook) -> Result<Vec<(MeetingId, Ve
     Ok(out)
 }
 
-fn cosine(a: &[f32], b: &[f32]) -> f32 {
-    if a.len() != b.len() || a.is_empty() {
-        return 0.0;
-    }
-    let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-    let na = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let nb = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if na <= f32::EPSILON || nb <= f32::EPSILON {
-        return 0.0;
-    }
-    dot / (na * nb)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -369,7 +420,7 @@ mod tests {
     #[test]
     fn a_known_voice_gets_its_name_immediately() {
         let mut book = VoiceBook::default();
-        book.enroll("Ngọc", &[NGOC.to_vec()]).unwrap();
+        book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
 
         let mut attributor = Attributor::new(book, log());
         let label = attributor.attribute(0, 0.0, 3.0, &near(NGOC, 0.02));
@@ -413,12 +464,103 @@ mod tests {
 
         let label = SpeakerId::from("Người 1".to_string());
         let mut book = VoiceBook::default();
-        let id = book.enroll("Ngọc", &log.embeddings_for(&label)).unwrap();
+        let id = book.enroll("Ngọc", &log.embeddings_for(&label), true).unwrap();
         confirm(&mut log, &label, &id, "Ngọc");
 
         let named: Vec<&str> = log.samples.iter().map(|s| s.label.as_str()).collect();
         assert_eq!(named, vec!["Ngọc", "Người 2", "Ngọc"]);
         assert!(log.samples[0].confirmed);
+    }
+
+    #[test]
+    fn an_unnamed_voice_keeps_its_own_spread() {
+        // The same reason a named person gets several centroids: an unnamed voice varies just as
+        // much, and it is still being established, so flattening it is worst exactly here.
+        // Cosine ≈ 0.70 with NGOC: the same voice by the within-meeting threshold, but a
+        // different enough recording that it deserves its own centroid.
+        let other_take = vec![0.70, 0.714, 0.0, 0.0];
+        let mut attributor = Attributor::new(VoiceBook::default(), log());
+        attributor.attribute(0, 0.0, 3.0, &NGOC);
+        attributor.attribute(1, 4.0, 3.0, &other_take);
+
+        let unknown = attributor.unknown_voices();
+        assert_eq!(unknown.len(), 1, "two takes on one voice became two people");
+        assert!(
+            unknown[0].centroids.len() >= 2,
+            "the spread was flattened into one centroid"
+        );
+        assert_eq!(unknown[0].sample_count(), 2);
+    }
+
+    #[test]
+    fn correcting_a_wrong_match_fixes_this_meeting_the_book_and_the_history() {
+        // The case the user runs into: a third person is recognised as Ngọc. Fixing it has to do
+        // all three things, or the mistake comes straight back next meeting.
+        let dir = TempDir::new().unwrap();
+        let voices = dir.path().to_path_buf();
+
+        let mut book = VoiceBook::load(voices.join("voices.json")).unwrap();
+        book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
+        // Ngọc's profile picks up a stranger by mistake.
+        book.enroll("Ngọc", &[KHACH.to_vec()], false).unwrap();
+
+        // An older meeting where the same stranger was already called Ngọc.
+        let mut old = VoiceLog::new(MeetingId::from("00Z".to_string()), "campplus-sv");
+        old.samples.push(VoiceSample {
+            seq: 0,
+            t0: 0.0,
+            duration: 3.0,
+            embedding: near(KHACH, 0.01),
+            person: Some("ngoc".into()),
+            label: SpeakerId::from("Ngọc".to_string()),
+            confirmed: false,
+        });
+        old.save(&VoiceLog::path_for(&voices, &old.meeting)).unwrap();
+
+        // Today's meeting, where the user notices.
+        let mut today = log();
+        let mut attributor = Attributor::new(book.clone(), today.clone());
+        attributor.attribute(0, 0.0, 3.0, &near(KHACH, 0.02));
+        today = attributor.into_log();
+        assert_eq!(today.samples[0].label.as_str(), "Ngọc", "setup failed");
+        today.save(&VoiceLog::path_for(&voices, &today.meeting)).unwrap();
+
+        let done = correct(
+            &voices,
+            &mut book,
+            &mut today,
+            &SpeakerId::from("Ngọc".to_string()),
+            "Bình",
+        )
+        .unwrap();
+
+        assert_eq!(done.person, "binh");
+        assert_eq!(done.in_this_meeting, 1);
+        // The stranger's sample left Ngọc, so the mistake cannot repeat.
+        assert_eq!(done.reassignment.removed_from, vec![("ngoc".to_string(), 1)]);
+        assert_eq!(book.identify(&KHACH).person(), Some("binh"));
+        assert_eq!(book.identify(&NGOC).person(), Some("ngoc"), "Ngọc was damaged");
+        // And the old meeting was fixed without anything being re-run.
+        assert_eq!(done.swept.len(), 1);
+        assert_eq!(done.swept[0].0.as_str(), "00Z");
+        assert_eq!(done.swept[0].1[0].to.as_str(), "Bình");
+    }
+
+    #[test]
+    fn correcting_a_label_that_is_not_in_the_meeting_is_refused() {
+        let dir = TempDir::new().unwrap();
+        let mut book = VoiceBook::default();
+        let mut log = log();
+        assert!(
+            correct(
+                dir.path(),
+                &mut book,
+                &mut log,
+                &SpeakerId::from("Người 9".to_string()),
+                "Bình"
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -436,7 +578,7 @@ mod tests {
         });
 
         let mut book = VoiceBook::default();
-        book.enroll("Ngọc", &[NGOC.to_vec()]).unwrap();
+        book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
 
         assert!(relabel(&log, &book).is_empty());
     }
@@ -462,7 +604,7 @@ mod tests {
         }
 
         let mut book = VoiceBook::default();
-        book.enroll("Ngọc", &[NGOC.to_vec()]).unwrap();
+        book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
 
         let swept = resweep(&voices, &book).unwrap();
         assert_eq!(swept.len(), 2, "both meetings should have been corrected");
@@ -490,7 +632,7 @@ mod tests {
         log.save(&VoiceLog::path_for(&voices, &log.meeting)).unwrap();
 
         let mut book = VoiceBook::default();
-        book.enroll("Ngọc", &[NGOC.to_vec()]).unwrap();
+        book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
 
         assert!(resweep(&voices, &book).unwrap().is_empty());
     }
