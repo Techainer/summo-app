@@ -1,5 +1,19 @@
+/**
+ * The nudge strip.
+ *
+ * Checks the thing the daemon cannot: that a nudge reaches the screen, and that dismissing removes
+ * it from the strip without the daemon repeating itself.
+ */
+import { rmSync } from 'node:fs';
 import { chromium } from 'playwright';
-const [, , appUrl, port, token] = process.argv;
+
+const [, , appUrl, port, token, statePath] = process.argv;
+
+// Asking for a nudge is what consumes it, so a second run would have nothing to show. Clearing the
+// daemon's record is the test's way of saying "pretend today just started".
+if (statePath) {
+  try { rmSync(statePath); } catch { /* nothing said yet */ }
+}
 const b = await chromium.launch();
 const c = await b.newContext({ viewport: { width: 1280, height: 860 }, colorScheme: 'dark' });
 const p = await c.newPage();
