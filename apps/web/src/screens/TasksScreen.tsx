@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Card, CardBody, CardHeader, SegmentedControl, StatusChip } from "../components/ui";
+import { Button, Card, CardBody, CardHeader, SegmentedControl, StatusChip } from "../components/ui";
 import { cn } from "../lib/cn";
 import { useEngine } from "../lib/engine-context";
 import { today } from "../lib/report";
@@ -40,6 +40,7 @@ export function TasksScreen() {
   const [owner, setOwner] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [runningId, setRunningId] = useState<string | null>(null);
   const now = today();
 
   const load = useCallback(async () => {
@@ -64,6 +65,22 @@ export function TasksScreen() {
         await client.move(id, { status });
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
+        void load();
+      }
+    },
+    [client, load],
+  );
+
+  const start = useCallback(
+    async (id: string) => {
+      setRunningId(id);
+      try {
+        await client.run(id);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setRunningId(null);
+        // The run wrote its steps to the vault; re-read rather than guessing what changed.
         void load();
       }
     },
@@ -150,7 +167,14 @@ export function TasksScreen() {
               <code className="tabular text-[13px]">- [ ] @agent …</code> trong ghi chú buổi họp.
             </p>
           ) : (
-            board.agent.map((task) => <AgentCard key={task.id} task={task} />)
+            board.agent.map((task) => (
+              <AgentCard
+                key={task.id}
+                task={task}
+                running={runningId === task.id}
+                onRun={() => void start(task.id)}
+              />
+            ))
           )}
         </div>
       )}
@@ -281,7 +305,15 @@ function PersonCard({
  * user who can see "đã quét ghi chú → đang soạn sự kiện" knows both what happened and what to blame
  * when the result is wrong.
  */
-function AgentCard({ task }: { task: Task }) {
+function AgentCard({
+  task,
+  running,
+  onRun,
+}: {
+  task: Task;
+  running: boolean;
+  onRun: () => void;
+}) {
   const [open, setOpen] = useState(task.status === "doing");
   const progress = stepProgress(task);
   const step = currentStep(task);
@@ -291,7 +323,16 @@ function AgentCard({ task }: { task: Task }) {
       <CardHeader
         title={task.text}
         count={progress === null ? undefined : `${progress}%`}
-        actions={<StatusChip status={mapStatus(task.status)} />}
+        actions={
+          <>
+            <StatusChip status={running ? "running" : mapStatus(task.status)} />
+            {task.status !== "done" && (
+              <Button size="sm" variant="primary" busy={running} onClick={onRun}>
+                Chạy
+              </Button>
+            )}
+          </>
+        }
       />
       <CardBody>
         {step && task.status === "doing" && (

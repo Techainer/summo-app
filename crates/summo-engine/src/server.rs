@@ -117,6 +117,7 @@ impl Server {
             .route("/meetings/{id}/draft/confirm", post(confirm_draft))
             .route("/meetings/{id}/draft", axum::routing::delete(discard_draft))
             .route("/tasks/{id}", post(update_task))
+            .route("/tasks/{id}/run", post(run_task))
             .route("/meetings/{id}/tasks", post(create_task))
             .route("/templates", get(templates))
             .route("/meetings/{id}/summarize", post(summarize_meeting))
@@ -822,6 +823,49 @@ async fn create_task(
         body.owner.as_deref(),
         body.due.as_deref(),
     ))
+}
+
+/// Hand an `@agent` task to the agent and wait for it.
+///
+/// Synchronous: the caller pressed "Run Task" and is watching the step list fill in, so a failure
+/// belongs on their screen rather than in a log. The steps themselves are written to the vault as
+/// they happen, so a client that navigates away still sees the trace when it comes back.
+async fn run_task(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+
+    let paths = state.engine.paths().clone();
+    let board = match crate::board::read(&paths) {
+        Ok(board) => board,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+    let Some(task) = board.agent.into_iter().find(|t| t.id == id) else {
+        return as_response(Err::<serde_json::Value, _>(summo_core::Error::Other(format!(
+            "no task with id {id} belongs to the agent"
+        ))));
+    };
+
+    as_response(
+        summo_agent::run::run(&paths, &task)
+            .await
+            .map(|ran| serde_json::json!({
+                "task": ran.task,
+                "status": ran.status.as_str(),
+                "outcome": ran.outcome,
+                "steps": ran.steps,
+            })),
+    )
 }
 
 /// Build an LLM client from settings, or say why not.
@@ -1993,6 +2037,43 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(board["todo"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn running_a_task_that_is_not_the_agents_is_refused() {
+        let (tmp, server) = running().await;
+        seed_with_body(
+            &tmp,
+            "01A",
+            "2026-08-10T09:00:00+07:00",
+            "Họp",
+            "## Việc cần làm\n- [ ] @ngoc Việc của người <!-- id:T1 -->\n",
+        );
+
+        let resp = client()
+            .post(format!("http://{}/tasks/T1/run", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_client_error(), "got {}", resp.status());
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert!(
+            body["error"].as_str().unwrap().contains("agent"),
+            "expected an explanation, got {body}"
+        );
+    }
+
+    #[tokio::test]
+    async fn running_a_task_that_does_not_exist_is_a_404() {
+        let (_tmp, server) = running().await;
+        let resp = client()
+            .post(format!("http://{}/tasks/NOPE/run", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

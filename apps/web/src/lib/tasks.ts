@@ -84,6 +84,18 @@ export class TaskClient {
     );
   }
 
+  /**
+   * Hand an agent task to the agent and wait for it.
+   *
+   * The steps land in the vault as they happen, so a client that navigates away still finds the
+   * trace when it comes back — this promise resolving is the end, not the only signal.
+   */
+  run(id: string): Promise<{ task: string; status: Status; outcome: string; steps: Step[] }> {
+    return fetch(url(this.handshake, `/tasks/${encodeURIComponent(id)}/run`), {
+      method: "POST",
+    }).then(json<{ task: string; status: Status; outcome: string; steps: Step[] }>);
+  }
+
   async create(
     meeting: string,
     text: string,

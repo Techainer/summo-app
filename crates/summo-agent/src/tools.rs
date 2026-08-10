@@ -450,14 +450,17 @@ fn read_all_tasks(paths: &Paths) -> summo_core::Result<Vec<tasks::Task>> {
 }
 
 /// Every Summo tool, ready to hand to the engine.
+///
+/// Boxed rather than shared: `ToolRegistry` owns what it is given, and nothing else needs a handle
+/// on a tool once the engine has it.
 #[must_use]
-pub fn all(paths: Arc<Paths>) -> Vec<Arc<dyn Tool>> {
+pub fn all(paths: Arc<Paths>) -> Vec<Box<dyn Tool>> {
     vec![
-        Arc::new(SearchTranscripts::new(paths.clone())),
-        Arc::new(GetMeeting::new(paths.clone())),
-        Arc::new(ListTasks::new(paths.clone())),
-        Arc::new(CreateTask::new(paths.clone())),
-        Arc::new(UpdateTask::new(paths)),
+        Box::new(SearchTranscripts::new(paths.clone())),
+        Box::new(GetMeeting::new(paths.clone())),
+        Box::new(ListTasks::new(paths.clone())),
+        Box::new(CreateTask::new(paths.clone())),
+        Box::new(UpdateTask::new(paths)),
     ]
 }
 

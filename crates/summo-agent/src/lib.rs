@@ -15,6 +15,7 @@
 //!                          └─ aion-agent drives this; the tools are ours
 //! ```
 
+pub mod run;
 pub mod steps;
 pub mod tools;
 
