@@ -8,6 +8,8 @@ use clap::{Parser, Subcommand};
 use summo_core::{ModelId, paths::Paths};
 use summo_models::{Downloader, Manifest, ModelStore, Registry, RegistrySource, hw::HwProfile};
 
+mod ai;
+
 #[cfg(feature = "transcribe")]
 mod transcribe;
 
@@ -67,6 +69,49 @@ enum Command {
     /// Registry maintenance.
     #[command(subcommand)]
     Registry(RegistryCmd),
+
+    /// Summarise a meeting and write the summary into its own file.
+    Summarize {
+        /// Path to a meeting Markdown file.
+        meeting: std::path::PathBuf,
+        /// `brief`, `standard` or `detailed`.
+        #[arg(long, default_value = "standard")]
+        style: String,
+        /// Language to write the summary in.
+        #[arg(long, default_value = "Vietnamese")]
+        language: String,
+        /// Print without modifying the file.
+        #[arg(long)]
+        dry_run: bool,
+        #[command(flatten)]
+        provider: ai::ProviderArgs,
+    },
+
+    /// Ask a question about the meetings on disk.
+    Ask {
+        question: String,
+        #[arg(long, default_value = "Vietnamese")]
+        language: String,
+        /// Excerpts to give the model.
+        #[arg(long, default_value_t = 40)]
+        limit: usize,
+        #[command(flatten)]
+        provider: ai::ProviderArgs,
+    },
+
+    /// Convert a meeting to another format.
+    Export {
+        meeting: std::path::PathBuf,
+        /// `md`, `txt`, `srt`, `vtt`, `json` or `csv`.
+        #[arg(long, default_value = "txt")]
+        format: String,
+        /// Write here instead of standard output.
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+        /// Drop timestamps and join each speaker's consecutive lines.
+        #[arg(long)]
+        readable: bool,
+    },
 
     /// Transcribe a 16 kHz mono WAV with the full live pipeline.
     #[cfg(feature = "transcribe")]
@@ -140,6 +185,33 @@ async fn main() -> Result<()> {
         } => setup(&paths, &lang, registry.as_deref(), dry_run).await,
         Command::Registry(RegistryCmd::Check { dir }) => check_registry(&dir),
         Command::Registry(RegistryCmd::Ls { registry }) => list_registry(registry.as_deref()).await,
+        Command::Summarize {
+            meeting,
+            style,
+            language,
+            dry_run,
+            provider,
+        } => {
+            let style = match style.as_str() {
+                "brief" => summo_llm::SummaryStyle::Brief,
+                "standard" => summo_llm::SummaryStyle::Standard,
+                "detailed" => summo_llm::SummaryStyle::Detailed,
+                other => bail!("unknown style `{other}`. Use brief, standard or detailed."),
+            };
+            ai::summarize(&meeting, style, &language, &provider, !dry_run).await
+        }
+        Command::Ask {
+            question,
+            language,
+            limit,
+            provider,
+        } => ai::ask(&paths, &question, &language, limit, &provider).await,
+        Command::Export {
+            meeting,
+            format,
+            out,
+            readable,
+        } => export(&meeting, &format, out.as_deref(), readable),
         #[cfg(feature = "transcribe")]
         Command::Transcribe {
             audio,
@@ -510,6 +582,43 @@ async fn setup(paths: &Paths, lang: &str, registry: Option<&str>, dry_run: bool)
     match refine {
         Some(refine) => println!("  live model {} refined by {}", live.id, refine.id),
         None => println!("  live model {}", live.id),
+    }
+    Ok(())
+}
+
+/// Render a meeting in another format.
+fn export(
+    meeting: &std::path::Path,
+    format: &str,
+    out: Option<&std::path::Path>,
+    readable: bool,
+) -> Result<()> {
+    use summo_vault::{
+        MeetingDoc,
+        export::{Format, Options},
+    };
+
+    let format = Format::parse(format).with_context(|| {
+        format!("unknown format `{format}`. Use md, txt, srt, vtt, json or csv.")
+    })?;
+    let body = std::fs::read_to_string(meeting)
+        .with_context(|| format!("cannot read {}", meeting.display()))?;
+    let doc = MeetingDoc::parse(&body)?;
+
+    let options = if readable {
+        Options::readable()
+    } else {
+        Options::default()
+    };
+    let rendered = summo_vault::export(&doc, format, options)?;
+
+    match out {
+        Some(path) => {
+            std::fs::write(path, &rendered)
+                .with_context(|| format!("cannot write {}", path.display()))?;
+            eprintln!("wrote {}", path.display());
+        }
+        None => print!("{rendered}"),
     }
     Ok(())
 }

@@ -20,6 +20,8 @@ path = "src/main.rs"
 [dependencies]
 summo-core.workspace = true
 summo-models.workspace = true
+summo-llm.workspace = true
+summo-vault.workspace = true
 summo-asr = { workspace = true, optional = true }
 summo-vad = { workspace = true, optional = true }
 hound = { workspace = true, optional = true }
@@ -30,3 +32,6 @@ serde_json.workspace = true
 tokio = { workspace = true }
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
