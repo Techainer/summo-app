@@ -10,12 +10,29 @@
     "test": "vitest run",
     "tauri": "tauri",
     "e2e": "node e2e/full-flow.mjs",
-    "e2e:library": "node e2e/library.mjs"
+    "e2e:library": "node e2e/library.mjs",
+    "e2e:shell": "node e2e/shell.mjs"
   },
   "dependencies": {
+    "@radix-ui/react-avatar": "^1.2.6",
+    "@radix-ui/react-collapsible": "^1.1.20",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-popover": "^1.1.23",
+    "@radix-ui/react-scroll-area": "^1.2.18",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@radix-ui/react-toggle-group": "^1.1.19",
+    "@radix-ui/react-tooltip": "^1.2.16",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-router": "^1.170.24",
     "@tanstack/react-virtual": "^3.13.12",
+    "clsx": "^2.1.1",
+    "motion": "^13.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.3",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
