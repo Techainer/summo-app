@@ -94,7 +94,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
 
   const header = (
     <>
-      <header className="drag-region flex items-center gap-3 border-b border-line px-3 py-2.5">
+      <header
+        aria-label="Thanh trên cùng"
+        className="drag-region flex items-center gap-3 border-b border-line px-3 py-2.5"
+      >
         <button
           type="button"
           onClick={() => setNavOpen((open) => !open)}

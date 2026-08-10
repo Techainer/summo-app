@@ -115,6 +115,7 @@ impl Server {
             .route("/people/{id}/avatar", post(set_person_avatar))
             .route("/people/{id}/merge", post(merge_person))
             .route("/people/{id}", axum::routing::delete(forget_person))
+            .route("/meetings/{id}/audio/{lane}", get(meeting_audio))
             .route("/meetings/{id}/voices", get(unknown_voices))
             .route("/meetings/{id}/voices/{label}", post(name_voice))
             .route("/library", get(library))
@@ -640,6 +641,80 @@ async fn report(
         &from,
         &to,
     ))
+}
+
+/// Stream one lane of a meeting's recording, honouring `Range` so the player can seek.
+async fn meeting_audio(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((id, lane)): Path<(String, String)>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+
+    let meeting = summo_core::MeetingId::from(id);
+    let path = match crate::audio_stream::locate(state.engine.paths(), &meeting, &lane) {
+        Ok(path) => path,
+        Err(e) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    };
+    let total = match std::fs::metadata(&path) {
+        Ok(meta) => meta.len(),
+        Err(e) => {
+            let message = format!("cannot read {}: {e}", path.display());
+            return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": message }))).into_response();
+        }
+    };
+
+    let range = headers.get(header::RANGE).and_then(|v| v.to_str().ok());
+    let span = match crate::audio_stream::parse_range(range, total) {
+        Ok(span) => span,
+        // A well-formed range that cannot be satisfied is a 416, and the header telling the client
+        // how long the file actually is is the part that lets it recover.
+        Err(_) => {
+            return (
+                StatusCode::RANGE_NOT_SATISFIABLE,
+                [(header::CONTENT_RANGE, format!("bytes */{total}"))],
+            )
+                .into_response();
+        }
+    };
+
+    // `Accept-Ranges` is what tells the player it may seek at all.
+    let common = [
+        (header::CONTENT_TYPE, "audio/ogg".to_string()),
+        (header::ACCEPT_RANGES, "bytes".to_string()),
+        // The vault is the user's own machine; caching a recording that never changes is free.
+        (header::CACHE_CONTROL, "private, max-age=3600".to_string()),
+    ];
+
+    match span {
+        Some(span) => match crate::audio_stream::read_span(&path, span) {
+            Ok(bytes) => (
+                StatusCode::PARTIAL_CONTENT,
+                common,
+                [(header::CONTENT_RANGE, span.content_range())],
+                bytes,
+            )
+                .into_response(),
+            Err(e) => vault_error_response(&e),
+        },
+        None => match std::fs::read(&path) {
+            Ok(bytes) => (StatusCode::OK, common, bytes).into_response(),
+            Err(e) => vault_error_response(&Error::io(&path, e)),
+        },
+    }
+}
+
+fn vault_error_response(e: &Error) -> Response {
+    let (status, message) = vault_error(e);
+    (status, Json(serde_json::json!({ "error": message }))).into_response()
 }
 
 /// The summary shapes installed, so the interface can offer a choice.
@@ -1374,6 +1449,121 @@ mod tests {
             embedding: embedding.to_vec(),
         });
         log.save(&path).unwrap();
+    }
+
+    /// Put a fake recording on disk. The bytes are not real Opus; nothing here decodes them.
+    fn seed_audio(tmp: &tempfile::TempDir, meeting: &str, lane: &str, len: usize) {
+        let paths = Paths::at(tmp.path());
+        let dir = paths.audio_for(&summo_core::MeetingId::from(meeting.to_string()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{lane}.opus")), vec![9u8; len]).unwrap();
+    }
+
+    #[tokio::test]
+    async fn audio_is_served_whole_when_no_range_is_asked_for() {
+        let (tmp, server) = running().await;
+        seed_audio(&tmp, "01A", "mic", 5_000);
+
+        let resp = client()
+            .get(format!("http://{}/meetings/01A/audio/mic", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.headers()["accept-ranges"], "bytes");
+        assert_eq!(resp.headers()["content-type"], "audio/ogg");
+        assert_eq!(resp.bytes().await.unwrap().len(), 5_000);
+    }
+
+    /// Seeking is the whole reason this route exists rather than a plain file read.
+    #[tokio::test]
+    async fn a_range_request_returns_only_that_span() {
+        let (tmp, server) = running().await;
+        seed_audio(&tmp, "01A", "mic", 5_000);
+
+        let resp = client()
+            .get(format!("http://{}/meetings/01A/audio/mic", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .header("range", "bytes=1000-1999")
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(resp.headers()["content-range"], "bytes 1000-1999/5000");
+        assert_eq!(resp.bytes().await.unwrap().len(), 1_000);
+    }
+
+    #[tokio::test]
+    async fn an_unsatisfiable_range_says_how_long_the_file_is() {
+        let (tmp, server) = running().await;
+        seed_audio(&tmp, "01A", "mic", 5_000);
+
+        let resp = client()
+            .get(format!("http://{}/meetings/01A/audio/mic", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .header("range", "bytes=9000-9999")
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+        assert_eq!(resp.headers()["content-range"], "bytes */5000");
+    }
+
+    #[tokio::test]
+    async fn a_lane_that_was_never_recorded_is_a_404() {
+        let (tmp, server) = running().await;
+        seed_audio(&tmp, "01A", "mic", 100);
+
+        let resp = client()
+            .get(format!("http://{}/meetings/01A/audio/system", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// The lane name comes from a URL, so it must never reach a path join.
+    #[tokio::test]
+    async fn audio_refuses_a_traversal_attempt() {
+        let (tmp, server) = running().await;
+        seed_audio(&tmp, "01A", "mic", 100);
+        std::fs::write(tmp.path().join("secret.opus"), b"do not serve me").unwrap();
+
+        for lane in ["..%2F..%2Fsecret", "..", "mic%2F..%2F..%2Fsecret"] {
+            let resp = client()
+                .get(format!("http://{}/meetings/01A/audio/{lane}", server.addr()))
+                .bearer_auth(server.token().as_str())
+                .send()
+                .await
+                .unwrap();
+            assert!(
+                resp.status().is_client_error(),
+                "lane {lane} returned {}",
+                resp.status()
+            );
+            let body = resp.bytes().await.unwrap();
+            assert!(
+                !body.windows(15).any(|w| w == b"do not serve me"),
+                "lane {lane} leaked a file outside the meeting"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn audio_needs_a_token() {
+        let (tmp, server) = running().await;
+        seed_audio(&tmp, "01A", "mic", 100);
+        let resp = client()
+            .get(format!("http://{}/meetings/01A/audio/mic", server.addr()))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]

@@ -1,9 +1,11 @@
 import { Link, useParams } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
+import { Player, type PlayerHandle } from "../components/meeting/Player";
+import { TranscriptChips } from "../components/meeting/TranscriptChips";
+import { Button, Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
 import { useEngine } from "../lib/engine-context";
-import type { MeetingDetail } from "../lib/library";
+import { url, type MeetingDetail } from "../lib/library";
 import { duration } from "../lib/report";
 
 type Pane = "notes" | "transcript";
@@ -22,10 +24,55 @@ const PANES = [
  */
 export function MeetingScreen() {
   const { meetingId } = useParams({ from: "/meetings/$meetingId" });
-  const { library } = useEngine();
+  const { library, handshake } = useEngine();
   const [detail, setDetail] = useState<MeetingDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pane, setPane] = useState<Pane>("notes");
+  const [at, setAt] = useState(0);
+  const [summarising, setSummarising] = useState(false);
+  const player = useRef<PlayerHandle>(null);
+
+  // The daemon reports file names (`mic.opus`); the route takes lane names. Strip the extension
+  // here rather than teaching the player about container formats.
+  const lanes = useMemo(
+    () =>
+      (detail?.audio ?? []).map((file) => {
+        const key = file.replace(/\.[^.]+$/, "");
+        return {
+          key,
+          label: key === "mic" ? "Mic" : "Hệ thống",
+          url: url(handshake, `/meetings/${encodeURIComponent(meetingId)}/audio/${key}`),
+        };
+      }),
+    [detail?.audio, handshake, meetingId],
+  );
+
+  const marks = useMemo(
+    () => (detail?.transcript ?? []).map((segment) => segment.t0),
+    [detail?.transcript],
+  );
+
+  const summarise = async () => {
+    setSummarising(true);
+    try {
+      await fetch(url(handshake, `/meetings/${encodeURIComponent(meetingId)}/summarize`), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      }).then(async (r) => {
+        if (!r.ok) {
+          const body = (await r.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error ?? `${r.status}`);
+        }
+      });
+      setDetail(await library.detail(meetingId));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSummarising(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -67,7 +114,7 @@ export function MeetingScreen() {
         ← Thư viện
       </Link>
 
-      <header className="mt-2">
+      <div className="mt-2">
         <h1 className="text-2xl font-semibold tracking-tight">{summary.title}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-fg-dim">
           <Pill>{summary.day}</Pill>
@@ -77,12 +124,26 @@ export function MeetingScreen() {
             <Pill key={tag}>#{tag}</Pill>
           ))}
         </div>
-      </header>
+      </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_360px]">
+      <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_380px]">
         <div className="space-y-4">
+          <Player lanes={lanes} marks={marks} onTime={setAt} ref={player} />
+
           {sections.length === 0 ? (
-            <p className="text-fg-faint">Chưa có tóm tắt cho buổi họp này.</p>
+            <Card>
+              <CardBody className="pt-4 text-center">
+                <p className="text-fg-faint">Chưa có tóm tắt cho buổi họp này.</p>
+                <Button
+                  className="mt-3"
+                  variant="primary"
+                  busy={summarising}
+                  onClick={() => void summarise()}
+                >
+                  Tóm tắt ngay
+                </Button>
+              </CardBody>
+            </Card>
           ) : (
             sections.map((section) => (
               <Card key={section.heading}>
@@ -103,29 +164,21 @@ export function MeetingScreen() {
             onChange={setPane}
             size="sm"
           />
-          <Card>
-            <CardBody className="max-h-[60vh] overflow-y-auto pt-4">
-              {pane === "transcript" ? (
-                transcript.length === 0 ? (
-                  <p className="text-[13px] text-fg-faint">Không có transcript.</p>
-                ) : (
-                  <ol className="space-y-3">
-                    {transcript.map((segment, i) => (
-                      <li key={i}>
-                        <p className="tabular text-[12px] text-fg-faint">
-                          {segment.speaker ?? "—"}
-                        </p>
-                        <p className="mt-0.5 text-sm leading-relaxed">{segment.text}</p>
-                      </li>
-                    ))}
-                  </ol>
-                )
-              ) : (
+          <Card className="h-[62vh] overflow-hidden">
+            {pane === "transcript" ? (
+              <TranscriptChips
+                segments={transcript}
+                at={at}
+                onSeek={(seconds) => player.current?.seek(seconds)}
+                reading
+              />
+            ) : (
+              <CardBody className="pt-4">
                 <p className="text-[13px] text-fg-faint">
                   Ghi chú riêng cho buổi họp sẽ xuất hiện ở đây.
                 </p>
-              )}
-            </CardBody>
+              </CardBody>
+            )}
           </Card>
         </aside>
       </div>

@@ -14,6 +14,7 @@
 //! token and an origin check.
 
 pub mod archive;
+pub mod audio_stream;
 pub mod auth;
 pub mod people;
 pub mod protocol;

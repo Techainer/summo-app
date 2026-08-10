@@ -27,6 +27,8 @@ interface Props {
   client: LibraryClient;
   /** Called when the user wants to record instead of read. */
   onRecord: () => void;
+  /** Open a meeting on its own screen, where the player and transcript live. */
+  onOpen?: (id: string) => void;
 }
 
 /**
@@ -36,7 +38,7 @@ interface Props {
  * cached one. The daemon rescans in a few milliseconds, and a derived view is how a list ends up
  * disagreeing with the files it claims to describe.
  */
-export function Library({ client, onRecord }: Props) {
+export function Library({ client, onRecord, onOpen }: Props) {
   const [view, setView] = useState<LibraryView | null>(null);
   const [group, setGroup] = useState<GroupBy>("day");
   const [folder, setFolder] = useState<string | undefined>();
@@ -170,6 +172,7 @@ export function Library({ client, onRecord }: Props) {
                     meeting={m}
                     selected={m.id === selected}
                     onSelect={() => setSelected(m.id)}
+                    onOpen={onOpen ? () => onOpen(m.id) : undefined}
                   />
                 ))}
               </section>
@@ -246,16 +249,27 @@ function MeetingRow({
   meeting,
   selected,
   onSelect,
+  onOpen,
 }: {
   meeting: MeetingSummary;
   selected: boolean;
   onSelect: () => void;
+  onOpen?: () => void;
 }) {
   return (
     <button
       type="button"
       className={`row${selected ? " on" : ""}`}
       onClick={onSelect}
+      // A single click previews beside the list; a double click commits to the full screen, the
+      // way a file manager works. Enter does the same for the keyboard.
+      onDoubleClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && onOpen) {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
       aria-current={selected}
     >
       <span className="row-time">{timeOfDay(meeting.date)}</span>
