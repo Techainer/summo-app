@@ -2,14 +2,40 @@
   "schema": 1,
   "models": [
     {
+      "id": "campplus-sv",
+      "name": "CAM++ speaker embedding",
+      "task": "speaker-embed",
+      "mode": "batch",
+      "license": "Apache-2.0",
+      "langs": [
+        "*"
+      ],
+      "size_bytes": 28281138,
+      "description": "Turns a finished utterance into a voice fingerprint, so the remote lane can be split by speaker. Runs after the text is already on screen and costs single-digit milliseconds per utterance."
+    },
+    {
       "id": "silero-vad-v5",
       "name": "Silero VAD v5",
       "task": "vad",
       "mode": "live",
-      "langs": ["*"],
-      "size_bytes": 2327524,
       "license": "MIT",
-      "description": "Default voice activity detector."
+      "langs": [
+        "*"
+      ],
+      "size_bytes": 2327524,
+      "description": "Default voice activity detector. Most accurate backend measured (F1 0.940) and permissively licensed. See docs/adr/0001-vad-backend-licensing.md."
+    },
+    {
+      "id": "whisper-tiny",
+      "name": "Whisper tiny (99 languages)",
+      "task": "asr",
+      "mode": "batch",
+      "license": "MIT",
+      "langs": [
+        "*"
+      ],
+      "size_bytes": 103609903,
+      "description": "Smallest multilingual model. Good on English, weak on Vietnamese — see the measured numbers before choosing it for a language a specialised model covers."
     }
   ]
 }

@@ -40,6 +40,30 @@ enum Command {
     Gc,
     /// Show what this machine looks like to the model picker.
     Hw,
+
+    /// Rank the models available for a language on this machine, and say why.
+    Recommend {
+        /// ISO language code, e.g. `vi` or `en`.
+        #[arg(long, default_value = "vi")]
+        lang: String,
+        /// Include models from the registry, not only the installed ones.
+        #[arg(long)]
+        registry: Option<String>,
+    },
+
+    /// Pick the right models for this machine and language, install them, and be ready to record.
+    ///
+    /// The one-command path: measure the machine, rank what is available, download what is missing,
+    /// and print the session to start with.
+    Setup {
+        #[arg(long, default_value = "vi")]
+        lang: String,
+        #[arg(long)]
+        registry: Option<String>,
+        /// Print the plan without downloading anything.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Registry maintenance.
     #[command(subcommand)]
     Registry(RegistryCmd),
@@ -106,6 +130,14 @@ async fn main() -> Result<()> {
         Command::Rm { id } => remove(&paths, &id),
         Command::Gc => gc(&paths),
         Command::Hw => show_hw(),
+        Command::Recommend { lang, registry } => {
+            show_recommendation(&paths, &lang, registry.as_deref()).await
+        }
+        Command::Setup {
+            lang,
+            registry,
+            dry_run,
+        } => setup(&paths, &lang, registry.as_deref(), dry_run).await,
         Command::Registry(RegistryCmd::Check { dir }) => check_registry(&dir),
         Command::Registry(RegistryCmd::Ls { registry }) => list_registry(registry.as_deref()).await,
         #[cfg(feature = "transcribe")]
@@ -330,6 +362,143 @@ async fn list_registry(spec: Option<&str>) -> Result<()> {
             human_bytes(m.size_bytes),
             m.license
         );
+    }
+    Ok(())
+}
+
+/// Gather every manifest worth considering: installed ones plus, optionally, the registry.
+async fn candidates(
+    paths: &Paths,
+    registry: Option<&str>,
+) -> Result<Vec<summo_models::Manifest>> {
+    let store = ModelStore::new(paths.clone());
+    let mut manifests = store.list();
+
+    if let Some(spec) = registry {
+        let reg = registry_for(Some(spec))?;
+        match reg.index().await {
+            Ok(index) => {
+                for entry in index.models {
+                    if manifests.iter().any(|m| m.id == entry.id) {
+                        continue;
+                    }
+                    match reg.manifest(&entry.id).await {
+                        Ok(m) => manifests.push(m),
+                        Err(e) => tracing::warn!(id = %entry.id, error = %e, "skipping"),
+                    }
+                }
+            }
+            // A registry that cannot be reached should not stop the app ranking what is already
+            // installed — offline is a supported state, not an error.
+            Err(e) => tracing::warn!(error = %e, "registry unavailable; ranking installed models only"),
+        }
+    }
+    Ok(manifests)
+}
+
+async fn show_recommendation(paths: &Paths, lang: &str, registry: Option<&str>) -> Result<()> {
+    let hw = HwProfile::detect();
+    let manifests = candidates(paths, registry).await?;
+    let out = summo_models::recommend(&manifests, &hw, lang);
+
+    println!("machine  {} · {} cores · {} MB free\n", hw.key(), hw.cores, hw.available_ram_mb);
+
+    if out.ranked.is_empty() {
+        println!("No model can run {lang} on this machine.");
+    }
+    for (rank, scored) in out.ranked.iter().enumerate() {
+        let marker = if scored.live_capable { "live" } else { "batch" };
+        println!("{}. {:<24} [{marker}]  {}", rank + 1, scored.id, scored.reason);
+    }
+
+    if !out.rejected.is_empty() {
+        println!("\nNot offered:");
+        for rejected in &out.rejected {
+            println!("   {:<24} {}", rejected.id, rejected.reason);
+        }
+    }
+
+    let (live, refine) = out.pair();
+    if let Some(live) = live {
+        println!("\nrecommended live model    {}", live.id);
+        match refine {
+            Some(refine) => println!("recommended refine model  {}", refine.id),
+            None => println!("recommended refine model  none — nothing available is more accurate"),
+        }
+    }
+    Ok(())
+}
+
+async fn setup(paths: &Paths, lang: &str, registry: Option<&str>, dry_run: bool) -> Result<()> {
+    paths.ensure()?;
+    let hw = HwProfile::detect();
+    let store = ModelStore::new(paths.clone());
+
+    println!("machine  {} · {} cores · {} MB free", hw.key(), hw.cores, hw.available_ram_mb);
+
+    let manifests = candidates(paths, registry).await?;
+    let out = summo_models::recommend(&manifests, &hw, lang);
+    let (live, refine) = out.pair();
+
+    let Some(live) = live else {
+        bail!(
+            "no model available can run {lang} on this machine. \
+             Point --registry at a registry with more models, or free up memory."
+        );
+    };
+
+    // A voice detector is needed regardless of which speech model is chosen; without one there are
+    // no utterance boundaries and nothing to decode.
+    let vad = manifests
+        .iter()
+        .find(|m| m.task == summo_models::Task::Vad)
+        .map(|m| m.id.to_string());
+
+    let mut plan: Vec<String> = Vec::new();
+    if let Some(vad) = &vad {
+        plan.push(vad.clone());
+    }
+    plan.push(live.id.clone());
+    if let Some(refine) = refine {
+        plan.push(refine.id.clone());
+    }
+
+    println!("\nplan for {lang}:");
+    for id in &plan {
+        let installed = summo_core::ModelId::parse(id.as_str())
+            .ok()
+            .is_some_and(|parsed| store.installed(&parsed).is_ok());
+        println!("  {} {id}", if installed { "have" } else { "pull" });
+    }
+
+    if dry_run {
+        println!("\ndry run: nothing downloaded");
+        return Ok(());
+    }
+
+    for id in &plan {
+        let parsed = summo_core::ModelId::parse(id.as_str()).map_err(anyhow::Error::msg)?;
+        if store.installed(&parsed).is_ok() {
+            continue;
+        }
+        println!("\npulling {id}…");
+        pull(paths, id, registry).await?;
+    }
+
+    if vad.is_none() {
+        println!(
+            "\nWarning: no voice detector is available. Recording will not start without one — \
+             try `summo pull silero-vad-v5`."
+        );
+    }
+
+    println!("\nready. Start a session with:");
+    match refine {
+        Some(refine) => println!(
+            "  live model {} refined by {}",
+            live.id, refine.id
+        ),
+        None => println!("  live model {}", live.id),
     }
     Ok(())
 }

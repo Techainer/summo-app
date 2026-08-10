@@ -12,11 +12,13 @@
 pub mod download;
 pub mod hw;
 pub mod manifest;
+pub mod recommend;
 pub mod registry;
 pub mod store;
 
 pub use download::{DownloadProgress, Downloader};
 pub use hw::{Accel, CpuFeatures, HwProfile};
 pub use manifest::{FileEntry, Manifest, Mode, Profile, Task};
+pub use recommend::{Recommendation, Scored, recommend};
 pub use registry::{Registry, RegistrySource};
 pub use store::ModelStore;

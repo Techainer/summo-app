@@ -10,7 +10,14 @@ repository.workspace = true
 [features]
 default = []
 # Real recognition. Off by default so the protocol and server can be built and tested anywhere.
-models = ["dep:summo-vad", "dep:summo-asr", "dep:summo-diar", "summo-vad/silero", "summo-asr/sherpa", "summo-diar/sherpa"]
+models = [
+    "dep:summo-vad",
+    "dep:summo-asr",
+    "dep:summo-diar",
+    "summo-vad/silero",
+    "summo-asr/sherpa",
+    "summo-diar/sherpa",
+]
 
 [lib]
 name = "summo_engine"

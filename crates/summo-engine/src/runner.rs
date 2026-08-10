@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use summo_asr::{Decoder, PseudoSession, SessionConfig};
 use summo_audio::Framer;
 use summo_core::{Error, Event, ModelId, Result, segment::Lane};
+use summo_diar::{ClusterConfig, OnlineClusterer, embed::SpeakerEmbedder};
 use summo_models::{ModelStore, hw::HwProfile};
 use summo_vad::{Vad, silero::SileroVad};
 
@@ -24,11 +25,23 @@ struct LaneRunner {
     vad: Box<dyn Vad>,
     framer: Framer,
     session: PseudoSession<Box<dyn Decoder>>,
+    /// Audio of the utterance currently being assembled, kept only when this lane is diarized.
+    ///
+    /// Speaker attribution needs the audio of a *finished* utterance, and the session hands back
+    /// text rather than samples, so the runner keeps its own copy.
+    pending: Vec<f32>,
+}
+
+/// Speaker attribution for the remote lane.
+struct Diarizer {
+    embedder: SpeakerEmbedder,
+    clusterer: OnlineClusterer,
 }
 
 /// Drives every lane in a session.
 pub struct SessionRunner {
     lanes: HashMap<Lane, LaneRunner>,
+    diarizer: Option<Diarizer>,
 }
 
 impl SessionRunner {
@@ -58,11 +71,23 @@ impl SessionRunner {
                     framer: Framer::new(vad.frame_len()),
                     vad,
                     session: PseudoSession::new(decoder, cfg),
+                    pending: Vec::new(),
                 },
             );
         }
 
-        Ok(Self { lanes })
+        // Only the remote lane is clustered. The microphone lane is the local user by construction,
+        // so embedding it could only ever discover one speaker at real cost.
+        let diarizer = if spec.diarize {
+            Some(Diarizer {
+                embedder: SpeakerEmbedder::load(resolve_speaker_model(store)?, 1)?,
+                clusterer: OnlineClusterer::new(ClusterConfig::default()),
+            })
+        } else {
+            None
+        };
+
+        Ok(Self { lanes, diarizer })
     }
 
     /// Feed audio for one lane, returning whatever it produced.
@@ -83,12 +108,63 @@ impl SessionRunner {
             .framer
             .push(samples, |frame| frames.push(frame.to_vec()));
 
+        let diarize = self.diarizer.is_some() && lane == Lane::System;
+
         let mut events = Vec::new();
         for frame in frames {
             let prob = runner.vad.feed_frame(&frame)?;
+            if diarize {
+                runner.pending.extend_from_slice(&frame);
+            }
             events.extend(runner.session.accept(&frame, prob)?);
         }
+
+        if diarize {
+            let audio = std::mem::take(&mut runner.pending);
+            let kept = self.attribute(&mut events, &audio);
+            // Keep the tail only while an utterance is still open; otherwise the buffer would grow
+            // for the whole meeting.
+            if let Some(runner) = self.lanes.get_mut(&lane) {
+                runner.pending = kept;
+            }
+        }
         Ok(events)
+    }
+
+    /// Assign a speaker to any final segment in `events`, using the audio that produced it.
+    ///
+    /// Returns the audio to carry forward: nothing once an utterance has closed, everything when
+    /// one is still being assembled.
+    fn attribute(&mut self, events: &mut [Event], audio: &[f32]) -> Vec<f32> {
+        let Some(diarizer) = self.diarizer.as_mut() else {
+            return audio.to_vec();
+        };
+
+        let mut closed = false;
+        for event in events.iter_mut() {
+            let Event::Final(segment) = event else { continue };
+            closed = true;
+
+            // Embedding failure is not worth losing a transcript line over; the utterance simply
+            // goes out unlabelled and the offline pass can attribute it later.
+            match diarizer.embedder.embed(audio) {
+                Ok(embedding) => {
+                    let assignment = diarizer.clusterer.assign(&embedding, segment.duration());
+                    if let Some(speaker) = assignment.speaker() {
+                        segment.speaker = Some(speaker.clone());
+                    }
+                }
+                Err(e) => tracing::warn!(error = %e, "speaker embedding failed; leaving unlabelled"),
+            }
+        }
+
+        if closed { Vec::new() } else { audio.to_vec() }
+    }
+
+    /// Speakers discovered so far in the remote lane.
+    #[must_use]
+    pub fn speaker_count(&self) -> usize {
+        self.diarizer.as_ref().map_or(0, |d| d.clusterer.speaker_count())
     }
 
     /// Close every lane, emitting any utterance still open.
@@ -140,6 +216,28 @@ fn resolve_vad(store: &ModelStore) -> Result<std::path::PathBuf> {
         .cloned()
         .ok_or_else(|| {
             Error::ModelNotFound("the installed voice detector has no model file".into())
+        })
+}
+
+/// Find an installed speaker-embedding model.
+fn resolve_speaker_model(store: &ModelStore) -> Result<std::path::PathBuf> {
+    let manifest = store
+        .list()
+        .into_iter()
+        .find(|m| m.task == summo_models::Task::SpeakerEmbed)
+        .ok_or_else(|| {
+            Error::ModelNotFound(
+                "diarization needs a speaker-embedding model. Run `summo pull cam++`.".into(),
+            )
+        })?;
+
+    let installed = store.resolve(&manifest)?;
+    installed
+        .param_path("model")
+        .or_else(|| installed.files.values().next())
+        .cloned()
+        .ok_or_else(|| {
+            Error::ModelNotFound("the installed speaker model has no model file".into())
         })
 }
 

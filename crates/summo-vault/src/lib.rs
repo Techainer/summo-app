@@ -12,8 +12,10 @@
 //!
 //! The cost is that parsing must be forgiving: these files *will* be edited by other tools.
 
+pub mod export;
 pub mod meeting;
 pub mod slug;
 
+pub use export::{Format, Options as ExportOptions, export};
 pub use meeting::{Frontmatter, MeetingDoc};
 pub use slug::{meeting_stem, slugify};

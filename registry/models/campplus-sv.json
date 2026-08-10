@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "id": "campplus-sv",
+  "name": "CAM++ speaker embedding",
+  "task": "speaker-embed",
+  "mode": "batch",
+  "runtime": "sherpa-onnx/speaker-embedding",
+  "langs": [
+    "*"
+  ],
+  "license": "Apache-2.0",
+  "attribution": "3D-Speaker (Alibaba DAMO), ONNX export by csukuangfj",
+  "redistributable": true,
+  "size_bytes": 28281138,
+  "description": "Turns a finished utterance into a voice fingerprint, so the remote lane can be split by speaker. Runs after the text is already on screen and costs single-digit milliseconds per utterance.",
+  "profile": {
+    "rss_mb": {
+      "idle": 60,
+      "peak": 180
+    },
+    "min_ram_mb": 512,
+    "rtf": {
+      "cpu_x86_avx512vnni_8t": 0.006
+    },
+    "accel": [
+      "cpu",
+      "coreml",
+      "cuda"
+    ]
+  },
+  "files": [
+    {
+      "name": "campplus.onnx",
+      "sha256": "f682b514c05d947ee3fa91cd6ec6c5c7543479a128373fa29b1faedccd21fd11",
+      "size": 28281138,
+      "url": "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx"
+    }
+  ],
+  "params": {
+    "model": "campplus.onnx"
+  }
+}
