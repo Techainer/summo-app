@@ -1863,6 +1863,12 @@ async fn list_notes(
                     "id": e.id.to_string(),
                     "title": e.title,
                     "day": e.day,
+                    // The colour and the tags a note carries. They were on the listing entry the
+                    // whole time and this route dropped them, so the notes screen was the one place
+                    // a colour somebody had set did not show — the mark is meant to be the same
+                    // mark wherever the note appears.
+                    "color": e.color,
+                    "tags": e.tags,
                     "file": e.path.display().to_string(),
                 })
             })

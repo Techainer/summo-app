@@ -1,3 +1,4 @@
+import { Checkbox } from "./ui";
 import { useCallback, useEffect, useState } from "react";
 
 import { useI18n, useT } from "../i18n/context";
@@ -234,14 +235,13 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         />
       </label>
 
-      <label className="text-fg-dim mt-3.5 flex items-center gap-2.5 text-[13px]">
-        <input
-          type="checkbox"
-          checked={llm.summarize_on_stop}
-          onChange={(e) => void save({ ...llm, summarize_on_stop: e.target.checked })}
-        />
-        <span>{t("settings.summarise_on_stop")}</span>
-      </label>
+      <Checkbox
+        className="mt-3.5"
+        checked={llm.summarize_on_stop}
+        onChange={(summarize_on_stop) => void save({ ...llm, summarize_on_stop })}
+      >
+        {t("settings.summarise_on_stop")}
+      </Checkbox>
 
       {needsKey && (
         <p className={`${HINT} ${keyPresent ? "" : "text-blocked"}`}>

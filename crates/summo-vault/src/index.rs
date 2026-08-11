@@ -783,8 +783,14 @@ fn excerpt(line: &str) -> Excerpt {
     }
 }
 
-/// Strip `[[…]]` and any `|alias`.
-fn unlink(text: &str) -> String {
+/// A person's name, without the wikilink syntax around it.
+///
+/// `[[Ngọc]]` is how a name is stored so Obsidian links it; it is not how anybody is called. Every
+/// screen that shows a participant has to strip it, and the copies drift — the analytics screen was
+/// listing `[[Bạn]]`, `[[Ngọc]]` and `[[Bình]]` in a bar chart because the report path was the one
+/// place that had never grown its own copy.
+#[must_use]
+pub fn unlink(text: &str) -> String {
     let t = text.trim();
     let inner = t
         .strip_prefix("[[")

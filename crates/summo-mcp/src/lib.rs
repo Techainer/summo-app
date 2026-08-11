@@ -334,13 +334,11 @@ fn describe(entry: &summo_vault::index::MeetingEntry) -> String {
         out.push_str(&format!(", in {}", entry.folder));
     }
     if !entry.participants.is_empty() {
-        // Without the brackets. `[[Ngọc]]` is how a name is stored so that Obsidian links it; it is
-        // not how a person is called, and putting the syntax in front of a model invites it to
-        // repeat the syntax back.
-        let people: Vec<&str> = entry
+        // Putting `[[Ngọc]]` in front of a model invites it to repeat the syntax back.
+        let people: Vec<String> = entry
             .participants
             .iter()
-            .map(|p| p.trim().trim_start_matches("[[").trim_end_matches("]]"))
+            .map(|p| summo_vault::index::unlink(p))
             .collect();
         out.push_str(&format!(", with {}", people.join(", ")));
     }

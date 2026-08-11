@@ -82,7 +82,7 @@ export function AnalyticsScreen() {
             <Metric label={t("analytics.meetings")} value={String(report.meetings.length)} />
             <Metric
               label={t("analytics.time")}
-              value={formatDuration(report.total_seconds, locale)}
+              value={formatDuration(report.total_seconds, locale, "short")}
             />
             <Metric label={t("analytics.open_tasks")} value={String(report.open_actions.length)} />
             <Metric
@@ -111,8 +111,8 @@ export function AnalyticsScreen() {
                         }}
                       />
                     </span>
-                    <span className="tabular text-fg-dim w-24 shrink-0 text-right text-[13px]">
-                      {formatDuration(person.seconds, locale)}
+                    <span className="tabular text-fg-dim w-28 shrink-0 text-right text-[13px] text-balance">
+                      {formatDuration(person.seconds, locale, "short")}
                     </span>
                   </div>
                 ))}
@@ -161,7 +161,11 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <Card className="p-3">
       <p className="text-fg-faint text-[12px]">{label}</p>
-      <p className="tabular mt-1 text-xl font-semibold">{value}</p>
+      {/* `text-balance` because these are small boxes holding a phrase, not a number.
+          "1 giờ 27 phút" broke as "1 giờ 27" / "phút", which reads as two facts. Vietnamese has no
+          abbreviation for `giờ` or `phút`, so `Intl`'s short form does nothing here and the fix has
+          to be the wrap rather than the wording. */}
+      <p className="tabular mt-1 text-xl font-semibold text-balance">{value}</p>
     </Card>
   );
 }

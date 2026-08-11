@@ -478,7 +478,10 @@ type Stats = NonNullable<LibraryView["stats"]>;
 function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="rounded-card border-line bg-bg-soft flex flex-col gap-0.5 border p-3.5">
-      <span className="tabular text-2xl font-semibold tracking-tight" data-testid="tile-value">
+      <span
+        className="tabular text-2xl font-semibold tracking-tight text-balance"
+        data-testid="tile-value"
+      >
         {value}
       </span>
       <span className="text-fg-dim text-[12px]">{label}</span>

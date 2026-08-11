@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { Checkbox } from "../ui";
 import { useI18n } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { TARGETS, hearsOthers, load, save, translating, type Capture } from "../../lib/capture";
@@ -52,26 +53,14 @@ export function CaptureControls() {
            * rebuild by hand, whereas `sr-only` plus `peer-*` keeps every bit of native behaviour —
            * space to toggle, tab order, the accessibility tree — and changes only the paint. */}
           {(["mic", "system"] as Lane[]).map((lane) => (
-            <label
+            <Checkbox
               key={lane}
-              className="group border-line bg-bg-soft text-fg-dim has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:checked]:text-accent has-[:focus-visible]:border-accent flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors"
+              className="border-line bg-bg-soft has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:checked]:text-accent rounded-full border px-3 py-1.5 text-sm"
+              checked={capture.lanes.includes(lane)}
+              onChange={() => toggleLane(lane)}
             >
-              <input
-                type="checkbox"
-                className="peer sr-only"
-                checked={capture.lanes.includes(lane)}
-                onChange={() => toggleLane(lane)}
-              />
-              <span
-                aria-hidden="true"
-                className="border-line-strong text-accent-fg peer-checked:border-accent peer-checked:bg-accent grid size-4 place-items-center rounded-[5px] border text-[10px]"
-              >
-                <span className="opacity-0 transition-opacity group-has-[:checked]:opacity-100">
-                  ✓
-                </span>
-              </span>
               {t(lane === "mic" ? "record.microphone" : "record.system")}
-            </label>
+            </Checkbox>
           ))}
 
           <label className="text-fg-faint ms-auto flex items-center gap-2 text-sm">

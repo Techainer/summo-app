@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/ui";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
+import { Dot } from "../components/library/Finder";
 import { useEngine } from "../lib/engine-context";
 import { NoteClient, SAVE_DEBOUNCE_MS, byDay, titleFrom, type NoteSummary } from "../lib/notes";
 
@@ -158,13 +159,16 @@ export function NotesScreen() {
                       type="button"
                       onClick={() => void open(note.id)}
                       aria-current={note.id === openId}
-                      className={`w-full truncate rounded-lg px-2 py-1.5 text-left text-sm ${
+                      className={`flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm ${
                         note.id === openId
                           ? "bg-accent-soft text-accent"
                           : "text-fg-dim hover:bg-bg-soft hover:text-fg"
                       }`}
                     >
-                      {note.title}
+                      {/* The same mark the library draws. A colour is meant to identify a note
+                          wherever it appears, and this list was the one place it did not. */}
+                      {note.color && <Dot colour={note.color} />}
+                      <span className="truncate">{note.title}</span>
                     </button>
                   </li>
                 ))}

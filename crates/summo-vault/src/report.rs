@@ -99,7 +99,10 @@ pub fn between(vault: &std::path::Path, from: &str, to: &str) -> Result<Report> 
         busy_days.insert(entry.day.clone(), ());
         total_seconds += entry.duration;
 
-        for name in &entry.participants {
+        for raw in &entry.participants {
+            // Without the brackets, and merged on the stripped name: `[[Ngọc]]` and `Ngọc` are one
+            // person, and counting them as two would split somebody's hours across two bars.
+            let name = crate::index::unlink(raw);
             let slot = people.entry(name.clone()).or_insert_with(|| PersonTime {
                 name: name.clone(),
                 meetings: 0,
@@ -142,7 +145,11 @@ pub fn between(vault: &std::path::Path, from: &str, to: &str) -> Result<Report> 
             title: entry.title.clone(),
             day: entry.day.clone(),
             duration: entry.duration,
-            participants: entry.participants.clone(),
+            participants: entry
+                .participants
+                .iter()
+                .map(|p| crate::index::unlink(p))
+                .collect(),
             tags: entry.tags.clone(),
             has_summary: entry.has_summary,
         });
@@ -310,6 +317,31 @@ mod tests {
         assert_eq!(report.people.len(), 2);
         assert_eq!(report.people[0].seconds, 1800);
         assert_eq!(report.people[0].meetings, 1);
+    }
+
+    /// The analytics screen drew a bar chart labelled `[[Bạn]]`, `[[Ngọc]]`, `[[Bình]]`. Three
+    /// other modules stripped the brackets and this one had never grown its own copy; there is one
+    /// implementation now, and this is the test that keeps the report using it.
+    #[test]
+    fn names_reach_the_report_without_their_wikilink_syntax() {
+        let dir = vault_with(&[(
+            "hop.md",
+            "---\nid: 01A\ndate: 2026-08-10T10:00:00+07:00\nduration: 600\n\
+             participants: [\"[[Bạn]]\", \"[[Ngọc|Ngọc Nguyễn]]\"]\n---\n# Họp\n",
+        )]);
+
+        let report = day(&dir.path().join("meetings"), "2026-08-10").unwrap();
+        let names: Vec<&str> = report.people.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["Bạn", "Ngọc"],
+            "brackets and aliases must both go"
+        );
+        for meeting in &report.meetings {
+            for who in &meeting.participants {
+                assert!(!who.contains("[["), "a bracket survived into {who}");
+            }
+        }
     }
 
     #[test]

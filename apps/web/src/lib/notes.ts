@@ -15,6 +15,9 @@ export interface NoteSummary {
   title: string;
   /** `YYYY-MM-DD`. */
   day: string;
+  /** A palette name, already resolved by the daemon — see `crates/summo-vault/src/colour.rs`. */
+  color: string | null;
+  tags: string[];
   file: string;
 }
 

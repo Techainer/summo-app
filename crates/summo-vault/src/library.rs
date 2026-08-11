@@ -9,7 +9,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::{
-    index::{Excerpt, Filter, MeetingEntry, MeetingIndex, Skipped, Stats, load},
+    index::{Excerpt, Filter, MeetingEntry, MeetingIndex, Skipped, Stats, load, unlink},
     meeting::Frontmatter,
     slug::slugify,
     write::write_atomically,
@@ -528,15 +528,6 @@ fn relative(path: &Path, root: &Path) -> String {
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/")
-}
-
-fn unlink(text: &str) -> String {
-    let t = text.trim();
-    let inner = t
-        .strip_prefix("[[")
-        .and_then(|r| r.strip_suffix("]]"))
-        .unwrap_or(t);
-    inner.split('|').next().unwrap_or(inner).trim().to_string()
 }
 
 #[cfg(test)]
