@@ -99,25 +99,20 @@ jobs:
             -p summo-core -p summo-models -p summo-vad -p summo-bench
 
   registry:
-    name: manifest rules
+    name: validate the published registry
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The catalogue is a separate repository. Checking it out here catches the case that matters:
+      # a tightening of the manifest rules in this repo that would reject a manifest already in the
+      # wild, which would break `summo pull` for everybody rather than only in review.
+      - uses: actions/checkout@v4
+        with:
+          repository: Techainer/summo-registry
+          path: registry
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p summo-models
+      - name: Validate every published manifest against this build
+        run: cargo run --quiet -p summo-cli -- registry check registry
 
-      # This job used to also check out `summo-registry` and validate every published manifest
-      # against this build, which is the check that matters: a tightening of the manifest rules
-      # here would otherwise reject a manifest already in the wild.
-      #
-      # That repository has not been published yet — the catalogue was split out of this one in
-      # f670520 and has not been pushed anywhere. The step was left in place pointing at a
-      # repository that does not exist, so it failed on every run and made the badge red for a
-      # reason that had nothing to do with the code.
-      #
-      # Restore it the day the registry is published:
-      #
-      #   - uses: actions/checkout@v4
-      #     with: { repository: Techainer/summo-registry, path: registry }
-      #   - run: cargo run --quiet -p summo-cli -- registry check registry

@@ -15,7 +15,7 @@ use crate::manifest::{Manifest, Mode, Task};
 /// Fast path, maintained by us.
 pub const DEFAULT_CDN: &str = "https://registry.summo.app";
 /// Always-free fallback that requires no infrastructure of ours to stay alive.
-pub const DEFAULT_GITHUB: &str = "https://raw.githubusercontent.com/summo-app/summo-registry/main";
+pub const DEFAULT_GITHUB: &str = "https://raw.githubusercontent.com/Techainer/summo-registry/main";
 
 /// One place manifests can be read from.
 #[derive(Debug, Clone, PartialEq, Eq)]
