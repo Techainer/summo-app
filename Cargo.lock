@@ -4660,6 +4660,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "summo-calendar"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "summo-core",
+ "tempfile",
+ "time",
+ "tracing",
+]
+
+[[package]]
 name = "summo-cli"
 version = "0.1.0"
 dependencies = [
@@ -4730,6 +4741,7 @@ dependencies = [
  "summo-agent",
  "summo-asr",
  "summo-audio",
+ "summo-calendar",
  "summo-core",
  "summo-diar",
  "summo-llm",

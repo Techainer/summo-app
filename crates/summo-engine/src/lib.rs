@@ -13,6 +13,7 @@
 //! The security of that socket is not incidental; see [`auth`] for why a loopback port needs a
 //! token and an origin check.
 
+pub mod agenda;
 pub mod archive;
 pub mod ask;
 pub mod audio_stream;

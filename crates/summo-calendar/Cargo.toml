@@ -1,0 +1,17 @@
+[package]
+name = "summo-calendar"
+description = "Reading calendars: .ics files, subscriptions and CalDAV"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+summo-core.workspace = true
+serde.workspace = true
+time.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

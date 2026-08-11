@@ -125,6 +125,10 @@ impl Server {
             .route("/meetings/{id}/tasks", post(create_task))
             .route("/templates", get(templates))
             .route("/locales", get(locales))
+            .route("/agenda", get(agenda))
+            .route("/agenda/suggest", get(suggest_meeting))
+            .route("/calendars", post(add_calendar))
+            .route("/calendars/{name}", axum::routing::delete(remove_calendar))
             .route("/onboarding", get(onboarding))
             .route("/onboarding/complete", post(complete_onboarding))
             .route("/onboarding/recommend", get(recommend_models))
@@ -1919,6 +1923,110 @@ async fn get_install(
     )
 }
 
+
+/// Meetings from the user's calendars, in time order.
+async fn agenda(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(Ok::<_, summo_core::Error>(crate::agenda::agenda(
+        state.engine.paths(),
+    )))
+}
+
+#[derive(Debug, Deserialize)]
+struct SuggestQuery {
+    #[serde(default)]
+    token: Option<String>,
+    /// When the recording started, as seconds since the epoch.
+    started_epoch: i64,
+}
+
+/// What a recording that started at a given moment was probably for.
+///
+/// A suggestion, never an action. Nothing on this route starts, stops or renames anything — the app
+/// offers the title and the user accepts it, because an app that titles a meeting from a calendar
+/// without asking will eventually put a client's name on the wrong transcript.
+async fn suggest_meeting(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<SuggestQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(Ok::<_, summo_core::Error>(crate::agenda::suggest(
+        state.engine.paths(),
+        q.started_epoch,
+    )))
+}
+
+#[derive(Debug, Deserialize)]
+struct CalendarBody {
+    /// Path to a `.ics` file on this machine.
+    path: String,
+    /// What to call it. Becomes the filename, so it is sanitised.
+    name: String,
+}
+
+/// Install a calendar file the user picked.
+async fn add_calendar(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<CalendarBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let result = crate::agenda::install(
+        state.engine.paths(),
+        std::path::Path::new(&body.path),
+        &body.name,
+    )
+    .map(|path| serde_json::json!({ "path": path.display().to_string() }));
+    as_response(result)
+}
+
+async fn remove_calendar(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(
+        crate::agenda::forget(state.engine.paths(), &name)
+            .map(|removed| serde_json::json!({ "removed": removed })),
+    )
+}
+
 /// Everyone Summo can recognise.
 async fn people(
     State(state): State<AppState>,
@@ -3227,6 +3335,105 @@ mod tests {
             .unwrap();
         assert!(resp.status().is_client_error() || resp.status().is_server_error());
         assert!(resp.text().await.unwrap().contains("wat"));
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn a_daemon_with_no_calendars_has_an_empty_agenda() {
+        let (_tmp, server) = running().await;
+        let entries: Vec<serde_json::Value> = client()
+            .get(format!("http://{}/agenda", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(entries.is_empty());
+        server.shutdown();
+    }
+
+    /// A suggestion is a suggestion. Nothing on this route may start, stop or rename anything — an
+    /// app that titles a meeting from a calendar without asking eventually puts a client's name on
+    /// the wrong transcript.
+    #[tokio::test]
+    async fn asking_for_a_suggestion_with_no_calendars_answers_nothing() {
+        let (_tmp, server) = running().await;
+        let response = client()
+            .get(format!(
+                "http://{}/agenda/suggest?started_epoch=1786000000",
+                server.addr()
+            ))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        assert!(response.json::<serde_json::Value>().await.unwrap().is_null());
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn a_calendar_that_is_not_a_calendar_is_refused_when_it_is_added() {
+        let (tmp, server) = running().await;
+        let source = tmp.path().join("nope.ics");
+        std::fs::write(&source, "<html>error</html>").unwrap();
+
+        let response = client()
+            .post(format!("http://{}/calendars", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "path": source, "name": "work" }))
+            .send()
+            .await
+            .unwrap();
+        assert!(response.status().is_client_error() || response.status().is_server_error());
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn a_calendar_can_be_added_listed_and_removed_over_http() {
+        let (tmp, server) = running().await;
+        let source = tmp.path().join("work.ics");
+        std::fs::write(
+            &source,
+            "BEGIN:VEVENT\r\nUID:standup\r\nDTSTART:20260810T090000Z\r\n\
+DTEND:20260810T093000Z\r\nSUMMARY:Standup\r\nATTENDEE:mailto:a@x\r\n\
+ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
+        )
+        .unwrap();
+
+        let added = client()
+            .post(format!("http://{}/calendars", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "path": source, "name": "work" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(added.status(), 200);
+
+        let entries: Vec<serde_json::Value> = client()
+            .get(format!("http://{}/agenda", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["summary"], "Standup");
+
+        let removed: serde_json::Value = client()
+            .delete(format!("http://{}/calendars/work", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(removed["removed"], true);
         server.shutdown();
     }
 

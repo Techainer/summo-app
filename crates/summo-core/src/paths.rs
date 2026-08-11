@@ -141,6 +141,16 @@ impl Paths {
         self.root.join("voices")
     }
 
+    /// Calendar files the user subscribed to or exported.
+    ///
+    /// Outside the vault: a calendar is somebody else's data that Summo reads, not a note the user
+    /// wrote, and mixing it into the vault would put an employer's meeting titles into a folder the
+    /// user thinks of as their own.
+    #[must_use]
+    pub fn calendars(&self) -> PathBuf {
+        self.root.join("calendars")
+    }
+
     /// Extra interface translations the user dropped in.
     ///
     /// Outside the vault on purpose: a translation is a property of this installation, not of the
