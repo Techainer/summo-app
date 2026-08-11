@@ -83,6 +83,14 @@ enum Command {
         dev: bool,
     },
 
+    /// Serve the vault to an MCP client — Claude Code, Cursor — over stdio.
+    ///
+    /// Read-only. No tool here creates a task, edits a note or starts a recording: an MCP client is
+    /// a model holding a tool list, and one that misreads an instruction should not be able to
+    /// rewrite somebody's meeting notes.
+    #[cfg(feature = "mcp")]
+    Mcp,
+
     /// Rank the models available for a language on this machine, and say why.
     Recommend {
         /// ISO language code, e.g. `vi` or `en`.
@@ -214,14 +222,23 @@ enum RegistryCmd {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    // stderr, always.
+    //
+    // Most commands print results to stdout and could log there too. `summo mcp` cannot: its stdout
+    // is a JSON-RPC stream, one object per line, and a log line in it is a parse error the client
+    // reports as the server being broken. Rather than making the destination depend on the
+    // subcommand — which is the kind of rule that gets forgotten when the next one is added —
+    // logging goes to stderr for everything. Nothing is lost: a terminal shows both.
     tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .with_target(false)
         .init();
 
-    let cli = Cli::parse();
     let paths = match &cli.home {
         Some(dir) => Paths::at(dir),
         None => Paths::discover()?,
@@ -244,6 +261,8 @@ async fn main() -> Result<()> {
             no_open,
             dev,
         } => serve(&paths, port, no_open, dev).await,
+        #[cfg(feature = "mcp")]
+        Command::Mcp => mcp(&paths),
         Command::Hw => show_hw(),
         Command::Recommend { lang, registry } => {
             show_recommendation(&paths, &lang, registry.as_deref()).await
@@ -976,4 +995,44 @@ fn open_browser(url: &str) {
     if !opened {
         tracing::debug!("no browser to open; the address is printed above");
     }
+}
+
+/// Serve the vault over stdio until the client closes it.
+///
+/// One JSON object per line each way. Logging goes to stderr and each reply is flushed: a stray
+/// line on stdout is a parse error at the other end, and a reply sitting in a buffer looks like a
+/// server that hung.
+#[cfg(feature = "mcp")]
+fn mcp(paths: &Paths) -> Result<()> {
+    use std::io::{BufRead, Write};
+
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+    tracing::info!(vault = %paths.vault().display(), "serving the vault over stdio");
+
+    for line in stdin.lock().lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let request: summo_mcp::Request = match serde_json::from_str(&line) {
+            Ok(request) => request,
+            Err(e) => {
+                // A malformed line has no id to reply against, so there is nobody to tell but the
+                // log. Answering with a null id would be a second protocol error on top of the
+                // first.
+                tracing::warn!(error = %e, "ignoring an unparseable request");
+                continue;
+            }
+        };
+
+        let Some(response) = summo_mcp::handle(paths, &request) else {
+            continue;
+        };
+        serde_json::to_writer(&mut stdout, &response)?;
+        stdout.write_all(b"\n")?;
+        stdout.flush()?;
+    }
+    Ok(())
 }

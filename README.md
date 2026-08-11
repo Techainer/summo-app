@@ -3,11 +3,36 @@
 Meeting notes that run on your machine. Speech recognition and speaker attribution never leave the
 device; only summarisation and translation call out to a language model you configure yourself.
 
-> Status: the pipeline runs end to end. `summo transcribe` takes a WAV through voice activity
-> detection, pseudo-streaming decode and hallucination filtering to a transcript — 2.4 % WER on
-> Fleurs VI, RTF 0.11 with live partials. Storage, the local daemon and the desktop app are next.
-> Vietnamese and English both transcribe; translation and summaries go through a language model you
-> configure. See [`docs/benchmarks.md`](docs/benchmarks.md) for numbers and `docs/adr/` for decisions.
+> Status: usable end to end. Record or import, get a transcript with speakers named, an agent-drafted
+> summary you approve, tasks on a board, questions answered from the vault with citations, live
+> translation of whatever is playing, notes, calendars and comments. 2.4 % WER on Fleurs VI, RTF 0.11
+> with live partials. Not done: dubbing has a synthesiser trait and no backend, mobile is scaffolded
+> and has never been compiled, and sync does not exist. See [`docs/benchmarks.md`](docs/benchmarks.md)
+> for numbers and `docs/adr/` for decisions.
+
+## Run it
+
+One binary, the way `ollama` is one binary — the interface is compiled in, so there is nothing to
+install beside it and no second process to start.
+
+```bash
+pnpm install && pnpm --filter @summo/web build     # the interface, once
+cargo run --release -p summo-cli --features bundled,models -- serve
+```
+
+That prints an address and opens it. `--features models` is what makes it transcribe; without it
+you get everything except recognition, which is a smaller build and enough to browse a vault.
+
+First run has one decision in it: which speech model to download. Summo ranks what is available
+against your machine and says why — memory, measured real-time factor, licence — and you can
+disagree with it. Nothing is recorded until you press record.
+
+```bash
+summo serve --port 8710      # a fixed port, when something else wants to find it
+summo serve --no-open        # a server, when there is no browser to open
+summo import ~/Downloads/zoom-recording.mp4
+summo mcp                    # the vault as tools, for Claude Code or Cursor
+```
 
 ## Why it is built this way
 
@@ -38,12 +63,17 @@ crates/
   summo-llm       summaries, translation and Q&A — the only part that leaves the machine
   summo-store     vector index for semantic Q&A                                 [not needed yet]
   summo-engine    the local daemon: capture, recognition and events over loopback
-  summo-cli       `summo setup | pull | list | recommend | transcribe`
-  summo-agent     skills, MCP server and client                                [next]
+  summo-cli       `summo serve | setup | pull | import | ask | export | registry`
+  summo-agent     the agent: aionrs core, Summo's own tools
+  summo-media     ffmpeg as a sidecar: probe, extract, convert
+  summo-calendar  iCalendar: .ics, subscriptions, matching a recording to an event
+  summo-tts       dubbing: fitting a translated line back into the slot it came from
+  summo-mcp       the vault as tools an assistant can call, over stdio
   summo-sync      CRDT + end-to-end-encrypted multi-device sync                [next]
 apps/
-  web/            the application interface — React, embedded by the shell
+  web/            the application interface — React, compiled into the binary
   desktop/        the Tauri shell: window, tray, global shortcut
+  mobile/         Tauri iOS/Android                          [scaffolded, never compiled]
 docs/adr/         decision records
 ```
 

@@ -8,12 +8,15 @@ instead of guessed at.
 {
   "mcpServers": {
     "summo": {
-      "command": "summo-mcp",
-      "env": { "SUMMO_HOME": "/home/you/.summo" }
+      "command": "summo",
+      "args": ["mcp"]
     }
   }
 }
 ```
+
+`summo mcp` is the same server inside the main binary — one thing to install. The standalone
+`summo-mcp` binary still exists for anyone who wants only this.
 
 `SUMMO_HOME` is optional; without it the same discovery the app uses applies.
 

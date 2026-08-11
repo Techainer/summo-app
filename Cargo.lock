@@ -4703,6 +4703,7 @@ dependencies = [
  "summo-core",
  "summo-engine",
  "summo-llm",
+ "summo-mcp",
  "summo-media",
  "summo-models",
  "summo-vad",
