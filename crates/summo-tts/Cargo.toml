@@ -24,3 +24,9 @@ sherpa-rs = { workspace = true, optional = true, features = ["tts"] }
 
 [dev-dependencies]
 tempfile.workspace = true
+
+# Needs a synthesiser, so it is not built by a default `cargo build`. Declared rather than left to
+# fail: an example that does not compile without a flag should say which flag.
+[[example]]
+name = "speak"
+required-features = ["sherpa"]
