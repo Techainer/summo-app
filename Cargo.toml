@@ -133,6 +133,15 @@ codegen-units = 1
 strip = "symbols"
 panic = "abort"
 
+[profile.dev]
+# Line tables, not full DWARF.
+#
+# A backtrace needs file and line; a step debugger needs types and locals. Almost every debug build
+# here is run to get a panic message or a test failure, and full debug info is most of what the
+# linker moves and most of what `target/debug` weighs. Anybody who does want to step through can
+# put `debug = true` back for the session.
+debug = "line-tables-only"
+
 # Faster ONNX / DSP in debug builds so live-audio dev is usable.
 [profile.dev.package."*"]
 opt-level = 2

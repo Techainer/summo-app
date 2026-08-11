@@ -33,19 +33,31 @@ apps, and iOS 18.1's own call recording ships with no third-party API. Google Pl
 third-party call recording apps since May 2022 — only the OEM dialer may. This is policy and
 platform, not difficulty.
 
-## Status: scaffolded, not built
+## Status: the Rust compiles for Android; the app has not been assembled
 
-Everything in `src-tauri/` is written but **has never been compiled**, because building it needs
-Xcode and the Android NDK, which this repository's CI does not have and which were not available
-where it was written. Treat it as a starting point that reflects the architecture, not as a working
-build.
+**The entire workspace type-checks for `aarch64-linux-android`** — the engine with its bundled
+interface, the vault, the agent, the model registry, and `summo-asr` with sherpa-onnx and ONNX
+Runtime behind it. Checked with NDK r27c, and CI checks it on every pull request so it cannot
+quietly stop being true.
 
-Two things are known to be unresolved:
+That is further than this file used to claim. It said the native runtimes were "real work that has
+not been attempted", and the answer turned out to be that the dependencies already handle it: the
+build scripts pick up the NDK's clang and cross-compile without any help from us.
 
-1. **Native model runtimes.** `summo-engine`'s `models` feature links sherpa-onnx and ONNX Runtime.
-   Cross-compiling both for `aarch64-apple-ios` and `aarch64-linux-android` is real work that has
-   not been attempted here. Until it is, this builds only without that feature — which means the
-   app runs, shows the vault, and cannot transcribe.
+What has **not** happened:
+
+1. **No `.apk` and no `.ipa` has ever been produced.** Type-checking is not linking, and linking is
+   not packaging. Between here and an installable app: `cargo tauri android init`, a Gradle
+   project, signing, the Android manifest's `RECORD_AUDIO` and foreground-service declarations, and
+   the same again for iOS.
+
+2. **iOS is unverified.** `aarch64-apple-ios` needs Xcode, which needs macOS. Nothing here suggests
+   it will be worse than Android — the same crates, the same C++ libraries, and Apple's toolchain
+   is the one those libraries are best tested against — but it has not been run.
+
+3. **Nothing has run on a phone.** Compiling says the code is well-formed for the platform. It says
+   nothing about whether the microphone permission flow works, whether recognition is fast enough
+   on a mid-range Android, or what the battery cost is.
 
 2. **Model size against phone memory.** `summo_models::recommend` already scores by available RAM,
    which is the right machinery. What it lacks is a measured RTF row for phone CPUs, so a ranking

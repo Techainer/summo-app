@@ -93,10 +93,22 @@ jobs:
         with:
           ndk-version: r27c
           add-to-path: true
-      - name: Build portable core
-        run: |
-          cargo build --target ${{ matrix.target }} \
-            -p summo-core -p summo-models -p summo-vad -p summo-bench
+      # The whole workspace, not a hand-picked four.
+      #
+      # The list used to be `summo-core summo-models summo-vad summo-bench`, chosen when nobody knew
+      # how much of the rest would survive the trip. All of it does — the engine with its bundled
+      # interface, the vault, the agent, sherpa-onnx and ONNX Runtime included — so checking four
+      # crates was understating what works and leaving the other twenty free to break quietly.
+      #
+      # `check` rather than `build` for Android: linking needs the NDK's sysroot for every C++
+      # dependency, which is a lot of minutes to prove something the type checker already proved.
+      # The desktop matrix above does the real linking.
+      - name: The whole workspace stays portable
+        env:
+          CC_aarch64_linux_android: aarch64-linux-android24-clang
+          CXX_aarch64_linux_android: aarch64-linux-android24-clang++
+          AR_aarch64_linux_android: llvm-ar
+        run: cargo check --target ${{ matrix.target }} --workspace
 
   # The shell users actually install. It is not a workspace member — a Tauri app has its own
   # lockfile and its own build script — so `cargo build --workspace` never touched it, and it had
