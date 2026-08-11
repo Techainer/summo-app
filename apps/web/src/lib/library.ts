@@ -161,36 +161,64 @@ export class LibraryClient {
   }
 }
 
-const WEEKDAYS = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
+/**
+ * The words a heading needs that a date formatter cannot supply.
+ *
+ * Passed in rather than imported so this module stays pure — it is the piece with the arithmetic in
+ * it, and arithmetic is what the tests here are about.
+ */
+export interface DayWords {
+  locale: string;
+  today: string;
+  yesterday: string;
+  /** `{n}` is the week number, `{year}` the year. */
+  week: string;
+  unfiled: string;
+}
 
 /**
  * A heading a person reads at a glance.
  *
- * Recent days get their name — "Hôm nay", "Thứ ba" — because that is how someone thinks about a
+ * Recent days get their name — "Today", "Thứ ba" — because that is how someone thinks about a
  * meeting they remember. Older ones get the date, because by then the weekday means nothing.
+ *
+ * Weekday and date come from `Intl`, in the interface's own locale. They used to be a hardcoded
+ * Vietnamese array, so an English interface showed "Hôm nay" above its meetings — and any language
+ * a user added by dropping in a JSON file could never have reached this line at all.
  */
-export function dayLabel(day: string, today: string): string {
-  if (day === today) return "Hôm nay";
-  if (day === shiftDay(today, -1)) return "Hôm qua";
+export function dayLabel(day: string, today: string, words: DayWords): string {
+  if (day === today) return words.today;
+  if (day === shiftDay(today, -1)) return words.yesterday;
 
   const date = parseDay(day);
   if (!date) return day;
 
   const age = daysBetween(day, today);
-  if (age > 0 && age < 7) return WEEKDAYS[date.getUTCDay()] ?? day;
+  if (age > 0 && age < 7) {
+    // UTC throughout: a day key is a calendar date, not an instant, and formatting it in the local
+    // zone moves it by one either side of midnight.
+    return new Intl.DateTimeFormat(words.locale, { weekday: "long", timeZone: "UTC" }).format(date);
+  }
 
-  const suffix = date.getUTCFullYear() === parseDay(today)?.getUTCFullYear() ? "" : ` năm ${date.getUTCFullYear()}`;
-  return `${date.getUTCDate()} tháng ${date.getUTCMonth() + 1}${suffix}`;
+  const sameYear = date.getUTCFullYear() === parseDay(today)?.getUTCFullYear();
+  return new Intl.DateTimeFormat(words.locale, {
+    day: "numeric",
+    month: "long",
+    year: sameYear ? undefined : "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 /** `2026-W32` reads as a week, and a folder path reads as itself. */
-export function groupLabel(key: string, group: GroupBy, today: string): string {
+export function groupLabel(key: string, group: GroupBy, today: string, words: DayWords): string {
   if (group === "week") {
     const match = /^(\d{4})-W(\d{1,2})$/.exec(key);
-    return match ? `Tuần ${Number(match[2])}, ${match[1]}` : key;
+    return match
+      ? words.week.replace("{n}", String(Number(match[2]))).replace("{year}", match[1] ?? "")
+      : key;
   }
-  if (group === "folder") return key === "" ? "Chưa phân loại" : key;
-  if (group === "day") return dayLabel(key, today);
+  if (group === "folder") return key === "" ? words.unfiled : key;
+  if (group === "day") return dayLabel(key, today, words);
   return key;
 }
 

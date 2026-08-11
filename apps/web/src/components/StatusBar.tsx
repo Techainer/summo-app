@@ -1,3 +1,4 @@
+import { cn } from "../lib/cn";
 import { useI18n } from "../i18n/context";
 import type { ConnectionState } from "../lib/engine";
 
@@ -27,21 +28,23 @@ export function StatusBar({
   const disconnected = connection === "reconnecting" || connection === "connecting";
 
   return (
-    <footer className="status">
-      {notice && <span className="notice">{notice}</span>}
-      <span className="spacer" />
+    <footer className="flex items-center gap-2.5 border-t border-line px-4 py-2 text-[0.78rem] text-fg-faint">
+      {notice && <span className="text-fg-dim">{notice}</span>}
+      <span className="flex-1" />
       {disconnected && (
-        <span className="chip warn" data-testid="connection">
+        <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem] border-rec text-rec" data-testid="connection">
           {connection === "reconnecting" ? t("status.reconnecting") : t("status.connecting")}
         </span>
       )}
-      {device && <span className="chip">{device}</span>}
-      {speakers.length > 0 && <span className="chip">{n("status.speakers", speakers.length)}</span>}
+      {device && <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem]">{device}</span>}
+      {speakers.length > 0 && <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem]">{n("status.speakers", speakers.length)}</span>}
       {stat && (
         <>
-          <span className={behind ? "chip warn" : "chip"}>RTF {stat.rtf.toFixed(3)}</span>
-          <span className="chip">{stat.rss_mb} MB</span>
-          {behind && <span className="chip warn">{t("status.behind")}</span>}
+          <span className={cn("inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem]", behind && "border-rec text-rec")}>
+            RTF {stat.rtf.toFixed(3)}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem]">{stat.rss_mb} MB</span>
+          {behind && <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem] border-rec text-rec">{t("status.behind")}</span>}
         </>
       )}
     </footer>

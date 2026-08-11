@@ -110,25 +110,6 @@
   --color-accent-fg: #06110c;
 }
 
-/* Aliases for the components not yet migrated off `styles.css`.
- *
- * Both files are loaded during the migration, and the old one refers to `--bg`, `--fg` and friends.
- * Pointing those at the new tokens means a component keeps rendering correctly right up to the
- * moment it is rewritten, instead of every screen breaking at once on the first commit. Delete this
- * block together with `styles.css`. */
-:root {
-  --bg: var(--color-bg);
-  --bg-soft: var(--color-bg-soft);
-  --line: var(--color-line);
-  --fg: var(--color-fg);
-  --fg-dim: var(--color-fg-dim);
-  --fg-faint: var(--color-fg-faint);
-  --accent: var(--color-accent);
-  --rec: var(--color-rec);
-  --sans: var(--font-sans);
-  --mono: var(--font-mono);
-}
-
 * {
   box-sizing: border-box;
 }

@@ -174,7 +174,11 @@
     "trash_confirm": "Move to trash?",
     "trash_yes": "Move",
     "transcript_lines": "Transcript ({count} lines)",
-    "a_note": "Note"
+    "a_note": "Note",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "week": "Week {n}, {year}",
+    "unfiled_group": "Unfiled"
   },
   "analytics": {
     "title": "Analytics",

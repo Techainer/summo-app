@@ -32,6 +32,14 @@ interface ProviderInfo {
   key_set: boolean;
 }
 
+/** One row of the form: a fixed-width label beside its control. */
+const FIELD = "mt-3.5 flex items-center gap-3 text-[13px] text-fg-dim";
+const LABEL = "w-[150px] shrink-0";
+const CONTROL =
+  "flex-1 rounded-lg border border-line bg-bg-soft px-2.5 py-1.5 text-sm text-fg focus:outline-none focus-visible:border-accent";
+/** The note under a field. Indented to line up with the control it explains. */
+const HINT = "mt-1.5 ml-[162px] text-[12px] leading-normal text-fg-faint";
+
 /** The pseudo-entry for "some other OpenAI-compatible server". Not a preset; there is no list of them. */
 const CUSTOM = "custom";
 
@@ -116,7 +124,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
     }
   }, [llm, post]);
 
-  if (!llm) return <p className="empty">{status ?? t("settings.loading")}</p>;
+  if (!llm) return <p className="mt-16 text-center text-fg-faint">{status ?? t("settings.loading")}</p>;
 
   // The stored provider is either a known id or a URL; the picker shows t("settings.other_endpoint") for a URL.
   const selected = providers.some((p) => p.id === llm.provider) ? llm.provider : CUSTOM;
@@ -129,19 +137,20 @@ export function Settings({ handshake }: { handshake: Handshake }) {
   const hosted = providers.filter((p) => !p.local);
 
   return (
-    <div className="settings" data-testid="settings">
+    <div className="max-w-xl p-6" data-testid="settings">
       <LanguagePicker />
 
-      <h2>{t("settings.llm_heading")}</h2>
-      <p className="hint">
+      <h2 className="text-xl font-semibold tracking-tight">{t("settings.llm_heading")}</h2>
+      <p className="my-4 text-[13px] leading-normal text-fg-faint">
         {t("settings.llm_hint_head")}
         <b>{t("settings.always_local")}</b>
         {t("settings.llm_hint_tail")}
       </p>
 
-      <label className="field">
-        <span>{t("settings.provider")}</span>
+      <label className={FIELD}>
+        <span className={LABEL}>{t("settings.provider")}</span>
         <select
+          className={CONTROL}
           value={selected}
           aria-label={t("settings.provider")}
           onChange={(e) => {
@@ -169,7 +178,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
           <option value={CUSTOM}>{t("settings.other_endpoint")}</option>
         </select>
       </label>
-      <p className="field-hint">
+      <p className={HINT}>
         {selected === CUSTOM
           ? t("settings.endpoint_hint")
           : chosen?.local
@@ -180,9 +189,10 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       </p>
 
       {selected === "custom" && (
-        <label className="field">
-          <span>{t("settings.address")}</span>
+        <label className={FIELD}>
+          <span className={LABEL}>{t("settings.address")}</span>
           <input
+            className={CONTROL}
             value={custom}
             aria-label={t("settings.endpoint")}
             placeholder="http://127.0.0.1:1234/v1"
@@ -192,9 +202,10 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         </label>
       )}
 
-      <label className="field">
-        <span>{t("settings.model")}</span>
+      <label className={FIELD}>
+        <span className={LABEL}>{t("settings.model")}</span>
         <input
+          className={CONTROL}
           value={llm.model ?? ""}
           aria-label={t("settings.model")}
           placeholder="qwen3:8b"
@@ -203,9 +214,10 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         />
       </label>
 
-      <label className="field">
-        <span>{t("settings.summary_language")}</span>
+      <label className={FIELD}>
+        <span className={LABEL}>{t("settings.summary_language")}</span>
         <input
+          className={CONTROL}
           value={llm.language}
           aria-label={t("settings.summary_language")}
           onChange={(e) => setLlm({ ...llm, language: e.target.value })}
@@ -213,7 +225,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         />
       </label>
 
-      <label className="field checkbox">
+      <label className="mt-3.5 flex items-center gap-2.5 text-[13px] text-fg-dim">
         <input
           type="checkbox"
           checked={llm.summarize_on_stop}
@@ -223,7 +235,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       </label>
 
       {needsKey && (
-        <p className={`field-hint${keyPresent ? "" : " warn"}`}>
+        <p className={`${HINT} ${keyPresent ? "" : "text-blocked"}`}>
           {keyPresent
             ? t("settings.key_present")
             : t("settings.key_missing")}
@@ -232,22 +244,34 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         </p>
       )}
 
-      <div className="settings-actions">
-        <button type="button" className="primary" onClick={() => void test()} disabled={testing}>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => void test()}
+          disabled={testing}
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
           {testing ? t("settings.testing") : t("settings.test")}
         </button>
-        {status && <span className="field-hint">{status}</span>}
+        {status && <span className="text-[12px] text-fg-faint">{status}</span>}
       </div>
 
       {result && (
-        <p className={`banner ${result.ok ? "ok" : "error"}`} data-testid="test-result">
+        <p
+          data-testid="test-result"
+          className={`mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-[13px] ${
+            result.ok
+              ? "border-accent/30 bg-accent-soft"
+              : "border-rec/30 bg-rec-soft text-rec"
+          }`}
+        >
           {result.ok ? t("settings.connected") : t("settings.not_connected")} — {result.base_url}
           <br />
           {result.local
             ? t("settings.local_only_comma")
             : t("settings.sent_here")}
           <br />
-          <span className="field-hint">{result.detail}</span>
+          <span className="text-[12px] text-fg-faint">{result.detail}</span>
         </p>
       )}
       <About />
@@ -269,9 +293,9 @@ function LanguagePicker() {
 
   return (
     <>
-      <h2>{t("settings.language")}</h2>
-      <label className="field">
-        <span>{t("settings.language")}</span>
+      <h2 className="text-xl font-semibold tracking-tight">{t("settings.language")}</h2>
+      <label className={FIELD}>
+        <span className={LABEL}>{t("settings.language")}</span>
         <select
           value={locale}
           aria-label={t("settings.language")}
@@ -284,7 +308,7 @@ function LanguagePicker() {
           ))}
         </select>
       </label>
-      <p className="hint">{t("settings.language_hint")}</p>
+      <p className="my-4 text-[13px] leading-normal text-fg-faint">{t("settings.language_hint")}</p>
     </>
   );
 }

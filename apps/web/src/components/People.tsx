@@ -108,32 +108,44 @@ export function People({ client, meeting }: Props) {
   );
 
   return (
-    <section className="people">
-      {error && <div className="banner error">{error}</div>}
+    <section className="mx-auto max-w-3xl space-y-4 p-6">
+      {error && (
+        <p className="rounded-lg border border-rec/30 bg-rec-soft px-3 py-2 text-[13px] text-rec">
+          {error}
+        </p>
+      )}
       {notice && (
-        <div className="banner info">
+        <p className="flex items-center gap-2 rounded-lg border border-accent/30 bg-accent-soft px-3 py-2 text-[13px]">
           {notice}
-          <button type="button" className="link" onClick={() => setNotice(null)}>
+          <button
+            type="button"
+            className="ml-auto shrink-0 text-accent hover:underline"
+            onClick={() => setNotice(null)}
+          >
             {t("common.close")}
           </button>
-        </div>
+        </p>
       )}
 
       {voices.length > 0 && (
         <>
-          <h2>{t("people.unknown")}</h2>
-          <ul className="voice-list">
+          <h2 className="text-xl font-semibold tracking-tight">{t("people.unknown")}</h2>
+          <ul className="space-y-2.5">
             {voices.map((voice) => (
-              <li key={voice.label} className="voice">
-                <div className="voice-head">
-                  <strong>{voice.label}</strong>
-                  <span className="muted">
-                    {speakingTime(voice.seconds)} · {t("people.utterances", { count: voice.utterances })}
+              <li
+                key={voice.label}
+                className="rounded-card border border-line bg-bg-soft p-3.5"
+              >
+                <div className="flex items-baseline gap-2.5">
+                  <strong className="text-[15px]">{voice.label}</strong>
+                  <span className="text-[12px] text-fg-dim">
+                    {speakingTime(voice.seconds)} ·{" "}
+                    {t("people.utterances", { count: voice.utterances })}
                   </span>
                 </div>
 
                 {voice.suggestions.length > 0 && (
-                  <p className="muted suggestion-hint">
+                  <p className="mt-1.5 text-[12px] leading-normal text-fg-dim">
                     {t("people.maybe")}{" "}
                     {voice.suggestions.map((s, i) => (
                       <span key={s.id}>
@@ -144,19 +156,22 @@ export function People({ client, meeting }: Props) {
                   </p>
                 )}
 
-                <div className="voice-actions">
+                {/* Wraps rather than scrolls: the list of colleagues is short, and a hidden name is an
+                    unusable name. */}
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                   {nameOptions(voice, people).map((person) => (
                     <button
                       key={person.id}
                       type="button"
                       disabled={busy === voice.label}
                       onClick={() => void name(voice.label, person.name)}
+                      className="rounded-full border border-line bg-bg px-2.5 py-1 text-[13px] transition-colors hover:border-accent hover:text-accent disabled:cursor-default disabled:opacity-50"
                     >
                       {person.name}
                     </button>
                   ))}
                   <form
-                    className="new-person"
+                    className="flex gap-1.5"
                     onSubmit={(e) => {
                       e.preventDefault();
                       const input = new FormData(e.currentTarget).get("name");
@@ -172,8 +187,13 @@ export function People({ client, meeting }: Props) {
                       placeholder={t("people.new_name")}
                       aria-label={t("people.name_this", { label: voice.label })}
                       disabled={busy === voice.label}
+                      className="w-36 rounded-full border border-line bg-bg px-2.5 py-1 text-[13px] focus:outline-none focus-visible:border-accent"
                     />
-                    <button type="submit" disabled={busy === voice.label}>
+                    <button
+                      type="submit"
+                      disabled={busy === voice.label}
+                      className="rounded-full border border-line bg-bg px-2.5 py-1 text-[13px] hover:border-accent hover:text-accent disabled:opacity-50"
+                    >
                       {t("common.save")}
                     </button>
                   </form>
@@ -184,21 +204,24 @@ export function People({ client, meeting }: Props) {
         </>
       )}
 
-      <h2>{t("people.known")}</h2>
-      {space && <p className="muted">{t("people.identified_by", { space })}</p>}
+      <h2 className="pt-2 text-xl font-semibold tracking-tight">{t("people.known")}</h2>
+      {space && (
+        <p className="-mt-2 text-[12px] text-fg-dim">{t("people.identified_by", { space })}</p>
+      )}
 
       {people.length === 0 ? (
-        <p className="empty">
-          {t("people.empty")}
-        </p>
+        <p className="mt-16 text-center text-fg-faint">{t("people.empty")}</p>
       ) : (
-        <ul className="person-list">
+        <ul className="divide-y divide-line">
           {people.map((person) => (
-            <li key={person.id} className="person">
-              <span className="avatar" aria-hidden="true">
+            <li key={person.id} className="flex items-center gap-3 py-2.5">
+              <span
+                aria-hidden="true"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-bg-soft text-[15px] font-medium text-fg-dim"
+              >
                 {person.name.slice(0, 1)}
               </span>
-              <div className="person-body">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 {renaming === person.id ? (
                   <form
                     onSubmit={(e) => {
@@ -213,12 +236,13 @@ export function People({ client, meeting }: Props) {
                       aria-label={t("people.rename_who", { name: person.name })}
                       onChange={(e) => setDraft(e.target.value)}
                       onBlur={() => void commitRename(person.id)}
+                      className="w-full rounded-md border border-accent bg-bg px-2 py-0.5 text-sm focus:outline-none"
                     />
                   </form>
                 ) : (
                   <button
                     type="button"
-                    className="link name"
+                    className="text-left text-sm font-medium text-accent hover:underline"
                     onClick={() => {
                       setRenaming(person.id);
                       setDraft(person.name);
@@ -227,7 +251,7 @@ export function People({ client, meeting }: Props) {
                     {person.name}
                   </button>
                 )}
-                <span className="muted">
+                <span className="text-[12px] text-fg-dim">
                   {t("people.samples", { count: person.samples })}
                   {person.confirmed > 0 && ` · ${t("people.confirmed_by_you", { count: person.confirmed })}`}
                   {person.centroids > 1 && ` · ${t("people.voice_styles", { count: person.centroids })}`}
@@ -235,7 +259,7 @@ export function People({ client, meeting }: Props) {
               </div>
               <button
                 type="button"
-                className="icon-button"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-line bg-bg-soft text-fg-dim transition-colors hover:border-rec hover:text-rec"
                 aria-label={t("people.forget_who", { name: person.name })}
                 title={t("people.remove")}
                 onClick={() => void forget(person)}

@@ -174,7 +174,11 @@
     "trash_confirm": "Chuyển vào thùng rác?",
     "trash_yes": "Chuyển",
     "transcript_lines": "Bản ghi ({count} dòng)",
-    "a_note": "Ghi chú"
+    "a_note": "Ghi chú",
+    "today": "Hôm nay",
+    "yesterday": "Hôm qua",
+    "week": "Tuần {n}, {year}",
+    "unfiled_group": "Chưa phân loại"
   },
   "analytics": {
     "title": "Thống kê",

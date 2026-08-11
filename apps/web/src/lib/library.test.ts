@@ -1,41 +1,52 @@
 import { describe, expect, it } from "vitest";
 import { dayLabel, formatDuration, groupLabel, localDay, timeOfDay, timestamp, url } from "./library";
 
+/** Vietnamese, because that is what these assertions are written against. */
+const VI = {
+  locale: "vi-VN",
+  today: "Hôm nay",
+  yesterday: "Hôm qua",
+  week: "Tuần {n}, {year}",
+  unfiled: "Chưa phân loại",
+};
+
 describe("dayLabel", () => {
   const today = "2026-08-10";
 
   it("names the days a person still remembers", () => {
-    expect(dayLabel("2026-08-10", today)).toBe("Hôm nay");
-    expect(dayLabel("2026-08-09", today)).toBe("Hôm qua");
-    expect(dayLabel("2026-08-06", today)).toBe("Thứ năm");
+    expect(dayLabel("2026-08-10", today, VI)).toBe("Hôm nay");
+    expect(dayLabel("2026-08-09", today, VI)).toBe("Hôm qua");
+    // `Intl`'s own Vietnamese, capitalisation included. It is the authority on how a weekday is
+    // written in a locale; the hand-written table this replaced was one language's guess.
+    expect(dayLabel("2026-08-06", today, VI)).toBe("Thứ Năm");
   });
 
   it("falls back to a date once the weekday stops meaning anything", () => {
-    expect(dayLabel("2026-07-01", today)).toBe("1 tháng 7");
-    expect(dayLabel("2025-12-24", today)).toBe("24 tháng 12 năm 2025");
+    expect(dayLabel("2026-07-01", today, VI)).toBe("1 tháng 7");
+    expect(dayLabel("2025-12-24", today, VI)).toBe("24 tháng 12, 2025");
   });
 
   it("does not shift a day into the browser's timezone", () => {
     // Parsed as local time, `2026-08-10` would be a different calendar day west of UTC, and the
     // heading would say "Hôm qua" to a user in Los Angeles for a meeting they had this morning.
-    expect(dayLabel("2026-08-10", "2026-08-10")).toBe("Hôm nay");
+    expect(dayLabel("2026-08-10", "2026-08-10", VI)).toBe("Hôm nay");
   });
 
   it("passes through anything that is not a date", () => {
-    expect(dayLabel("", today)).toBe("");
-    expect(dayLabel("not-a-day", today)).toBe("not-a-day");
+    expect(dayLabel("", today, VI)).toBe("");
+    expect(dayLabel("not-a-day", today, VI)).toBe("not-a-day");
   });
 });
 
 describe("groupLabel", () => {
   it("reads an ISO week as a week", () => {
-    expect(groupLabel("2026-W32", "week", "2026-08-10")).toBe("Tuần 32, 2026");
-    expect(groupLabel("2026-W02", "week", "2026-08-10")).toBe("Tuần 2, 2026");
+    expect(groupLabel("2026-W32", "week", "2026-08-10", VI)).toBe("Tuần 32, 2026");
+    expect(groupLabel("2026-W02", "week", "2026-08-10", VI)).toBe("Tuần 2, 2026");
   });
 
   it("names the folder a meeting has not been filed into", () => {
-    expect(groupLabel("", "folder", "2026-08-10")).toBe("Chưa phân loại");
-    expect(groupLabel("khach-hang/acme", "folder", "2026-08-10")).toBe("khach-hang/acme");
+    expect(groupLabel("", "folder", "2026-08-10", VI)).toBe("Chưa phân loại");
+    expect(groupLabel("khach-hang/acme", "folder", "2026-08-10", VI)).toBe("khach-hang/acme");
   });
 });
 
