@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../lib/cn";
 import { useI18n, useT } from "../i18n/context";
+import { useIsNarrow } from "../lib/breakpoint";
 import { useErrorText } from "../lib/errors";
 import {
   LibraryClient,
@@ -16,6 +17,7 @@ import {
   type MeetingSummary,
   type SearchHit,
 } from "../lib/library";
+import { ColourPicker, Dot, Finder } from "./library/Finder";
 
 /** How long to wait after the last keystroke before searching. */
 const SEARCH_DEBOUNCE_MS = 180;
@@ -30,6 +32,22 @@ const GROUPS: { value: GroupBy; labelKey: string }[] = [
 
 interface Props {
   client: LibraryClient;
+  /**
+   * Which folder is being browsed, `""` for the root and `undefined` for all of them.
+   *
+   * Every filter below is owned by the route rather than by this component. The folder has to be,
+   * because the app's own sidebar sets it too and a filter with two owners shows whichever was
+   * told last. The rest follow so there is one answer to "what is on screen" instead of two
+   * mechanisms — and so a narrowed view survives a reload and steps back out with the back button.
+   */
+  folder: string | undefined;
+  tags: string[];
+  colour: string | undefined;
+  query: string;
+  onFolder: (folder: string | undefined) => void;
+  onTags: (tags: string[]) => void;
+  onColour: (colour: string | undefined) => void;
+  onQuery: (query: string) => void;
   /** Called when the user wants to record instead of read. */
   onRecord: () => void;
   /** Open a meeting on its own screen, where the player and transcript live. */
@@ -63,15 +81,29 @@ function useDayWords() {
   );
 }
 
-export function Library({ client, onRecord, onOpen }: Props) {
+export function Library({
+  client,
+  folder,
+  tags,
+  colour,
+  query,
+  onFolder,
+  onTags,
+  onColour,
+  onQuery,
+  onRecord,
+  onOpen,
+}: Props) {
   const t = useT();
   const words = useDayWords();
+  const narrow = useIsNarrow();
   const say = useErrorText();
   const [view, setView] = useState<LibraryView | null>(null);
   const [group, setGroup] = useState<GroupBy>("day");
-  const [folder, setFolder] = useState<string | undefined>();
-  const [tag, setTag] = useState<string | undefined>();
-  const [query, setQuery] = useState("");
+  // What is in the box, which leads what is in the URL by one debounce. A controlled input driven
+  // straight from the route would push a history entry per keystroke and make the back button undo
+  // the query one letter at a time.
+  const [typed, setTyped] = useState(query);
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<MeetingDetail | null>(null);
@@ -82,35 +114,48 @@ export function Library({ client, onRecord, onOpen }: Props) {
 
   const refresh = useCallback(async () => {
     try {
-      setView(await client.view({ group, folder, tag }));
+      // Joined here rather than in the client, because the daemon takes one query parameter: a
+      // query string cannot express a repeated key that every deserialiser agrees on.
+      setView(await client.view({ group, folder, tag: tags.join(","), colour }));
       setError(null);
     } catch (e) {
       setError(say(e));
     }
-  }, [client, group, folder, tag]);
+  }, [client, group, folder, tags, colour]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
+  // A query arriving from outside — a reload, or the back button — is a new box, not an edit to
+  // what is in it. Guarded so it does not fight the debounce below, which sets the same value one
+  // beat after the user typed it.
+  useEffect(() => {
+    setTyped((current) => (current.trim() === query.trim() ? current : query));
+  }, [query]);
+
   // Searching on every keystroke would send a request per character; waiting for a pause sends one
-  // per word, which is what a person means by typing anyway.
+  // per word, which is what a person means by typing anyway. The same pause is when the URL
+  // catches up, so history gets one entry per search rather than one per letter.
   const searchTimer = useRef<number | null>(null);
   useEffect(() => {
     if (searchTimer.current !== null) window.clearTimeout(searchTimer.current);
-    if (query.trim() === "") {
-      setHits(null);
-      return undefined;
-    }
-    searchTimer.current = window.setTimeout(() => {
-      client
-        .search(query)
-        .then(setHits)
-        .catch((e: unknown) => setError(say(e)));
-    }, SEARCH_DEBOUNCE_MS);
+    if (typed.trim() === query.trim()) return undefined;
+    searchTimer.current = window.setTimeout(() => onQuery(typed.trim()), SEARCH_DEBOUNCE_MS);
     return () => {
       if (searchTimer.current !== null) window.clearTimeout(searchTimer.current);
     };
+  }, [typed, query, onQuery]);
+
+  useEffect(() => {
+    if (query.trim() === "") {
+      setHits(null);
+      return;
+    }
+    client
+      .search(query)
+      .then(setHits)
+      .catch((e: unknown) => setError(say(e)));
   }, [client, query]);
 
   useEffect(() => {
@@ -145,15 +190,24 @@ export function Library({ client, onRecord, onOpen }: Props) {
 
   return (
     <div className="grid h-full min-h-0 grid-cols-1 md:grid-cols-[320px_1fr]" data-testid="library">
-      <aside className="flex min-h-0 max-h-[45%] flex-col gap-2.5 overflow-y-auto border-b border-line p-3 md:max-h-none md:border-r md:border-b-0">
+      {/* On a phone the two panes take turns; on a desktop they sit side by side.
+       *
+       * They used to stack, with the list capped at 45% of the height. At 390 px that is 167 px of
+       * window for 754 px of content — the filters filled it and the meetings were below the fold,
+       * so the library looked empty on the device most likely to open it. Taking turns is what a
+       * phone does with a master and a detail, and it is why `selected` gets a way back out. */}
+      <aside
+        hidden={narrow && selected !== null}
+        className="flex min-h-0 flex-col gap-2.5 overflow-y-auto border-b border-line p-3 md:border-r md:border-b-0"
+      >
         <div className="flex gap-2">
           <input
             className="w-full rounded-lg border border-line bg-bg-soft px-3 py-2 text-sm text-fg focus:outline-none focus-visible:border-accent"
             type="search"
-            value={query}
+            value={typed}
             placeholder={t("library.search_placeholder")}
             aria-label={t("library.search")}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => setTyped(e.target.value)}
           />
         </div>
 
@@ -177,19 +231,18 @@ export function Library({ client, onRecord, onOpen }: Props) {
           </div>
         )}
 
-        {(folder !== undefined || tag !== undefined) && (
-          <div className="flex flex-wrap gap-1.5">
-            {folder !== undefined && (
-              <button type="button" className="rounded-full border border-fg-faint bg-bg-soft px-2.5 py-0.5 text-[12px] text-fg" onClick={() => setFolder(undefined)}>
-                📁 {folder === "" ? t("library.unfiled") : folder} ✕
-              </button>
-            )}
-            {tag !== undefined && (
-              <button type="button" className="rounded-full border border-fg-faint bg-bg-soft px-2.5 py-0.5 text-[12px] text-fg" onClick={() => setTag(undefined)}>
-                #{tag} ✕
-              </button>
-            )}
-          </div>
+        {/* Hidden while searching: a full-text query is its own way of narrowing, and leaving the
+            filters on screen invites the reading that they are still applied to the hits. */}
+        {view && hits === null && (
+          <Finder
+            view={view}
+            folder={folder}
+            tags={tags}
+            colour={colour}
+            onFolder={onFolder}
+            onTags={onTags}
+            onColour={onColour}
+          />
         )}
 
         <div className="min-h-0 flex-1" data-testid="meeting-list">
@@ -223,26 +276,6 @@ export function Library({ client, onRecord, onOpen }: Props) {
           {hits?.length === 0 && <p className="mt-10 text-center text-fg-faint">{t("library.no_hits", { query })}</p>}
         </div>
 
-        {view && view.folders.length > 1 && hits === null && (
-          <nav className="flex flex-wrap gap-1.5 border-t border-line pt-2" aria-label={t("library.filter_folder")}>
-            {view.folders.map((f) => (
-              <button key={f} type="button" onClick={() => setFolder(f)}>
-                {f === "" ? t("library.unfiled") : f}
-              </button>
-            ))}
-          </nav>
-        )}
-
-        {view && view.tags.length > 0 && hits === null && (
-          <nav className="flex flex-wrap gap-1.5 border-t border-line pt-2" aria-label={t("library.filter_tag")}>
-            {view.tags.map((t) => (
-              <button key={t.name} type="button" onClick={() => setTag(t.name)}>
-                #{t.name} <span>{t.count}</span>
-              </button>
-            ))}
-          </nav>
-        )}
-
         {/* A file that would not parse is on disk but not on screen; saying so is the only way the
             user can go and fix it. */}
         {view?.skipped.map((s) => (
@@ -255,21 +288,38 @@ export function Library({ client, onRecord, onOpen }: Props) {
         ))}
       </aside>
 
-      <section className="min-h-0 overflow-y-auto px-7 py-6">
+      <section
+        hidden={narrow && selected === null}
+        className="min-h-0 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
+      >
         {error && (
           <p className="rounded-lg border border-rec/30 bg-rec-soft px-3 py-2 text-[13px] text-rec">
             {error}
           </p>
         )}
 
+        {/* The way back to the list, which on a phone is the only way — there is no list beside
+            this one to click away to. */}
+        {narrow && selected !== null && (
+          <button
+            type="button"
+            onClick={() => setSelected(null)}
+            className="mb-3 -ms-1 rounded-lg px-2 py-1 text-[13px] text-fg-dim hover:bg-bg-soft hover:text-fg"
+          >
+            <span aria-hidden="true">←</span> {t("library.title")}
+          </button>
+        )}
+
         {detail ? (
           <MeetingPane
             detail={detail}
             folders={view?.folders ?? []}
+            palette={view?.palette ?? []}
             busy={busy}
             onRename={(title) => void mutate(() => client.rename(detail.summary.id, title))}
             onMove={(to) => void mutate(() => client.moveTo(detail.summary.id, to))}
             onTags={(tags) => void mutate(() => client.setTags(detail.summary.id, tags))}
+            onColour={(colour) => void mutate(() => client.setColour(detail.summary.id, colour))}
             onTrash={() =>
               void mutate(async () => {
                 await client.trash(detail.summary.id);
@@ -322,7 +372,12 @@ function MeetingRow({
         {meeting.kind === "note" ? "✎" : timeOfDay(meeting.date)}
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="leading-snug font-medium">{meeting.title}</span>
+        <span className="flex min-w-0 items-center gap-1.5 leading-snug font-medium">
+          {/* Beside the title rather than as a stripe down the row: a colour is one signal among
+              several here, and a full-height bar reads as a status the way the selected row's does. */}
+          {meeting.color && <Dot colour={meeting.color} />}
+          <span className="truncate">{meeting.title}</span>
+        </span>
         <span className="text-[12px] text-fg-faint">
           {meeting.kind === "note"
             ? t("library.a_note")
@@ -411,18 +466,22 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
 function MeetingPane({
   detail,
   folders,
+  palette,
   busy,
   onRename,
   onMove,
   onTags,
+  onColour,
   onTrash,
 }: {
   detail: MeetingDetail;
   folders: string[];
+  palette: string[];
   busy: boolean;
   onRename: (title: string) => void;
   onMove: (folder: string) => void;
   onTags: (tags: string[]) => void;
+  onColour: (colour: string | null) => void;
   onTrash: () => void;
 }) {
   const t = useT();
@@ -443,7 +502,10 @@ function MeetingPane({
 
   return (
     <article className="max-w-3xl" data-testid="meeting">
-      <header className="flex items-start gap-3">
+      {/* Stacked, not a row. These are a title, a caption and a set of controls — three different
+          kinds of thing — and laying them side by side clipped the title behind the date and ran
+          the folder, tags and colour off the edge of the pane. */}
+      <header className="flex flex-col gap-1">
         <input
           className="w-full border-0 border-b border-transparent bg-transparent px-0 py-0.5 text-[22px] font-semibold tracking-tight text-fg hover:border-line focus:border-accent focus:outline-none"
           value={title}
@@ -451,14 +513,17 @@ function MeetingPane({
           onChange={(e) => setTitle(e.target.value)}
           onBlur={() => title.trim() && title !== summary.title && onRename(title.trim())}
         />
-        <p className="my-1 mb-3.5 text-[13px] text-fg-faint">
+        <p className="text-[13px] text-fg-faint">
           {dayLabel(summary.day, localDay(), words)} · {timeOfDay(summary.date)} ·{" "}
           {formatDuration(summary.duration)}
           {detail.audio.length > 0 && ` · ${t("library.recordings", { count: detail.audio.length })}`}
         </p>
 
-        <div className="flex flex-wrap items-center gap-3.5 border-b border-line pb-4">
-          <label>{t("library.by_folder")}<select
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2.5 border-b border-line pb-4">
+          <label className="flex items-center gap-1.5 text-[13px] text-fg-faint">
+            {t("library.by_folder")}
+            <select
+              className="rounded-lg border border-line bg-bg-soft px-2 py-1 text-[13px] text-fg focus:outline-none focus-visible:border-accent"
               value={summary.folder}
               disabled={busy}
               onChange={(e) => onMove(e.target.value)}
@@ -471,7 +536,10 @@ function MeetingPane({
               ))}
             </select>
           </label>
-          <label>{t("library.by_tag")}<input
+          <label className="flex min-w-0 grow basis-56 items-center gap-1.5 text-[13px] text-fg-faint">
+            {t("library.by_tag")}
+            <input
+              className="min-w-32 flex-1 rounded-lg border border-line bg-bg-soft px-2 py-1 text-[13px] text-fg focus:outline-none focus-visible:border-accent"
               value={tags}
               disabled={busy}
               aria-label={t("library.by_tag")}
@@ -480,6 +548,12 @@ function MeetingPane({
               onBlur={() => onTags(tags.split(",").map((t) => t.trim()).filter(Boolean))}
             />
           </label>
+          <ColourPicker
+            palette={palette}
+            chosen={summary.color}
+            disabled={busy}
+            onChoose={onColour}
+          />
           {confirming ? (
             <span className="flex items-center gap-1.5 text-[13px] text-fg-dim">
               {t("library.trash_confirm")}

@@ -23,8 +23,12 @@ pub enum MeetingCmd {
         /// Only meetings in this folder, including its subfolders.
         #[arg(long)]
         folder: Option<String>,
+        /// Only meetings carrying every tag named. Repeat with commas: `--tag a,b`.
         #[arg(long)]
         tag: Option<String>,
+        /// Only meetings with this colour. A palette name, or a hex that snaps to one.
+        #[arg(long)]
+        colour: Option<String>,
         /// Only meetings this person took part in.
         #[arg(long)]
         person: Option<String>,
@@ -53,6 +57,14 @@ pub enum MeetingCmd {
 
     /// Replace a meeting's tags.
     Tag { id: String, tags: Vec<String> },
+
+    /// Colour a meeting. With no colour, clears it.
+    Colour {
+        id: String,
+        /// A palette name, or a hex that snaps to one. Naming a colour that is not in the palette
+        /// fails with the list of ones that are.
+        colour: Option<String>,
+    },
 
     /// Rename a meeting.
     Rename { id: String, title: String },
@@ -96,6 +108,7 @@ pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
             group,
             folder,
             tag,
+            colour,
             person,
             from,
             to,
@@ -105,7 +118,9 @@ pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
                 token: None,
                 group: parse_group(&group)?,
                 folder,
+                unfiled: false,
                 tag,
+                colour,
                 person,
                 from,
                 to,
@@ -173,6 +188,9 @@ pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
             if !detail.summary.tags.is_empty() {
                 println!("tags: {}", detail.summary.tags.join(", "));
             }
+            if let Some(colour) = detail.summary.color {
+                println!("colour: {colour}");
+            }
             if !detail.summary.participants.is_empty() {
                 println!("with: {}", detail.summary.participants.join(", "));
             }
@@ -197,6 +215,12 @@ pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
         MeetingCmd::Mv { id, folder } => {
             let path = library.move_to_folder(&MeetingId::from(id), &folder)?;
             println!("moved to {}", path.display());
+            Ok(())
+        }
+
+        MeetingCmd::Colour { id, colour } => {
+            let set = library.set_colour(&MeetingId::from(id), colour.as_deref())?;
+            println!("colour: {}", set.unwrap_or("none"));
             Ok(())
         }
 
@@ -468,6 +492,7 @@ mod tests {
             duration: 600,
             participants: Vec::new(),
             tags: Vec::new(),
+            color: None,
             has_summary: true,
             size_bytes: 0,
             file: "a.md".into(),

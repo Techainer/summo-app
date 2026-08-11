@@ -27,6 +27,13 @@ export interface MeetingSummary {
   duration: number;
   participants: string[];
   tags: string[];
+  /**
+   * A palette name, already resolved by the daemon — `teal`, never `#4fd1d9`.
+   *
+   * The vault may hold either; what arrives here is only ever one of the names the theme has a
+   * swatch for. See `crates/summo-vault/src/colour.rs` for why that conversion happens there.
+   */
+  color: string | null;
   has_summary: boolean;
   size_bytes: number;
   file: string;
@@ -54,6 +61,10 @@ export interface LibraryView {
   stats: Stats;
   folders: string[];
   tags: { name: string; count: number }[];
+  /** Only colours actually in use, so the finder offers filters that would find something. */
+  colours: { name: string; count: number }[];
+  /** Every colour that can be set, in picker order. The daemon owns this list. */
+  palette: string[];
   people: { name: string; count: number }[];
   skipped: { path: string; reason: string }[];
 }
@@ -90,8 +101,11 @@ export type GroupBy = "day" | "week" | "folder" | "none";
 
 export interface LibraryFilters {
   group?: GroupBy;
+  /** A folder path; `""` is the vault root, meaning things nobody has filed. */
   folder?: string;
+  /** Comma-separated; a document must carry every one of them. */
   tag?: string;
+  colour?: string;
   person?: string;
   from?: string;
   to?: string;
@@ -123,7 +137,12 @@ export class LibraryClient {
   constructor(private readonly handshake: Handshake) {}
 
   async view(filters: LibraryFilters = {}): Promise<LibraryView> {
-    return json<LibraryView>(await fetch(url(this.handshake, "/library", { ...filters })));
+    const { folder, ...rest } = filters;
+    // `folder: ""` is the vault root — a real place to narrow to, and the one folder a query
+    // parameter cannot name, since `folder=` reads as absent rather than as empty. It travels as
+    // its own flag, which also means there is no sentinel path for a `..` to be smuggled into.
+    const where = folder === "" ? { ...rest, unfiled: true } : { ...rest, folder };
+    return json<LibraryView>(await fetch(url(this.handshake, "/library", where)));
   }
 
   async search(query: string, limit = 30): Promise<SearchHit[]> {
@@ -152,6 +171,11 @@ export class LibraryClient {
     return this.post<{ tags: string[] }>(id, "tags", { tags });
   }
 
+  /** `null` clears it. */
+  setColour(id: string, colour: string | null) {
+    return this.post<{ colour: string | null }>(id, "colour", { colour });
+  }
+
   rename(id: string, title: string) {
     return this.post<{ title: string }>(id, "title", { title });
   }
@@ -159,6 +183,23 @@ export class LibraryClient {
   trash(id: string) {
     return this.post<{ trashed: boolean }>(id, "trash");
   }
+}
+
+/**
+ * The colour a swatch paints, as a CSS value — or nothing.
+ *
+ * The one place in the app where a colour name from the vault turns into CSS, so the check that
+ * makes that safe lives here and only here.
+ *
+ * It checks the *shape* rather than the membership: a name of nothing but lowercase letters cannot
+ * close the `var(` it sits inside, whatever it says. Checking membership instead would mean a
+ * second copy of the palette in TypeScript, and two lists that drift produce a colour the daemon
+ * accepts and the app then refuses to draw. A name that shapes up but has no token simply resolves
+ * to nothing, which is a missing dot rather than a broken screen.
+ */
+export function swatch(colour: string | null | undefined): string | undefined {
+  if (!colour || !/^[a-z]+$/.test(colour)) return undefined;
+  return `var(--color-swatch-${colour})`;
 }
 
 /**

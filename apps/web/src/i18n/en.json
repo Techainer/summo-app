@@ -427,5 +427,24 @@
     "task_count_other": "{count} open tasks",
     "dangling": "{from} can hand work to “{to}”, but no agent by that name exists.",
     "unreadable": "Could not read {path}: {reason}"
+  },
+  "finder": {
+    "title": "Find",
+    "clear": "Clear",
+    "folders": "Folders",
+    "tags": "Tags",
+    "colours": "Colours",
+    "colour": "Colour",
+    "no_colour": "No colour"
+  },
+  "colour": {
+    "red": "Red",
+    "amber": "Amber",
+    "green": "Green",
+    "teal": "Teal",
+    "blue": "Blue",
+    "purple": "Purple",
+    "pink": "Pink",
+    "grey": "Grey"
   }
 }

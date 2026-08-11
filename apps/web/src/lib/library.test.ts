@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { dayLabel, formatDuration, groupLabel, localDay, timeOfDay, timestamp, url } from "./library";
+import {
+  dayLabel,
+  formatDuration,
+  groupLabel,
+  localDay,
+  swatch,
+  timeOfDay,
+  timestamp,
+  url,
+} from "./library";
 
 /** Vietnamese, because that is what these assertions are written against. */
 const VI = {
@@ -101,5 +110,45 @@ describe("localDay", () => {
   it("is the browser's calendar day, not a UTC one", () => {
     expect(localDay(new Date(2026, 7, 10, 1, 0))).toBe("2026-08-10");
     expect(localDay(new Date(2026, 0, 1))).toBe("2026-01-01");
+  });
+});
+
+describe("swatch", () => {
+  it("turns a palette name into the theme's variable for it", () => {
+    expect(swatch("teal")).toBe("var(--color-swatch-teal)");
+  });
+
+  it("is nothing when a document has no colour", () => {
+    expect(swatch(null)).toBeUndefined();
+    expect(swatch(undefined)).toBeUndefined();
+    expect(swatch("")).toBeUndefined();
+  });
+
+  /**
+   * The reason this function exists. A colour comes out of a file the user edits by hand and ends
+   * up in a `style` attribute, so the one place that conversion happens is the one place it has to
+   * be impossible to escape the `var(` it sits inside.
+   */
+  it("refuses anything that could close the var() it sits in", () => {
+    for (const attack of [
+      "teal)",
+      "teal); background: url(https://evil.example/p.png",
+      "red; --color-bg: red",
+      "#0f7350",
+      "url(x)",
+      "TEAL",
+      "swatch-teal", // a hyphen is not a letter, and this is how a prefix would be smuggled in
+    ]) {
+      expect(swatch(attack), attack).toBeUndefined();
+    }
+  });
+
+  /**
+   * The daemon owns the palette and sends it; this only checks the shape. A name that shapes up
+   * but has no token resolves to nothing, which is a missing dot rather than a broken screen — so
+   * a colour added to the daemon before the theme still degrades quietly.
+   */
+  it("accepts a name the theme may not have a token for yet", () => {
+    expect(swatch("indigo")).toBe("var(--color-swatch-indigo)");
   });
 });

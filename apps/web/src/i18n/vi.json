@@ -427,5 +427,24 @@
     "task_count_other": "{count} việc treo",
     "dangling": "{from} có thể giao việc cho “{to}”, nhưng không có agent nào tên đó.",
     "unreadable": "Không đọc được {path}: {reason}"
+  },
+  "finder": {
+    "title": "Tìm",
+    "clear": "Bỏ lọc",
+    "folders": "Thư mục",
+    "tags": "Thẻ",
+    "colours": "Màu",
+    "colour": "Màu",
+    "no_colour": "Không màu"
+  },
+  "colour": {
+    "red": "Đỏ",
+    "amber": "Hổ phách",
+    "green": "Xanh lá",
+    "teal": "Xanh mòng két",
+    "blue": "Xanh dương",
+    "purple": "Tím",
+    "pink": "Hồng",
+    "grey": "Xám"
   }
 }

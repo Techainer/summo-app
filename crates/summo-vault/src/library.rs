@@ -40,7 +40,17 @@ pub struct LibraryQuery {
     #[serde(default)]
     pub group: GroupBy,
     pub folder: Option<String>,
+    /// Only what is filed nowhere: the vault root.
+    ///
+    /// A flag rather than `folder=`, because an empty query parameter cannot be told apart from an
+    /// absent one — so the root is the single folder `folder` cannot name. It is also the one
+    /// people most want to filter to, being the pile of things they have not got round to filing.
+    #[serde(default)]
+    pub unfiled: bool,
+    /// Comma-separated, because this arrives as a query string and `tag=a&tag=b` is not something
+    /// every deserialiser agrees on. All of them must match — see [`Filter::tags`].
     pub tag: Option<String>,
+    pub colour: Option<String>,
     pub person: Option<String>,
     pub from: Option<String>,
     pub to: Option<String>,
@@ -51,8 +61,22 @@ pub struct LibraryQuery {
 impl LibraryQuery {
     fn filter(&self) -> Filter {
         Filter {
-            folder: self.folder.clone(),
-            tag: self.tag.clone(),
+            // `Some("")` is the root and matches nothing below it, which is what "unfiled" means.
+            folder: if self.unfiled {
+                Some(String::new())
+            } else {
+                self.folder.clone()
+            },
+            tags: self
+                .tag
+                .as_deref()
+                .unwrap_or_default()
+                .split(',')
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+                .map(str::to_string)
+                .collect(),
+            colour: self.colour.clone(),
             person: self.person.clone(),
             from: self.from.clone(),
             to: self.to.clone(),
@@ -75,6 +99,8 @@ pub struct MeetingSummary {
     pub duration: u64,
     pub participants: Vec<String>,
     pub tags: Vec<String>,
+    /// A palette name, or nothing. Never a colour the client has to sanitise — [`crate::colour`].
+    pub color: Option<&'static str>,
     pub has_summary: bool,
     pub size_bytes: u64,
     pub file: String,
@@ -92,6 +118,7 @@ impl MeetingSummary {
             duration: entry.duration,
             participants: entry.participants.iter().map(|p| unlink(p)).collect(),
             tags: entry.tags.clone(),
+            color: entry.color,
             has_summary: entry.has_summary,
             size_bytes: entry.size_bytes,
             file: relative(&entry.path, meetings_root),
@@ -117,6 +144,15 @@ pub struct LibraryView {
     pub stats: Stats,
     pub folders: Vec<String>,
     pub tags: Vec<TagCount>,
+    /// Colours in use, with counts. Only what is actually on something — see
+    /// [`MeetingIndex::colours`](crate::index::MeetingIndex::colours).
+    pub colours: Vec<ColourCount>,
+    /// Every colour that *can* be set, in picker order.
+    ///
+    /// Sent rather than hardcoded in the client so the palette has one definition. A second copy in
+    /// TypeScript would be a second copy to keep in step with the theme, and the failure mode is a
+    /// swatch the user can pick and the daemon then refuses.
+    pub palette: Vec<&'static str>,
     pub people: Vec<PersonCount>,
     /// Files that would not parse, so a user can find and fix them instead of wondering where a
     /// meeting went.
@@ -126,6 +162,12 @@ pub struct LibraryView {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TagCount {
     pub name: String,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ColourCount {
+    pub name: &'static str,
     pub count: usize,
 }
 
@@ -235,6 +277,12 @@ impl Library {
                     count,
                 })
                 .collect(),
+            colours: index
+                .colours()
+                .into_iter()
+                .map(|(name, count)| ColourCount { name, count })
+                .collect(),
+            palette: crate::colour::PALETTE.iter().map(|s| s.name).collect(),
             people: index
                 .people()
                 .into_iter()
@@ -348,6 +396,24 @@ impl Library {
         doc.frontmatter.tags.clone_from(&tags);
         write_atomically(&entry.path, doc.to_markdown()?.as_bytes())?;
         Ok(tags)
+    }
+
+    /// Set or clear a document's colour.
+    ///
+    /// `None` removes the field rather than writing `color: none`, so a note the user has finished
+    /// colour-coding goes back to looking exactly like one that never was — no residue in the file
+    /// to explain to somebody reading it in Obsidian.
+    pub fn set_colour(&self, id: &MeetingId, colour: Option<&str>) -> Result<Option<&'static str>> {
+        let index = self.scan()?;
+        let entry = index
+            .get(id)
+            .ok_or_else(|| Error::Vault(format!("no meeting with id {}", id.as_str())))?;
+        let mut doc = load(entry)?;
+
+        let chosen = colour.map(crate::colour::parse).transpose()?;
+        doc.frontmatter.color = chosen.map(str::to_string);
+        write_atomically(&entry.path, doc.to_markdown()?.as_bytes())?;
+        Ok(chosen)
     }
 
     /// Rename a meeting. The file keeps its name: renaming it would break links from other notes,
@@ -687,6 +753,130 @@ mod tests {
             .unwrap();
         assert_eq!(tags, vec!["product"]);
         assert_eq!(lib.scan().unwrap().get(&id).unwrap().tags, vec!["product"]);
+    }
+
+    /// The whole promise of ADR 0006, as a test: somebody types a tag and a colour into a file in
+    /// Obsidian, and Summo sees both on the next scan. No import, no sync step, no database row.
+    #[test]
+    fn a_tag_and_a_colour_typed_by_hand_need_no_import() {
+        let (dir, lib) = library();
+        // No `id`, no `date`. That is what Obsidian's own tag control writes, and what anybody
+        // adding a colour by hand writes — a ULID is not a thing a person has. The first version
+        // of this test supplied both, which made it pass against a file Summo itself would have
+        // written and proved nothing about the case it was named for.
+        fs::write(
+            lib.paths.meetings().join("bang-tay.md"),
+            "---\ntags: [khách-hàng, hợp-đồng]\ncolor: \"#0f7350\"\n---\n# Viết tay\n",
+        )
+        .unwrap();
+        // Nothing between writing the file and asking for the library.
+        let view = lib.view(&LibraryQuery::default(), now()).unwrap();
+        drop(dir);
+
+        let listed = view
+            .groups
+            .iter()
+            .flat_map(|g| &g.meetings)
+            .find(|m| m.title == "Viết tay")
+            .expect("a hand-written file must list");
+        assert_eq!(listed.tags, vec!["khách-hàng", "hợp-đồng"]);
+        assert_eq!(
+            listed.color,
+            Some("green"),
+            "a hex somebody typed becomes a palette colour rather than an error"
+        );
+        assert!(view.colours.iter().any(|c| c.name == "green" && c.count == 1));
+    }
+
+    /// Narrowing is what a finder is for: one tag is a hundred notes, two is the four you wanted.
+    #[test]
+    fn filtering_by_two_tags_wants_both_of_them() {
+        let (_dir, lib) = library();
+        fs::write(
+            lib.paths.meetings().join("ca-hai.md"),
+            "---\nid: 01Y\ndate: 2026-08-11T09:00:00+07:00\ntags: [weekly, sales]\n---\n# Cả hai\n",
+        )
+        .unwrap();
+
+        let both = |tag: &str| {
+            lib.view(
+                &LibraryQuery {
+                    tag: Some(tag.to_string()),
+                    ..Default::default()
+                },
+                now(),
+            )
+            .unwrap()
+            .total
+        };
+        assert_eq!(both("weekly"), 2, "the new file and the weekly sync");
+        assert_eq!(both("weekly,sales"), 1, "only the one carrying both");
+        assert_eq!(both("weekly, sales"), 1, "spaces after the comma are typing, not a tag");
+    }
+
+    #[test]
+    fn a_colour_is_set_cleared_and_filtered_by() {
+        let (_dir, lib) = library();
+        let id = MeetingId::from("01A".to_string());
+
+        assert_eq!(lib.set_colour(&id, Some("teal")).unwrap(), Some("teal"));
+        let filtered = lib
+            .view(
+                &LibraryQuery {
+                    colour: Some("teal".into()),
+                    ..Default::default()
+                },
+                now(),
+            )
+            .unwrap();
+        assert_eq!(filtered.total, 1);
+        assert_eq!(filtered.groups[0].meetings[0].title, "Weekly Sync");
+
+        assert_eq!(lib.set_colour(&id, None).unwrap(), None);
+        assert!(lib.scan().unwrap().get(&id).unwrap().color.is_none());
+    }
+
+    /// Clearing must leave a file that looks like one which was never coloured, because somebody is
+    /// going to read it in Obsidian and `color: none` would need explaining.
+    #[test]
+    fn clearing_a_colour_removes_the_field_rather_than_emptying_it() {
+        let (_dir, lib) = library();
+        let id = MeetingId::from("01A".to_string());
+        lib.set_colour(&id, Some("pink")).unwrap();
+        lib.set_colour(&id, None).unwrap();
+
+        let path = lib.scan().unwrap().get(&id).unwrap().path.clone();
+        let text = fs::read_to_string(path).unwrap();
+        assert!(!text.contains("color"), "the field must be gone:\n{text}");
+    }
+
+    /// The app has a picker, so anything else arriving is a caller's bug worth naming.
+    #[test]
+    fn a_colour_outside_the_palette_is_refused_and_nothing_is_written() {
+        let (_dir, lib) = library();
+        let id = MeetingId::from("01A".to_string());
+        let before = fs::read_to_string(lib.scan().unwrap().get(&id).unwrap().path.clone()).unwrap();
+
+        assert!(lib.set_colour(&id, Some("chartreuse")).is_err());
+        let after = fs::read_to_string(lib.scan().unwrap().get(&id).unwrap().path.clone()).unwrap();
+        assert_eq!(before, after, "a refused colour must not have touched the file");
+    }
+
+    /// Asking "which are green?" when nothing understands green must answer nothing, not
+    /// everything-without-a-colour.
+    #[test]
+    fn filtering_by_a_colour_that_is_not_one_matches_nothing() {
+        let (_dir, lib) = library();
+        let view = lib
+            .view(
+                &LibraryQuery {
+                    colour: Some("}, body { display: none } .x {".into()),
+                    ..Default::default()
+                },
+                now(),
+            )
+            .unwrap();
+        assert_eq!(view.total, 0);
     }
 
     #[test]

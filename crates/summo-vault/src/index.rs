@@ -64,6 +64,11 @@ pub struct MeetingEntry {
     pub duration: u64,
     pub participants: Vec<String>,
     pub tags: Vec<String>,
+    /// A palette name, already validated — never the raw string from the file.
+    ///
+    /// Listing is where a colour crosses from a file somebody edits into something a screen paints,
+    /// so it is where the raw value stops. See [`crate::colour`].
+    pub color: Option<&'static str>,
     /// Whether a summary section exists, so the library can show what still needs one.
     pub has_summary: bool,
     pub size_bytes: u64,
@@ -318,6 +323,20 @@ impl MeetingIndex {
         counts
     }
 
+    /// Every colour in use, with how many documents carry it.
+    ///
+    /// Only colours actually on something: an eight-swatch picker belongs on one note's own
+    /// controls, whereas the finder should offer the four a user has really filed by. Offering all
+    /// eight there would be five dead filters and one live one.
+    #[must_use]
+    pub fn colours(&self) -> BTreeMap<&'static str, usize> {
+        let mut counts = BTreeMap::new();
+        for colour in self.entries.iter().filter_map(|e| e.color) {
+            *counts.entry(colour).or_insert(0) += 1;
+        }
+        counts
+    }
+
     /// Every participant, with how many meetings they appear in. Wikilink brackets are stripped so
     /// `[[Ngọc]]` and `Ngọc` are the same person.
     #[must_use]
@@ -423,7 +442,13 @@ impl MeetingIndex {
 #[derive(Debug, Clone, Default)]
 pub struct Filter {
     pub folder: Option<String>,
-    pub tag: Option<String>,
+    /// Every tag named must be present, not merely one of them.
+    ///
+    /// A list rather than a single tag because narrowing is the point of a finder: `khách-hàng` on
+    /// its own is a hundred notes, and `khách-hàng` + `hợp-đồng` is the four somebody is looking
+    /// for. An empty list matches everything.
+    pub tags: Vec<String>,
+    pub colour: Option<String>,
     pub person: Option<String>,
     /// Inclusive `YYYY-MM-DD` bounds.
     pub from: Option<String>,
@@ -447,10 +472,23 @@ impl Filter {
                 return false;
             }
         }
-        if let Some(tag) = &self.tag
-            && !e.tags.iter().any(|t| fold(t) == fold(tag))
-        {
-            return false;
+        // Every tag asked for, not any: see the field's own note.
+        for tag in &self.tags {
+            if !e.tags.iter().any(|t| fold(t) == fold(tag)) {
+                return false;
+            }
+        }
+        // Compared against the *normalised* colour, so filtering by `green` finds the note whose
+        // file says `#0f7350` — the same colour, spelled the way its author spells colours.
+        //
+        // A filter naming no colour we know matches nothing. Letting it fall through to
+        // `e.color == None` would have answered "which notes are green?" with every uncoloured
+        // note in the vault, which is the most confidently wrong answer available.
+        if let Some(colour) = &self.colour {
+            match crate::colour::normalise(colour) {
+                Some(wanted) if e.color == Some(wanted) => {}
+                _ => return false,
+            }
         }
         if let Some(person) = &self.person
             && !e.participants.iter().any(|p| fold(&unlink(p)) == fold(person))
@@ -481,16 +519,18 @@ fn read_entry(path: &Path, root: &Path) -> Result<MeetingEntry> {
     let head = read_head(path)?;
 
     let relative = path.strip_prefix(root).unwrap_or(path);
-    let frontmatter = match parse_frontmatter(&head) {
+    let mut frontmatter = match parse_frontmatter(&head) {
         Ok(frontmatter) => frontmatter,
         // No frontmatter means a person wrote this file, not Summo. That is the ordinary way a
         // note gets into a folder somebody was told they own, so it is adopted rather than
         // reported: an id from its path, a date from when it was last written.
-        Err(_) if !head.starts_with("---\n") => {
-            Frontmatter::new(adopted_id(relative), modified_at(meta.as_ref()))
-        }
+        Err(_) if !head.starts_with("---\n") => Frontmatter::new(MeetingId::from(String::new()), String::new()),
         Err(e) => return Err(e),
     };
+    // The same two fallbacks whether the file had no frontmatter or partial frontmatter, which is
+    // what Obsidian writes when somebody adds a tag: an id from the path, so it survives a rescan,
+    // and a date from the file's own mtime, so a note written last March stays in March.
+    frontmatter.fill(adopted_id(relative), modified_at(meta.as_ref()));
 
     let title = parse_title(&head).unwrap_or_else(|| {
         // A file without a heading still deserves a name in the list; the filename is what the
@@ -500,6 +540,7 @@ fn read_entry(path: &Path, root: &Path) -> Result<MeetingEntry> {
             .unwrap_or_default()
     });
 
+    let color = frontmatter.swatch();
     let (day, started_at) = parse_date(&frontmatter.date);
     let folder = path
         .parent()
@@ -519,6 +560,7 @@ fn read_entry(path: &Path, root: &Path) -> Result<MeetingEntry> {
         duration: frontmatter.duration,
         participants: frontmatter.participants,
         tags: frontmatter.tags,
+        color,
         has_summary: has_summary(&head),
         size_bytes,
     })
@@ -910,6 +952,61 @@ mod tests {
                 .unwrap()
         };
         assert_eq!(id_of(&first), id_of(&again));
+    }
+
+    /// The shape frontmatter a person wrote actually has: some of it. Obsidian's tag control adds
+    /// a block containing nothing but `tags:`, and demanding `id` and `date` meant that tagging a
+    /// note in the tool the vault is advertised as being editable in *removed it from the library*.
+    #[test]
+    fn frontmatter_with_tags_but_no_id_is_adopted_rather_than_skipped() {
+        let dir = vault();
+        write(
+            dir.path(),
+            "tagged.md",
+            "---\ntags: [khách-hàng]\ncolor: teal\n---\n# Đã gắn thẻ\n",
+        );
+        let index = MeetingIndex::scan(dir.path()).unwrap();
+
+        assert!(index.skipped().is_empty(), "{:?}", index.skipped());
+        let entry = index
+            .entries()
+            .iter()
+            .find(|e| e.path.ends_with("tagged.md"))
+            .expect("a partly-filled file must list");
+        assert_eq!(entry.tags, vec!["khách-hàng"]);
+        assert_eq!(entry.color, Some("teal"));
+        assert!(entry.id.as_str().starts_with("adopted-"));
+    }
+
+    /// The trap this walked into once: `MeetingId::default()` mints a fresh UUIDv7, so filling the
+    /// gap with it looked like it worked and gave the same note a new identity on every scan.
+    #[test]
+    fn a_partly_filled_file_keeps_the_same_id_across_scans() {
+        let dir = vault();
+        write(dir.path(), "tagged.md", "---\ntags: [x]\n---\n# Đã gắn thẻ\n");
+        let id_of = |index: &MeetingIndex| {
+            index
+                .entries()
+                .iter()
+                .find(|e| e.path.ends_with("tagged.md"))
+                .map(|e| e.id.clone())
+                .unwrap()
+        };
+        assert_eq!(
+            id_of(&MeetingIndex::scan(dir.path()).unwrap()),
+            id_of(&MeetingIndex::scan(dir.path()).unwrap())
+        );
+    }
+
+    /// A file that *does* name an id keeps it — filling must only fill what is missing.
+    #[test]
+    fn filling_does_not_overwrite_what_the_file_already_says() {
+        let dir = vault();
+        let index = MeetingIndex::scan(dir.path()).unwrap();
+        assert!(
+            index.entries().iter().any(|e| e.id.as_str() == "01A"),
+            "an id written in the file must survive"
+        );
     }
 
     #[test]

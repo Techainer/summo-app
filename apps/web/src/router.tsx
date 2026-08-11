@@ -6,6 +6,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 
+import { claimHandshake } from "./lib/session";
 import { RootLayout } from "./components/shell/RootLayout";
 import { AgendaScreen } from "./screens/AgendaScreen";
 import { AnalyticsScreen } from "./screens/AnalyticsScreen";
@@ -27,11 +28,19 @@ import { SettingsScreen } from "./screens/SettingsScreen";
  * route inside one document while still giving real URLs, back/forward, and deep links into a
  * meeting.
  */
+// Before the history is created, because creating it parses the URL once and immediately — and the
+// thing being removed is what makes that parse wrong. See `claimHandshake`.
+claimHandshake();
+
 const history = createHashHistory();
 
 export interface LibrarySearch {
+  /** A folder path. `""` is the vault root — the things nobody has filed — not "no filter". */
   folder?: string;
+  /** Comma-separated. A document must carry every one of them. */
   tag?: string;
+  /** A palette name; see `crates/summo-vault/src/colour.rs`. */
+  colour?: string;
   q?: string;
 }
 
@@ -59,7 +68,15 @@ const libraryRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): LibrarySearch => {
     const text = (value: unknown) =>
       typeof value === "string" && value !== "" ? value : undefined;
-    return { folder: text(search.folder), tag: text(search.tag), q: text(search.q) };
+    // The folder is the exception: an empty string is the vault root, which is a real folder to
+    // browse and the one people reach for most, since it is everything they have not filed yet.
+    const folder = typeof search.folder === "string" ? search.folder : undefined;
+    return {
+      folder,
+      tag: text(search.tag),
+      colour: text(search.colour),
+      q: text(search.q),
+    };
   },
 });
 

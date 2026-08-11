@@ -202,6 +202,7 @@ impl Server {
             .route("/meetings/{id}", get(meeting))
             .route("/meetings/{id}/folder", post(set_folder))
             .route("/meetings/{id}/tags", post(set_tags))
+            .route("/meetings/{id}/colour", post(set_colour))
             .route("/meetings/{id}/title", post(set_title))
             .route("/meetings/{id}/trash", post(trash))
             .route("/ws", get(websocket))
@@ -532,6 +533,33 @@ async fn set_tags(
             .library
             .set_tags(&id, body.tags)
             .map(|tags| serde_json::json!({ "tags": tags })),
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct ColourBody {
+    /// Absent or `null` clears the colour. A client that wants no colour says so by omitting it,
+    /// rather than by sending an empty string that would then have to mean two things.
+    #[serde(default)]
+    colour: Option<String>,
+}
+
+async fn set_colour(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<ColourBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let id = summo_core::MeetingId::from(id);
+    as_response(
+        state
+            .library
+            .set_colour(&id, body.colour.as_deref())
+            .map(|colour| serde_json::json!({ "colour": colour })),
     )
 }
 
@@ -4192,6 +4220,72 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
             .await
             .unwrap();
         assert_eq!(body["total"], 0, "a trashed meeting must leave the library");
+        server.shutdown();
+    }
+
+    /// A colour set over HTTP, found by filtering, and cleared again — and, in the middle, the one
+    /// thing this route exists to make impossible: a colour that is really a stylesheet.
+    #[tokio::test]
+    async fn a_colour_is_set_filtered_by_and_refused_when_it_is_not_one() {
+        let (tmp, server) = running().await;
+        seed(&tmp, "01A", "2026-08-09T10:00:00+07:00", "Weekly Sync");
+        let base = format!("http://{}/meetings/01A", server.addr());
+        let token = server.token().as_str().to_string();
+
+        let colour = |body: serde_json::Value| {
+            let base = base.clone();
+            let token = token.clone();
+            async move {
+                client()
+                    .post(format!("{base}/colour"))
+                    .bearer_auth(&token)
+                    .json(&body)
+                    .send()
+                    .await
+                    .unwrap()
+            }
+        };
+
+        let resp = colour(serde_json::json!({ "colour": "teal" })).await;
+        assert_eq!(resp.status(), 200);
+        assert_eq!(resp.json::<serde_json::Value>().await.unwrap()["colour"], "teal");
+
+        let listed: serde_json::Value = client()
+            .get(format!("http://{}/library?colour=teal", server.addr()))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(listed["total"], 1);
+        assert_eq!(listed["colours"][0]["name"], "teal");
+        assert_eq!(listed["colours"][0]["count"], 1);
+        assert_eq!(
+            listed["palette"].as_array().unwrap().len(),
+            8,
+            "the client takes its picker from this list rather than keeping a second copy"
+        );
+
+        // Refused at the edge, not sanitised somewhere later and half-written.
+        let resp = colour(serde_json::json!({ "colour": "teal; background: url(https://x/)" })).await;
+        assert_eq!(resp.status(), 400);
+        let still: serde_json::Value = client()
+            .get(&base)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(still["summary"]["color"], "teal", "the refused write changed nothing");
+
+        // No colour at all, which is how the picker's ninth option travels.
+        let resp = colour(serde_json::json!({ "colour": null })).await;
+        assert_eq!(resp.status(), 200);
+        assert!(resp.json::<serde_json::Value>().await.unwrap()["colour"].is_null());
         server.shutdown();
     }
 

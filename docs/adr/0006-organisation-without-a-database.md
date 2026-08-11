@@ -15,11 +15,30 @@ organisation, and specifically does not put notes in a hosted one.
 id: 01J4KQ2M3E
 date: 2026-08-11T09:00:00+07:00
 tags: [sản-phẩm, khách-hàng]
-color: "#0f7350"
+color: teal
 ---
 
 # Weekly product sync
 ```
+
+### The colour is a name, not a hex
+
+This ADR first wrote `color: "#0f7350"`. Implementing it changed the answer, for two reasons found
+on the way:
+
+- **A hex chosen in one scheme is wrong in the other.** The app is dark by default and light when
+  the system asks. `#0f7350` is a readable green on white and nearly invisible on `#0b0c0e`. A name
+  resolves per scheme, so the theme keeps deciding what colours look like — which is where every
+  other colour decision in the product already lives.
+- **A name removes an injection surface instead of guarding one.** The value comes out of a file the
+  user edits by hand and ends up in a `style` attribute. With a fixed palette the renderer only ever
+  emits `var(--swatch-<name>)` for a name it already knew, so the safety is structural rather than a
+  validator somebody has to keep remembering.
+
+A hex somebody types anyway is **snapped to the nearest palette name** rather than rejected —
+`#0f7350` becomes `teal`'s neighbour `green` — and nothing is written back, so their file still says
+what they typed. `crates/summo-vault/src/colour.rs` owns the names; `apps/web/src/styles/theme.css`
+owns what each one looks like, once per scheme.
 
 ## Why the question came up
 
@@ -65,7 +84,10 @@ The line is not "no databases anywhere". It is **no database holds a user's cont
 - Tag and colour become `Frontmatter` fields, read by the existing scan.
 - Filtering by tag is `MeetingIndex::filter`, not a query.
 - A user can add a tag in Obsidian and Summo sees it on the next scan, with no import step.
-- A colour is a string in a file the user can edit; there is no palette table to migrate.
+- A colour is a word in a file the user can edit; there is no palette table to migrate.
+- Frontmatter a person wrote is usually *partial* — Obsidian's tag control writes a block with
+  nothing in it but `tags:`. Reading it therefore has to supply a missing `id` and `date` rather
+  than reject the file, or the feature makes notes disappear from the tool it was built for.
 - Renaming a tag across a vault is a find-and-replace over Markdown, which `sed` can do and so can
   we. There is no cascade to get wrong.
 

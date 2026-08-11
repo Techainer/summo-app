@@ -39,8 +39,13 @@ const TRANSCRIPT_HEADING: &str = "Transcript";
 /// Document metadata.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Frontmatter {
+    /// Empty when the file did not name one — see [`Frontmatter::fill`].
+    #[serde(default = "unnamed")]
     pub id: MeetingId,
     /// ISO-8601 with offset, so a meeting keeps the wall-clock time it happened at.
+    ///
+    /// Empty when the file did not name one, for the same reason as `id`.
+    #[serde(default)]
     pub date: String,
     /// Recording length in seconds.
     #[serde(default)]
@@ -49,6 +54,17 @@ pub struct Frontmatter {
     pub participants: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    /// A colour, as the user's file spells it.
+    ///
+    /// Kept **verbatim** rather than normalised on parse, because parsing is one step away from
+    /// rewriting: every autosave, retag and rename writes this document back out, and a field
+    /// silently replaced on the way in is a field silently edited in somebody's file. Someone who
+    /// typed `#0f7350` still has `#0f7350` after Summo has touched the note.
+    ///
+    /// Nothing may render this string. [`Frontmatter::swatch`] is what a renderer reads — see
+    /// [`crate::colour`] for why that distinction is the whole safety story.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     /// Which models produced this transcript, for reproducing or re-running it later.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub models: BTreeMap<String, String>,
@@ -61,6 +77,16 @@ fn default_schema() -> u32 {
     1
 }
 
+/// The id a file that did not name one gets, until [`Frontmatter::fill`] supplies a real one.
+///
+/// Deliberately **not** `MeetingId::default()`, which mints a fresh UUIDv7. A generated id here
+/// would look like it worked and would be a different id on every scan — the same note losing its
+/// identity every launch, taking every link, comment and task pointing at it with it. Empty is the
+/// only value that can be recognised later as "nobody has decided yet".
+fn unnamed() -> MeetingId {
+    MeetingId::from(String::new())
+}
+
 impl Frontmatter {
     #[must_use]
     pub fn new(id: MeetingId, date: impl Into<String>) -> Self {
@@ -70,9 +96,42 @@ impl Frontmatter {
             duration: 0,
             participants: Vec::new(),
             tags: Vec::new(),
+            color: None,
             models: BTreeMap::new(),
             schema: 1,
         }
+    }
+
+    /// Supply an id and a date for a file that named neither.
+    ///
+    /// Frontmatter written by a person is usually *partial*. Obsidian's own tag control writes
+    /// nothing but `tags:` into a fresh block; somebody adding a colour by hand writes `color:` and
+    /// stops. Neither of them writes a ULID, because a ULID is not a thing a person has.
+    ///
+    /// Demanding `id` and `date` meant that adding a tag to a note in the very tool the vault is
+    /// advertised as being editable in *unlisted the note* — and did it loudly, as "cannot parse
+    /// frontmatter: missing field `id`". The file with no frontmatter at all was already adopted;
+    /// this is the same forgiveness for the far more common case of a file with some.
+    ///
+    /// Only empty fields are filled, so a document that does name an id keeps it.
+    pub fn fill(&mut self, id: MeetingId, date: impl Into<String>) {
+        if self.id.as_str().is_empty() {
+            self.id = id;
+        }
+        if self.date.is_empty() {
+            self.date = date.into();
+        }
+    }
+
+    /// The palette name this document's colour means, if it means one.
+    ///
+    /// The only reading of [`Frontmatter::color`] anything is allowed to render. It returns a
+    /// `&'static str` from [`crate::colour::PALETTE`] rather than borrowing the file's own string,
+    /// which is what makes "a colour can never be CSS" a property of the type rather than a rule
+    /// somebody has to keep following.
+    #[must_use]
+    pub fn swatch(&self) -> Option<&'static str> {
+        self.color.as_deref().and_then(crate::colour::normalise)
     }
 }
 
@@ -158,6 +217,14 @@ impl MeetingDoc {
 
     /// Render to Markdown.
     pub fn to_markdown(&self) -> Result<String> {
+        // The empty id is the sentinel [`Frontmatter::fill`] replaces, and writing one out would
+        // put `id: ''` into a user's file and give every such document the same identity. Every
+        // reader fills it; this is the assertion that keeps that true if one ever stops.
+        if self.frontmatter.id.as_str().is_empty() {
+            return Err(Error::Vault(
+                "refusing to write a document with no id: it was parsed without one and never filled".into(),
+            ));
+        }
         let yaml = serde_yaml::to_string(&self.frontmatter)
             .map_err(|e| Error::Vault(format!("cannot serialize frontmatter: {e}")))?;
 
@@ -217,8 +284,10 @@ impl MeetingDoc {
     pub fn adopt(markdown: &str, id: MeetingId, date: impl Into<String>) -> Result<Self> {
         match split_frontmatter(markdown) {
             Some((yaml, _)) => {
-                let frontmatter: Frontmatter = serde_yaml::from_str(yaml)
+                let mut frontmatter: Frontmatter = serde_yaml::from_str(yaml)
                     .map_err(|e| Error::Vault(format!("cannot parse frontmatter: {e}")))?;
+                // Partial frontmatter is the normal shape of frontmatter a person wrote.
+                frontmatter.fill(id, date);
                 Self::parse_with(markdown, frontmatter)
             }
             None => Self::parse_with(markdown, Frontmatter::new(id, date)),
@@ -574,6 +643,28 @@ mod tests {
         assert!(markdown.contains("\n# Weekly Sync\n"));
         assert!(markdown.contains("\n## Tóm tắt\n"));
         assert!(markdown.contains("**[00:12:04] me** — Anh nghĩ mình nên dùng Rust"));
+    }
+
+    /// The sentinel must never reach a file. `id: ''` on disk would give every unfilled document
+    /// the same identity, which is worse than the error this refuses with.
+    #[test]
+    fn a_document_whose_id_was_never_filled_refuses_to_be_written() {
+        let doc = MeetingDoc::new(Frontmatter::new(unnamed(), "2026-08-11"), "Chưa có id");
+        let err = doc.to_markdown().unwrap_err().to_string();
+        assert!(err.contains("no id"), "got: {err}");
+    }
+
+    #[test]
+    fn filling_supplies_only_what_is_missing() {
+        let mut partial: Frontmatter = serde_yaml::from_str("tags: [x]").unwrap();
+        partial.fill(MeetingId::from("adopted-1".to_string()), "2026-08-11");
+        assert_eq!(partial.id.as_str(), "adopted-1");
+        assert_eq!(partial.date, "2026-08-11");
+
+        let mut named: Frontmatter = serde_yaml::from_str("id: 01A\ndate: 2026-01-01").unwrap();
+        named.fill(MeetingId::from("adopted-1".to_string()), "2026-08-11");
+        assert_eq!(named.id.as_str(), "01A", "what the file says wins");
+        assert_eq!(named.date, "2026-01-01");
     }
 
     #[test]

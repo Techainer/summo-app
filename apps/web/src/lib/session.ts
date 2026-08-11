@@ -153,6 +153,57 @@ export function deviceWarning(state: SessionState): string | null {
   return null;
 }
 
+/** Where a handshake taken out of the URL is kept, so a reload can still find it. */
+const STASH = "summo.handshake";
+
+/**
+ * Move the handshake out of the query string, before anything reads the URL.
+ *
+ * The desktop shell loads the app as `…?port=8710&token=…`, which is the only way to hand a
+ * webview an address it cannot have injected into. That query string then breaks the router: hash
+ * history writes the router's own search *after* the `#` and reads it from `window.location.search`
+ * *before* the `#`, so it parses `#/library?tag=weekly` on a page whose URL also has `?token=…` as
+ * `tag=weekly?token=…`. Every filter in the app came back empty, and only in the desktop build.
+ *
+ * So the handshake is claimed once and the query string erased. `sessionStorage` rather than a
+ * variable because the URL is what a reload has, and after this runs the URL no longer says it —
+ * losing the daemon's address on refresh would be a worse bug than the one being fixed. It is also
+ * what the token wanted anyway: a token in a URL ends up in history, in the window title, and in
+ * whatever a user pastes into a bug report.
+ *
+ * Call before the router is created. It is safe to call twice and does nothing when the daemon
+ * served the page itself, since then there was never a query string to begin with.
+ */
+export function claimHandshake(): void {
+  if (typeof window === "undefined" || window.location.search === "") return;
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("port") && !params.has("token")) return;
+
+  // Whether or not the two make a usable handshake. A lone `token=` breaks the router exactly as
+  // badly as a complete one and is the ordinary shape when the daemon served the page — it has
+  // already injected what it needs, and what is left in the URL is a leftover that only does harm.
+  const found = readHandshake({ port: Number(params.get("port")), token: params.get("token") });
+  if (found) {
+    try {
+      window.sessionStorage.setItem(STASH, JSON.stringify(found));
+    } catch {
+      // Private mode, or storage disabled. Keep the URL, since it is now the only copy: a broken
+      // filter is a smaller failure than an app that cannot reach its daemon.
+      return;
+    }
+  }
+
+  // Only these two keys. Anything else in the query belongs to whoever put it there.
+  params.delete("port");
+  params.delete("token");
+  const rest = params.toString();
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${rest === "" ? "" : `?${rest}`}${window.location.hash}`,
+  );
+}
+
 /** Read the daemon's address from the URL, for development and for the desktop shell. */
 export function handshakeFromLocation(search: string): Handshake | null {
   // Injected by the daemon when it serves the page itself — see `summo_engine::assets`. Preferred
@@ -163,8 +214,22 @@ export function handshakeFromLocation(search: string): Handshake | null {
   const fromInjection = readHandshake(injected);
   if (fromInjection) return fromInjection;
 
+  // Whatever `claimHandshake` took out of the URL, including across a reload.
+  const stashed = readStash();
+  if (stashed) return stashed;
+
   const params = new URLSearchParams(search);
   return readHandshake({ port: Number(params.get("port")), token: params.get("token") });
+}
+
+function readStash(): Handshake | null {
+  try {
+    const raw = window.sessionStorage.getItem(STASH);
+    return raw === null ? null : readHandshake(JSON.parse(raw));
+  } catch {
+    // Unparseable or unavailable: fall through to the query string rather than fail to connect.
+    return null;
+  }
 }
 
 /** Accept a handshake only if both halves are usable; half of one is not a connection. */

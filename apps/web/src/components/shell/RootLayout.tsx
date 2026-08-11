@@ -72,7 +72,9 @@ export function RootLayout({ children }: { children: ReactNode }) {
 
   const selectFolder = useCallback(
     (folder: string | null) => {
-      void navigate({ to: "/library", search: folder ? { folder } : {} });
+      // `null` clears the filter; `""` is the vault root, which is a folder like any other. A
+      // truthiness test collapses the two and makes "unfiled" impossible to select.
+      void navigate({ to: "/library", search: folder === null ? {} : { folder } });
     },
     [navigate],
   );

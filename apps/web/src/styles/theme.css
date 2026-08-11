@@ -62,6 +62,33 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* The eight colours a note can be filed under.
+ *
+ * Named rather than free hex, and resolved here rather than stored per note, because a colour
+ * picked on white is not a colour on `#0b0c0e`. The vault records `color: teal`; what teal *is* is
+ * a theme decision, like every other colour in this file. `crates/summo-vault/src/colour.rs` owns
+ * the list of names; this owns what each one looks like, once per scheme.
+ *
+ * Used as dots and outlines, never behind text — which is what keeps eight new colours from being
+ * eight new contrast pairs to audit. A swatch marks a row; the row's label stays `fg`.
+ *
+ * A plain `:root` rule rather than an entry in `@theme`, because these are read through `var()`
+ * from an inline style and never through a Tailwind utility. Tailwind v4 emits only the `@theme`
+ * variables some generated utility refers to, so in `@theme` seven of these eight were dropped
+ * from the bundle and every dot but one painted transparent. The screenshot audit passed: a dot
+ * has no text, so there was no contrast pair to fail. `theme.test.ts` is the check that would
+ * have caught it. */
+:root {
+  --color-swatch-red: #f2585b;
+  --color-swatch-amber: #e0a458;
+  --color-swatch-green: #64e3a1;
+  --color-swatch-teal: #4fd1d9;
+  --color-swatch-blue: #7aa2f7;
+  --color-swatch-purple: #b494f5;
+  --color-swatch-pink: #f07ac0;
+  --color-swatch-grey: #8b94a5;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     --color-bg: #fbfbfc;
@@ -86,6 +113,16 @@
     --color-running-soft: #2f5fc014;
     --color-blocked: #8a5610;
     --color-blocked-soft: #8a561014;
+    /* Darker than their dark-mode counterparts: a dot has to be seen *against* the surface, and on
+     * `#fbfbfc` the pastels above disappear. Same eight names, same eight distinguishable hues. */
+    --color-swatch-red: #c62f32;
+    --color-swatch-amber: #b8730d;
+    --color-swatch-green: #0f7350;
+    --color-swatch-teal: #0d7a83;
+    --color-swatch-blue: #2f5fc0;
+    --color-swatch-purple: #6b46c1;
+    --color-swatch-pink: #b83280;
+    --color-swatch-grey: #616a78;
     --shadow-card: 0 1px 2px rgb(16 24 40 / 0.06), 0 8px 24px -12px rgb(16 24 40 / 0.14);
     --shadow-pop: 0 4px 12px rgb(16 24 40 / 0.1), 0 16px 48px -16px rgb(16 24 40 / 0.22);
   }
