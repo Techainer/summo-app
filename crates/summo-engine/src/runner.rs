@@ -10,26 +10,47 @@
 //! attribution Summo has.
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
-use summo_asr::{Decoder, PseudoSession, SessionConfig};
-use summo_audio::Framer;
+use summo_asr::{Decoder, SessionConfig};
 use summo_core::{Error, Event, ModelId, Result, segment::Lane};
 use summo_diar::{ClusterConfig, OnlineClusterer, embed::SpeakerEmbedder};
 use summo_models::{ModelStore, hw::HwProfile};
+use summo_pipeline::{Frame, Pipeline, processors::{Reframe, Tap}};
 use summo_vad::{Vad, silero::SileroVad};
 
 use crate::protocol::SessionSpec;
+use crate::stages::{Detect, Recognise};
+
+/// Pull the events out of what a chain produced, dropping the plumbing.
+fn events_of(frames: Vec<Frame>) -> Vec<Event> {
+    frames
+        .into_iter()
+        .filter_map(|f| match f {
+            Frame::Event(event) => Some(event),
+            _ => None,
+        })
+        .collect()
+}
 
 /// One lane's pipeline.
+///
+/// Assembled from [`summo_pipeline`] stages rather than hand-wired. The chain is
+/// `reframe → detect → recognise`, which is what the hand-written loop did in three inlined steps;
+/// proven equivalent on real audio before this replaced it — same text, same timestamps, same
+/// decode counts, RTF within run-to-run noise. `summo transcribe --pipeline` re-runs that
+/// comparison.
+///
+/// The point of the change is not speed. It is that a stage can now be inserted: a denoiser before
+/// the detector, live translation after the recogniser, without editing this struct or anything
+/// that builds it.
 struct LaneRunner {
-    vad: Box<dyn Vad>,
-    framer: Framer,
-    session: PseudoSession<Box<dyn Decoder>>,
+    chain: Pipeline,
     /// Audio of the utterance currently being assembled, kept only when this lane is diarized.
     ///
-    /// Speaker attribution needs the audio of a *finished* utterance, and the session hands back
-    /// text rather than samples, so the runner keeps its own copy.
-    pending: Vec<f32>,
+    /// Speaker attribution needs the audio of a *finished* utterance, and the recogniser hands back
+    /// text rather than samples, so a tap in the chain keeps a copy here.
+    pending: Arc<Mutex<Vec<f32>>>,
 }
 
 /// Speaker attribution for the remote lane.
@@ -59,21 +80,38 @@ impl SessionRunner {
         let mut lanes = HashMap::new();
         for &lane in &spec.lanes {
             let vad: Box<dyn Vad> = Box::new(SileroVad::load(&vad_model, 1)?);
+            let width = vad.frame_len();
             let decoder = load_decoder(&spec.live_model, spec.language.as_deref(), store, threads)?;
 
             let cfg = SessionConfig {
                 lane,
                 ..SessionConfig::default()
             };
-            lanes.insert(
-                lane,
-                LaneRunner {
-                    framer: Framer::new(vad.frame_len()),
-                    vad,
-                    session: PseudoSession::new(decoder, cfg),
-                    pending: Vec::new(),
-                },
-            );
+
+            // Only the system lane is clustered, so only it pays for keeping the audio.
+            let pending: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
+            let keep = spec.diarize && lane == Lane::System;
+            let sink = pending.clone();
+
+            let chain = Pipeline::new()
+                .then(Reframe::new(width, summo_core::audio::SAMPLE_RATE))
+                // Between the reframer and the detector: the frames here are exactly what the
+                // detector will score, which is what makes the kept audio line up with the
+                // utterance the recogniser commits.
+                .then(Tap::new("keep-audio", move |frame| {
+                    if !keep {
+                        return;
+                    }
+                    if let Frame::Audio(audio) = frame
+                        && let Ok(mut buffer) = sink.lock()
+                    {
+                        buffer.extend_from_slice(&audio.samples);
+                    }
+                }))
+                .then(Detect::new(lane, vad))
+                .then(Recognise::new(lane, decoder, cfg));
+
+            lanes.insert(lane, LaneRunner { chain, pending });
         }
 
         // Only the remote lane is clustered. The microphone lane is the local user by construction,
@@ -101,31 +139,27 @@ impl SessionRunner {
             )));
         };
 
-        // Collect the exact-width frames first: the closure cannot borrow `runner` mutably while
-        // `framer` is already borrowed from it.
-        let mut frames: Vec<Vec<f32>> = Vec::new();
-        runner
-            .framer
-            .push(samples, |frame| frames.push(frame.to_vec()));
-
         let diarize = self.diarizer.is_some() && lane == Lane::System;
 
-        let mut events = Vec::new();
-        for frame in frames {
-            let prob = runner.vad.feed_frame(&frame)?;
-            if diarize {
-                runner.pending.extend_from_slice(&frame);
-            }
-            events.extend(runner.session.accept(&frame, prob)?);
-        }
+        let produced = runner
+            .chain
+            .push(Frame::audio(lane, samples.to_vec(), summo_core::audio::SAMPLE_RATE))?;
+        let mut events = events_of(produced);
 
         if diarize {
-            let audio = std::mem::take(&mut runner.pending);
+            let audio = runner
+                .pending
+                .lock()
+                .map(|mut buffer| std::mem::take(&mut *buffer))
+                .unwrap_or_default();
+
             let kept = self.attribute(&mut events, &audio);
             // Keep the tail only while an utterance is still open; otherwise the buffer would grow
             // for the whole meeting.
-            if let Some(runner) = self.lanes.get_mut(&lane) {
-                runner.pending = kept;
+            if let Some(runner) = self.lanes.get_mut(&lane)
+                && let Ok(mut buffer) = runner.pending.lock()
+            {
+                *buffer = kept;
             }
         }
         Ok(events)
@@ -177,7 +211,9 @@ impl SessionRunner {
     pub fn flush(&mut self) -> Result<Vec<Event>> {
         let mut events = Vec::new();
         for runner in self.lanes.values_mut() {
-            events.extend(runner.session.flush()?);
+            // `Flush` rather than `End`: a caller may want partial results without tearing the
+            // session down, and the pipeline reinstates it for every stage regardless.
+            events.extend(events_of(runner.chain.push(Frame::Flush)?));
         }
         Ok(events)
     }
@@ -185,7 +221,11 @@ impl SessionRunner {
     /// Decode calls made across all lanes, for the performance HUD.
     #[must_use]
     pub fn decode_count(&self) -> u64 {
-        self.lanes.values().map(|l| l.session.decode_count()).sum()
+        self.lanes
+            .values()
+            .filter_map(|l| l.chain.stage::<Recognise>())
+            .map(Recognise::decode_count)
+            .sum()
     }
 
     /// Utterances suppressed as likely hallucinations.
@@ -193,13 +233,17 @@ impl SessionRunner {
     pub fn suppressed_count(&self) -> u64 {
         self.lanes
             .values()
-            .map(|l| l.session.suppressed_count())
+            .filter_map(|l| l.chain.stage::<Recognise>())
+            .map(Recognise::suppressed_count)
             .sum()
     }
 
     #[must_use]
     pub fn is_speaking(&self) -> bool {
-        self.lanes.values().any(|l| l.session.is_speaking())
+        self.lanes
+            .values()
+            .filter_map(|l| l.chain.stage::<Recognise>())
+            .any(Recognise::is_speaking)
     }
 }
 
