@@ -9,6 +9,9 @@ repository.workspace = true
 
 [dependencies]
 summo-core.workspace = true
+# So an `@agent` task runs against the same endpoint every other text feature does, rather than
+# against aion's own default.
+summo-llm.workspace = true
 summo-vault.workspace = true
 
 # The agent loop, tool registry, MCP client and provider layer come from aionrs (Apache-2.0).

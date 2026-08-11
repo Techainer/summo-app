@@ -142,6 +142,63 @@ fn describe(name: &str, input: &str) -> String {
     }
 }
 
+/// The endpoint the agent should use, translated into what `aion-agent` accepts.
+struct Chosen {
+    /// `anthropic` or `openai`; those are the two request shapes aion implements.
+    provider: String,
+    model: String,
+    api_key: String,
+    base_url: Option<String>,
+}
+
+/// Route the agent at whatever the user configured for everything else.
+///
+/// Without this the agent took aion's own defaults, which are Anthropic and a key from
+/// `ANTHROPIC_API_KEY`. So a machine set to Ollama — the default, and the one the settings screen
+/// was displaying — ran `@agent` tasks against a hosted provider it had never been pointed at, and
+/// failed with a missing-key error naming a variable that appears nowhere in Summo's interface.
+///
+/// Every preset except Anthropic speaks the OpenAI shape, so the mapping is the wire format plus a
+/// base URL. If settings cannot be read or name something unresolvable, aion's defaults stand:
+/// refusing to run a task because a settings file is unreadable helps nobody.
+fn chosen_provider(paths: &Paths) -> Chosen {
+    let settings = summo_core::Settings::load(&paths.settings()).unwrap_or_default();
+    let id = settings.llm.provider.trim();
+
+    let provider = summo_llm::provider::Provider::resolve(
+        id,
+        settings.llm.model.as_deref(),
+        summo_llm::provider::key_from_env(id).as_deref(),
+    );
+
+    let Ok(provider) = provider else {
+        tracing::warn!(provider = id, "cannot resolve the configured provider for the agent");
+        return Chosen {
+            provider: "anthropic".into(),
+            model: settings.llm.model.unwrap_or_else(|| "claude-opus-5".into()),
+            api_key: std::env::var("ANTHROPIC_API_KEY").unwrap_or_default(),
+            base_url: None,
+        };
+    };
+
+    match provider.wire {
+        summo_llm::Wire::Anthropic => Chosen {
+            provider: "anthropic".into(),
+            model: provider.model,
+            api_key: provider.api_key.unwrap_or_default(),
+            base_url: Some(provider.base_url),
+        },
+        summo_llm::Wire::OpenAi => Chosen {
+            provider: "openai".into(),
+            model: provider.model,
+            // A local server ignores the credential but the client still sends a header, and an
+            // empty one is rejected by some of them. aion's own documentation uses this shape.
+            api_key: provider.api_key.unwrap_or_else(|| "local".into()),
+            base_url: Some(provider.base_url),
+        },
+    }
+}
+
 /// Run one `@agent` task to completion.
 ///
 /// `instruction` is the task's own text — the agent is told to do the thing the checkbox says, and
@@ -163,11 +220,13 @@ pub async fn run(paths: &Paths, task: &Task) -> Result<Ran> {
 
     let recorder = Arc::new(StepRecorder::new(paths.clone(), task.clone()));
 
+    let chosen = chosen_provider(paths);
+
     let config = Config::resolve(&CliArgs {
-        provider: None,
-        api_key: None,
-        base_url: None,
-        model: None,
+        provider: Some(chosen.provider),
+        api_key: Some(chosen.api_key),
+        base_url: chosen.base_url,
+        model: Some(chosen.model),
         max_tokens: None,
         thinking: None,
         thinking_budget: None,

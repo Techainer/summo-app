@@ -98,8 +98,8 @@ export function RootLayout({ children }: { children: ReactNode }) {
         <button
           type="button"
           onClick={() => setCompact(false)}
-          aria-label="Mở rộng cửa sổ"
-          title="Mở rộng"
+          aria-label={t("nav.expand")}
+          title={t("nav.expand_hint")}
           className="rounded-lg px-2 py-1 text-fg-faint hover:bg-bg-soft hover:text-fg"
         >
           ⤢
@@ -131,19 +131,26 @@ export function RootLayout({ children }: { children: ReactNode }) {
           </span>
           Summo
         </div>
-        <div className="ml-auto flex items-center gap-2.5">
-          <Waveform level={engine.level} active={engine.session.recording} />
+        <div className="ml-auto flex min-w-0 items-center gap-2.5">
+          {/* The meter is the first thing to go when there is no room: the record button says the
+              same thing, and a two-pixel-wide waveform says nothing. */}
+          <span className="hidden sm:flex">
+            <Waveform level={engine.level} active={engine.session.recording} />
+          </span>
           <RecordButton
             recording={engine.session.recording}
             elapsed={engine.elapsed}
             onToggle={engine.toggle}
           />
+          {/* Shrinking the window is a desktop affordance. At phone width there is no window to
+              shrink, and keeping it pushed the header 27px past the viewport — the whole app
+              scrolled sideways. */}
           <button
             type="button"
             onClick={() => setCompact(true)}
-            aria-label="Thu gọn cửa sổ"
-            title="Thu gọn khi đang họp"
-            className="rounded-lg px-2 py-1.5 text-fg-faint hover:bg-bg-soft hover:text-fg"
+            aria-label={t("nav.shrink")}
+            title={t("nav.shrink_hint")}
+            className="hidden rounded-lg px-2 py-1.5 text-fg-faint hover:bg-bg-soft hover:text-fg sm:block"
           >
             ⤡
           </button>

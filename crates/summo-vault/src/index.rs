@@ -476,10 +476,22 @@ impl Filter {
 
 /// Read one file's head and turn it into a listing entry.
 fn read_entry(path: &Path, root: &Path) -> Result<MeetingEntry> {
-    let size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let meta = std::fs::metadata(path).ok();
+    let size_bytes = meta.as_ref().map(std::fs::Metadata::len).unwrap_or(0);
     let head = read_head(path)?;
 
-    let frontmatter = parse_frontmatter(&head)?;
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    let frontmatter = match parse_frontmatter(&head) {
+        Ok(frontmatter) => frontmatter,
+        // No frontmatter means a person wrote this file, not Summo. That is the ordinary way a
+        // note gets into a folder somebody was told they own, so it is adopted rather than
+        // reported: an id from its path, a date from when it was last written.
+        Err(_) if !head.starts_with("---\n") => {
+            Frontmatter::new(adopted_id(relative), modified_at(meta.as_ref()))
+        }
+        Err(e) => return Err(e),
+    };
+
     let title = parse_title(&head).unwrap_or_else(|| {
         // A file without a heading still deserves a name in the list; the filename is what the
         // user sees in their file manager anyway.
@@ -547,11 +559,47 @@ fn parse_frontmatter(head: &str) -> Result<Frontmatter> {
 }
 
 fn parse_title(head: &str) -> Option<String> {
-    head.lines()
-        .skip_while(|l| !l.starts_with("---"))
-        .find_map(|l| l.strip_prefix("# "))
+    // Skipping to the `---` avoids mistaking a `#` inside frontmatter for the title — but only when
+    // there *is* frontmatter. On an adopted file the skip consumed the whole document and every
+    // hand-written note listed under its filename instead of its heading.
+    let lines = head.lines();
+    let body: Box<dyn Iterator<Item = &str>> = if head.starts_with("---\n") {
+        Box::new(lines.skip_while(|l| !l.starts_with("---")))
+    } else {
+        Box::new(lines)
+    };
+    body.filter_map(|l| l.strip_prefix("# "))
         .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty())
+        .find(|t| !t.is_empty())
+}
+
+/// A stable id for a file Summo did not write.
+///
+/// Derived from the path, not generated, because the id has to survive a rescan: a fresh ULID each
+/// time would give the same note a new identity every launch, breaking every link, comment and task
+/// that pointed at it. Prefixed so an adopted document is recognisable in a log or a filename.
+#[must_use]
+pub fn adopted_id(relative: &Path) -> MeetingId {
+    let key = relative.to_string_lossy().replace('\\', "/");
+    let digest = blake3::hash(key.as_bytes()).to_hex();
+    MeetingId::from(format!("adopted-{}", &digest[..24]))
+}
+
+/// When a file was last written, as the date a document with no frontmatter is filed under.
+///
+/// Its own modification time, not today: a note written last March belongs in March, and filing it
+/// under the day the vault happened to be scanned would reorder somebody's whole library.
+fn modified_at(meta: Option<&std::fs::Metadata>) -> String {
+    meta.and_then(|m| m.modified().ok())
+        .map(OffsetDateTime::from)
+        .and_then(|t| {
+            // The local offset is what the rest of the vault records, and it is unavailable in a
+            // process with threads on some platforms — UTC is a correct answer, not a wrong one.
+            t.to_offset(time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC))
+                .format(&Rfc3339)
+                .ok()
+        })
+        .unwrap_or_else(|| "1970-01-01T00:00:00Z".to_string())
 }
 
 /// Whether a document is a recording or something somebody typed.
@@ -704,9 +752,12 @@ pub fn fold(text: &str) -> String {
 }
 
 /// Load the full document behind a listing entry.
+///
+/// Adopting rather than parsing, and with the id and date the listing already worked out: an
+/// adopted file that listed fine but would not *open* is the same bug one screen later.
 pub fn load(entry: &MeetingEntry) -> Result<MeetingDoc> {
     let text = std::fs::read_to_string(&entry.path).map_err(|e| Error::io(&entry.path, e))?;
-    MeetingDoc::parse(&text)
+    MeetingDoc::adopt(&text, entry.id.clone(), &entry.date)
 }
 
 #[cfg(test)]
@@ -793,15 +844,104 @@ mod tests {
         assert_eq!(titles, vec!["1-1 Ngọc", "Weekly Sync", "Demo khách hàng"]);
     }
 
+    /// Broken means frontmatter that *claims* to be frontmatter and is not. A file with none at all
+    /// is not broken — see the adoption tests below.
     #[test]
     fn a_broken_file_is_reported_and_the_rest_still_list() {
         let dir = vault();
-        write(dir.path(), "broken.md", "no frontmatter here\n");
+        write(dir.path(), "broken.md", "---\nid: [unterminated\n");
         let index = MeetingIndex::scan(dir.path()).unwrap();
 
         assert_eq!(index.len(), 3, "the good files must still be listed");
         assert_eq!(index.skipped().len(), 1);
         assert!(index.skipped()[0].path.ends_with("broken.md"));
+    }
+
+    /// The ordinary way a note arrives: somebody typed it in Obsidian. Rejecting it made the
+    /// vault's whole promise false, and did it loudly — one error banner per file.
+    #[test]
+    fn a_file_a_person_wrote_by_hand_is_adopted_rather_than_skipped() {
+        let dir = vault();
+        write(dir.path(), "idea.md", "# Ý tưởng\n\nvài dòng\n");
+        let index = MeetingIndex::scan(dir.path()).unwrap();
+
+        assert!(index.skipped().is_empty(), "{:?}", index.skipped());
+        let adopted = index
+            .entries()
+            .iter()
+            .find(|e| e.path.ends_with("idea.md"))
+            .expect("the hand-written file must list");
+        assert_eq!(adopted.title, "Ý tưởng", "its own heading, not its filename");
+        assert!(adopted.kind.is_note());
+    }
+
+    /// An id derived from the path rather than generated. A fresh one per scan would give the same
+    /// note a new identity every launch, breaking every link and task that pointed at it.
+    #[test]
+    fn an_adopted_id_is_the_same_on_every_scan() {
+        let dir = vault();
+        write(dir.path(), "idea.md", "# Ý tưởng\n");
+        let first = MeetingIndex::scan(dir.path()).unwrap();
+        let again = MeetingIndex::scan(dir.path()).unwrap();
+
+        let id_of = |index: &MeetingIndex| {
+            index
+                .entries()
+                .iter()
+                .find(|e| e.path.ends_with("idea.md"))
+                .map(|e| e.id.clone())
+                .unwrap()
+        };
+        assert_eq!(id_of(&first), id_of(&again));
+    }
+
+    #[test]
+    fn two_hand_written_files_do_not_share_an_id() {
+        assert_ne!(
+            adopted_id(Path::new("notes/a.md")),
+            adopted_id(Path::new("notes/b.md"))
+        );
+    }
+
+    /// Listing an adopted file and then failing to open it would be the same bug one screen later.
+    #[test]
+    fn an_adopted_file_opens() {
+        let dir = vault();
+        write(dir.path(), "idea.md", "# Ý tưởng\n\nvài dòng\n");
+        let index = MeetingIndex::scan(dir.path()).unwrap();
+        let entry = index
+            .entries()
+            .iter()
+            .find(|e| e.path.ends_with("idea.md"))
+            .unwrap();
+
+        let doc = load(entry).expect("an adopted file must open");
+        assert_eq!(doc.title, "Ý tưởng");
+        assert!(doc.body.contains("vài dòng"));
+        assert_eq!(doc.frontmatter.id, entry.id, "the listing and the document must agree");
+    }
+
+    /// A note written last March belongs in March. Filing it under the day the vault happened to be
+    /// scanned would reorder somebody's whole library the first time they ran a new build.
+    #[test]
+    fn an_adopted_file_is_dated_by_its_own_modification_time() {
+        let dir = vault();
+        write(dir.path(), "idea.md", "# Ý tưởng\n");
+        let path = dir.path().join("idea.md");
+        // 2021-03-04T05:06:07Z
+        let when = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_614_834_367);
+        std::fs::File::open(&path)
+            .unwrap()
+            .set_modified(when)
+            .unwrap();
+
+        let index = MeetingIndex::scan(dir.path()).unwrap();
+        let entry = index
+            .entries()
+            .iter()
+            .find(|e| e.path.ends_with("idea.md"))
+            .unwrap();
+        assert!(entry.date.starts_with("2021-03-04"), "{}", entry.date);
     }
 
     #[test]

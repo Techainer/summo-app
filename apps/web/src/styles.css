@@ -1,31 +1,12 @@
-/* The app shell. Dark by default, light where the system asks for it.
-   Fonts are self-hosted in the packaged build; the stacks below are the OS faces that render
-   Vietnamese tone marks without collision, which is the constraint that rules most of them out. */
-:root {
-  --bg: #0b0c0e;
-  --bg-soft: #111317;
-  --line: #23272f;
-  --fg: #e9ecf1;
-  --fg-dim: #9aa3b2;
-  --fg-faint: #6b7484;
-  --accent: #64e3a1;
-  --rec: #f2585b;
-  --sans: "Inter var", "Inter", "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, sans-serif;
-  --mono: "JetBrains Mono", "SF Mono", ui-monospace, Consolas, monospace;
-}
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #fbfbfc; --bg-soft: #f3f4f6; --line: #e4e7ec;
-    --fg: #14171c; --fg-dim: #525c6b; --fg-faint: #8a93a3; --accent: #12855a;
-  }
-}
-* { box-sizing: border-box; }
-html, body, #root { height: 100%; margin: 0; }
-body {
-  background: var(--bg); color: var(--fg); font-family: var(--sans);
-  font-size: 15px; -webkit-font-smoothing: antialiased;
-}
+/* What is left of the pre-Tailwind stylesheet, for the screens still on it.
+ *
+ * It used to declare its own `--bg`, `--fg`, `--accent` and friends. Because it is imported *after*
+ * `styles/theme.css`, those declarations won — so every light-mode colour in the app came from here
+ * and the design tokens were dead letters in light mode. Tightening a token changed nothing, which
+ * is how three failing contrast ratios survived a palette that had already been corrected.
+ *
+ * The names now come from the alias block in `theme.css`, which points them at the real tokens.
+ * Nothing here may declare a colour: this file is on its way out, one screen at a time. */
 .app { display: flex; flex-direction: column; height: 100%; }
 
 .app-header {
@@ -117,7 +98,7 @@ body {
   border-bottom: 1px solid var(--line);
 }
 .banner.error { background: color-mix(in srgb, var(--rec) 12%, transparent); color: var(--fg); }
-.banner.warn { background: color-mix(in srgb, #f0b866 14%, transparent); color: var(--fg); }
+.banner.warn { background: color-mix(in srgb, var(--color-blocked) 14%, transparent); color: var(--fg); }
 
 /* Compact mode: what the window becomes during a meeting. Small enough to leave on top of a call
    without covering a face, and still showing the two things that matter — that it is recording, and
@@ -219,9 +200,12 @@ body {
 .hint { color: var(--fg-faint); font-size: 13px; margin: 18px 0; }
 .hint code { font-family: var(--mono); font-size: 12px; }
 
+/* The label colour is a token, not a constant: in light mode the accent is a dark green and this
+   was near-black text on it — 4.09:1, under AA. `--color-accent-fg` is white there and near-black
+   on the light green of dark mode, which is the whole reason the token exists. */
 .primary {
   padding: 9px 18px; border-radius: 8px; border: 0; background: var(--accent);
-  color: #06130d; font: inherit; font-weight: 600; cursor: pointer;
+  color: var(--color-accent-fg); font: inherit; font-weight: 600; cursor: pointer;
 }
 .ghost, .danger, .confirm button {
   padding: 5px 11px; border-radius: 7px; border: 1px solid var(--line);
@@ -278,7 +262,7 @@ body {
 .field.checkbox { gap: 9px; }
 .field.checkbox > span { width: auto; }
 .field-hint { margin: 6px 0 0 162px; font-size: 12px; color: var(--fg-faint); line-height: 1.55; }
-.field-hint.warn { color: #e0a458; }
+.field-hint.warn { color: var(--color-blocked); }
 .settings-actions { display: flex; align-items: center; gap: 12px; margin-top: 22px; }
 .settings-actions .field-hint { margin: 0; }
 .banner.ok { border-left: 3px solid var(--accent); }

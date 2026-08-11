@@ -14,15 +14,26 @@ import type { Handshake } from "../lib/engine";
  * somewhere else — so it is the only thing this screen asks about.
  */
 
-// Product names stay as they are — "Ollama" is "Ollama" in every language. The labels and hints
-// that are prose carry keys and resolve at render.
-const PROVIDERS = [
-  { value: "ollama", label: "Ollama", hintKey: "settings.local_only" },
-  { value: "lm-studio", label: "LM Studio", hintKey: "settings.local_only" },
-  { value: "openai", label: "OpenAI", hintKey: "settings.key_needed" },
-  { value: "anthropic", label: "Anthropic", hintKey: "settings.key_needed" },
-  { value: "custom", labelKey: "settings.other_endpoint", hintKey: "settings.endpoint_hint" },
-] as { value: string; label?: string; labelKey?: string; hintKey: string }[];
+/**
+ * One endpoint, as the daemon describes it.
+ *
+ * This list used to live here as a hardcoded array of four, alongside the daemon's own list of
+ * four. Adding a provider meant editing both, in two languages, and two facts could not be shown at
+ * all because only the daemon had them: which environment variable holds the key, and whether it is
+ * already set on this machine.
+ */
+interface ProviderInfo {
+  id: string;
+  name: string;
+  base_url: string;
+  model: string;
+  local: boolean;
+  key_env: string | null;
+  key_set: boolean;
+}
+
+/** The pseudo-entry for "some other OpenAI-compatible server". Not a preset; there is no list of them. */
+const CUSTOM = "custom";
 
 interface Llm {
   provider: string;
@@ -41,6 +52,7 @@ interface TestResult {
 export function Settings({ handshake }: { handshake: Handshake }) {
   const t = useT();
   const [llm, setLlm] = useState<Llm | null>(null);
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [keyPresent, setKeyPresent] = useState(false);
   const [custom, setCustom] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -55,6 +67,11 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         setKeyPresent(body.api_key_present);
         if (body.settings.llm.provider.startsWith("http")) setCustom(body.settings.llm.provider);
       })
+      .catch((e: unknown) => setStatus(e instanceof Error ? e.message : String(e)));
+
+    fetch(url(handshake, "/settings/llm/providers"))
+      .then((r) => r.json())
+      .then((body: { providers: ProviderInfo[] }) => setProviders(body.providers))
       .catch((e: unknown) => setStatus(e instanceof Error ? e.message : String(e)));
   }, [handshake]);
 
@@ -101,10 +118,15 @@ export function Settings({ handshake }: { handshake: Handshake }) {
 
   if (!llm) return <p className="empty">{status ?? t("settings.loading")}</p>;
 
-  // The stored provider is either a known name or a URL; the picker shows t("settings.other_endpoint") for a URL.
-  const selected = PROVIDERS.some((p) => p.value === llm.provider) ? llm.provider : "custom";
-  const chosen = PROVIDERS.find((p) => p.value === selected);
-  const needsKey = selected === "openai" || selected === "anthropic";
+  // The stored provider is either a known id or a URL; the picker shows t("settings.other_endpoint") for a URL.
+  const selected = providers.some((p) => p.id === llm.provider) ? llm.provider : CUSTOM;
+  const chosen = providers.find((p) => p.id === selected);
+  // Whether a key is wanted is the daemon's answer, not a list of names kept in sync by hand.
+  const needsKey = chosen?.key_env != null;
+  // Local endpoints are grouped first: it is the recommendation, and the difference between them
+  // and the rest is the entire product promise.
+  const local = providers.filter((p) => p.local);
+  const hosted = providers.filter((p) => !p.local);
 
   return (
     <div className="settings" data-testid="settings">
@@ -127,14 +149,35 @@ export function Settings({ handshake }: { handshake: Handshake }) {
             void save({ ...llm, provider: value === "custom" ? custom || "http://" : value });
           }}
         >
-          {PROVIDERS.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label ?? t(p.labelKey ?? "")}
-            </option>
-          ))}
+          <optgroup label={t("settings.group_local")}>
+            {local.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label={t("settings.group_hosted")}>
+            {hosted.map((p) => (
+              // Ready means the key is already in the environment, so the user knows before they
+              // press Test whether there is anything left to do.
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.key_set ? ` — ${t("settings.key_ready")}` : ""}
+              </option>
+            ))}
+          </optgroup>
+          <option value={CUSTOM}>{t("settings.other_endpoint")}</option>
         </select>
       </label>
-      {chosen && <p className="field-hint">{t(chosen.hintKey)}</p>}
+      <p className="field-hint">
+        {selected === CUSTOM
+          ? t("settings.endpoint_hint")
+          : chosen?.local
+            ? t("settings.local_only")
+            : chosen?.key_set
+              ? t("settings.key_found", { name: chosen.key_env ?? "" })
+              : t("settings.key_missing", { name: chosen?.key_env ?? "" })}
+      </p>
 
       {selected === "custom" && (
         <label className="field">

@@ -20,7 +20,11 @@
     "all_folders": "All",
     "no_folders": "No folders yet",
     "notes": "Notes",
-    "agenda": "Calendar"
+    "agenda": "Calendar",
+    "shrink": "Shrink the window",
+    "shrink_hint": "Shrink while you are in the meeting",
+    "expand": "Expand the window",
+    "expand_hint": "Expand"
   },
   "record": {
     "source": "Source",
@@ -235,7 +239,7 @@
     "connected": "Connected",
     "not_connected": "Could not connect",
     "key_present": "SUMMO_API_KEY is set.",
-    "key_missing": "SUMMO_API_KEY is not set. Set it and restart Summo.",
+    "key_missing": "Set {name} (or SUMMO_API_KEY) before using this. Transcript text will be sent to this provider.",
     "key_needed": "Needs SUMMO_API_KEY. Transcript text will be sent.",
     "local_only": "Runs on your machine. Nothing leaves it.",
     "notifications": "Notifications",
@@ -249,7 +253,11 @@
     "local_only_comma": "Runs on your machine, nothing leaves it.",
     "llm_hint_tail": ". Only summaries, translation and questions use a language model — and you choose where it runs.",
     "llm_hint_head": "Speech recognition and speaker attribution ",
-    "key_not_stored": "The key is not stored in the settings file — if it were, it would follow into backups and sync."
+    "key_not_stored": "The key is not stored in the settings file — if it were, it would follow into backups and sync.",
+    "group_local": "On this machine",
+    "group_hosted": "Hosted",
+    "key_ready": "key set",
+    "key_found": "{name} is set. Transcript text will be sent to this provider."
   },
   "status": {
     "top_bar": "Top bar",

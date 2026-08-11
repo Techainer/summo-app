@@ -141,6 +141,7 @@ impl Server {
             .route("/meetings/{id}/audio", axum::routing::delete(forget_audio))
             .route("/settings", get(settings))
             .route("/settings/llm", post(set_llm))
+            .route("/settings/llm/providers", get(llm_providers))
             .route("/settings/llm/test", post(test_llm))
             .route("/report", get(report))
             .route("/tasks", get(tasks))
@@ -1047,7 +1048,10 @@ fn llm_for_engine(engine: &EngineState) -> Result<summo_llm::LlmClient> {
     let provider = summo_llm::Provider::resolve(
         &settings.llm.provider,
         settings.llm.model.as_deref(),
-        api_key().as_deref(),
+        // Where a key comes from is `Provider::resolve`'s decision: SUMMO_API_KEY first, then
+        // the provider's own variable. Passing one here would have been a second, narrower
+        // copy of that policy.
+        None,
     )?;
     summo_llm::LlmClient::new(provider)
 }
@@ -1272,7 +1276,10 @@ async fn summarize_meeting(
     let provider = match summo_llm::Provider::resolve(
         &settings.llm.provider,
         settings.llm.model.as_deref(),
-        api_key().as_deref(),
+        // Where a key comes from is `Provider::resolve`'s decision: SUMMO_API_KEY first, then
+        // the provider's own variable. Passing one here would have been a second, narrower
+        // copy of that policy.
+        None,
     ) {
         Ok(provider) => provider,
         Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
@@ -2293,6 +2300,39 @@ fn api_key() -> Option<String> {
         .filter(|k| !k.trim().is_empty())
 }
 
+/// Every endpoint Summo knows, and whether this machine can already reach it.
+///
+/// Served rather than hardcoded in the interface: the settings screen used to keep its own array of
+/// four providers, which meant adding one was two edits in two languages and the two facts it did
+/// not have — which variable holds the key, and whether that variable is set — could not be shown
+/// at all. A user with `GEMINI_API_KEY` already exported now sees Gemini as ready.
+///
+/// `key_set` is a boolean. The key itself never crosses this boundary.
+async fn llm_providers(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let presets: Vec<serde_json::Value> = summo_llm::provider::PRESETS
+        .iter()
+        .map(|preset| {
+            serde_json::json!({
+                "id": preset.id,
+                "name": preset.name,
+                "base_url": preset.base_url,
+                "model": preset.model,
+                "local": preset.local,
+                "key_env": preset.key_env,
+                "key_set": summo_llm::provider::key_from_env(preset.id).is_some(),
+            })
+        })
+        .collect();
+    Json(serde_json::json!({ "providers": presets })).into_response()
+}
+
 async fn set_llm(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -2336,7 +2376,10 @@ async fn test_llm(
     let provider = match summo_llm::Provider::resolve(
         &body.provider,
         body.model.as_deref(),
-        api_key().as_deref(),
+        // Where a key comes from is `Provider::resolve`'s decision: SUMMO_API_KEY first, then
+        // the provider's own variable. Passing one here would have been a second, narrower
+        // copy of that policy.
+        None,
     ) {
         Ok(provider) => provider,
         Err(e) => return as_response(Err::<(), _>(e)),

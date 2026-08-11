@@ -19,10 +19,15 @@
   --color-line: #23272f;
   --color-line-strong: #2f353f;
 
-  /* Text, from most to least important. */
+  /* Text, from most to least important.
+   *
+   * `fg-faint` is the quietest thing that is still *prose* — empty-state sentences, the note under
+   * a setting, the group labels in the sidebar. It is not decoration, so it holds 4.5:1 against the
+   * raised surface, not merely against the page. The earlier value cleared the page and failed on a
+   * card, which is where most of that text actually sits. */
   --color-fg: #e9ecf1;
   --color-fg-dim: #9aa3b2;
-  --color-fg-faint: #6b7484;
+  --color-fg-faint: #7b8494;
 
   /* One accent, used for what is live and what is chosen. */
   --color-accent: #64e3a1;
@@ -66,17 +71,21 @@
     --color-line-strong: #d3d8e0;
     --color-fg: #14171c;
     --color-fg-dim: #525c6b;
-    --color-fg-faint: #8a93a3;
-    --color-accent: #12855a;
-    --color-accent-soft: #12855a14;
+    --color-fg-faint: #616a78;
+    /* Every accent here is also used as *text* — on a chip, in a link, as a sidebar item — and each
+     * is checked against its own `-soft` tint rather than against the page, because that tint is a
+     * near-white wash that raises the background it has to stand out from. The lighter versions
+     * these replaced were legible on white and failed on the chip they were designed for. */
+    --color-accent: #0f7350;
+    --color-accent-soft: #0f735014;
     --color-accent-fg: #ffffff;
-    --color-rec: #d63b3e;
-    --color-rec-soft: #d63b3e14;
-    --color-done: #12855a;
-    --color-running: #3b6fd4;
-    --color-running-soft: #3b6fd414;
-    --color-blocked: #a86a12;
-    --color-blocked-soft: #a86a1214;
+    --color-rec: #c62f32;
+    --color-rec-soft: #c62f3214;
+    --color-done: #0f7350;
+    --color-running: #2f5fc0;
+    --color-running-soft: #2f5fc014;
+    --color-blocked: #8a5610;
+    --color-blocked-soft: #8a561014;
     --shadow-card: 0 1px 2px rgb(16 24 40 / 0.06), 0 8px 24px -12px rgb(16 24 40 / 0.14);
     --shadow-pop: 0 4px 12px rgb(16 24 40 / 0.1), 0 16px 48px -16px rgb(16 24 40 / 0.22);
   }
@@ -95,7 +104,7 @@
   --color-line-strong: #2f353f;
   --color-fg: #e9ecf1;
   --color-fg-dim: #9aa3b2;
-  --color-fg-faint: #6b7484;
+  --color-fg-faint: #7b8494;
   --color-accent: #64e3a1;
   --color-accent-soft: #64e3a11a;
   --color-accent-fg: #06110c;

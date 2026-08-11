@@ -20,7 +20,11 @@
     "all_folders": "Tất cả",
     "no_folders": "Chưa có thư mục nào",
     "notes": "Ghi chú",
-    "agenda": "Lịch"
+    "agenda": "Lịch",
+    "shrink": "Thu gọn cửa sổ",
+    "shrink_hint": "Thu gọn khi đang họp",
+    "expand": "Mở rộng cửa sổ",
+    "expand_hint": "Mở rộng"
   },
   "record": {
     "source": "Nguồn",
@@ -235,7 +239,7 @@
     "connected": "Kết nối được",
     "not_connected": "Không kết nối được",
     "key_present": "Đã có SUMMO_API_KEY.",
-    "key_missing": "Chưa có SUMMO_API_KEY. Đặt biến môi trường rồi khởi động lại Summo.",
+    "key_missing": "Cần đặt {name} (hoặc SUMMO_API_KEY) trước khi dùng. Văn bản bản ghi sẽ được gửi tới nhà cung cấp này.",
     "key_needed": "Cần SUMMO_API_KEY. Văn bản bản ghi sẽ được gửi đi.",
     "local_only": "Chạy trên máy bạn. Không có gì rời khỏi máy.",
     "notifications": "Thông báo",
@@ -249,7 +253,11 @@
     "local_only_comma": "Chạy trên máy bạn, không có gì rời khỏi máy.",
     "llm_hint_tail": ". Chỉ tóm tắt, dịch và hỏi đáp mới dùng mô hình ngôn ngữ — và bạn chọn nó chạy ở đâu.",
     "llm_hint_head": "Nhận dạng giọng nói và tách người nói ",
-    "key_not_stored": "Khoá không được lưu vào tệp cài đặt — nếu lưu, nó sẽ theo vào bản sao lưu và bản đồng bộ."
+    "key_not_stored": "Khoá không được lưu vào tệp cài đặt — nếu lưu, nó sẽ theo vào bản sao lưu và bản đồng bộ.",
+    "group_local": "Trên máy này",
+    "group_hosted": "Dịch vụ ngoài",
+    "key_ready": "đã có khoá",
+    "key_found": "{name} đã được đặt. Văn bản bản ghi sẽ được gửi tới nhà cung cấp này."
   },
   "status": {
     "top_bar": "Thanh trên cùng",

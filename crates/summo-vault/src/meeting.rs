@@ -188,13 +188,46 @@ impl MeetingDoc {
         Ok(out)
     }
 
-    /// Parse a Markdown document.
+    /// Parse a Markdown document that Summo wrote.
+    ///
+    /// Requires frontmatter. For a file a *person* wrote — in Obsidian, in vim, by dropping it into
+    /// the folder — use [`MeetingDoc::adopt`] instead.
     pub fn parse(markdown: &str) -> Result<Self> {
-        let (yaml, body) = split_frontmatter(markdown)
+        let (yaml, _) = split_frontmatter(markdown)
             .ok_or_else(|| Error::Vault("missing YAML frontmatter".into()))?;
-
         let frontmatter: Frontmatter = serde_yaml::from_str(yaml)
             .map_err(|e| Error::Vault(format!("cannot parse frontmatter: {e}")))?;
+        Self::parse_with(markdown, frontmatter)
+    }
+
+    /// Parse a Markdown document, inventing frontmatter if it has none.
+    ///
+    /// The vault's promise is that it is a folder of Markdown files you own and can edit in
+    /// anything. A file created outside Summo has no frontmatter, and rejecting it made that
+    /// promise false in the most ordinary case there is: writing a note in Obsidian and expecting
+    /// to see it. Worse, the failure surfaced as an error banner per file, so a vault somebody had
+    /// been using normally looked broken.
+    ///
+    /// `id` and `date` are what the caller knows and the file does not — see
+    /// [`crate::index::adopted_id`], which derives a stable id from the path so the same file is
+    /// the same document on every scan.
+    ///
+    /// Nothing is written back. The file keeps its shape until the user edits it through Summo,
+    /// which is the first moment they have asked Summo to own it.
+    pub fn adopt(markdown: &str, id: MeetingId, date: impl Into<String>) -> Result<Self> {
+        match split_frontmatter(markdown) {
+            Some((yaml, _)) => {
+                let frontmatter: Frontmatter = serde_yaml::from_str(yaml)
+                    .map_err(|e| Error::Vault(format!("cannot parse frontmatter: {e}")))?;
+                Self::parse_with(markdown, frontmatter)
+            }
+            None => Self::parse_with(markdown, Frontmatter::new(id, date)),
+        }
+    }
+
+    fn parse_with(markdown: &str, frontmatter: Frontmatter) -> Result<Self> {
+        let body = split_frontmatter(markdown).map_or(markdown, |(_, body)| body);
+
         if frontmatter.schema > 1 {
             return Err(Error::Vault(format!(
                 "document schema {} is newer than this build understands",

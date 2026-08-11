@@ -300,17 +300,64 @@ mod tests {
         assert!(local.client().is_ok());
     }
 
+    /// "Without a key" now includes the provider's own environment variable, not just Summo's — so
+    /// this has to say what the environment is rather than assume it. On a developer's machine
+    /// `OPENAI_API_KEY` is usually exported, and the test read as a failure of the error message
+    /// when it was actually the fallback working.
     #[test]
     fn a_hosted_provider_without_a_key_fails_clearly() {
+        // SAFETY: single-threaded within this test binary's use of these two variables; nothing
+        // else reads them, and both are restored before returning.
+        let restore: Vec<(&str, Option<String>)> = ["SUMMO_API_KEY", "OPENAI_API_KEY"]
+            .into_iter()
+            .map(|name| (name, std::env::var(name).ok()))
+            .collect();
+        for (name, _) in &restore {
+            unsafe { std::env::remove_var(name) };
+        }
+
         let hosted = ProviderArgs {
             provider: "openai".into(),
             model: None,
             api_key: None,
         };
-        let Err(err) = hosted.client() else {
+        let built = hosted.client();
+
+        for (name, value) in restore {
+            if let Some(value) = value {
+                unsafe { std::env::set_var(name, value) };
+            }
+        }
+
+        let Err(err) = built else {
             panic!("a hosted provider without a key should not build a client")
         };
         assert!(err.to_string().contains("API key"), "got: {err}");
+        assert!(
+            err.to_string().contains("OPENAI_API_KEY"),
+            "the message must name the variable to set: {err}"
+        );
+    }
+
+    /// The reason the fallback exists: a machine that already talks to a provider should not need
+    /// its credential copied into a second, Summo-specific variable.
+    #[test]
+    fn a_provider_s_own_environment_variable_is_accepted() {
+        let restore = std::env::var("GROQ_API_KEY").ok();
+        unsafe { std::env::set_var("GROQ_API_KEY", "gsk-test") };
+
+        let hosted = ProviderArgs {
+            provider: "groq".into(),
+            model: None,
+            api_key: None,
+        };
+        let built = hosted.client();
+
+        match restore {
+            Some(value) => unsafe { std::env::set_var("GROQ_API_KEY", value) },
+            None => unsafe { std::env::remove_var("GROQ_API_KEY") },
+        }
+        assert!(built.is_ok(), "{:?}", built.err());
     }
 
     #[test]
