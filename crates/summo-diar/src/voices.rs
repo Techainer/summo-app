@@ -654,8 +654,14 @@ mod tests {
             2,
             "the spread of the voice was flattened"
         );
-        assert!(matches!(book.identify(&near(NGOC, 0.02)), Match::Known { .. }));
-        assert!(matches!(book.identify(&near(BINH, 0.02)), Match::Known { .. }));
+        assert!(matches!(
+            book.identify(&near(NGOC, 0.02)),
+            Match::Known { .. }
+        ));
+        assert!(matches!(
+            book.identify(&near(BINH, 0.02)),
+            Match::Known { .. }
+        ));
     }
 
     #[test]
@@ -753,7 +759,10 @@ mod tests {
         book.merge("ngoc-nguyen", "ngoc").unwrap();
         assert_eq!(book.len(), 1);
         assert_eq!(book.get("ngoc").unwrap().sample_count(), 2);
-        assert!(matches!(book.identify(&near(BINH, 0.02)), Match::Known { .. }));
+        assert!(matches!(
+            book.identify(&near(BINH, 0.02)),
+            Match::Known { .. }
+        ));
     }
 
     #[test]
@@ -800,7 +809,8 @@ mod tests {
     fn an_empty_book_adopts_whichever_model_runs_first() {
         let mut book = VoiceBook::default();
         assert!(book.space().is_none());
-        book.adopt(&EmbeddingSpace::new("campplus-sv", 192)).unwrap();
+        book.adopt(&EmbeddingSpace::new("campplus-sv", 192))
+            .unwrap();
         assert_eq!(book.space().unwrap().model, "campplus-sv");
     }
 
@@ -816,7 +826,8 @@ mod tests {
     #[test]
     fn a_book_refuses_a_different_model_of_the_same_width() {
         let mut book = VoiceBook::default();
-        book.adopt(&EmbeddingSpace::new("campplus-sv", 192)).unwrap();
+        book.adopt(&EmbeddingSpace::new("campplus-sv", 192))
+            .unwrap();
 
         let error = book
             .adopt(&EmbeddingSpace::new("eres2netv2-sv", 192))
@@ -829,7 +840,8 @@ mod tests {
     #[test]
     fn resetting_vectors_keeps_the_people_and_their_names() {
         let mut book = VoiceBook::default();
-        book.adopt(&EmbeddingSpace::new("campplus-sv", 192)).unwrap();
+        book.adopt(&EmbeddingSpace::new("campplus-sv", 192))
+            .unwrap();
         book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
         book.set_avatar("ngoc", Some("attachments/ngoc.jpg".into()))
             .unwrap();
@@ -860,7 +872,10 @@ mod tests {
         book.save().unwrap();
 
         let mut reloaded = VoiceBook::load(&path).unwrap();
-        assert_eq!(reloaded.space().unwrap().revision.as_deref(), Some("2026-01"));
+        assert_eq!(
+            reloaded.space().unwrap().revision.as_deref(),
+            Some("2026-01")
+        );
         assert!(
             reloaded
                 .adopt(&EmbeddingSpace::new("eres2netv2-sv", 192))

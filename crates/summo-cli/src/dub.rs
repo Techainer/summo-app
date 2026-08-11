@@ -41,8 +41,13 @@ pub fn run(paths: &Paths, opts: &Options) -> Result<()> {
         .with_context(|| format!("no meeting {}", opts.meeting))?;
     let doc = summo_vault::open(&paths.vault(), &path)?;
 
-    let translation = summo_vault::translation::load(paths, &id, &opts.lang)?
-        .with_context(|| format!("meeting {} has no {} translation — run `summo translate` first", opts.meeting, opts.lang))?;
+    let translation =
+        summo_vault::translation::load(paths, &id, &opts.lang)?.with_context(|| {
+            format!(
+                "meeting {} has no {} translation — run `summo translate` first",
+                opts.meeting, opts.lang
+            )
+        })?;
 
     // Only lines that were translated. An untranslated one keeps its original audio underneath,
     // which is a better answer than speaking the source language in the target voice.
@@ -62,7 +67,11 @@ pub fn run(paths: &Paths, opts: &Options) -> Result<()> {
 
     let mut tts = summo_tts::vits::Vits::load(&opts.voice, opts.threads)?;
     println!("voice  {}", opts.voice.display());
-    println!("lines  {} of {} translated", lines.len(), doc.transcript.len());
+    println!(
+        "lines  {} of {} translated",
+        lines.len(),
+        doc.transcript.len()
+    );
 
     // Pass one: how long does each line take at natural speed?
     let mut measured = Vec::with_capacity(lines.len());

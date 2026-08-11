@@ -37,7 +37,7 @@ export function AgendaScreen() {
     } catch (e) {
       setError(say(e));
     }
-  }, [client]);
+  }, [client, say]);
 
   useEffect(() => {
     void refresh();
@@ -74,10 +74,10 @@ export function AgendaScreen() {
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <h1 className="text-lg font-semibold">{t("agenda.title")}</h1>
-      <p className="mt-1 text-sm text-fg-dim">{t("agenda.hint")}</p>
+      <p className="text-fg-dim mt-1 text-sm">{t("agenda.hint")}</p>
 
       {error && (
-        <p role="alert" className="mt-4 text-sm text-danger">
+        <p role="alert" className="text-danger mt-4 text-sm">
           {error}
         </p>
       )}
@@ -91,14 +91,14 @@ export function AgendaScreen() {
           }}
           placeholder={t("agenda.path_placeholder")}
           aria-label={t("agenda.path_label")}
-          className="min-w-0 flex-1 rounded-xl border border-line bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent"
+          className="border-line bg-bg-soft focus:border-accent min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
         />
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={t("agenda.name_placeholder")}
           aria-label={t("agenda.name_label")}
-          className="w-36 rounded-xl border border-line bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent"
+          className="border-line bg-bg-soft focus:border-accent w-36 rounded-xl border px-3 py-2 text-sm outline-none"
         />
         <Button variant="ghost" onClick={() => void browse()}>
           {t("import.browse")}
@@ -113,7 +113,7 @@ export function AgendaScreen() {
           {calendars.map((calendar) => (
             <li
               key={calendar}
-              className="flex items-center gap-1.5 rounded-full border border-line bg-bg-soft px-2.5 py-1 text-[13px]"
+              className="border-line bg-bg-soft flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px]"
             >
               {calendar}
               <button
@@ -130,12 +130,12 @@ export function AgendaScreen() {
       )}
 
       {entries.length === 0 ? (
-        <p className="mt-12 text-center text-fg-faint">{t("agenda.empty")}</p>
+        <p className="text-fg-faint mt-12 text-center">{t("agenda.empty")}</p>
       ) : (
         <div className="mt-8 space-y-6">
           {grouped.map(([day, items]) => (
             <section key={day}>
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
+              <h2 className="text-fg-faint text-[11px] font-semibold tracking-wider uppercase">
                 {day}
               </h2>
               <ul className="mt-2 space-y-1.5">
@@ -146,9 +146,9 @@ export function AgendaScreen() {
                     initial="hidden"
                     animate="shown"
                     transition={GENTLE}
-                    className="flex items-baseline gap-3 rounded-xl border border-line bg-bg-soft px-3 py-2"
+                    className="border-line bg-bg-soft flex items-baseline gap-3 rounded-xl border px-3 py-2"
                   >
-                    <span className="tabular w-24 shrink-0 text-sm text-fg-dim">
+                    <span className="tabular text-fg-dim w-24 shrink-0 text-sm">
                       {clock(entry.start_epoch)}
                       {entry.duration_s ? (
                         <span className="text-fg-faint"> · {length(entry.duration_s)}</span>
@@ -157,11 +157,13 @@ export function AgendaScreen() {
 
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{entry.summary}</span>
-                      <span className="block truncate text-[12px] text-fg-faint">
+                      <span className="text-fg-faint block truncate text-[12px]">
                         {[
                           entry.location,
                           entry.attendees.length > 0
-                            ? t("agenda.attendees", { count: entry.attendees.length })
+                            ? t("agenda.attendees", {
+                                count: entry.attendees.length,
+                              })
                             : null,
                           entry.repeats ? t("agenda.repeats") : null,
                           entry.calendar,
@@ -176,7 +178,7 @@ export function AgendaScreen() {
                         href={entry.conference}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="shrink-0 rounded-full bg-accent px-3 py-1 text-[13px] font-medium text-accent-fg hover:brightness-110"
+                        className="bg-accent text-accent-fg shrink-0 rounded-full px-3 py-1 text-[13px] font-medium hover:brightness-110"
                       >
                         {service(entry.conference)}
                       </a>

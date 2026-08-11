@@ -54,7 +54,7 @@ export function CaptureControls() {
           {(["mic", "system"] as Lane[]).map((lane) => (
             <label
               key={lane}
-              className="group flex cursor-pointer items-center gap-2 rounded-full border border-line bg-bg-soft px-3 py-1.5 text-sm text-fg-dim transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:checked]:text-accent has-[:focus-visible]:border-accent"
+              className="group border-line bg-bg-soft text-fg-dim has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:checked]:text-accent has-[:focus-visible]:border-accent flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors"
             >
               <input
                 type="checkbox"
@@ -64,21 +64,23 @@ export function CaptureControls() {
               />
               <span
                 aria-hidden="true"
-                className="grid size-4 place-items-center rounded-[5px] border border-line-strong text-[10px] text-accent-fg peer-checked:border-accent peer-checked:bg-accent"
+                className="border-line-strong text-accent-fg peer-checked:border-accent peer-checked:bg-accent grid size-4 place-items-center rounded-[5px] border text-[10px]"
               >
-                <span className="opacity-0 transition-opacity group-has-[:checked]:opacity-100">✓</span>
+                <span className="opacity-0 transition-opacity group-has-[:checked]:opacity-100">
+                  ✓
+                </span>
               </span>
               {t(lane === "mic" ? "record.microphone" : "record.system")}
             </label>
           ))}
 
-          <label className="ms-auto flex items-center gap-2 text-sm text-fg-faint">
+          <label className="text-fg-faint ms-auto flex items-center gap-2 text-sm">
             {t("record.translate_live")}
             <select
               value={capture.translateTo}
               aria-label={t("record.translate_live")}
               onChange={(e) => update({ ...capture, translateTo: e.target.value })}
-              className="rounded-lg border border-line bg-bg-soft px-2 py-1.5 text-sm text-fg focus:outline-none focus-visible:border-accent"
+              className="border-line bg-bg-soft text-fg focus-visible:border-accent rounded-lg border px-2 py-1.5 text-sm focus:outline-none"
             >
               {TARGETS.map((target) => (
                 <option key={target.code} value={target.code}>
@@ -91,7 +93,7 @@ export function CaptureControls() {
       </fieldset>
 
       {translating(capture) && (
-        <p className="mt-2 text-[13px] text-fg-dim">
+        <p className="text-fg-dim mt-2 text-[13px]">
           {/* The mistake this catches: translation on, system audio off, so the app dutifully
               translates the user's own voice back at them and looks broken. */}
           {hearsOthers(capture) ? t("record.translate_hint") : t("record.translate_needs_system")}

@@ -193,7 +193,16 @@ mod tests {
             seq: 1,
             samples: vec![0.5; 4_000],
         };
-        let track = assemble(&plan, &[take], &[], 8_000, Mix { under_gain: 0.0, voice_gain: 1.0 });
+        let track = assemble(
+            &plan,
+            &[take],
+            &[],
+            8_000,
+            Mix {
+                under_gain: 0.0,
+                voice_gain: 1.0,
+            },
+        );
 
         assert_eq!(track[7_999], 0.0, "nothing before the slot");
         assert!(track[8_100] > 0.4, "audio inside the slot");
@@ -216,7 +225,10 @@ mod tests {
             &[],
             &vec![1.0f32; 100],
             8_000,
-            Mix { under_gain: 0.0, voice_gain: 1.0 },
+            Mix {
+                under_gain: 0.0,
+                voice_gain: 1.0,
+            },
         );
         assert!(track.iter().all(|s| *s == 0.0));
     }
@@ -226,10 +238,25 @@ mod tests {
     fn overlapping_lines_are_scaled_down_rather_than_clipped() {
         let plan = plan_of(vec![slot(1, 0.0, 1.0, 1.0), slot(2, 0.0, 1.0, 1.0)]);
         let takes = vec![
-            Take { seq: 1, samples: vec![0.8; 800] },
-            Take { seq: 2, samples: vec![0.8; 800] },
+            Take {
+                seq: 1,
+                samples: vec![0.8; 800],
+            },
+            Take {
+                seq: 2,
+                samples: vec![0.8; 800],
+            },
         ];
-        let track = assemble(&plan, &takes, &[], 800, Mix { under_gain: 0.0, voice_gain: 1.0 });
+        let track = assemble(
+            &plan,
+            &takes,
+            &[],
+            800,
+            Mix {
+                under_gain: 0.0,
+                voice_gain: 1.0,
+            },
+        );
 
         let peak = track.iter().fold(0.0f32, |m, s| m.max(s.abs()));
         assert!(peak <= 1.0, "peak {peak}");
@@ -256,8 +283,20 @@ mod tests {
     #[test]
     fn a_take_with_no_slot_is_dropped_rather_than_appended() {
         let plan = plan_of(vec![slot(1, 0.0, 1.0, 0.1)]);
-        let takes = vec![Take { seq: 99, samples: vec![1.0; 800] }];
-        let track = assemble(&plan, &takes, &[], 800, Mix { under_gain: 0.0, voice_gain: 1.0 });
+        let takes = vec![Take {
+            seq: 99,
+            samples: vec![1.0; 800],
+        }];
+        let track = assemble(
+            &plan,
+            &takes,
+            &[],
+            800,
+            Mix {
+                under_gain: 0.0,
+                voice_gain: 1.0,
+            },
+        );
         assert!(track.iter().all(|s| *s == 0.0));
     }
 
@@ -265,8 +304,20 @@ mod tests {
     fn a_line_running_past_the_end_is_truncated_not_grown_onto_the_video() {
         let plan = plan_of(vec![slot(1, 0.0, 1.0, 0.5)]);
         let under = vec![0.0f32; 400];
-        let takes = vec![Take { seq: 1, samples: vec![1.0; 4_000] }];
-        let track = assemble(&plan, &takes, &under, 800, Mix { under_gain: 0.0, voice_gain: 1.0 });
+        let takes = vec![Take {
+            seq: 1,
+            samples: vec![1.0; 4_000],
+        }];
+        let track = assemble(
+            &plan,
+            &takes,
+            &under,
+            800,
+            Mix {
+                under_gain: 0.0,
+                voice_gain: 1.0,
+            },
+        );
         assert_eq!(track.len(), 400.max((0.5 * 800.0) as usize));
     }
 

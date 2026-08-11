@@ -8,14 +8,14 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
-use summo_core::{Error, MeetingId, Result, Segment, paths::Paths};
 use crate::{
     index::{Excerpt, Filter, MeetingEntry, MeetingIndex, Skipped, Stats, load},
     meeting::Frontmatter,
     slug::slugify,
     write::write_atomically,
 };
+use serde::{Deserialize, Serialize};
+use summo_core::{Error, MeetingId, Result, Segment, paths::Paths};
 use time::OffsetDateTime;
 
 /// How meetings are grouped in the sidebar.
@@ -564,7 +564,10 @@ mod tests {
 
         let titles: Vec<&str> = hits.iter().map(|h| h.meeting.title.as_str()).collect();
         assert!(titles.contains(&"Họp"), "{titles:?}");
-        assert!(titles.contains(&"Ý tưởng"), "the note is findable too: {titles:?}");
+        assert!(
+            titles.contains(&"Ý tưởng"),
+            "the note is findable too: {titles:?}"
+        );
     }
 
     /// Same document, different kind — and the kind comes from the transcript, so a screen that
@@ -785,7 +788,11 @@ mod tests {
             Some("green"),
             "a hex somebody typed becomes a palette colour rather than an error"
         );
-        assert!(view.colours.iter().any(|c| c.name == "green" && c.count == 1));
+        assert!(
+            view.colours
+                .iter()
+                .any(|c| c.name == "green" && c.count == 1)
+        );
     }
 
     /// Narrowing is what a finder is for: one tag is a hundred notes, two is the four you wanted.
@@ -811,7 +818,11 @@ mod tests {
         };
         assert_eq!(both("weekly"), 2, "the new file and the weekly sync");
         assert_eq!(both("weekly,sales"), 1, "only the one carrying both");
-        assert_eq!(both("weekly, sales"), 1, "spaces after the comma are typing, not a tag");
+        assert_eq!(
+            both("weekly, sales"),
+            1,
+            "spaces after the comma are typing, not a tag"
+        );
     }
 
     #[test]
@@ -855,11 +866,15 @@ mod tests {
     fn a_colour_outside_the_palette_is_refused_and_nothing_is_written() {
         let (_dir, lib) = library();
         let id = MeetingId::from("01A".to_string());
-        let before = fs::read_to_string(lib.scan().unwrap().get(&id).unwrap().path.clone()).unwrap();
+        let before =
+            fs::read_to_string(lib.scan().unwrap().get(&id).unwrap().path.clone()).unwrap();
 
         assert!(lib.set_colour(&id, Some("chartreuse")).is_err());
         let after = fs::read_to_string(lib.scan().unwrap().get(&id).unwrap().path.clone()).unwrap();
-        assert_eq!(before, after, "a refused colour must not have touched the file");
+        assert_eq!(
+            before, after,
+            "a refused colour must not have touched the file"
+        );
     }
 
     /// Asking "which are green?" when nothing understands green must answer nothing, not
@@ -895,7 +910,10 @@ mod tests {
     #[test]
     fn an_empty_title_is_refused() {
         let (_dir, lib) = library();
-        assert!(lib.rename(&MeetingId::from("01A".to_string()), "  ").is_err());
+        assert!(
+            lib.rename(&MeetingId::from("01A".to_string()), "  ")
+                .is_err()
+        );
     }
 
     #[test]
@@ -907,7 +925,9 @@ mod tests {
         assert!(target.exists(), "the file must still exist in the trash");
         assert!(lib.scan().unwrap().get(&id).is_none());
         assert!(
-            std::fs::read_to_string(&target).unwrap().contains("Weekly Sync"),
+            std::fs::read_to_string(&target)
+                .unwrap()
+                .contains("Weekly Sync"),
             "the trashed file must still be the meeting"
         );
     }

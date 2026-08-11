@@ -123,7 +123,10 @@ mod tests {
 
     fn doc() -> MeetingDoc {
         MeetingDoc::new(
-            Frontmatter::new(MeetingId::from("01A".to_string()), "2026-08-10T09:00:00+07:00"),
+            Frontmatter::new(
+                MeetingId::from("01A".to_string()),
+                "2026-08-10T09:00:00+07:00",
+            ),
             "Họp",
         )
     }
@@ -147,7 +150,11 @@ mod tests {
         let mut d = doc();
         set_draft(&mut d, "Tóm tắt", "Nội dung");
         assert_eq!(in_document(&d), vec!["Tóm tắt"]);
-        assert!(d.to_markdown().unwrap().contains("## Tóm tắt <!-- summo:draft -->"));
+        assert!(
+            d.to_markdown()
+                .unwrap()
+                .contains("## Tóm tắt <!-- summo:draft -->")
+        );
     }
 
     #[test]
@@ -198,7 +205,11 @@ mod tests {
         let approved = approve_all(&mut d);
         assert_eq!(approved, vec!["Tóm tắt", "Quyết định"]);
         assert!(in_document(&d).is_empty());
-        assert_eq!(d.section("Ghi chú của tôi"), Some("C"), "a human's section is untouched");
+        assert_eq!(
+            d.section("Ghi chú của tôi"),
+            Some("C"),
+            "a human's section is untouched"
+        );
     }
 
     /// The property that matters: rejecting the agent must not delete a person's writing.
@@ -206,7 +217,10 @@ mod tests {
     fn rejecting_only_removes_the_agents_section() {
         let mut d = doc();
         d.set_section("Tóm tắt", "Tôi tự viết");
-        assert!(!reject(&mut d, "Tóm tắt"), "nothing of the agent's to reject");
+        assert!(
+            !reject(&mut d, "Tóm tắt"),
+            "nothing of the agent's to reject"
+        );
         assert_eq!(d.section("Tóm tắt"), Some("Tôi tự viết"));
 
         set_draft(&mut d, "Quyết định", "Agent viết");

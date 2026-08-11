@@ -56,17 +56,18 @@ pub struct Pruned {
 /// Measure everything.
 pub fn usage(paths: &Paths) -> Result<Usage> {
     let index = MeetingIndex::scan(paths.meetings())?;
-    let by_id: BTreeMap<&str, &crate::index::MeetingEntry> = index
-        .entries()
-        .iter()
-        .map(|e| (e.id.as_str(), e))
-        .collect();
+    let by_id: BTreeMap<&str, &crate::index::MeetingEntry> =
+        index.entries().iter().map(|e| (e.id.as_str(), e)).collect();
 
     let mut recordings = Vec::new();
     let mut orphaned = Vec::new();
     let audio_root = paths.audio();
 
-    for entry in std::fs::read_dir(&audio_root).into_iter().flatten().flatten() {
+    for entry in std::fs::read_dir(&audio_root)
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
         if !entry.file_type().is_ok_and(|t| t.is_dir()) {
             continue;
         }
@@ -146,8 +147,7 @@ pub fn prune(paths: &Paths, retention_days: u32, today: &str, dry_run: bool) -> 
     let freed_bytes = removed.iter().map(|r| r.bytes).sum();
     if !dry_run {
         for recording in &removed {
-            std::fs::remove_dir_all(&recording.path)
-                .map_err(|e| Error::io(&recording.path, e))?;
+            std::fs::remove_dir_all(&recording.path).map_err(|e| Error::io(&recording.path, e))?;
         }
     }
 
@@ -275,9 +275,20 @@ mod tests {
         assert_eq!(pruned.removed[0].id.as_str(), "old");
         assert_eq!(pruned.freed_bytes, 9_000);
 
-        assert!(paths.meetings().join("old.md").exists(), "a transcript was deleted");
-        assert!(!paths.audio_for(&MeetingId::from("old".to_string())).exists());
-        assert!(paths.audio_for(&MeetingId::from("new".to_string())).exists());
+        assert!(
+            paths.meetings().join("old.md").exists(),
+            "a transcript was deleted"
+        );
+        assert!(
+            !paths
+                .audio_for(&MeetingId::from("old".to_string()))
+                .exists()
+        );
+        assert!(
+            paths
+                .audio_for(&MeetingId::from("new".to_string()))
+                .exists()
+        );
     }
 
     #[test]
@@ -289,7 +300,9 @@ mod tests {
         assert_eq!(pruned.freed_bytes, 9_000);
         assert!(pruned.dry_run);
         assert!(
-            paths.audio_for(&MeetingId::from("old".to_string())).exists(),
+            paths
+                .audio_for(&MeetingId::from("old".to_string()))
+                .exists(),
             "a dry run deleted something"
         );
     }
@@ -302,7 +315,11 @@ mod tests {
 
         let pruned = prune(&paths, 0, "2026-08-10", false).unwrap();
         assert!(pruned.removed.is_empty());
-        assert!(paths.audio_for(&MeetingId::from("ancient".to_string())).exists());
+        assert!(
+            paths
+                .audio_for(&MeetingId::from("ancient".to_string()))
+                .exists()
+        );
     }
 
     #[test]
@@ -310,7 +327,10 @@ mod tests {
         let (_dir, paths) = vault();
         meeting(&paths, "edge", "2026-07-11", 1_000); // exactly 30 days before
         let pruned = prune(&paths, 30, "2026-08-10", true).unwrap();
-        assert!(pruned.removed.is_empty(), "deleted on the day it was still within retention");
+        assert!(
+            pruned.removed.is_empty(),
+            "deleted on the day it was still within retention"
+        );
 
         let pruned = prune(&paths, 30, "2026-08-11", true).unwrap();
         assert_eq!(pruned.removed.len(), 1);

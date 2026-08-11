@@ -16,7 +16,9 @@ import viJson from "./vi.json";
 
 describe("flatten", () => {
   it("turns nested json into dotted keys", () => {
-    expect(flatten({ nav: { record: "Ghi" } })).toEqual({ "nav.record": "Ghi" });
+    expect(flatten({ nav: { record: "Ghi" } })).toEqual({
+      "nav.record": "Ghi",
+    });
   });
 
   it("drops values that are not strings rather than coercing them", () => {
@@ -84,11 +86,11 @@ describe("plurals", () => {
   });
 
   it("falls back to the other form when a language lacks a category", () => {
-    expect(plural({ "a_other": "many" }, "a", 1, "en")).toBe("many");
+    expect(plural({ a_other: "many" }, "a", 1, "en")).toBe("many");
   });
 
   it("does not throw on a locale tag Intl does not know", () => {
-    expect(plural({ "a_other": "x" }, "a", 2, "not-a-locale!!")).toBe("x");
+    expect(plural({ a_other: "x" }, "a", 2, "not-a-locale!!")).toBe("x");
   });
 
   it("renders the key rather than blank when no form exists", () => {
@@ -108,7 +110,10 @@ describe("interpolate", () => {
 
 describe("fallbacks", () => {
   it("layers later catalogs over earlier ones", () => {
-    expect(mergeCatalogs({ a: "1", b: "2" }, { b: "3" })).toEqual({ a: "1", b: "3" });
+    expect(mergeCatalogs({ a: "1", b: "2" }, { b: "3" })).toEqual({
+      a: "1",
+      b: "3",
+    });
   });
 
   // Half-translated is the normal state of a locale someone contributed; it has to degrade to

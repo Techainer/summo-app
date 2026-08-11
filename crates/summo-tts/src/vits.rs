@@ -50,8 +50,12 @@ pub struct VitsFiles {
 impl VitsFiles {
     /// Resolve from a directory laid out the way sherpa's released models are.
     pub fn from_dir(dir: &Path) -> Result<Self> {
-        let model = first_matching(dir, |name| name.ends_with(".onnx"))
-            .ok_or_else(|| Error::msg("tts.no_model", format!("{} có không .onnx nào", dir.display())))?;
+        let model = first_matching(dir, |name| name.ends_with(".onnx")).ok_or_else(|| {
+            Error::msg(
+                "tts.no_model",
+                format!("{} có không .onnx nào", dir.display()),
+            )
+        })?;
         let tokens = dir.join("tokens.txt");
         if !tokens.is_file() {
             return Err(Error::msg(
@@ -75,11 +79,7 @@ fn first_matching(dir: &Path, matches: impl Fn(&str) -> bool) -> Option<std::pat
         .ok()?
         .flatten()
         .map(|e| e.path())
-        .filter(|p| {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(&matches)
-        })
+        .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(&matches))
         .collect();
     // Sorted so a directory with two graphs picks the same one every run rather than whichever the
     // filesystem happened to list first.
@@ -99,9 +99,8 @@ impl Vits {
     /// Load a voice from a directory of model files.
     pub fn load(dir: &Path, threads: usize) -> Result<Self> {
         let files = VitsFiles::from_dir(dir)?;
-        let path = |p: Option<std::path::PathBuf>| {
-            p.map(|p| p.display().to_string()).unwrap_or_default()
-        };
+        let path =
+            |p: Option<std::path::PathBuf>| p.map(|p| p.display().to_string()).unwrap_or_default();
 
         let config = sherpa_rs::tts::VitsTtsConfig {
             model: files.model.display().to_string(),

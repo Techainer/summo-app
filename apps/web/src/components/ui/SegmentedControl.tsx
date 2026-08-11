@@ -48,7 +48,7 @@ export function SegmentedControl<T extends string>({
       onValueChange={(next) => next && onChange(next as T)}
       aria-label={label}
       className={cn(
-        "inline-flex items-center rounded-full bg-bg-soft border border-line p-0.5",
+        "bg-bg-soft border-line inline-flex items-center rounded-full border p-0.5",
         className,
       )}
     >
@@ -67,7 +67,7 @@ export function SegmentedControl<T extends string>({
             {selected && (
               <motion.span
                 layoutId={layoutId}
-                className="absolute inset-0 rounded-full bg-accent"
+                className="bg-accent absolute inset-0 rounded-full"
                 transition={SPRING}
               />
             )}

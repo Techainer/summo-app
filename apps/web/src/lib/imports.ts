@@ -35,7 +35,6 @@ export interface Job {
   error?: string;
 }
 
-
 export interface StartOptions {
   model?: string;
   language?: string;
@@ -107,9 +106,7 @@ export function percent(job: Job): number | null {
  * any wording this could invent ("không có âm thanh" says what to fix), and it arrives already
  * written in whatever language the daemon speaks.
  */
-export type Described =
-  | { key: string; values: Record<string, string | number> }
-  | { text: string };
+export type Described = { key: string; values: Record<string, string | number> } | { text: string };
 
 /**
  * Describe a job as a key rather than as text.

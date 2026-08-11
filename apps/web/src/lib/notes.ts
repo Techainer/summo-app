@@ -25,7 +25,6 @@ export interface Note {
   sections: { heading: string; body: string }[];
 }
 
-
 export class NoteClient {
   constructor(private readonly handshake: Handshake) {}
 
@@ -65,7 +64,9 @@ export class NoteClient {
 
   async remove(id: string): Promise<boolean> {
     const body = await readJson<{ removed: boolean }>(
-      await fetch(url(this.handshake, `/notes/${encodeURIComponent(id)}`), { method: "DELETE" }),
+      await fetch(url(this.handshake, `/notes/${encodeURIComponent(id)}`), {
+        method: "DELETE",
+      }),
     );
     return body.removed;
   }

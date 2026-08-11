@@ -340,7 +340,11 @@ fn tools_in(base: &str) -> Vec<String> {
         }
         if let Some(rest) = line.trim().strip_prefix("- ") {
             let name = rest.trim().trim_matches('`');
-            let name = name.split_whitespace().next().unwrap_or("").trim_matches('`');
+            let name = name
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_matches('`');
             if !name.is_empty() {
                 out.push(name.to_string());
             }
@@ -365,10 +369,7 @@ fn seed(dir: &Path) -> Result<()> {
         let agent = dir.join(slug);
         std::fs::create_dir_all(&agent).map_err(|e| Error::io(&agent, e))?;
         write(&agent.join(DEFINITION), definition)?;
-        write(
-            &agent.join(MEMORY),
-            "# Memory\n\nNothing learned yet.\n",
-        )?;
+        write(&agent.join(MEMORY), "# Memory\n\nNothing learned yet.\n")?;
         write(&agent.join(TASKS), "# Tasks\n\n")?;
     }
     Ok(())
@@ -637,7 +638,11 @@ mod tests {
     #[test]
     fn the_base_file_is_where_tools_are_granted() {
         let (_tmp, roster) = roster();
-        assert!(roster.base_tools().contains(&"search_transcripts".to_string()));
+        assert!(
+            roster
+                .base_tools()
+                .contains(&"search_transcripts".to_string())
+        );
         assert!(roster.base_tools().contains(&"remember".to_string()));
     }
 

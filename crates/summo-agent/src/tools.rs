@@ -203,7 +203,10 @@ impl Tool for GetMeeting {
                     for segment in &detail.transcript {
                         out.push_str(&format!(
                             "{} — {}\n",
-                            segment.speaker.as_ref().map_or("?", summo_core::SpeakerId::as_str),
+                            segment
+                                .speaker
+                                .as_ref()
+                                .map_or("?", summo_core::SpeakerId::as_str),
                             segment.text
                         ));
                     }
@@ -578,7 +581,11 @@ mod tests {
             .execute(json!({ "query": "ngân sách" }))
             .await;
         assert!(!result.is_error, "{}", result.content);
-        assert!(result.content.contains("Họp ngân sách"), "{}", result.content);
+        assert!(
+            result.content.contains("Họp ngân sách"),
+            "{}",
+            result.content
+        );
     }
 
     #[tokio::test]
@@ -594,8 +601,18 @@ mod tests {
     #[tokio::test]
     async fn a_missing_argument_is_an_error_not_a_panic() {
         let (_d, paths) = vault_with("");
-        assert!(SearchTranscripts::new(paths.clone()).execute(json!({})).await.is_error);
-        assert!(GetMeeting::new(paths.clone()).execute(json!({})).await.is_error);
+        assert!(
+            SearchTranscripts::new(paths.clone())
+                .execute(json!({}))
+                .await
+                .is_error
+        );
+        assert!(
+            GetMeeting::new(paths.clone())
+                .execute(json!({}))
+                .await
+                .is_error
+        );
         assert!(UpdateTask::new(paths).execute(json!({})).await.is_error);
     }
 
@@ -606,10 +623,19 @@ mod tests {
 
         let brief = tool.execute(json!({ "id": "01A" })).await;
         assert!(brief.content.contains("Chốt ngân sách quý 4"));
-        assert!(!brief.content.contains("Mình cần chốt ngân sách trước thứ sáu"));
+        assert!(
+            !brief
+                .content
+                .contains("Mình cần chốt ngân sách trước thứ sáu")
+        );
 
-        let full = tool.execute(json!({ "id": "01A", "transcript": true })).await;
-        assert!(full.content.contains("Mình cần chốt ngân sách trước thứ sáu"));
+        let full = tool
+            .execute(json!({ "id": "01A", "transcript": true }))
+            .await;
+        assert!(
+            full.content
+                .contains("Mình cần chốt ngân sách trước thứ sáu")
+        );
     }
 
     /// The tools take ids, never paths, so a hallucinated path is simply not a meeting.
@@ -617,7 +643,9 @@ mod tests {
     async fn a_path_where_an_id_belongs_finds_nothing() {
         let (_d, paths) = vault_with("");
         for id in ["../../../etc/passwd", "/etc/passwd", "01A/../../secret"] {
-            let result = GetMeeting::new(paths.clone()).execute(json!({ "id": id })).await;
+            let result = GetMeeting::new(paths.clone())
+                .execute(json!({ "id": id }))
+                .await;
             assert!(result.is_error, "{id} was accepted: {}", result.content);
             assert!(!result.content.contains("root:"), "{id} leaked a file");
         }
@@ -653,14 +681,18 @@ mod tests {
             .await;
         assert!(!created.is_error, "{}", created.content);
 
-        let listed = ListTasks::new(paths.clone()).execute(json!({ "owner": "binh" })).await;
+        let listed = ListTasks::new(paths.clone())
+            .execute(json!({ "owner": "binh" }))
+            .await;
         assert!(listed.content.contains("Gửi báo giá"), "{}", listed.content);
 
         let moved = UpdateTask::new(paths.clone())
             .execute(json!({ "id": "T1", "status": "done" }))
             .await;
         assert!(!moved.is_error, "{}", moved.content);
-        let after = ListTasks::new(paths).execute(json!({ "status": "done" })).await;
+        let after = ListTasks::new(paths)
+            .execute(json!({ "status": "done" }))
+            .await;
         assert!(after.content.contains("Cũ"), "{}", after.content);
     }
 
@@ -680,7 +712,11 @@ mod tests {
         assert_eq!(tools.len(), 5);
         for tool in &tools {
             assert!(!tool.name().is_empty());
-            assert!(tool.description().len() > 20, "{} needs a real description", tool.name());
+            assert!(
+                tool.description().len() > 20,
+                "{} needs a real description",
+                tool.name()
+            );
             assert_eq!(tool.input_schema()["type"], "object", "{}", tool.name());
         }
         // The two that write are the two the engine should be able to gate on.

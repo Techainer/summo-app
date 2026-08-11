@@ -182,7 +182,10 @@ pub(crate) fn chosen_provider(paths: &Paths, agent: Option<&crate::roster::Agent
         summo_llm::provider::Provider::resolve_in(&catalogue, id, model.as_deref(), None);
 
     let Ok(provider) = provider else {
-        tracing::warn!(provider = id, "cannot resolve the configured provider for the agent");
+        tracing::warn!(
+            provider = id,
+            "cannot resolve the configured provider for the agent"
+        );
         return Chosen {
             provider: "anthropic".into(),
             model: model.unwrap_or_else(|| "claude-opus-5".into()),
@@ -399,7 +402,9 @@ mod tests {
     #[tokio::test]
     async fn a_task_that_is_not_the_agents_is_refused() {
         let dir = tempfile::tempdir().unwrap();
-        let err = run(&Paths::at(dir.path()), &task("ngoc")).await.unwrap_err();
+        let err = run(&Paths::at(dir.path()), &task("ngoc"))
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("not the agent's"), "{err}");
     }
 
@@ -409,7 +414,10 @@ mod tests {
             describe("search_transcripts", r#"{"query":"ngân sách"}"#),
             "Tìm trong transcript: “ngân sách”"
         );
-        assert_eq!(describe("create_task", r#"{"text":"Gửi báo giá"}"#), "Thêm việc: Gửi báo giá");
+        assert_eq!(
+            describe("create_task", r#"{"text":"Gửi báo giá"}"#),
+            "Thêm việc: Gửi báo giá"
+        );
         assert_eq!(describe("list_tasks", "{}"), "Xem danh sách việc");
     }
 
@@ -453,8 +461,15 @@ mod tests {
         recorder.emit_tool_result("1", "create_task", true, "nope");
 
         let after = recorder.snapshot();
-        assert!(after.steps[0].done, "a failed step is finished, not pending");
-        assert!(after.steps[0].text.contains("lỗi"), "{}", after.steps[0].text);
+        assert!(
+            after.steps[0].done,
+            "a failed step is finished, not pending"
+        );
+        assert!(
+            after.steps[0].text.contains("lỗi"),
+            "{}",
+            after.steps[0].text
+        );
         assert!(*recorder.failed.lock().unwrap());
     }
 

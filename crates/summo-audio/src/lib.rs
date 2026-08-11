@@ -12,11 +12,11 @@
 //! * **The audio callback must never block.** It cannot allocate, decode, or wait on a lock, so
 //!   captured frames go into a lock-free queue and the pipeline runs on another thread.
 
-pub mod record;
 pub mod capture;
 pub mod convert;
 pub mod device;
 pub mod loopback;
+pub mod record;
 
 pub use capture::{Capture, CaptureConfig, CaptureStats};
 pub use convert::{Framer, Resampling, to_mono};

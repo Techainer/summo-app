@@ -181,11 +181,8 @@ pub fn set_status(
     let Ok(text) = std::fs::read_to_string(path) else {
         return Ok(false);
     };
-    let mut found = summo_vault::tasks::parse_scoped(
-        &text,
-        file_label,
-        summo_vault::tasks::Scope::Everywhere,
-    );
+    let mut found =
+        summo_vault::tasks::parse_scoped(&text, file_label, summo_vault::tasks::Scope::Everywhere);
     let Some(task) = found.iter_mut().find(|t| t.id == id) else {
         return Ok(false);
     };
@@ -263,7 +260,10 @@ mod tests {
         }
         let facts = load(&path);
         assert_eq!(facts.len(), MAX_LINES);
-        assert_eq!(facts.last().unwrap().text, format!("fact {}", MAX_LINES + 9));
+        assert_eq!(
+            facts.last().unwrap().text,
+            format!("fact {}", MAX_LINES + 9)
+        );
         assert!(
             !facts.iter().any(|f| f.text == "fact 0"),
             "the oldest should have fallen off"

@@ -63,7 +63,10 @@ describe("correctionSummary", () => {
   });
 
   it("reports profiles the correction took samples away from", () => {
-    const summary = correctionSummary({ ...base, corrected_profiles: ["ngoc"] });
+    const summary = correctionSummary({
+      ...base,
+      corrected_profiles: ["ngoc"],
+    });
     expect(summary).toEqual([{ key: "people.unmerged", params: { count: "1" } }]);
   });
 
@@ -73,10 +76,7 @@ describe("correctionSummary", () => {
       relabelled_elsewhere: [{ meeting: "01A", utterances: 5 }],
       corrected_profiles: ["ngoc"],
     });
-    expect(summary.map((phrase) => phrase.key)).toEqual([
-      "people.relabelled",
-      "people.unmerged",
-    ]);
+    expect(summary.map((phrase) => phrase.key)).toEqual(["people.relabelled", "people.unmerged"]);
   });
 });
 

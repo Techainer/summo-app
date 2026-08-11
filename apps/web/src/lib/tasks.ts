@@ -55,7 +55,6 @@ export type ColumnStatus = "todo" | "doing" | "done" | "blocked";
  */
 export const COLUMNS: ColumnStatus[] = ["todo", "doing", "blocked", "done"];
 
-
 export class TaskClient {
   constructor(private readonly handshake: Handshake) {}
 
@@ -89,15 +88,17 @@ export class TaskClient {
   run(id: string): Promise<{ task: string; status: Status; outcome: string; steps: Step[] }> {
     return fetch(url(this.handshake, `/tasks/${encodeURIComponent(id)}/run`), {
       method: "POST",
-    }).then(readJson<{ task: string; status: Status; outcome: string; steps: Step[] }>);
+    }).then(
+      readJson<{
+        task: string;
+        status: Status;
+        outcome: string;
+        steps: Step[];
+      }>,
+    );
   }
 
-  async create(
-    meeting: string,
-    text: string,
-    owner?: string,
-    due?: string,
-  ): Promise<Task> {
+  async create(meeting: string, text: string, owner?: string, due?: string): Promise<Task> {
     return readJson<Task>(
       await fetch(url(this.handshake, `/meetings/${encodeURIComponent(meeting)}/tasks`), {
         method: "POST",

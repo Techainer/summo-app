@@ -5,13 +5,7 @@ import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { formatDuration } from "../lib/duration";
 import { useEngine } from "../lib/engine-context";
-import {
-  ReportClient,
-  share,
-  shiftDay,
-  today,
-  type Report,
-} from "../lib/report";
+import { ReportClient, share, shiftDay, today, type Report } from "../lib/report";
 
 type Range = "day" | "week" | "month";
 
@@ -49,7 +43,7 @@ export function AnalyticsScreen() {
     } catch (e) {
       setError(say(e));
     }
-  }, [client, range]);
+  }, [client, range, say]);
 
   useEffect(() => {
     void load();
@@ -62,7 +56,10 @@ export function AnalyticsScreen() {
         <SegmentedControl
           className="ml-auto"
           label={t("analytics.range")}
-          options={RANGES.map((r) => ({ value: r.value, label: t(r.labelKey) }))}
+          options={RANGES.map((r) => ({
+            value: r.value,
+            label: t(r.labelKey),
+          }))}
           value={range}
           onChange={setRange}
           size="sm"
@@ -70,38 +67,51 @@ export function AnalyticsScreen() {
       </div>
 
       {error && (
-        <p className="rounded-lg border border-rec/30 bg-rec-soft px-3 py-2 text-[13px] text-rec">
+        <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
           {error}
         </p>
       )}
 
       {report && report.meetings.length === 0 && (
-        <p className="mt-16 text-center text-fg-faint">{t("analytics.empty")}</p>
+        <p className="text-fg-faint mt-16 text-center">{t("analytics.empty")}</p>
       )}
 
       {report && report.meetings.length > 0 && (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Metric label={t("analytics.meetings")} value={String(report.meetings.length)} />
-            <Metric label={t("analytics.time")} value={formatDuration(report.total_seconds, locale)} />
+            <Metric
+              label={t("analytics.time")}
+              value={formatDuration(report.total_seconds, locale)}
+            />
             <Metric label={t("analytics.open_tasks")} value={String(report.open_actions.length)} />
-            <Metric label={t("analytics.unsummarised")} value={String(report.without_summary.length)} />
+            <Metric
+              label={t("analytics.unsummarised")}
+              value={String(report.without_summary.length)}
+            />
           </div>
 
           {report.people.length > 0 && (
             <Card>
-              <CardHeader title={t("analytics.time_with")} count={t("analytics.people_count", { count: report.people.length })} />
+              <CardHeader
+                title={t("analytics.time_with")}
+                count={t("analytics.people_count", {
+                  count: report.people.length,
+                })}
+              />
               <CardBody className="space-y-2">
                 {report.people.slice(0, 8).map((person) => (
                   <div key={person.name} className="flex items-center gap-3">
                     <span className="w-32 shrink-0 truncate text-sm">{person.name}</span>
-                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-bg-soft">
+                    <span className="bg-bg-soft h-2 flex-1 overflow-hidden rounded-full">
                       <span
-                        className="block h-full rounded-full bg-accent"
-                        style={{ width: `${share(person.seconds, report.total_seconds)}%` }}
+                        className="bg-accent block h-full rounded-full"
+                        style={{
+                          width: `${share(person.seconds, report.total_seconds)}%`,
+                        }}
                       />
                     </span>
-                    <span className="tabular w-24 shrink-0 text-right text-[13px] text-fg-dim">
+                    <span className="tabular text-fg-dim w-24 shrink-0 text-right text-[13px]">
                       {formatDuration(person.seconds, locale)}
                     </span>
                   </div>
@@ -114,19 +124,18 @@ export function AnalyticsScreen() {
             <Card>
               <CardHeader
                 title={t("analytics.todo")}
-                count={t("analytics.tasks_count", { count: report.open_actions.length })}
+                count={t("analytics.tasks_count", {
+                  count: report.open_actions.length,
+                })}
               />
               <CardBody className="space-y-1.5">
                 {report.open_actions.map((action, i) => (
-                  <div
-                    key={`${action.meeting}-${i}`}
-                    className="flex items-baseline gap-2 text-sm"
-                  >
+                  <div key={`${action.meeting}-${i}`} className="flex items-baseline gap-2 text-sm">
                     <span aria-hidden="true" className="text-fg-faint">
                       ☐
                     </span>
                     <span className="flex-1">{action.text}</span>
-                    <span className="shrink-0 text-[12px] text-fg-faint">
+                    <span className="text-fg-faint shrink-0 text-[12px]">
                       {action.meeting_title}
                     </span>
                   </div>
@@ -136,8 +145,10 @@ export function AnalyticsScreen() {
           )}
 
           {report.quiet_days.length > 0 && (
-            <p className="text-[13px] text-fg-faint">
-              {t("analytics.quiet_days", { days: report.quiet_days.join(", ") })}
+            <p className="text-fg-faint text-[13px]">
+              {t("analytics.quiet_days", {
+                days: report.quiet_days.join(", "),
+              })}
             </p>
           )}
         </>
@@ -149,7 +160,7 @@ export function AnalyticsScreen() {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <Card className="p-3">
-      <p className="text-[12px] text-fg-faint">{label}</p>
+      <p className="text-fg-faint text-[12px]">{label}</p>
       <p className="tabular mt-1 text-xl font-semibold">{value}</p>
     </Card>
   );

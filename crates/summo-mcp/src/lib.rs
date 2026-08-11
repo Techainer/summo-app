@@ -105,9 +105,9 @@ pub fn tools() -> Value {
         {
             "name": "search_meetings",
             "description": "Search every meeting transcript in the user's Summo vault and return \
-matching excerpts with the meeting they came from and their timestamps. Use this first for any \
-question about what was said, decided or agreed — it searches what the user actually recorded, not \
-general knowledge. Vietnamese is matched with or without diacritics.",
+    matching excerpts with the meeting they came from and their timestamps. Use this first for any \
+    question about what was said, decided or agreed — it searches what the user actually recorded, not \
+    general knowledge. Vietnamese is matched with or without diacritics.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -123,8 +123,8 @@ general knowledge. Vietnamese is matched with or without diacritics.",
         {
             "name": "get_meeting",
             "description": "Read one meeting in full: its summary, sections and whole transcript. \
-Use after search_meetings when the excerpts are not enough and you need the surrounding \
-conversation.",
+    Use after search_meetings when the excerpts are not enough and you need the surrounding \
+    conversation.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -136,8 +136,8 @@ conversation.",
         {
             "name": "list_meetings",
             "description": "List recent meetings with their dates, titles and folders. Use to find \
-out what the user has been in, or when a search turns up nothing and you need to check whether the \
-meeting exists at all.",
+    out what the user has been in, or when a search turns up nothing and you need to check whether the \
+    meeting exists at all.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -148,7 +148,7 @@ meeting exists at all.",
         {
             "name": "list_tasks",
             "description": "List the open tasks across the vault, with who they are assigned to and \
-when they are due. Tasks assigned to @agent are ones Summo runs itself.",
+    when they are due. Tasks assigned to @agent are ones Summo runs itself.",
             "inputSchema": { "type": "object", "properties": {} }
         }
     ])
@@ -183,7 +183,10 @@ pub fn handle(paths: &Paths, request: &Request) -> Option<Response> {
 
 fn call(paths: &Paths, id: Value, params: &Value) -> Response {
     let name = params.get("name").and_then(Value::as_str).unwrap_or("");
-    let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+    let args = params
+        .get("arguments")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
 
     let result = match name {
         "search_meetings" => search(paths, &args),
@@ -194,10 +197,7 @@ fn call(paths: &Paths, id: Value, params: &Value) -> Response {
     };
 
     match result {
-        Ok(text) => Response::ok(
-            id,
-            json!({ "content": [{ "type": "text", "text": text }] }),
-        ),
+        Ok(text) => Response::ok(id, json!({ "content": [{ "type": "text", "text": text }] })),
         // A tool failure is reported as tool content with `isError`, not as a JSON-RPC error: the
         // model should see what went wrong and be able to try something else, rather than have the
         // client treat it as a transport fault.
@@ -278,7 +278,11 @@ fn get_meeting(paths: &Paths, args: &Value) -> Result<String, String> {
     );
 
     for section in &detail.sections {
-        out.push_str(&format!("## {}\n{}\n\n", section.heading, section.body.trim()));
+        out.push_str(&format!(
+            "## {}\n{}\n\n",
+            section.heading,
+            section.body.trim()
+        ));
     }
 
     if !detail.transcript.is_empty() {
@@ -427,7 +431,12 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            ["search_meetings", "get_meeting", "list_meetings", "list_tasks"]
+            [
+                "search_meetings",
+                "get_meeting",
+                "list_meetings",
+                "list_tasks"
+            ]
         );
     }
 
@@ -472,10 +481,12 @@ mod tests {
         assert!(response.error.is_none());
         let result = response.result.unwrap();
         assert_eq!(result["isError"], true);
-        assert!(result["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("unknown tool"));
+        assert!(
+            result["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("unknown tool")
+        );
     }
 
     #[test]
@@ -517,15 +528,20 @@ mod tests {
         let (_tmp, paths) = empty_vault();
         let response = handle(
             &paths,
-            &request("tools/call", json!({ "name": "get_meeting", "arguments": {} })),
+            &request(
+                "tools/call",
+                json!({ "name": "get_meeting", "arguments": {} }),
+            ),
         )
         .unwrap();
         let result = response.result.unwrap();
         assert_eq!(result["isError"], true);
-        assert!(result["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("needs an id"));
+        assert!(
+            result["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("needs an id")
+        );
     }
 
     #[test]
@@ -533,21 +549,31 @@ mod tests {
         let (_tmp, paths) = empty_vault();
         let response = handle(
             &paths,
-            &request("tools/call", json!({ "name": "list_meetings", "arguments": {} })),
+            &request(
+                "tools/call",
+                json!({ "name": "list_meetings", "arguments": {} }),
+            ),
         )
         .unwrap();
         let result = response.result.unwrap();
         assert!(result.get("isError").is_none());
-        assert!(result["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("no meetings"));
+        assert!(
+            result["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("no meetings")
+        );
     }
 
     #[test]
     fn ping_answers() {
         let (_tmp, paths) = empty_vault();
-        assert!(handle(&paths, &request("ping", json!({}))).unwrap().error.is_none());
+        assert!(
+            handle(&paths, &request("ping", json!({})))
+                .unwrap()
+                .error
+                .is_none()
+        );
     }
 
     /// Read-only is a property of the tool list, and it has to stay one. Anything here that could
@@ -556,7 +582,9 @@ mod tests {
     fn no_tool_is_a_writing_tool() {
         for tool in tools().as_array().unwrap() {
             let name = tool["name"].as_str().unwrap();
-            for verb in ["create", "update", "delete", "write", "start", "record", "set"] {
+            for verb in [
+                "create", "update", "delete", "write", "start", "record", "set",
+            ] {
                 assert!(
                     !name.starts_with(verb),
                     "`{name}` looks like it writes; this server is read-only"

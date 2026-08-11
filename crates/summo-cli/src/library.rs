@@ -261,7 +261,12 @@ pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
             if !usage.recordings.is_empty() {
                 println!("\nlargest recordings");
                 for r in usage.recordings.iter().take(10) {
-                    println!("  {:>9}  {}  {}", mb(r.bytes), r.day, truncate(&r.title, 40));
+                    println!(
+                        "  {:>9}  {}  {}",
+                        mb(r.bytes),
+                        r.day,
+                        truncate(&r.title, 40)
+                    );
                 }
             }
             if !usage.orphaned.is_empty() {
@@ -297,7 +302,9 @@ pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
                     }
                 }
                 if settings.storage.audio_retention_days == 0 {
-                    println!("retention is off (storage.audio_retention_days = 0), so nothing ages out");
+                    println!(
+                        "retention is off (storage.audio_retention_days = 0), so nothing ages out"
+                    );
                 }
             }
             Ok(())
@@ -404,10 +411,8 @@ fn parse_group(name: &str) -> Result<GroupBy> {
 /// by a few hours is better than refusing to print the library.
 /// Shift a `YYYY-MM-DD` by whole days, leaving it alone if it will not parse.
 fn shift(day: &str, days: i64) -> String {
-    let Ok(date) = time::Date::parse(
-        day,
-        &time::format_description::well_known::Iso8601::DATE,
-    ) else {
+    let Ok(date) = time::Date::parse(day, &time::format_description::well_known::Iso8601::DATE)
+    else {
         return day.to_string();
     };
     (date + time::Duration::days(days)).to_string()
@@ -435,7 +440,11 @@ fn print_report(report: &summo_vault::report::Report) {
             "  {:>6}  {}{}",
             duration(meeting.duration),
             meeting.title,
-            if meeting.has_summary { "" } else { "  (chưa tóm tắt)" }
+            if meeting.has_summary {
+                ""
+            } else {
+                "  (chưa tóm tắt)"
+            }
         );
     }
 

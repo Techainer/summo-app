@@ -112,8 +112,12 @@ mod tests {
 
     #[test]
     fn a_plan_is_written_under_its_task() {
-        let out = replace_steps("## Việc cần làm\n- [ ] @agent X <!-- id:T1 -->\n", 1, &steps(&[("một", false)]))
-            .expect("replace");
+        let out = replace_steps(
+            "## Việc cần làm\n- [ ] @agent X <!-- id:T1 -->\n",
+            1,
+            &steps(&[("một", false)]),
+        )
+        .expect("replace");
         assert!(out.contains("  - [ ] một"), "{out}");
     }
 
@@ -121,7 +125,10 @@ mod tests {
     fn an_existing_plan_is_replaced_not_appended() {
         let out = replace_steps(DOC, 1, &steps(&[("mới", false)])).expect("replace");
         assert!(out.contains("  - [ ] mới"), "{out}");
-        assert!(!out.contains("Quét ghi chú"), "the old plan survived: {out}");
+        assert!(
+            !out.contains("Quét ghi chú"),
+            "the old plan survived: {out}"
+        );
         assert!(!out.contains("Soạn sự kiện"));
     }
 
@@ -134,7 +141,8 @@ mod tests {
 
     #[test]
     fn a_finished_step_is_ticked() {
-        let out = replace_steps(DOC, 1, &steps(&[("xong", true), ("chưa", false)])).expect("replace");
+        let out =
+            replace_steps(DOC, 1, &steps(&[("xong", true), ("chưa", false)])).expect("replace");
         assert!(out.contains("  - [x] xong"), "{out}");
         assert!(out.contains("  - [ ] chưa"));
     }

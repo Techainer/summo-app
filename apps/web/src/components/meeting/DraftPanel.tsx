@@ -28,7 +28,10 @@ interface Props {
  */
 export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard }: Props) {
   const { t, n } = useI18n();
-  const [picked, setPicked] = useState<{ heading: string; text: string } | null>(null);
+  const [picked, setPicked] = useState<{
+    heading: string;
+    text: string;
+  } | null>(null);
   const [instruction, setInstruction] = useState("");
   const [message, setMessage] = useState("");
 
@@ -67,17 +70,14 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
       />
 
       <CardBody className="space-y-4">
-        <p className="text-[12px] text-fg-faint">
-          {t("draft.select_hint")}
-        </p>
+        <p className="text-fg-faint text-[12px]">{t("draft.select_hint")}</p>
 
         {draft.sections.map((section) => (
           <section key={section.heading}>
-            <h3 className="text-[13px] font-semibold text-fg-dim">{section.heading}</h3>
+            <h3 className="text-fg-dim text-[13px] font-semibold">{section.heading}</h3>
             <p
               // The tint is the whole signal: this text is in the note but nobody has agreed to it.
-              className="mt-1 whitespace-pre-wrap rounded-md bg-accent-soft px-2 py-1.5 leading-relaxed
-                selection:bg-accent selection:text-accent-fg"
+              className="bg-accent-soft selection:bg-accent selection:text-accent-fg mt-1 rounded-md px-2 py-1.5 leading-relaxed whitespace-pre-wrap"
               onMouseUp={(e) => onSelect(section.heading, e.currentTarget)}
               onKeyUp={(e) => onSelect(section.heading, e.currentTarget)}
             >
@@ -87,8 +87,8 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
         ))}
 
         {picked && (
-          <div className="rounded-[var(--radius-card)] border border-accent/40 bg-bg-soft p-2.5">
-            <p className="text-[12px] text-fg-dim">
+          <div className="border-accent/40 bg-bg-soft rounded-[var(--radius-card)] border p-2.5">
+            <p className="text-fg-dim text-[12px]">
               {t("draft.revising", { heading: picked.heading })}{" "}
               <span className="italic">“{shorten(picked.text)}”</span>
             </p>
@@ -106,7 +106,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
                 placeholder={t("draft.revise_placeholder")}
                 aria-label={t("draft.revise_label")}
                 disabled={busy}
-                className="flex-1 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-sm"
+                className="border-line bg-bg flex-1 rounded-lg border px-2.5 py-1.5 text-sm"
               />
               <Button size="sm" variant="primary" type="submit" busy={busy}>
                 {t("draft.apply")}
@@ -119,16 +119,15 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
         )}
 
         {draft.turns.length > 0 && (
-          <ol className="space-y-1.5 border-t border-line pt-3">
+          <ol className="border-line space-y-1.5 border-t pt-3">
             {draft.turns.map((turn, i) => (
               <li
                 key={`${turn.role}-${i}`}
-                className={cn(
-                  "text-[13px]",
-                  turn.role === "you" ? "text-fg" : "text-fg-faint",
-                )}
+                className={cn("text-[13px]", turn.role === "you" ? "text-fg" : "text-fg-faint")}
               >
-                <span className="font-medium">{turn.role === "you" ? t("draft.you") : t("draft.agent")}: </span>
+                <span className="font-medium">
+                  {turn.role === "you" ? t("draft.you") : t("draft.agent")}:{" "}
+                </span>
                 {turn.text}
               </li>
             ))}
@@ -136,7 +135,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
         )}
 
         <form
-          className="flex gap-2 border-t border-line pt-3"
+          className="border-line flex gap-2 border-t pt-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!message.trim()) return;
@@ -150,7 +149,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
             placeholder={t("draft.chat_placeholder")}
             aria-label={t("draft.chat_send")}
             disabled={busy}
-            className="flex-1 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-sm"
+            className="border-line bg-bg flex-1 rounded-lg border px-2.5 py-1.5 text-sm"
           />
           <Button size="sm" type="submit" busy={busy}>
             {t("draft.send")}

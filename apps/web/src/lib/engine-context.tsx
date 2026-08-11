@@ -72,7 +72,11 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const onEvent = useCallback((event: Event) => {
     switch (event.kind) {
       case "stat":
-        setStat({ rtf: event.rtf, rss_mb: event.rss_mb, queue_ms: event.queue_ms });
+        setStat({
+          rtf: event.rtf,
+          rss_mb: event.rss_mb,
+          queue_ms: event.queue_ms,
+        });
         break;
       case "error":
         setNotice(event.message);
@@ -162,7 +166,20 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       stop,
       toggle,
     }),
-    [library, people, handshake, session, transcript, elapsed, level, stat, notice, start, stop, toggle],
+    [
+      library,
+      people,
+      handshake,
+      session,
+      transcript,
+      elapsed,
+      level,
+      stat,
+      notice,
+      start,
+      stop,
+      toggle,
+    ],
   );
 
   return <EngineContext.Provider value={value}>{children}</EngineContext.Provider>;

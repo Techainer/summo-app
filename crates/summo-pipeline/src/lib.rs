@@ -292,12 +292,15 @@ mod tests {
     fn ordinary_frames_are_not_reinstated() {
         let mut pipeline = Pipeline::new().then(Blackhole);
         assert!(pipeline.push(audio()).unwrap().is_empty());
-        assert!(pipeline.push(Frame::Voice {
-            lane: Lane::Mic,
-            probability: 0.5
-        })
-        .unwrap()
-        .is_empty());
+        assert!(
+            pipeline
+                .push(Frame::Voice {
+                    lane: Lane::Mic,
+                    probability: 0.5
+                })
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

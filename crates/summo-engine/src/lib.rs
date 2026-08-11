@@ -15,8 +15,8 @@
 
 pub mod agenda;
 pub mod archive;
-pub mod assets;
 pub mod ask;
+pub mod assets;
 pub mod audio_stream;
 pub mod auth;
 pub mod board;
@@ -37,9 +37,9 @@ pub mod recorder;
 pub mod offline;
 #[cfg(feature = "models")]
 pub mod runner;
+pub mod server;
 #[cfg(feature = "models")]
 pub mod stages;
-pub mod server;
 pub mod state;
 pub mod summarize;
 pub mod translate;

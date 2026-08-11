@@ -30,9 +30,9 @@ pub mod translation;
 pub mod write;
 
 pub use export::{Format, Options as ExportOptions, export};
-pub use library::{Library, LibraryQuery, LibraryView, MeetingDetail, MeetingSummary};
-pub use storage::{Pruned, Usage, human_bytes};
-pub use write::write_atomically;
 pub use index::{Filter, Group, Hit, MeetingEntry, MeetingIndex, Stats, fold, open};
+pub use library::{Library, LibraryQuery, LibraryView, MeetingDetail, MeetingSummary};
 pub use meeting::{Frontmatter, MeetingDoc};
 pub use slug::{meeting_stem, slugify};
+pub use storage::{Pruned, Usage, human_bytes};
+pub use write::write_atomically;

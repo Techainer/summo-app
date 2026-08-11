@@ -234,9 +234,12 @@ pub fn parse_scoped(markdown: &str, file: &str, scope: Scope) -> Vec<Task> {
 /// to have reformatted.
 pub fn update(markdown: &str, task: &Task) -> Result<String> {
     let mut lines: Vec<&str> = markdown.lines().collect();
-    let line = lines
-        .get_mut(task.line)
-        .ok_or_else(|| Error::Other(format!("line {} is past the end of {}", task.line, task.file)))?;
+    let line = lines.get_mut(task.line).ok_or_else(|| {
+        Error::Other(format!(
+            "line {} is past the end of {}",
+            task.line, task.file
+        ))
+    })?;
 
     let indent = &line[..line.len() - line.trim_start().len()];
     if checkbox(line.trim()).is_none() {
@@ -378,7 +381,10 @@ mod tests {
     #[test]
     fn in_a_note_a_checkbox_anywhere_is_a_task() {
         let markdown = "# Ý tưởng\n\nMột dòng bất kỳ.\n- [ ] @ngoc Gọi khách\n";
-        assert!(parse(markdown, "notes/x.md").is_empty(), "not in the default scope");
+        assert!(
+            parse(markdown, "notes/x.md").is_empty(),
+            "not in the default scope"
+        );
 
         let found = parse_scoped(markdown, "notes/x.md", Scope::Everywhere);
         assert_eq!(found.len(), 1);
@@ -421,7 +427,12 @@ Không phải việc.
     #[test]
     fn only_checkboxes_under_a_task_heading_count() {
         let tasks = parse(DOC, "m.md");
-        assert_eq!(tasks.len(), 3, "{:?}", tasks.iter().map(|t| &t.text).collect::<Vec<_>>());
+        assert_eq!(
+            tasks.len(),
+            3,
+            "{:?}",
+            tasks.iter().map(|t| &t.text).collect::<Vec<_>>()
+        );
         assert!(tasks.iter().all(|t| !t.text.contains("ngoài mục việc")));
     }
 
@@ -466,7 +477,11 @@ Không phải việc.
         let first = parse(doc, "m.md")[0].id.clone();
         let second = parse(doc, "m.md")[0].id.clone();
         assert_eq!(first, second, "reading twice must not produce two rows");
-        assert_ne!(first, parse(doc, "khac.md")[0].id, "different files, different ids");
+        assert_ne!(
+            first,
+            parse(doc, "khac.md")[0].id,
+            "different files, different ids"
+        );
     }
 
     #[test]
@@ -480,7 +495,10 @@ Không phải việc.
         // Everything else survives byte for byte.
         assert!(out.contains("Không phải việc."));
         assert!(out.contains("- [ ] dòng này ngoài mục việc"));
-        assert!(out.contains("  - [x] Quét ghi chú tìm mốc"), "steps kept their indent");
+        assert!(
+            out.contains("  - [x] Quét ghi chú tìm mốc"),
+            "steps kept their indent"
+        );
     }
 
     #[test]
@@ -501,7 +519,11 @@ Không phải việc.
         for task in &tasks {
             doc = update(&doc, task).expect("update");
         }
-        assert_eq!(parse(&doc, "m.md"), tasks, "rewriting unchanged tasks changed them");
+        assert_eq!(
+            parse(&doc, "m.md"),
+            tasks,
+            "rewriting unchanged tasks changed them"
+        );
     }
 
     /// The file is the user's; it can change underneath a board that was rendered a minute ago.

@@ -215,7 +215,11 @@ mod tests {
 
     #[test]
     fn blank_tokens_count_as_absent() {
-        assert!(!Credentials::none().with_huggingface("   ").has_huggingface());
+        assert!(
+            !Credentials::none()
+                .with_huggingface("   ")
+                .has_huggingface()
+        );
         assert!(!Credentials::none().with_huggingface("").has_huggingface());
     }
 
@@ -280,6 +284,10 @@ mod live {
             .send()
             .await
             .expect("request");
-        assert!(authorised.status().is_success(), "got {}", authorised.status());
+        assert!(
+            authorised.status().is_success(),
+            "got {}",
+            authorised.status()
+        );
     }
 }

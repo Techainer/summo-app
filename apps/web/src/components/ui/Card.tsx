@@ -2,14 +2,11 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
 
-export function Card({
-  className,
-  ...props
-}: HTMLAttributes<HTMLDivElement>) {
+export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-card)] border border-line bg-bg-raised shadow-[var(--shadow-card)]",
+        "border-line bg-bg-raised rounded-[var(--radius-card)] border shadow-[var(--shadow-card)]",
         className,
       )}
       {...props}
@@ -39,9 +36,7 @@ export function CardHeader({
     <div className={cn("flex items-center gap-3 px-4 py-3", className)}>
       <h2 className="text-[15px] font-semibold tracking-tight">
         {title}
-        {count !== undefined && (
-          <span className="ml-2 font-normal text-fg-faint">· {count}</span>
-        )}
+        {count !== undefined && <span className="text-fg-faint ml-2 font-normal">· {count}</span>}
       </h2>
       {actions && <div className="ml-auto flex items-center gap-1.5">{actions}</div>}
     </div>

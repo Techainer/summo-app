@@ -76,14 +76,14 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
 
   if (!current) {
     return (
-      <p className="rounded-[var(--radius-card)] border border-line bg-bg-soft px-4 py-3 text-[13px] text-fg-faint">
+      <p className="border-line bg-bg-soft text-fg-faint rounded-[var(--radius-card)] border px-4 py-3 text-[13px]">
         {t("meeting.no_audio")}
       </p>
     );
   }
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-bg-raised p-3">
+    <div className="border-line bg-bg-raised rounded-[var(--radius-card)] border p-3">
       <audio
         ref={audio}
         src={current.url}
@@ -102,7 +102,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
           type="button"
           onClick={toggle}
           aria-label={playing ? t("meeting.pause") : t("meeting.play")}
-          className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-fg hover:brightness-110"
+          className="bg-accent text-accent-fg grid size-9 shrink-0 place-items-center rounded-full hover:brightness-110"
         >
           <span aria-hidden="true">{playing ? "⏸" : "▶"}</span>
         </button>
@@ -119,7 +119,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
           }}
         />
 
-        <span className="tabular shrink-0 text-[12px] text-fg-dim">
+        <span className="tabular text-fg-dim shrink-0 text-[12px]">
           {clock(time)} / {clock(duration)}
         </span>
       </div>
@@ -144,7 +144,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
               className={cn(
                 "tabular rounded-full px-2 py-1 text-[12px] transition-colors",
                 speed === option
-                  ? "bg-accent-soft font-medium text-accent"
+                  ? "bg-accent-soft text-accent font-medium"
                   : "text-fg-faint hover:text-fg",
               )}
             >
@@ -154,7 +154,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
         </div>
       </div>
 
-      {error && <p className="mt-2 text-[12px] text-rec">{error}</p>}
+      {error && <p className="text-rec mt-2 text-[12px]">{error}</p>}
     </div>
   );
 }
@@ -186,18 +186,13 @@ function Scrubber({
         onChange={(e) => onSeek(Number(e.target.value))}
         aria-label={t("meeting.seek")}
         aria-valuetext={clock(time)}
-        className="peer relative z-10 h-6 w-full cursor-pointer appearance-none bg-transparent
-          [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none
-          [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent"
+        className="peer [&::-webkit-slider-thumb]:bg-accent relative z-10 h-6 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full"
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-bg-soft"
+        className="bg-bg-soft pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full"
       >
-        <span
-          className="block h-full rounded-full bg-accent"
-          style={{ width: `${percent}%` }}
-        />
+        <span className="bg-accent block h-full rounded-full" style={{ width: `${percent}%` }} />
       </span>
       {/* Where somebody was speaking. The gaps are the silences. */}
       {duration > 0 &&
@@ -205,7 +200,7 @@ function Scrubber({
           <span
             key={`${at}-${i}`}
             aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 h-2 w-px -translate-y-1/2 bg-fg-faint/50"
+            className="bg-fg-faint/50 pointer-events-none absolute top-1/2 h-2 w-px -translate-y-1/2"
             style={{ left: `${Math.min((at / duration) * 100, 100)}%` }}
           />
         ))}

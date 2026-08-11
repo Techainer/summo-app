@@ -101,17 +101,30 @@ pub fn sync(
         let local_file = snapshot::absolute(vault, path);
 
         match &step.action {
-            Action::Upload | Action::Resurrect { edited_on: Side::Local } => {
+            Action::Upload
+            | Action::Resurrect {
+                edited_on: Side::Local,
+            } => {
                 let bytes = std::fs::read(&local_file).map_err(|e| Error::io(&local_file, e))?;
                 push(remote, key, &bytes)?;
-                agreed.files.insert(path.clone(), entry_for(&bytes, &local_file));
+                agreed
+                    .files
+                    .insert(path.clone(), entry_for(&bytes, &local_file));
             }
 
-            Action::Download | Action::Resurrect { edited_on: Side::Remote } => {
-                let want = their_snapshot.get(path).map(|e| e.hash.as_str()).unwrap_or_default();
+            Action::Download
+            | Action::Resurrect {
+                edited_on: Side::Remote,
+            } => {
+                let want = their_snapshot
+                    .get(path)
+                    .map(|e| e.hash.as_str())
+                    .unwrap_or_default();
                 let bytes = fetch(remote, key, want, path)?;
                 write_file(&local_file, &bytes)?;
-                agreed.files.insert(path.clone(), entry_for(&bytes, &local_file));
+                agreed
+                    .files
+                    .insert(path.clone(), entry_for(&bytes, &local_file));
             }
 
             Action::DeleteRemote => {
@@ -134,7 +147,10 @@ pub fn sync(
 
             Action::Merge => {
                 let mine = std::fs::read(&local_file).map_err(|e| Error::io(&local_file, e))?;
-                let want = their_snapshot.get(path).map(|e| e.hash.as_str()).unwrap_or_default();
+                let want = their_snapshot
+                    .get(path)
+                    .map(|e| e.hash.as_str())
+                    .unwrap_or_default();
                 let theirs = fetch(remote, key, want, path)?;
 
                 // The ancestor's *contents*. Blobs are addressed by content, so the version the two
@@ -160,9 +176,12 @@ pub fn sync(
                                     .insert(path.clone(), entry_for(text.as_bytes(), &local_file));
                             }
                             crate::merge::Merged::Conflict { .. } => {
-                                outcome
-                                    .conflicts
-                                    .push(keep_both(vault, path, &theirs, remote.name().as_str())?);
+                                outcome.conflicts.push(keep_both(
+                                    vault,
+                                    path,
+                                    &theirs,
+                                    remote.name().as_str(),
+                                )?);
                                 // Deliberately not recorded as agreed: nothing was reconciled, so
                                 // the next run must look at this file again.
                             }
@@ -171,9 +190,12 @@ pub fn sync(
                     // Not text. A merge is meaningless, so both versions are kept — the same answer
                     // as a conflict, reached for a different reason.
                     _ => {
-                        outcome
-                            .conflicts
-                            .push(keep_both(vault, path, &theirs, remote.name().as_str())?);
+                        outcome.conflicts.push(keep_both(
+                            vault,
+                            path,
+                            &theirs,
+                            remote.name().as_str(),
+                        )?);
                     }
                 }
             }
@@ -185,7 +207,9 @@ pub fn sync(
     let mut published = agreed.clone();
     for conflict in &outcome.conflicts {
         if let Some(theirs) = their_snapshot.get(&conflict.path) {
-            published.files.insert(conflict.path.clone(), theirs.clone());
+            published
+                .files
+                .insert(conflict.path.clone(), theirs.clone());
         }
     }
 
@@ -381,7 +405,10 @@ mod tests {
         laptop.sync(&mut remote);
         desktop.sync(&mut remote);
 
-        assert_eq!(desktop.read("meetings/a.md").as_deref(), Some("# Họp\n\nnội dung\n"));
+        assert_eq!(
+            desktop.read("meetings/a.md").as_deref(),
+            Some("# Họp\n\nnội dung\n")
+        );
     }
 
     #[test]
@@ -470,8 +497,14 @@ mod tests {
         laptop.sync(&mut remote);
         desktop.sync(&mut remote);
 
-        laptop.write("a.md", "## Việc cần làm\n\n- [ ] @ngoc Chốt spec\n- [ ] @minh Đo M1\n");
-        desktop.write("a.md", "## Việc cần làm\n\n- [ ] @ngoc Chốt spec\n- [ ] @viet Release note\n");
+        laptop.write(
+            "a.md",
+            "## Việc cần làm\n\n- [ ] @ngoc Chốt spec\n- [ ] @minh Đo M1\n",
+        );
+        desktop.write(
+            "a.md",
+            "## Việc cần làm\n\n- [ ] @ngoc Chốt spec\n- [ ] @viet Release note\n",
+        );
 
         laptop.sync(&mut remote);
         desktop.sync(&mut remote);
@@ -573,14 +606,29 @@ mod tests {
         laptop.sync(&mut remote);
 
         let mut seen = Vec::new();
-        for entry in walkdir::WalkDir::new(relay_dir.path()).into_iter().flatten() {
+        for entry in walkdir::WalkDir::new(relay_dir.path())
+            .into_iter()
+            .flatten()
+        {
             seen.push(entry.file_name().to_string_lossy().into_owned());
             if entry.file_type().is_file() {
                 let bytes = std::fs::read(entry.path()).unwrap();
                 let text = String::from_utf8_lossy(&bytes);
-                assert!(!text.contains("40 triệu"), "contents readable in {:?}", entry.path());
-                assert!(!text.contains("Thương vụ"), "contents readable in {:?}", entry.path());
-                assert!(!text.contains("meetings"), "a path leaked in {:?}", entry.path());
+                assert!(
+                    !text.contains("40 triệu"),
+                    "contents readable in {:?}",
+                    entry.path()
+                );
+                assert!(
+                    !text.contains("Thương vụ"),
+                    "contents readable in {:?}",
+                    entry.path()
+                );
+                assert!(
+                    !text.contains("meetings"),
+                    "a path leaked in {:?}",
+                    entry.path()
+                );
             }
         }
         let names = seen.join(" ");
@@ -604,7 +652,10 @@ mod tests {
             &wrong,
             "intruder",
         );
-        assert!(result.is_err(), "the vault opened with the wrong passphrase");
+        assert!(
+            result.is_err(),
+            "the vault opened with the wrong passphrase"
+        );
     }
 
     // ---- crash safety --------------------------------------------------------------------------
@@ -644,7 +695,14 @@ mod tests {
         laptop.write("a.md", "một\n");
 
         assert!(
-            sync(&laptop.vault(), &laptop.state(), &mut remote, &laptop.key, "laptop").is_err()
+            sync(
+                &laptop.vault(),
+                &laptop.state(),
+                &mut remote,
+                &laptop.key,
+                "laptop"
+            )
+            .is_err()
         );
         assert!(
             Snapshot::read(&laptop.state().join("base.json")).is_empty(),
@@ -675,13 +733,29 @@ mod tests {
         let desktop = Machine::new("desktop");
 
         laptop.write("agents/AGENTS.md", "# Rules\n");
-        laptop.write("agents/scribe/AGENT.md", "---\nname: Scribe\n---\n\nWrite.\n");
-        laptop.write("agents/scribe/MEMORY.md", "- 2026-08-11 — Ngọc leads product\n");
+        laptop.write(
+            "agents/scribe/AGENT.md",
+            "---\nname: Scribe\n---\n\nWrite.\n",
+        );
+        laptop.write(
+            "agents/scribe/MEMORY.md",
+            "- 2026-08-11 — Ngọc leads product\n",
+        );
         laptop.sync(&mut remote);
         desktop.sync(&mut remote);
 
-        assert!(desktop.read("agents/scribe/AGENT.md").unwrap().contains("Scribe"));
-        assert!(desktop.read("agents/scribe/MEMORY.md").unwrap().contains("Ngọc"));
+        assert!(
+            desktop
+                .read("agents/scribe/AGENT.md")
+                .unwrap()
+                .contains("Scribe")
+        );
+        assert!(
+            desktop
+                .read("agents/scribe/MEMORY.md")
+                .unwrap()
+                .contains("Ngọc")
+        );
     }
 
     /// Two machines whose agents each learned something different should end up knowing both.
@@ -695,8 +769,14 @@ mod tests {
         laptop.sync(&mut remote);
         desktop.sync(&mut remote);
 
-        laptop.write("agents/scribe/MEMORY.md", "# Memory\n\n- 2026-08-10 — a\n- 2026-08-11 — laptop learned b\n");
-        desktop.write("agents/scribe/MEMORY.md", "# Memory\n\n- 2026-08-10 — a\n- 2026-08-11 — desktop learned c\n");
+        laptop.write(
+            "agents/scribe/MEMORY.md",
+            "# Memory\n\n- 2026-08-10 — a\n- 2026-08-11 — laptop learned b\n",
+        );
+        desktop.write(
+            "agents/scribe/MEMORY.md",
+            "# Memory\n\n- 2026-08-10 — a\n- 2026-08-11 — desktop learned c\n",
+        );
 
         laptop.sync(&mut remote);
         desktop.sync(&mut remote);

@@ -163,7 +163,10 @@ pub fn suggest(paths: &Paths, started_epoch: i64) -> Option<Suggestion> {
 pub fn install(paths: &Paths, source: &std::path::Path, name: &str) -> Result<std::path::PathBuf> {
     let name = safe_name(name);
     if name.is_empty() {
-        return Err(summo_core::Error::msg("calendar.no_name", "lịch cần có tên"));
+        return Err(summo_core::Error::msg(
+            "calendar.no_name",
+            "lịch cần có tên",
+        ));
     }
 
     // Parse before installing: a file that is not a calendar should be refused now, not discovered
@@ -259,7 +262,10 @@ ATTENDEE:mailto:a@x\r\nATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n";
     /// extension. One of those must not take the agenda down.
     #[test]
     fn a_broken_calendar_costs_itself_and_not_the_others() {
-        let (_tmp, paths) = with(&[("bad.ics", "<html>not a calendar</html>"), ("work.ics", MEETING)]);
+        let (_tmp, paths) = with(&[
+            ("bad.ics", "<html>not a calendar</html>"),
+            ("work.ics", MEETING),
+        ]);
         let entries = agenda(&paths);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].calendar, "work");

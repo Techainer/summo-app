@@ -55,7 +55,7 @@ export function TasksScreen() {
     } catch (e) {
       setError(say(e));
     }
-  }, [client]);
+  }, [client, say]);
 
   useEffect(() => {
     void load();
@@ -73,7 +73,7 @@ export function TasksScreen() {
         void load();
       }
     },
-    [client, load],
+    [client, load, say],
   );
 
   const start = useCallback(
@@ -89,19 +89,19 @@ export function TasksScreen() {
         void load();
       }
     },
-    [client, load],
+    [client, load, say],
   );
 
   if (error && !board) {
     return (
       <div className="p-5">
-        <p className="rounded-lg border border-rec/30 bg-rec-soft px-3 py-2 text-[13px] text-rec">
+        <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
           {error}
         </p>
       </div>
     );
   }
-  if (!board) return <p className="mt-24 text-center text-fg-faint">{t("tasks.opening")}</p>;
+  if (!board) return <p className="text-fg-faint mt-24 text-center">{t("tasks.opening")}</p>;
 
   return (
     <div className="p-5">
@@ -118,7 +118,7 @@ export function TasksScreen() {
       </div>
 
       {error && (
-        <p className="mt-3 rounded-lg border border-rec/30 bg-rec-soft px-3 py-2 text-[13px] text-rec">
+        <p className="border-rec/30 bg-rec-soft text-rec mt-3 rounded-lg border px-3 py-2 text-[13px]">
           {error}
         </p>
       )}
@@ -127,7 +127,11 @@ export function TasksScreen() {
         <>
           {board.owners.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <FilterChip label={t("tasks.all")} on={owner === null} onClick={() => setOwner(null)} />
+              <FilterChip
+                label={t("tasks.all")}
+                on={owner === null}
+                onClick={() => setOwner(null)}
+              />
               {board.owners.map((name) => (
                 <FilterChip
                   key={name}
@@ -167,9 +171,10 @@ export function TasksScreen() {
       ) : (
         <div className="mt-4 space-y-3">
           {board.agent.length === 0 ? (
-            <p className="mt-16 text-center text-fg-faint">
+            <p className="text-fg-faint mt-16 text-center">
               {t("tasks.agent_empty_head")}{" "}
-              <code className="tabular text-[13px]">- [ ] @agent …</code> {t("tasks.agent_empty_tail")}
+              <code className="tabular text-[13px]">- [ ] @agent …</code>{" "}
+              {t("tasks.agent_empty_tail")}
             </p>
           ) : (
             board.agent.map((task) => (
@@ -251,7 +256,7 @@ function Column({
         over ? "border-accent/50 bg-accent-soft" : "border-line bg-bg-soft/40",
       )}
     >
-      <h2 className="px-1 pb-2 text-[12px] font-semibold uppercase tracking-wider text-fg-faint">
+      <h2 className="text-fg-faint px-1 pb-2 text-[12px] font-semibold tracking-wider uppercase">
         {label}
         <span className="tabular ml-1.5 font-normal">{count}</span>
       </h2>
@@ -284,12 +289,17 @@ function PersonCard({
       }}
       onDragEnd={onDragEnd}
       className={cn(
-        "cursor-grab rounded-[var(--radius-card)] border border-line bg-bg-raised p-2.5",
+        "border-line bg-bg-raised cursor-grab rounded-[var(--radius-card)] border p-2.5",
         "active:cursor-grabbing",
         dragging && "opacity-50",
       )}
     >
-      <p className={cn("text-sm leading-snug", task.status === "done" && "text-fg-faint line-through")}>
+      <p
+        className={cn(
+          "text-sm leading-snug",
+          task.status === "done" && "text-fg-faint line-through",
+        )}
+      >
         {task.text}
       </p>
       <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px]">
@@ -311,15 +321,7 @@ function PersonCard({
  * user who can see "đã quét ghi chú → đang soạn sự kiện" knows both what happened and what to blame
  * when the result is wrong.
  */
-function AgentCard({
-  task,
-  running,
-  onRun,
-}: {
-  task: Task;
-  running: boolean;
-  onRun: () => void;
-}) {
+function AgentCard({ task, running, onRun }: { task: Task; running: boolean; onRun: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(task.status === "doing");
   const progress = stepProgress(task);
@@ -343,7 +345,7 @@ function AgentCard({
       />
       <CardBody>
         {step && task.status === "doing" && (
-          <p className="text-[13px] text-running">◐ {step.text}</p>
+          <p className="text-running text-[13px]">◐ {step.text}</p>
         )}
 
         {(task.steps?.length ?? 0) > 0 && (
@@ -352,9 +354,11 @@ function AgentCard({
               type="button"
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
-              className="mt-2 text-[13px] font-medium text-fg-dim underline-offset-2 hover:text-fg hover:underline"
+              className="text-fg-dim hover:text-fg mt-2 text-[13px] font-medium underline-offset-2 hover:underline"
             >
-              {open ? t("tasks.hide_steps") : t("tasks.show_steps_n", { count: task.steps?.length ?? 0 })}
+              {open
+                ? t("tasks.hide_steps")
+                : t("tasks.show_steps_n", { count: task.steps?.length ?? 0 })}
             </button>
             {open && (
               <ul className="mt-2 space-y-1">
@@ -376,7 +380,7 @@ function AgentCard({
         )}
 
         {(task.steps?.length ?? 0) === 0 && (
-          <p className="text-[13px] text-fg-faint">{t("tasks.no_plan")}</p>
+          <p className="text-fg-faint text-[13px]">{t("tasks.no_plan")}</p>
         )}
       </CardBody>
     </Card>

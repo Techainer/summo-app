@@ -71,9 +71,9 @@ impl When {
     #[must_use]
     pub fn day(&self) -> String {
         match self {
-            When::Date { y, m, d }
-            | When::Local { y, m, d, .. }
-            | When::Utc { y, m, d, .. } => format!("{y:04}-{m:02}-{d:02}"),
+            When::Date { y, m, d } | When::Local { y, m, d, .. } | When::Utc { y, m, d, .. } => {
+                format!("{y:04}-{m:02}-{d:02}")
+            }
         }
     }
 
@@ -92,10 +92,21 @@ impl When {
         let (y, m, d, hh, mm, ss) = match *self {
             When::Date { y, m, d } => (y, m, d, 0, 0, 0),
             When::Local {
-                y, m, d, hh, mm, ss, ..
+                y,
+                m,
+                d,
+                hh,
+                mm,
+                ss,
+                ..
             }
             | When::Utc {
-                y, m, d, hh, mm, ss,
+                y,
+                m,
+                d,
+                hh,
+                mm,
+                ss,
             } => (y, m, d, hh, mm, ss),
         };
         days_from_civil(y, m, d) * 86_400
@@ -315,7 +326,9 @@ pub fn parse(text: &str) -> Vec<Event> {
     let mut current: Option<Event> = None;
 
     for line in unfold(text) {
-        let Some(prop) = property(&line) else { continue };
+        let Some(prop) = property(&line) else {
+            continue;
+        };
 
         match (prop.name.as_str(), prop.value.trim()) {
             ("BEGIN", "VEVENT") => {
@@ -488,7 +501,10 @@ END:VCALENDAR\r\n";
     /// Printing the raw value shows the backslashes to the user.
     #[test]
     fn escaped_text_is_unescaped() {
-        assert_eq!(unescape(r"Q4: budget\, scope\; done"), "Q4: budget, scope; done");
+        assert_eq!(
+            unescape(r"Q4: budget\, scope\; done"),
+            "Q4: budget, scope; done"
+        );
         assert_eq!(unescape(r"line\nline"), "line\nline");
         assert_eq!(unescape(r"back\\slash"), r"back\slash");
     }
@@ -584,7 +600,10 @@ DESCRIPTION:Join here: https://zoom.us/j/123456 or dial in\r\nEND:VEVENT\r\n";
     #[test]
     fn a_repeating_event_carries_its_rule_rather_than_being_expanded() {
         let text = "BEGIN:VEVENT\r\nUID:x\r\nRRULE:FREQ=WEEKLY;BYDAY=MO\r\nEND:VEVENT\r\n";
-        assert_eq!(parse(text)[0].rrule.as_deref(), Some("FREQ=WEEKLY;BYDAY=MO"));
+        assert_eq!(
+            parse(text)[0].rrule.as_deref(),
+            Some("FREQ=WEEKLY;BYDAY=MO")
+        );
     }
 
     #[test]
@@ -625,7 +644,10 @@ SUMMARY:Focus time\r\nEND:VEVENT\r\n";
 
         let birthday = "BEGIN:VEVENT\r\nUID:y\r\nDTSTART;VALUE=DATE:20260810\r\n\
 SUMMARY:Sinh nhật Ngọc\r\nATTENDEE:mailto:a@x\r\nATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n";
-        assert!(!parse(birthday)[0].looks_like_a_meeting(), "all-day is not a meeting");
+        assert!(
+            !parse(birthday)[0].looks_like_a_meeting(),
+            "all-day is not a meeting"
+        );
     }
 
     #[test]
@@ -637,8 +659,22 @@ ATTENDEE:mailto:me@example.com\r\nEND:VEVENT\r\n";
 
     #[test]
     fn epochs_order_events_correctly_across_a_month_boundary() {
-        let jan31 = When::Utc { y: 2026, m: 1, d: 31, hh: 23, mm: 0, ss: 0 };
-        let feb01 = When::Utc { y: 2026, m: 2, d: 1, hh: 0, mm: 0, ss: 0 };
+        let jan31 = When::Utc {
+            y: 2026,
+            m: 1,
+            d: 31,
+            hh: 23,
+            mm: 0,
+            ss: 0,
+        };
+        let feb01 = When::Utc {
+            y: 2026,
+            m: 2,
+            d: 1,
+            hh: 0,
+            mm: 0,
+            ss: 0,
+        };
         assert!(jan31.approx_epoch() < feb01.approx_epoch());
         assert_eq!(feb01.approx_epoch() - jan31.approx_epoch(), 3_600);
     }
@@ -646,15 +682,31 @@ ATTENDEE:mailto:me@example.com\r\nEND:VEVENT\r\n";
     #[test]
     fn the_epoch_of_the_epoch_is_zero() {
         assert_eq!(
-            When::Utc { y: 1970, m: 1, d: 1, hh: 0, mm: 0, ss: 0 }.approx_epoch(),
+            When::Utc {
+                y: 1970,
+                m: 1,
+                d: 1,
+                hh: 0,
+                mm: 0,
+                ss: 0
+            }
+            .approx_epoch(),
             0
         );
     }
 
     #[test]
     fn a_leap_year_is_handled() {
-        let feb29 = When::Date { y: 2024, m: 2, d: 29 };
-        let mar01 = When::Date { y: 2024, m: 3, d: 1 };
+        let feb29 = When::Date {
+            y: 2024,
+            m: 2,
+            d: 29,
+        };
+        let mar01 = When::Date {
+            y: 2024,
+            m: 3,
+            d: 1,
+        };
         assert_eq!(mar01.approx_epoch() - feb29.approx_epoch(), 86_400);
     }
 

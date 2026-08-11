@@ -269,7 +269,13 @@ impl Attributor {
     /// A short utterance gets no label rather than a guess. In a meeting most one-word replies
     /// belong to whoever was already speaking, and the transcript reads fine without a name on
     /// them.
-    pub fn attribute(&mut self, seq: u64, t0: f64, duration: f64, embedding: &[f32]) -> Option<SpeakerId> {
+    pub fn attribute(
+        &mut self,
+        seq: u64,
+        t0: f64,
+        duration: f64,
+        embedding: &[f32],
+    ) -> Option<SpeakerId> {
         if duration < self.min_duration_s || embedding.is_empty() {
             return None;
         }
@@ -315,7 +321,10 @@ impl Attributor {
             return i;
         }
         let n = self.unknown.len() + 1;
-        let mut person = Person::new(format!("unknown-{n}"), unknown_speaker(n).as_str().to_string());
+        let mut person = Person::new(
+            format!("unknown-{n}"),
+            unknown_speaker(n).as_str().to_string(),
+        );
         person.absorb(embedding, false);
         self.unknown.push(person);
         self.unknown.len() - 1
@@ -686,7 +695,10 @@ mod tests {
         );
         // The first voice returning is the same person, not a third.
         assert_eq!(
-            attributor.attribute(2, 8.0, 3.0, &near(NGOC, 0.05)).unwrap().as_str(),
+            attributor
+                .attribute(2, 8.0, 3.0, &near(NGOC, 0.05))
+                .unwrap()
+                .as_str(),
             "Người 1"
         );
     }
@@ -695,7 +707,10 @@ mod tests {
     fn an_utterance_too_short_to_embed_gets_no_label_rather_than_a_guess() {
         let mut attributor = Attributor::new(VoiceBook::default(), log());
         assert_eq!(attributor.attribute(0, 0.0, 0.3, &NGOC), None);
-        assert!(attributor.log().samples.is_empty(), "a guess was still stored");
+        assert!(
+            attributor.log().samples.is_empty(),
+            "a guess was still stored"
+        );
     }
 
     #[test]
@@ -709,7 +724,9 @@ mod tests {
 
         let label = SpeakerId::from("Người 1".to_string());
         let mut book = VoiceBook::default();
-        let id = book.enroll("Ngọc", &log.embeddings_for(&label), true).unwrap();
+        let id = book
+            .enroll("Ngọc", &log.embeddings_for(&label), true)
+            .unwrap();
         confirm(&mut log, &label, &id, "Ngọc");
 
         let named: Vec<&str> = log.samples.iter().map(|s| s.label.as_str()).collect();
@@ -760,7 +777,8 @@ mod tests {
             label: SpeakerId::from("Ngọc".to_string()),
             confirmed: false,
         });
-        old.save(&VoiceLog::path_for(&voices, &old.meeting)).unwrap();
+        old.save(&VoiceLog::path_for(&voices, &old.meeting))
+            .unwrap();
 
         // Today's meeting, where the user notices.
         let mut today = log();
@@ -768,7 +786,9 @@ mod tests {
         attributor.attribute(0, 0.0, 3.0, &near(KHACH, 0.02));
         today = attributor.into_log();
         assert_eq!(today.samples[0].label.as_str(), "Ngọc", "setup failed");
-        today.save(&VoiceLog::path_for(&voices, &today.meeting)).unwrap();
+        today
+            .save(&VoiceLog::path_for(&voices, &today.meeting))
+            .unwrap();
 
         let done = correct(
             &voices,
@@ -782,9 +802,16 @@ mod tests {
         assert_eq!(done.person, "binh");
         assert_eq!(done.in_this_meeting, 1);
         // The stranger's sample left Ngọc, so the mistake cannot repeat.
-        assert_eq!(done.reassignment.removed_from, vec![("ngoc".to_string(), 1)]);
+        assert_eq!(
+            done.reassignment.removed_from,
+            vec![("ngoc".to_string(), 1)]
+        );
         assert_eq!(book.identify(&KHACH).person(), Some("binh"));
-        assert_eq!(book.identify(&NGOC).person(), Some("ngoc"), "Ngọc was damaged");
+        assert_eq!(
+            book.identify(&NGOC).person(),
+            Some("ngoc"),
+            "Ngọc was damaged"
+        );
         // And the old meeting was fixed without anything being re-run.
         assert_eq!(done.swept.len(), 1);
         assert_eq!(done.swept[0].0.as_str(), "00Z");
@@ -845,7 +872,8 @@ mod tests {
                 label: SpeakerId::from("Người 1".to_string()),
                 confirmed: false,
             });
-            log.save(&VoiceLog::path_for(&voices, &log.meeting)).unwrap();
+            log.save(&VoiceLog::path_for(&voices, &log.meeting))
+                .unwrap();
         }
 
         let mut book = VoiceBook::default();
@@ -874,7 +902,8 @@ mod tests {
             label: SpeakerId::from("Người 1".to_string()),
             confirmed: false,
         });
-        log.save(&VoiceLog::path_for(&voices, &log.meeting)).unwrap();
+        log.save(&VoiceLog::path_for(&voices, &log.meeting))
+            .unwrap();
 
         let mut book = VoiceBook::default();
         book.enroll("Ngọc", &[NGOC.to_vec()], true).unwrap();
@@ -885,7 +914,11 @@ mod tests {
     #[test]
     fn a_meeting_with_no_history_sweeps_without_complaining() {
         let dir = TempDir::new().unwrap();
-        assert!(resweep(dir.path(), &VoiceBook::default()).unwrap().is_empty());
+        assert!(
+            resweep(dir.path(), &VoiceBook::default())
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -916,6 +949,10 @@ mod tests {
     #[test]
     fn a_log_that_was_never_written_is_absence_not_failure() {
         let dir = TempDir::new().unwrap();
-        assert!(VoiceLog::load(&dir.path().join("nothing.json")).unwrap().is_none());
+        assert!(
+            VoiceLog::load(&dir.path().join("nothing.json"))
+                .unwrap()
+                .is_none()
+        );
     }
 }

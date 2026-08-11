@@ -359,7 +359,10 @@ fn env_first(names: &[&str]) -> Option<String> {
 /// and a redirect nobody expects.
 #[must_use]
 pub fn base_url_from_env(id: &str) -> Option<String> {
-    preset(id).map(Endpoint::from).as_ref().and_then(base_url_for)
+    preset(id)
+        .map(Endpoint::from)
+        .as_ref()
+        .and_then(base_url_for)
 }
 
 /// The gateway to use instead of an endpoint's own address, if the environment names one.
@@ -404,7 +407,11 @@ impl Provider {
     /// A local Ollama server. The default suggestion: nothing leaves the machine.
     #[must_use]
     pub fn ollama(model: &str) -> Self {
-        Self::from_preset(preset("ollama").expect("ollama is a preset"), Some(model), None)
+        Self::from_preset(
+            preset("ollama").expect("ollama is a preset"),
+            Some(model),
+            None,
+        )
     }
 
     #[must_use]
@@ -960,7 +967,11 @@ mod tests {
     #[test]
     fn every_hosted_preset_names_the_variable_its_own_tooling_uses() {
         for preset in PRESETS.iter().filter(|p| !p.local) {
-            assert!(preset.key_env.is_some(), "{} names no key variable", preset.id);
+            assert!(
+                preset.key_env.is_some(),
+                "{} names no key variable",
+                preset.id
+            );
         }
     }
 
@@ -988,7 +999,9 @@ mod tests {
 
     #[test]
     fn an_unknown_name_lists_what_is_known() {
-        let err = Provider::resolve("kimi", None, None).unwrap_err().to_string();
+        let err = Provider::resolve("kimi", None, None)
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("ollama"), "{err}");
         assert!(err.contains("openrouter"), "{err}");
     }
@@ -1003,7 +1016,9 @@ mod tests {
     /// sends people to the documentation for a one-word answer.
     #[test]
     fn a_missing_key_names_the_variable_to_set() {
-        let err = Provider::resolve("gemini", None, None).unwrap_err().to_string();
+        let err = Provider::resolve("gemini", None, None)
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("GEMINI_API_KEY"), "{err}");
     }
 
@@ -1099,7 +1114,8 @@ mod tests {
             r#"[{"id":"corp-claude","name":"Corp","base_url":"https://gw.corp/v1",
                  "wire":"anthropic","key_env":"CORP_KEY"}]"#,
         );
-        let built = Provider::resolve_in(&catalogue(&path), "corp-claude", None, Some("k")).unwrap();
+        let built =
+            Provider::resolve_in(&catalogue(&path), "corp-claude", None, Some("k")).unwrap();
         assert_eq!(built.wire, Wire::Anthropic);
         assert!(built.endpoint().ends_with("/messages"));
     }

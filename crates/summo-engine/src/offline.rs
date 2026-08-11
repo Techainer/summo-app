@@ -95,7 +95,11 @@ pub fn read_wav(path: &Path) -> Result<Wav> {
     if spec.channels != 1 {
         return Err(Error::msg(
             "audio.not_mono",
-            format!("{} có {} kênh; cần 1 kênh mono", path.display(), spec.channels),
+            format!(
+                "{} có {} kênh; cần 1 kênh mono",
+                path.display(),
+                spec.channels
+            ),
         ));
     }
     if spec.sample_rate != summo_media::TARGET_RATE {

@@ -64,10 +64,15 @@ impl Template {
     /// parse back out — `MeetingDoc::set_section` matches on them.
     #[must_use]
     pub fn instructions(&self) -> String {
-        let mut out = String::from("Structure the summary with exactly these sections, in order, \
-                                    using these headings verbatim:\n");
+        let mut out = String::from(
+            "Structure the summary with exactly these sections, in order, \
+                                    using these headings verbatim:\n",
+        );
         for section in &self.sections {
-            out.push_str(&format!("\n## {}\n{}\n", section.heading, section.instruction));
+            out.push_str(&format!(
+                "\n## {}\n{}\n",
+                section.heading, section.instruction
+            ));
         }
         out.push_str(
             "\nOmit a section entirely if the transcript contains nothing for it, rather than \
@@ -238,10 +243,7 @@ fn split_frontmatter(markdown: &str) -> (&str, &str) {
 
 /// The templates written on first run.
 const BUILT_IN: &[(&str, &str)] = &[
-    (
-        "standard",
-        include_str!("templates/standard.md"),
-    ),
+    ("standard", include_str!("templates/standard.md")),
     ("standup", include_str!("templates/standup.md")),
     ("one-on-one", include_str!("templates/one-on-one.md")),
     ("sales", include_str!("templates/sales.md")),
@@ -322,7 +324,10 @@ mod tests {
 
         assert!(templates.all().len() >= 4, "expected the built-in set");
         assert!(templates.get("standard").is_some());
-        assert!(dir.path().join("standard.md").exists(), "seeded to disk, so it is editable");
+        assert!(
+            dir.path().join("standard.md").exists(),
+            "seeded to disk, so it is editable"
+        );
     }
 
     #[test]

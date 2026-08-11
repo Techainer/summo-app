@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  dayLabel,
-  groupLabel,
-  localDay,
-  swatch,
-  timeOfDay,
-  timestamp,
-  url,
-} from "./library";
+import { dayLabel, groupLabel, localDay, swatch, timeOfDay, timestamp, url } from "./library";
 
 /** Vietnamese, because that is what these assertions are written against. */
 const VI = {
@@ -76,7 +68,11 @@ describe("url", () => {
   const handshake = { port: 8710, token: "secret" };
 
   it("carries the token and drops empty filters", () => {
-    const built = url(handshake, "/library", { group: "day", folder: "", without_summary: false });
+    const built = url(handshake, "/library", {
+      group: "day",
+      folder: "",
+      without_summary: false,
+    });
     expect(built).toBe("http://127.0.0.1:8710/library?token=secret&group=day");
   });
 

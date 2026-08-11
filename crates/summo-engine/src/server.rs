@@ -283,15 +283,13 @@ async fn cors(
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
 
-    let allowed = origin
-        .as_deref()
-        .is_some_and(|o| {
-            crate::auth::origin_is_allowed_from(
-                Some(o),
-                state.allow_loopback_origins,
-                Some(state.own_port()),
-            )
-        });
+    let allowed = origin.as_deref().is_some_and(|o| {
+        crate::auth::origin_is_allowed_from(
+            Some(o),
+            state.allow_loopback_origins,
+            Some(state.own_port()),
+        )
+    });
 
     // A preflight carries no token — it is the browser asking whether it may send one — so it is
     // answered before authorization rather than rejected for lacking it.
@@ -1805,8 +1803,6 @@ async fn get_install(
     )
 }
 
-
-
 #[derive(Debug, Deserialize)]
 struct NoteBody {
     #[serde(default)]
@@ -1927,14 +1923,10 @@ async fn delete_note(
 /// No token check. This is the page that *receives* the token — asking for one first would be a
 /// chicken-and-egg, and the assets are the same public bundle anybody can download. Everything the
 /// page then does is authenticated.
-async fn interface(
-    State(state): State<AppState>,
-    uri: axum::http::Uri,
-) -> impl IntoResponse {
+async fn interface(State(state): State<AppState>, uri: axum::http::Uri) -> impl IntoResponse {
     let port = state.port.load(std::sync::atomic::Ordering::Relaxed);
     crate::assets::serve(uri.path(), port, state.token.as_str())
 }
-
 
 /// Everything said about one note, and what the agent is still waiting on.
 async fn list_comments(
@@ -2003,7 +1995,9 @@ async fn add_comment(
 
     let paths = state.engine.paths();
     let result = summo_vault::annotate::load(paths, &id).and_then(|mut thread| {
-        let added = thread.comment(&author, &body.body, anchor, now_iso())?.clone();
+        let added = thread
+            .comment(&author, &body.body, anchor, now_iso())?
+            .clone();
         summo_vault::annotate::save(paths, &id, &thread)?;
         Ok(added)
     });
@@ -2455,7 +2449,10 @@ async fn set_agent(
 ///
 /// A slug comes from a URL. Without this, `../../..` in a path segment is a write anywhere the
 /// daemon can reach.
-fn agent_dir(paths: &summo_core::paths::Paths, slug: &str) -> summo_core::Result<std::path::PathBuf> {
+fn agent_dir(
+    paths: &summo_core::paths::Paths,
+    slug: &str,
+) -> summo_core::Result<std::path::PathBuf> {
     let clean = slug.trim();
     let ok = !clean.is_empty()
         && clean.len() <= 64
@@ -3849,7 +3846,13 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), 200);
-        assert!(response.json::<serde_json::Value>().await.unwrap().is_null());
+        assert!(
+            response
+                .json::<serde_json::Value>()
+                .await
+                .unwrap()
+                .is_null()
+        );
         server.shutdown();
     }
 
@@ -4248,7 +4251,10 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
 
         let resp = colour(serde_json::json!({ "colour": "teal" })).await;
         assert_eq!(resp.status(), 200);
-        assert_eq!(resp.json::<serde_json::Value>().await.unwrap()["colour"], "teal");
+        assert_eq!(
+            resp.json::<serde_json::Value>().await.unwrap()["colour"],
+            "teal"
+        );
 
         let listed: serde_json::Value = client()
             .get(format!("http://{}/library?colour=teal", server.addr()))
@@ -4269,7 +4275,8 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
         );
 
         // Refused at the edge, not sanitised somewhere later and half-written.
-        let resp = colour(serde_json::json!({ "colour": "teal; background: url(https://x/)" })).await;
+        let resp =
+            colour(serde_json::json!({ "colour": "teal; background: url(https://x/)" })).await;
         assert_eq!(resp.status(), 400);
         let still: serde_json::Value = client()
             .get(&base)
@@ -4280,7 +4287,10 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
             .json()
             .await
             .unwrap();
-        assert_eq!(still["summary"]["color"], "teal", "the refused write changed nothing");
+        assert_eq!(
+            still["summary"]["color"], "teal",
+            "the refused write changed nothing"
+        );
 
         // No colour at all, which is how the picker's ninth option travels.
         let resp = colour(serde_json::json!({ "colour": null })).await;

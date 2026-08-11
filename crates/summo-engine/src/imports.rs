@@ -165,7 +165,10 @@ impl Imports {
 /// so a typo'd path never reaches ffmpeg.
 pub fn check(path: &Path) -> Result<()> {
     if !path.exists() {
-        return Err(Error::msg("import.not_found", format!("không thấy {}", path.display())));
+        return Err(Error::msg(
+            "import.not_found",
+            format!("không thấy {}", path.display()),
+        ));
     }
     if path.is_dir() {
         return Err(Error::msg(

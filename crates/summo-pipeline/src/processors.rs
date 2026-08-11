@@ -276,7 +276,10 @@ mod tests {
         p.push(audio(Lane::Mic, 100)).unwrap();
         let out = p.push(Frame::Flush).unwrap();
         assert_eq!(samples_of(&out), [160], "zero-padded to a whole frame");
-        assert!(out.last().unwrap().is_control(), "and the flush still travels");
+        assert!(
+            out.last().unwrap().is_control(),
+            "and the flush still travels"
+        );
     }
 
     #[test]
@@ -337,7 +340,8 @@ mod tests {
     #[test]
     fn the_meter_counts_audio_and_finals() {
         let mut p = Meter::new();
-        p.push(Frame::audio(Lane::Mic, vec![0.0; 16_000], 16_000)).unwrap();
+        p.push(Frame::audio(Lane::Mic, vec![0.0; 16_000], 16_000))
+            .unwrap();
         p.push(Frame::Event(Event::Final(Segment::new(
             1,
             Lane::Mic,
@@ -348,7 +352,13 @@ mod tests {
         .unwrap();
         p.push(Frame::Event(Event::info("not a final"))).unwrap();
 
-        assert_eq!(p.counts(), Counts { seconds: 1.0, finals: 1 });
+        assert_eq!(
+            p.counts(),
+            Counts {
+                seconds: 1.0,
+                finals: 1
+            }
+        );
         p.reset();
         assert_eq!(p.counts(), Counts::default());
     }
@@ -381,7 +391,12 @@ mod tests {
         assert_eq!(pipeline.describe(), "only-lanes → reframe → meter");
 
         // System audio is dropped before it costs anything.
-        assert!(pipeline.push(audio(Lane::System, 1_600)).unwrap().is_empty());
+        assert!(
+            pipeline
+                .push(audio(Lane::System, 1_600))
+                .unwrap()
+                .is_empty()
+        );
 
         let out = pipeline.push(audio(Lane::Mic, 500)).unwrap();
         assert_eq!(samples_of(&out), [160, 160, 160]);

@@ -33,8 +33,7 @@ export function Sheet({
   children: ReactNode;
   className?: string;
 }) {
-  const enter =
-    side === "bottom" ? { y: "100%" } : { x: side === "left" ? "-100%" : "100%" };
+  const enter = side === "bottom" ? { y: "100%" } : { x: side === "left" ? "-100%" : "100%" };
   const settled = side === "bottom" ? { y: 0 } : { x: 0 };
 
   return (
@@ -54,7 +53,7 @@ export function Sheet({
             <Dialog.Content asChild>
               <motion.div
                 className={cn(
-                  "fixed z-50 bg-bg-raised border-line shadow-[var(--shadow-pop)]",
+                  "bg-bg-raised border-line fixed z-50 shadow-[var(--shadow-pop)]",
                   side === "left" && "inset-y-0 left-0 w-[290px] border-r",
                   side === "right" && "inset-y-0 right-0 w-[360px] border-l",
                   side === "bottom" &&
@@ -68,7 +67,7 @@ export function Sheet({
               >
                 {side === "bottom" && (
                   <div className="flex justify-center pt-2.5" aria-hidden="true">
-                    <span className="h-1 w-9 rounded-full bg-line-strong" />
+                    <span className="bg-line-strong h-1 w-9 rounded-full" />
                   </div>
                 )}
                 <Dialog.Title className="sr-only">{title}</Dialog.Title>

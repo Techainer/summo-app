@@ -9,15 +9,15 @@
 //! resolve(id) → manifest → download blobs (resumable, sha256-verified) → install → load
 //! ```
 
-pub mod page;
-pub mod variant;
 pub mod credentials;
 pub mod download;
 pub mod hw;
 pub mod manifest;
+pub mod page;
 pub mod recommend;
 pub mod registry;
 pub mod store;
+pub mod variant;
 
 pub use credentials::Credentials;
 pub use download::{DownloadProgress, Downloader};

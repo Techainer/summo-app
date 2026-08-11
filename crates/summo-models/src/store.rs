@@ -302,19 +302,34 @@ mod tests {
 
         let installed = fixture
             .store
-            .install_variant(&manifest, &fixture.downloader(), Some("int8".into()), |_| {})
+            .install_variant(
+                &manifest,
+                &fixture.downloader(),
+                Some("int8".into()),
+                |_| {},
+            )
             .await
             .unwrap();
 
         let mut names: Vec<&str> = installed.files.keys().map(String::as_str).collect();
         names.sort_unstable();
-        assert_eq!(names, ["model.int8.onnx", "tokens.txt"], "no fp32 blob fetched");
+        assert_eq!(
+            names,
+            ["model.int8.onnx", "tokens.txt"],
+            "no fp32 blob fetched"
+        );
 
         // And it still knows that after a restart, from the manifest it wrote.
         let reread = fixture.store.list();
-        let stored = reread.iter().find(|m| m.id.as_str() == "two-builds").unwrap();
+        let stored = reread
+            .iter()
+            .find(|m| m.id.as_str() == "two-builds")
+            .unwrap();
         assert_eq!(stored.installed_variant.as_deref(), Some("int8"));
-        assert!(fixture.store.is_installed(stored), "the other build's absence is not a gap");
+        assert!(
+            fixture.store.is_installed(stored),
+            "the other build's absence is not a gap"
+        );
     }
 
     /// Re-deciding on every call would report an installed model as missing the moment the machine
@@ -324,10 +339,8 @@ mod tests {
         use crate::variant::{Precision, Variant};
 
         let fixture = fixture();
-        let mut manifest = fixture.manifest(
-            "pinned",
-            vec![fixture.file("model.int8.onnx", b"small")],
-        );
+        let mut manifest =
+            fixture.manifest("pinned", vec![fixture.file("model.int8.onnx", b"small")]);
         manifest.files[0].variant = Some("int8".into());
         manifest.variants = vec![
             Variant {
@@ -344,7 +357,12 @@ mod tests {
 
         fixture
             .store
-            .install_variant(&manifest, &fixture.downloader(), Some("int8".into()), |_| {})
+            .install_variant(
+                &manifest,
+                &fixture.downloader(),
+                Some("int8".into()),
+                |_| {},
+            )
             .await
             .unwrap();
 
@@ -403,7 +421,7 @@ mod tests {
                 license: "Apache-2.0".into(),
                 attribution: None,
                 redistributable: true,
-            gated: false,
+                gated: false,
                 size_bytes: files.iter().map(|f| f.size).sum(),
                 profile: crate::manifest::Profile::default(),
                 variants: Vec::new(),

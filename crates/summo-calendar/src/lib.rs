@@ -84,8 +84,10 @@ pub fn best_match(events: &[Event], started_epoch: i64) -> Option<Match<'_>> {
         let better = match &best {
             None => true,
             // `Inside` sorts before `Near`, so a smaller confidence wins; ties break on distance.
-            Some(current) => (candidate.confidence, candidate.offset_s.abs())
-                < (current.confidence, current.offset_s.abs()),
+            Some(current) => {
+                (candidate.confidence, candidate.offset_s.abs())
+                    < (current.confidence, current.offset_s.abs())
+            }
         };
         if better {
             best = Some(candidate);
@@ -101,10 +103,7 @@ pub fn best_match(events: &[Event], started_epoch: i64) -> Option<Match<'_>> {
 /// list that includes focus blocks and birthdays is a list nobody reads.
 #[must_use]
 pub fn meetings(events: &[Event]) -> Vec<&Event> {
-    let mut out: Vec<&Event> = events
-        .iter()
-        .filter(|e| e.looks_like_a_meeting())
-        .collect();
+    let mut out: Vec<&Event> = events.iter().filter(|e| e.looks_like_a_meeting()).collect();
     out.sort_by_key(|e| e.start.as_ref().map_or(i64::MAX, When::approx_epoch));
     out
 }

@@ -85,19 +85,16 @@ export function Tour({ onClose }: { onClose: () => void }) {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 12 }}
-        className="fixed bottom-4 right-4 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-line bg-bg-soft p-4 shadow-lg"
+        className="border-line bg-bg-soft fixed right-4 bottom-4 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border p-4 shadow-lg"
       >
-        <p className="text-[12px] uppercase tracking-wide text-fg-faint">
+        <p className="text-fg-faint text-[12px] tracking-wide uppercase">
           {t("tour.step", { current: index + 1, total: STEPS.length })}
         </p>
         <h2 className="mt-1 font-medium">{t(`tour.${step}_title`)}</h2>
-        <p className="mt-1 text-sm text-fg-dim">{t(`tour.${step}_body`)}</p>
+        <p className="text-fg-dim mt-1 text-sm">{t(`tour.${step}_body`)}</p>
 
         <div className="mt-4 flex items-center gap-2">
-          <Button
-            onClick={() => (last ? finish() : setIndex((i) => i + 1))}
-            className="flex-1"
-          >
+          <Button onClick={() => (last ? finish() : setIndex((i) => i + 1))} className="flex-1">
             {last ? t("tour.done") : t("tour.next")}
           </Button>
           <Button variant="ghost" onClick={finish}>

@@ -28,23 +28,45 @@ export function StatusBar({
   const disconnected = connection === "reconnecting" || connection === "connecting";
 
   return (
-    <footer className="flex items-center gap-2.5 border-t border-line px-4 py-2 text-[0.78rem] text-fg-faint">
+    <footer className="border-line text-fg-faint flex items-center gap-2.5 border-t px-4 py-2 text-[0.78rem]">
       {notice && <span className="text-fg-dim">{notice}</span>}
       <span className="flex-1" />
       {disconnected && (
-        <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem] border-rec text-rec" data-testid="connection">
+        <span
+          className="border-line tabular border-rec text-rec inline-flex items-center rounded-full border px-2 py-0.5 text-[0.78rem]"
+          data-testid="connection"
+        >
           {connection === "reconnecting" ? t("status.reconnecting") : t("status.connecting")}
         </span>
       )}
-      {device && <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem]">{device}</span>}
-      {speakers.length > 0 && <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem]">{n("status.speakers", speakers.length)}</span>}
+      {device && (
+        <span className="border-line tabular inline-flex items-center rounded-full border px-2 py-0.5 text-[0.78rem]">
+          {device}
+        </span>
+      )}
+      {speakers.length > 0 && (
+        <span className="border-line tabular inline-flex items-center rounded-full border px-2 py-0.5 text-[0.78rem]">
+          {n("status.speakers", speakers.length)}
+        </span>
+      )}
       {stat && (
         <>
-          <span className={cn("inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem]", behind && "border-rec text-rec")}>
+          <span
+            className={cn(
+              "border-line tabular inline-flex items-center rounded-full border px-2 py-0.5 text-[0.78rem]",
+              behind && "border-rec text-rec",
+            )}
+          >
             RTF {stat.rtf.toFixed(3)}
           </span>
-          <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem]">{stat.rss_mb} MB</span>
-          {behind && <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 tabular text-[0.78rem] border-rec text-rec">{t("status.behind")}</span>}
+          <span className="border-line tabular inline-flex items-center rounded-full border px-2 py-0.5 text-[0.78rem]">
+            {stat.rss_mb} MB
+          </span>
+          {behind && (
+            <span className="border-line tabular border-rec text-rec inline-flex items-center rounded-full border px-2 py-0.5 text-[0.78rem]">
+              {t("status.behind")}
+            </span>
+          )}
         </>
       )}
     </footer>

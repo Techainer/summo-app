@@ -63,7 +63,7 @@ export function MeetingScreen() {
         setSummarising(false);
       }
     },
-    [applyDraft],
+    [applyDraft, say],
   );
 
   // The daemon reports file names (`mic.opus`); the route takes lane names. Strip the extension
@@ -78,7 +78,7 @@ export function MeetingScreen() {
           url: url(handshake, `/meetings/${encodeURIComponent(meetingId)}/audio/${key}`),
         };
       }),
-    [detail?.audio, handshake, meetingId],
+    [detail?.audio, handshake, meetingId, t],
   );
 
   const marks = useMemo(
@@ -105,12 +105,12 @@ export function MeetingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [library, drafts, meetingId]);
+  }, [library, drafts, meetingId, say, t]);
 
   if (error) {
     return (
       <div className="p-5">
-        <p className="rounded-lg border border-rec/30 bg-rec-soft px-3 py-2 text-[13px] text-rec">
+        <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
           {error}
         </p>
       </div>
@@ -118,24 +118,20 @@ export function MeetingScreen() {
   }
 
   if (!detail) {
-    return <p className="mt-24 text-center text-fg-faint">{t("meeting.opening")}</p>;
+    return <p className="text-fg-faint mt-24 text-center">{t("meeting.opening")}</p>;
   }
 
   const { summary, sections, transcript } = detail;
 
   return (
     <div className="p-5">
-      <Link
-        to="/library"
-        search={{}}
-        className="text-[13px] text-fg-dim hover:text-fg"
-      >
+      <Link to="/library" search={{}} className="text-fg-dim hover:text-fg text-[13px]">
         ← {t("meeting.back")}
       </Link>
 
       <div className="mt-2">
         <h1 className="text-2xl font-semibold tracking-tight">{summary.title}</h1>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-fg-dim">
+        <div className="text-fg-dim mt-2 flex flex-wrap items-center gap-2 text-[13px]">
           <Pill>{summary.day}</Pill>
           <Pill>{formatDuration(summary.duration, locale)}</Pill>
           {summary.folder && <Pill>{summary.folder}</Pill>}
@@ -157,14 +153,18 @@ export function MeetingScreen() {
                 void run(() => drafts.refine(meetingId, heading, selection, instruction))
               }
               onChat={(message) => void run(() => drafts.chat(meetingId, message))}
-              onConfirm={() => void run(async () => {
-                await drafts.confirm(meetingId);
-                return null;
-              })}
-              onDiscard={() => void run(async () => {
-                await drafts.discard(meetingId);
-                return null;
-              })}
+              onConfirm={() =>
+                void run(async () => {
+                  await drafts.confirm(meetingId);
+                  return null;
+                })
+              }
+              onDiscard={() =>
+                void run(async () => {
+                  await drafts.discard(meetingId);
+                  return null;
+                })
+              }
             />
           )}
 
@@ -188,20 +188,23 @@ export function MeetingScreen() {
               // show the same paragraph twice.
               .filter((section) => !section.draft)
               .map((section) => (
-              <Card key={section.heading}>
-                <CardHeader title={section.heading} />
-                <CardBody>
-                  <p className="whitespace-pre-wrap leading-relaxed">{readable(section.body)}</p>
-                </CardBody>
-              </Card>
-            ))
+                <Card key={section.heading}>
+                  <CardHeader title={section.heading} />
+                  <CardBody>
+                    <p className="leading-relaxed whitespace-pre-wrap">{readable(section.body)}</p>
+                  </CardBody>
+                </Card>
+              ))
           )}
         </div>
 
         <aside className="space-y-3">
           <SegmentedControl
             label={t("meeting.right_panel")}
-            options={PANES.map((p) => ({ value: p.value, label: t(p.labelKey) }))}
+            options={PANES.map((p) => ({
+              value: p.value,
+              label: t(p.labelKey),
+            }))}
             value={pane}
             onChange={setPane}
             size="sm"
@@ -235,7 +238,5 @@ export function MeetingScreen() {
 }
 
 function Pill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full border border-line bg-bg-soft px-2.5 py-1">{children}</span>
-  );
+  return <span className="border-line bg-bg-soft rounded-full border px-2.5 py-1">{children}</span>;
 }

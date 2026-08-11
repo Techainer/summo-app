@@ -68,8 +68,7 @@ fn load(path: &std::path::Path) -> Result<MeetingDoc> {
     // Its own parent as the vault root: this takes a path to any file, which need not be inside a
     // vault at all, and the derived id only matters for a file that has no frontmatter.
     let root = path.parent().unwrap_or(std::path::Path::new("."));
-    summo_vault::open(root, path)
-        .with_context(|| format!("cannot read {}", path.display()))
+    summo_vault::open(root, path).with_context(|| format!("cannot read {}", path.display()))
 }
 
 /// Summarise a meeting and write the result back into its own file.
@@ -200,8 +199,7 @@ pub fn search(paths: &Paths, question: &str, limit: usize) -> Result<Vec<Excerpt
     let vault = paths.vault();
     let meetings = paths.meetings();
     let notes = paths.notes();
-    let index =
-        summo_vault::MeetingIndex::scan_all([meetings.as_path(), notes.as_path()])?;
+    let index = summo_vault::MeetingIndex::scan_all([meetings.as_path(), notes.as_path()])?;
 
     let mut entries: Vec<_> = index.entries().iter().collect();
     // Newest first: recent meetings are far more often what someone is asking about.

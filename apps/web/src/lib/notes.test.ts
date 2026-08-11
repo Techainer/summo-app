@@ -18,7 +18,10 @@ describe("titleFrom", () => {
   });
 
   it("handles a note that is only a title", () => {
-    expect(titleFrom("Chỉ một dòng")).toEqual({ title: "Chỉ một dòng", rest: "" });
+    expect(titleFrom("Chỉ một dòng")).toEqual({
+      title: "Chỉ một dòng",
+      rest: "",
+    });
   });
 
   it("handles an empty note without throwing", () => {

@@ -76,7 +76,7 @@ export function AppShell({
         {!narrow && navOpen && (
           <motion.aside
             key="sidebar"
-            className="shrink-0 overflow-hidden border-r border-line bg-bg-soft/40"
+            className="border-line bg-bg-soft/40 shrink-0 overflow-hidden border-r"
             initial={{ width: 0 }}
             animate={{ width: 270 }}
             exit={{ width: 0 }}

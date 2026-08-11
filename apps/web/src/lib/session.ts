@@ -71,7 +71,9 @@ export class Session {
     // dropped and the daemon would never start recording.
     const connected = await this.waitForOpen(5000);
     if (!connected) {
-      this.update({ error: "The recognition engine is not responding. Is summo-engine running?" });
+      this.update({
+        error: "The recognition engine is not responding. Is summo-engine running?",
+      });
       this.client.close();
       this.client = null;
       return;
@@ -182,7 +184,10 @@ export function claimHandshake(): void {
   // Whether or not the two make a usable handshake. A lone `token=` breaks the router exactly as
   // badly as a complete one and is the ordinary shape when the daemon served the page — it has
   // already injected what it needs, and what is left in the URL is a leftover that only does harm.
-  const found = readHandshake({ port: Number(params.get("port")), token: params.get("token") });
+  const found = readHandshake({
+    port: Number(params.get("port")),
+    token: params.get("token"),
+  });
   if (found) {
     try {
       window.sessionStorage.setItem(STASH, JSON.stringify(found));
@@ -219,7 +224,10 @@ export function handshakeFromLocation(search: string): Handshake | null {
   if (stashed) return stashed;
 
   const params = new URLSearchParams(search);
-  return readHandshake({ port: Number(params.get("port")), token: params.get("token") });
+  return readHandshake({
+    port: Number(params.get("port")),
+    token: params.get("token"),
+  });
 }
 
 function readStash(): Handshake | null {

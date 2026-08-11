@@ -91,7 +91,10 @@ export function AgentsScreen() {
       setSaved(null);
       try {
         const response = await fetch(url(handshake, `/agents/${slug}`));
-        const body = (await response.json()) as { definition?: string; error?: string };
+        const body = (await response.json()) as {
+          definition?: string;
+          error?: string;
+        };
         if (!response.ok) throw new Error(body.error ?? response.statusText);
         setDraft(body.definition ?? "");
       } catch (e) {
@@ -128,11 +131,11 @@ export function AgentsScreen() {
     <div className="mx-auto max-w-4xl space-y-4 p-5">
       <div className="flex items-baseline gap-3">
         <h1 className="text-xl font-semibold tracking-tight">{t("agents.title")}</h1>
-        <p className="text-[13px] text-fg-faint">{t("agents.subtitle")}</p>
+        <p className="text-fg-faint text-[13px]">{t("agents.subtitle")}</p>
       </div>
 
       {error && (
-        <p className="rounded-lg border border-rec/30 bg-rec-soft px-3 py-2 text-[13px] text-rec">
+        <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
           {error}
         </p>
       )}
@@ -142,7 +145,7 @@ export function AgentsScreen() {
       {roster?.dangling.map(([from, to]) => (
         <p
           key={`${from}-${to}`}
-          className="rounded-lg border border-blocked/30 bg-blocked-soft px-3 py-2 text-[13px] text-blocked"
+          className="border-blocked/30 bg-blocked-soft text-blocked rounded-lg border px-3 py-2 text-[13px]"
         >
           {t("agents.dangling", { from, to })}
         </p>
@@ -151,7 +154,7 @@ export function AgentsScreen() {
       {roster?.skipped.map((broken) => (
         <p
           key={broken.path}
-          className="rounded-lg border border-rec/30 bg-rec-soft px-3 py-2 text-[13px] text-rec"
+          className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]"
         >
           {t("agents.unreadable", { path: broken.path, reason: broken.reason })}
         </p>
@@ -164,7 +167,7 @@ export function AgentsScreen() {
             type="button"
             onClick={() => void open(each.slug)}
             className={cn(
-              "rounded-card border bg-bg-soft p-4 text-left transition-colors",
+              "rounded-card bg-bg-soft border p-4 text-left transition-colors",
               each.slug === chosen ? "border-accent" : "border-line hover:border-fg-faint",
             )}
           >
@@ -175,24 +178,20 @@ export function AgentsScreen() {
               {each.spawns.length > 0 && (
                 <StatusChip status="running" label={t("agents.coordinates")} />
               )}
-              <span className="tabular ml-auto text-[12px] text-fg-faint">{each.slug}</span>
+              <span className="tabular text-fg-faint ml-auto text-[12px]">{each.slug}</span>
             </div>
 
-            <p className="mt-1.5 line-clamp-2 text-[13px] leading-normal text-fg-dim">
+            <p className="text-fg-dim mt-1.5 line-clamp-2 text-[13px] leading-normal">
               {each.description || each.brief}
             </p>
 
-            <p className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px] text-fg-faint">
+            <p className="text-fg-faint mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
               <span className="tabular">{n("agents.tool_count", each.tools.length)}</span>
               {each.memory.length > 0 && (
-                <span className="tabular">
-                  · {n("agents.memory_count", each.memory.length)}
-                </span>
+                <span className="tabular">· {n("agents.memory_count", each.memory.length)}</span>
               )}
               {each.open_tasks > 0 && (
-                <span className="tabular">
-                  · {n("agents.task_count", each.open_tasks)}
-                </span>
+                <span className="tabular">· {n("agents.task_count", each.open_tasks)}</span>
               )}
               {each.model && <span className="tabular">· {each.model}</span>}
             </p>
@@ -212,12 +211,9 @@ export function AgentsScreen() {
             className="space-y-3"
           >
             <Card>
-              <CardHeader
-                title={agent.name}
-                count={`vault/agents/${agent.slug}/AGENT.md`}
-              />
+              <CardHeader title={agent.name} count={`vault/agents/${agent.slug}/AGENT.md`} />
               <CardBody className="space-y-3">
-                <p className="text-[13px] text-fg-faint">{t("agents.file_hint")}</p>
+                <p className="text-fg-faint text-[13px]">{t("agents.file_hint")}</p>
 
                 {/* A textarea, for the reason at the top of this file. Monospaced because the
                     frontmatter is YAML and indentation is load-bearing. */}
@@ -229,14 +225,14 @@ export function AgentsScreen() {
                   }}
                   spellCheck={false}
                   aria-label={t("agents.definition")}
-                  className="h-72 w-full resize-y rounded-lg border border-line bg-bg px-3 py-2 font-mono text-[13px] leading-relaxed text-fg focus:outline-none focus-visible:border-accent"
+                  className="border-line bg-bg text-fg focus-visible:border-accent h-72 w-full resize-y rounded-lg border px-3 py-2 font-mono text-[13px] leading-relaxed focus:outline-none"
                 />
 
                 <div className="flex flex-wrap items-center gap-3">
                   <Button onClick={() => void save()} disabled={saving}>
                     {saving ? t("common.saving") : t("common.save")}
                   </Button>
-                  {saved && <span className="text-[13px] text-accent">{saved}</span>}
+                  {saved && <span className="text-accent text-[13px]">{saved}</span>}
                 </div>
               </CardBody>
             </Card>
@@ -245,12 +241,12 @@ export function AgentsScreen() {
               <Card>
                 <CardHeader title={t("agents.tools")} />
                 <CardBody>
-                  <p className="text-[13px] text-fg-faint">{t("agents.tools_hint")}</p>
+                  <p className="text-fg-faint text-[13px]">{t("agents.tools_hint")}</p>
                   <ul className="mt-2 flex flex-wrap gap-1.5">
                     {agent.tools.map((tool) => (
                       <li
                         key={tool}
-                        className="rounded-full border border-line bg-bg px-2.5 py-0.5 font-mono text-[12px] text-fg-dim"
+                        className="border-line bg-bg text-fg-dim rounded-full border px-2.5 py-0.5 font-mono text-[12px]"
                       >
                         {tool}
                       </li>
@@ -266,12 +262,12 @@ export function AgentsScreen() {
                 />
                 <CardBody>
                   {agent.memory.length === 0 ? (
-                    <p className="text-[13px] text-fg-faint">{t("agents.memory_empty")}</p>
+                    <p className="text-fg-faint text-[13px]">{t("agents.memory_empty")}</p>
                   ) : (
                     <ul className="space-y-1.5 text-[13px]">
                       {agent.memory.map((fact) => (
                         <li key={fact.text} className="flex gap-2">
-                          <span className="tabular shrink-0 text-[12px] text-fg-faint">
+                          <span className="tabular text-fg-faint shrink-0 text-[12px]">
                             {fact.learned || "—"}
                           </span>
                           <span className="text-fg-dim">{fact.text}</span>
@@ -286,9 +282,7 @@ export function AgentsScreen() {
         )}
       </AnimatePresence>
 
-      {roster && !agent && (
-        <p className="mt-10 text-center text-fg-faint">{t("agents.pick")}</p>
-      )}
+      {roster && !agent && <p className="text-fg-faint mt-10 text-center">{t("agents.pick")}</p>}
     </div>
   );
 }

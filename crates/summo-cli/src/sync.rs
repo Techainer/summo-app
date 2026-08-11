@@ -15,9 +15,15 @@ use summo_core::paths::Paths;
 /// Where the passphrase comes from when it is not typed.
 const ENV_PASSPHRASE: &str = "SUMMO_SYNC_PASSPHRASE";
 
-pub fn run(paths: &Paths, to: &std::path::Path, machine: Option<&str>, dry_run: bool) -> Result<()> {
+pub fn run(
+    paths: &Paths,
+    to: &std::path::Path,
+    machine: Option<&str>,
+    dry_run: bool,
+) -> Result<()> {
     let state = paths.root().join("sync");
-    std::fs::create_dir_all(&state).with_context(|| format!("cannot create {}", state.display()))?;
+    std::fs::create_dir_all(&state)
+        .with_context(|| format!("cannot create {}", state.display()))?;
 
     let machine = machine
         .map(str::to_string)
@@ -87,8 +93,12 @@ fn label(action: &summo_sync::Action) -> &'static str {
         Action::Merge => "merge",
         Action::DeleteRemote => "delete there",
         Action::DeleteLocal => "delete here",
-        Action::Resurrect { edited_on: Side::Local } => "restore there",
-        Action::Resurrect { edited_on: Side::Remote } => "restore here",
+        Action::Resurrect {
+            edited_on: Side::Local,
+        } => "restore there",
+        Action::Resurrect {
+            edited_on: Side::Remote,
+        } => "restore here",
     }
 }
 
@@ -107,7 +117,9 @@ fn salt(remote: &mut dyn summo_sync::Remote) -> Result<Vec<u8>> {
         return Ok(existing);
     }
     let fresh = summo_sync::crypto::new_salt()?;
-    remote.put_salt(&fresh).context("cannot write the sync salt")?;
+    remote
+        .put_salt(&fresh)
+        .context("cannot write the sync salt")?;
     Ok(fresh.to_vec())
 }
 

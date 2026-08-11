@@ -113,11 +113,20 @@ export interface LibraryFilters {
 }
 
 /** Build a daemon URL, dropping empty filters so the query string says only what was asked. */
-export function url(handshake: Handshake, path: string, params: Record<string, unknown> = {}): string {
+export function url(
+  handshake: Handshake,
+  path: string,
+  params: Record<string, unknown> = {},
+): string {
   const query = new URLSearchParams();
   if (handshake.token) query.set("token", handshake.token);
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === "" || value === false) continue;
+    // Only what a query string can carry. An object reaching here would be serialised as
+    // "[object Object]" and sent as a filter, which the daemon would then answer literally.
+    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+      throw new TypeError(`query parameter ${key} must be a scalar, got ${typeof value}`);
+    }
     query.set(key, String(value));
   }
   const suffix = query.toString();
@@ -127,7 +136,9 @@ export function url(handshake: Handshake, path: string, params: Record<string, u
 async function json<T>(response: Response): Promise<T> {
   if (!response.ok) {
     // The daemon answers failures with `{"error": …}`; anything else is a bug worth showing raw.
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
     throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
   }
   return (await response.json()) as T;
@@ -146,11 +157,15 @@ export class LibraryClient {
   }
 
   async search(query: string, limit = 30): Promise<SearchHit[]> {
-    return json<SearchHit[]>(await fetch(url(this.handshake, "/library/search", { q: query, limit })));
+    return json<SearchHit[]>(
+      await fetch(url(this.handshake, "/library/search", { q: query, limit })),
+    );
   }
 
   async detail(id: string): Promise<MeetingDetail> {
-    return json<MeetingDetail>(await fetch(url(this.handshake, `/meetings/${encodeURIComponent(id)}`)));
+    return json<MeetingDetail>(
+      await fetch(url(this.handshake, `/meetings/${encodeURIComponent(id)}`)),
+    );
   }
 
   private async post<T>(id: string, action: string, body?: unknown): Promise<T> {
@@ -238,7 +253,10 @@ export function dayLabel(day: string, today: string, words: DayWords): string {
   if (age > 0 && age < 7) {
     // UTC throughout: a day key is a calendar date, not an instant, and formatting it in the local
     // zone moves it by one either side of midnight.
-    return new Intl.DateTimeFormat(words.locale, { weekday: "long", timeZone: "UTC" }).format(date);
+    return new Intl.DateTimeFormat(words.locale, {
+      weekday: "long",
+      timeZone: "UTC",
+    }).format(date);
   }
 
   const sameYear = date.getUTCFullYear() === parseDay(today)?.getUTCFullYear();

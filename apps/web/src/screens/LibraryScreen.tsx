@@ -18,7 +18,7 @@ export function LibraryScreen() {
   const { library, start } = useEngine();
   const navigate = useNavigate();
   const search = useRouterState({
-    select: (s) => s.location.search as LibrarySearch,
+    select: (s) => s.location.search,
   });
 
   const patch = useCallback(
@@ -33,10 +33,7 @@ export function LibraryScreen() {
 
   // A new array identity on every render would refetch the library on every render; the string is
   // what actually changed.
-  const tags = useMemo(
-    () => (search.tag ?? "").split(",").filter(Boolean),
-    [search.tag],
-  );
+  const tags = useMemo(() => (search.tag ?? "").split(",").filter(Boolean), [search.tag]);
 
   return (
     <Library

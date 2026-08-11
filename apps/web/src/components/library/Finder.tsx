@@ -41,7 +41,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
   return (
     <div className="flex flex-col gap-3" data-testid="finder">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-[11px] font-semibold tracking-wide text-fg-faint uppercase">
+        <h2 className="text-fg-faint text-[11px] font-semibold tracking-wide uppercase">
           {t("finder.title")}
         </h2>
         {/* One control that undoes every filter at once. Clearing them one at a time is three
@@ -49,7 +49,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
         {active && (
           <button
             type="button"
-            className="rounded-md px-1.5 py-0.5 text-[12px] text-fg-dim hover:bg-bg-soft hover:text-fg"
+            className="text-fg-dim hover:bg-bg-soft hover:text-fg rounded-md px-1.5 py-0.5 text-[12px]"
             onClick={() => {
               onFolder(undefined);
               onTags([]);
@@ -75,7 +75,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
               className={cn(
                 "flex items-center gap-1.5 rounded-md py-1 pe-2 text-left text-[13px] transition-colors",
                 folder === node.path
-                  ? "bg-bg-soft font-medium text-fg"
+                  ? "bg-bg-soft text-fg font-medium"
                   : "text-fg-dim hover:bg-bg-soft hover:text-fg",
               )}
             >
@@ -110,7 +110,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
                 )}
               >
                 #{each.name}
-                <span className="tabular ms-1 text-fg-faint">{each.count}</span>
+                <span className="tabular text-fg-faint ms-1">{each.count}</span>
               </button>
             );
           })}
@@ -160,7 +160,10 @@ export function Dot({ colour, className }: { colour: string; className?: string 
   return (
     <span
       aria-hidden="true"
-      className={cn("inline-block size-2.5 shrink-0 rounded-full ring-1 ring-inset ring-black/20", className)}
+      className={cn(
+        "inline-block size-2.5 shrink-0 rounded-full ring-1 ring-black/20 ring-inset",
+        className,
+      )}
       style={{ background: swatch(colour) }}
     />
   );
@@ -204,7 +207,7 @@ export function ColourPicker({
         disabled={disabled}
         onClick={() => onChoose(null)}
         className={cn(
-          "grid size-6 place-items-center rounded-full border text-[11px] text-fg-faint transition-colors disabled:opacity-50",
+          "text-fg-faint grid size-6 place-items-center rounded-full border text-[11px] transition-colors disabled:opacity-50",
           chosen === null ? "border-fg-faint bg-bg-soft" : "border-line hover:border-line-strong",
         )}
       >
@@ -221,7 +224,9 @@ export function ColourPicker({
           onClick={() => onChoose(name)}
           className={cn(
             "grid size-6 place-items-center rounded-full border transition-colors disabled:opacity-50",
-            chosen === name ? "border-fg-faint bg-bg-soft" : "border-transparent hover:border-line-strong",
+            chosen === name
+              ? "border-fg-faint bg-bg-soft"
+              : "hover:border-line-strong border-transparent",
           )}
         >
           <Dot colour={name} className="size-3.5" />

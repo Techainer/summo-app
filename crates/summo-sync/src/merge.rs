@@ -347,7 +347,13 @@ pub fn conflict_name(path: &str, machine: &str) -> String {
 fn sanitize(name: &str) -> String {
     let cleaned: String = name
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let trimmed = cleaned.trim_matches('-');
     if trimmed.is_empty() {
@@ -364,7 +370,9 @@ mod tests {
     fn clean(base: &str, mine: &str, theirs: &str) -> String {
         match merge(base, mine, theirs) {
             Merged::Clean(text) => text,
-            Merged::Conflict { regions } => panic!("expected a clean merge, got {regions} conflicts"),
+            Merged::Conflict { regions } => {
+                panic!("expected a clean merge, got {regions} conflicts")
+            }
         }
     }
 
@@ -469,7 +477,8 @@ mod tests {
     #[test]
     fn two_agents_remembering_different_facts_keep_both() {
         let base = "# Memory\n\n- 2026-08-10 — Ngọc leads product\n";
-        let mine = "# Memory\n\n- 2026-08-10 — Ngọc leads product\n- 2026-08-11 — Minh is on leave\n";
+        let mine =
+            "# Memory\n\n- 2026-08-10 — Ngọc leads product\n- 2026-08-11 — Minh is on leave\n";
         let theirs = "# Memory\n\n- 2026-08-10 — Ngọc leads product\n- 2026-08-11 — the team ships on Fridays\n";
 
         let merged = clean(base, mine, theirs);
@@ -530,6 +539,9 @@ mod tests {
     /// Two conflicts on the same file from the same machine should overwrite, not pile up.
     #[test]
     fn the_same_conflict_twice_names_the_same_file() {
-        assert_eq!(conflict_name("a.md", "laptop"), conflict_name("a.md", "laptop"));
+        assert_eq!(
+            conflict_name("a.md", "laptop"),
+            conflict_name("a.md", "laptop")
+        );
     }
 }

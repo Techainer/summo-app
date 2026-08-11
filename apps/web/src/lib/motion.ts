@@ -38,7 +38,12 @@ export const GENTLE: Transition = { duration: 0.26, ease: [0.22, 1, 0.36, 1] };
  * Stiff and well damped: this is a UI control, not a bouncing ball, and overshoot on a task card
  * landing in a column reads as sloppiness.
  */
-export const SPRING: Transition = { type: "spring", stiffness: 420, damping: 34, mass: 0.6 };
+export const SPRING: Transition = {
+  type: "spring",
+  stiffness: 420,
+  damping: 34,
+  mass: 0.6,
+};
 
 /** A progress bar catching up to a number that moved. Slower on purpose: it is being read. */
 export const METER: Transition = { duration: 0.3, ease: "easeOut" };

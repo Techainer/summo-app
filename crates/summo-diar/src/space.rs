@@ -115,7 +115,11 @@ pub enum Migration {
 /// Names, transcripts and the fact that a person exists all survive either outcome — only the
 /// vectors are model-specific. That is why this is a recoverable event rather than data loss.
 #[must_use]
-pub fn plan(stored: Option<&EmbeddingSpace>, running: &EmbeddingSpace, audio_kept: bool) -> Migration {
+pub fn plan(
+    stored: Option<&EmbeddingSpace>,
+    running: &EmbeddingSpace,
+    audio_kept: bool,
+) -> Migration {
     match stored {
         // A book that has never held a vector adopts whatever model runs first.
         None => Migration::None,
@@ -166,7 +170,11 @@ mod tests {
     #[test]
     fn an_unknown_revision_does_not_invalidate_a_book() {
         assert!(campplus().compatible_with(&campplus().with_revision("2026-01")));
-        assert!(campplus().with_revision("2026-01").compatible_with(&campplus()));
+        assert!(
+            campplus()
+                .with_revision("2026-01")
+                .compatible_with(&campplus())
+        );
     }
 
     #[test]

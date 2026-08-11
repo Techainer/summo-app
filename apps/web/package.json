@@ -17,7 +17,11 @@
     "e2e:draft": "node e2e/draft.mjs",
     "e2e:nudges": "node e2e/nudges.mjs",
     "e2e:chat": "node e2e/chat.mjs",
-    "e2e:first-run": "node e2e/first-run.mjs"
+    "e2e:first-run": "node e2e/first-run.mjs",
+    "lint": "eslint . --max-warnings 30",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "tsc --noEmit && pnpm lint && prettier --check . && vitest run"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",
@@ -43,11 +47,19 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.1",
     "@vitejs/plugin-react": "^5.0.4",
+    "eslint": "^10.8.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.9.0",
     "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.66.0",
     "vite": "^7.1.9",
     "vitest": "^3.2.4"
   },

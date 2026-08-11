@@ -1,5 +1,8 @@
 # Summo
 
+[![CI](https://github.com/Techainer/summo-app/actions/workflows/ci.yml/badge.svg)](https://github.com/Techainer/summo-app/actions/workflows/ci.yml)
+[![License: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
+
 Meeting notes that run on your machine. Speech recognition and speaker attribution never leave the
 device; only summarisation and translation call out to a language model you configure yourself.
 
@@ -172,3 +175,10 @@ points at whoever published the weights.
 ## Licence
 
 AGPL-3.0-or-later. Models are fetched at runtime and keep their own licences; see `NOTICE`.
+
+## Contributing
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to run it, and every check CI runs so you can run them first
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [SECURITY.md](SECURITY.md) — what the product promises, and where to report a hole in one
+- [docs/adr/](docs/adr/) — the decisions that shaped this, and what would reopen each of them

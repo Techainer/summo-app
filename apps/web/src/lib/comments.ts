@@ -42,7 +42,6 @@ export interface Thread {
   pending: number;
 }
 
-
 export interface Where {
   seq?: number;
   heading?: string;

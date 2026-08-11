@@ -52,9 +52,9 @@ describe("swatch tokens", () => {
    * legible in one scheme and invisible in the other, which is the bug the design avoids.
    */
   it("gives every palette colour a value in light mode too", () => {
-    expect([
-      ...declared(css, /@media \(prefers-color-scheme: light\)\s*\{[\s\S]*?\n\s*\}\n\}/),
-    ].sort()).toEqual([...names].sort());
+    expect(
+      [...declared(css, /@media \(prefers-color-scheme: light\)\s*\{[\s\S]*?\n\s*\}\n\}/)].sort(),
+    ).toEqual([...names].sort());
   });
 
   /**

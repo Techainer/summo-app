@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
 
 env:
@@ -22,6 +22,29 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+
+  # The interface has 245 tests, a type checker, a linter and a formatter, and until now CI ran
+  # none of them — every one of those checks existed only on the machine of whoever remembered.
+  web:
+    name: types · lint · format · test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm lint
+      - run: pnpm exec prettier --check .
+      - run: pnpm test
+      - run: pnpm build
 
   desktop:
     name: build ${{ matrix.target }}
@@ -76,18 +99,25 @@ jobs:
             -p summo-core -p summo-models -p summo-vad -p summo-bench
 
   registry:
-    name: validate the live registry
+    name: manifest rules
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # The catalogue is a separate repository. Checking it out here catches the case that matters:
-      # a change to the manifest rules in this repo that would reject manifests already published.
-      - uses: actions/checkout@v4
-        with:
-          repository: summo-app/summo-registry
-          path: registry
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p summo-models
-      - name: Validate every published manifest against this build
-        run: cargo run --quiet -p summo-cli -- registry check registry
+
+      # This job used to also check out `summo-registry` and validate every published manifest
+      # against this build, which is the check that matters: a tightening of the manifest rules
+      # here would otherwise reject a manifest already in the wild.
+      #
+      # That repository has not been published yet — the catalogue was split out of this one in
+      # f670520 and has not been pushed anywhere. The step was left in place pointing at a
+      # repository that does not exist, so it failed on every run and made the badge red for a
+      # reason that had nothing to do with the code.
+      #
+      # Restore it the day the registry is published:
+      #
+      #   - uses: actions/checkout@v4
+      #     with: { repository: Techainer/summo-registry, path: registry }
+      #   - run: cargo run --quiet -p summo-cli -- registry check registry

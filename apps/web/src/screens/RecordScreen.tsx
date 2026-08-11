@@ -36,7 +36,7 @@ function Idle() {
         aria-label={session.recording ? t("record.stop") : t("record.start")}
         className={cn(
           "grid size-24 place-items-center rounded-full border-2 transition-colors",
-          "focus:outline-none focus-visible:border-accent",
+          "focus-visible:border-accent focus:outline-none",
           session.recording
             ? "border-rec bg-rec-soft"
             : "border-line-strong bg-bg-soft hover:border-rec",
@@ -59,10 +59,10 @@ function Idle() {
         <>
           <p className="tabular text-2xl font-semibold">{formatTime(elapsed)}</p>
           <Waveform level={level} active />
-          <p className="text-[13px] text-fg-faint">{t("record.listening")}</p>
+          <p className="text-fg-faint text-[13px]">{t("record.listening")}</p>
         </>
       ) : (
-        <p className="max-w-sm text-[13px] leading-relaxed text-fg-faint">{t("record.idle")}</p>
+        <p className="text-fg-faint max-w-sm text-[13px] leading-relaxed">{t("record.idle")}</p>
       )}
     </div>
   );

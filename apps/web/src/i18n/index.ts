@@ -127,7 +127,12 @@ export function interpolate(template: string, values?: Values): string {
  * Polish has four, and a hand-rolled comparison silently produces wrong grammar in those languages
  * rather than an error anyone would notice.
  */
-export function plural(catalog: Catalog, key: string, count: number, locale: string): string | undefined {
+export function plural(
+  catalog: Catalog,
+  key: string,
+  count: number,
+  locale: string,
+): string | undefined {
   let category: string;
   try {
     category = new Intl.PluralRules(locale).select(count);
@@ -195,7 +200,9 @@ export function translator(
 export function detectLocale(available: string[], saved?: string | null): string {
   if (saved && available.includes(saved)) return saved;
 
-  const candidates =
+  // Typed explicitly: `Array.isArray` on a `readonly string[]` narrows to `any[]`, which then
+  // spreads `any` through everything downstream of this loop.
+  const candidates: readonly string[] =
     typeof navigator !== "undefined" && Array.isArray(navigator.languages)
       ? navigator.languages
       : [];

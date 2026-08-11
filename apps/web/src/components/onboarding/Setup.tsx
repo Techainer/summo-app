@@ -55,7 +55,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
     } catch (e) {
       setError(say(e));
     }
-  }, [client]);
+  }, [client, say]);
 
   useEffect(() => {
     void refresh();
@@ -110,7 +110,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
   };
 
   if (!status) {
-    return <p className="mt-24 text-center text-fg-faint">{t("common.loading")}</p>;
+    return <p className="text-fg-faint mt-24 text-center">{t("common.loading")}</p>;
   }
 
   const stuck = blocker(status);
@@ -120,10 +120,10 @@ export function Setup({ onDone }: { onDone: () => void }) {
   return (
     <div className="mx-auto mt-12 w-full max-w-2xl px-6 pb-16">
       <h1 className="text-2xl font-semibold">{t("setup.title")}</h1>
-      <p className="mt-2 text-fg-dim">{t("setup.promise")}</p>
+      <p className="text-fg-dim mt-2">{t("setup.promise")}</p>
 
       {error && (
-        <p role="alert" className="mt-4 text-sm text-danger">
+        <p role="alert" className="text-danger mt-4 text-sm">
           {error}
         </p>
       )}
@@ -131,7 +131,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
       {stuck ? (
         <section className="mt-8">
           <h2 className="text-base font-medium">{t("setup.pick_model")}</h2>
-          <p className="mt-1 text-sm text-fg-dim">
+          <p className="text-fg-dim mt-1 text-sm">
             {t("setup.machine", {
               cores: status.hardware.cores,
               ram: Math.round(status.hardware.total_ram_mb / 1024),
@@ -139,7 +139,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
           </p>
 
           {models.length === 0 ? (
-            <p className="mt-4 text-sm text-fg-faint">{t("setup.no_models")}</p>
+            <p className="text-fg-faint mt-4 text-sm">{t("setup.no_models")}</p>
           ) : (
             <ul className="mt-4 space-y-2">
               {models.map((m) => {
@@ -163,27 +163,31 @@ export function Setup({ onDone }: { onDone: () => void }) {
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-3">
                           <span className="font-medium">{m.name}</span>
-                          <span className="text-[13px] text-fg-faint">
+                          <span className="text-fg-faint text-[13px]">
                             {m.installed ? t("setup.installed") : size(m.size_bytes)}
                           </span>
                         </span>
-                        <span className="mt-0.5 block text-[13px] text-fg-dim">{m.reason}</span>
+                        <span className="text-fg-dim mt-0.5 block text-[13px]">{m.reason}</span>
                         {m.license && (
-                          <span className="mt-0.5 block text-[12px] text-fg-faint">
+                          <span className="text-fg-faint mt-0.5 block text-[12px]">
                             {m.license}
                             {needsConsent(m) ? ` · ${t("setup.upstream")}` : ""}
                           </span>
                         )}
                         {job && (
-                          <span className="mt-2 block h-1 overflow-hidden rounded-full bg-line">
+                          <span className="bg-line mt-2 block h-1 overflow-hidden rounded-full">
                             <motion.span
-                              className="block h-full bg-accent"
+                              className="bg-accent block h-full"
                               animate={
                                 pct === null ? { x: ["-100%", "100%"] } : { width: `${pct}%` }
                               }
                               transition={
                                 pct === null
-                                  ? { repeat: Infinity, duration: 1.2, ease: "linear" }
+                                  ? {
+                                      repeat: Infinity,
+                                      duration: 1.2,
+                                      ease: "linear",
+                                    }
                                   : METER
                               }
                               style={pct === null ? { width: "40%" } : undefined}
@@ -191,7 +195,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
                           </span>
                         )}
                         {job?.error && (
-                          <span className="mt-1 block text-[12px] text-danger">{job.error}</span>
+                          <span className="text-danger mt-1 block text-[12px]">{job.error}</span>
                         )}
                       </span>
                     </label>
@@ -202,33 +206,29 @@ export function Setup({ onDone }: { onDone: () => void }) {
           )}
 
           {selected && needsConsent(selected) && (
-            <p className="mt-3 rounded-xl border border-blocked/30 bg-blocked-soft p-3 text-[13px] text-blocked">
+            <p className="border-blocked/30 bg-blocked-soft text-blocked mt-3 rounded-xl border p-3 text-[13px]">
               {t("setup.upstream_note")}
             </p>
           )}
 
-          <Button
-            className="mt-4"
-            onClick={() => void install()}
-            disabled={!chosen || downloading}
-          >
+          <Button className="mt-4" onClick={() => void install()} disabled={!chosen || downloading}>
             {downloading ? t("setup.downloading") : t("setup.install")}
           </Button>
         </section>
       ) : (
-        <section className="mt-8 rounded-xl border border-ok/30 bg-ok-soft p-4">
+        <section className="border-ok/30 bg-ok-soft mt-8 rounded-xl border p-4">
           <p className="font-medium">{t("setup.ready")}</p>
-          <p className="mt-1 text-sm text-fg-dim">{t("setup.ready_hint")}</p>
+          <p className="text-fg-dim mt-1 text-sm">{t("setup.ready_hint")}</p>
         </section>
       )}
 
       {later.length > 0 && (
         <section className="mt-8">
           <h2 className="text-base font-medium">{t("setup.later")}</h2>
-          <ul className="mt-2 space-y-1 text-sm text-fg-dim">
+          <ul className="text-fg-dim mt-2 space-y-1 text-sm">
             {later.map((check) => (
               <li key={check.step}>
-                <b className="font-medium text-fg">{t(`setup.step_${check.step}`)}</b> —{" "}
+                <b className="text-fg font-medium">{t(`setup.step_${check.step}`)}</b> —{" "}
                 {t(`setup.why_${check.step}`)}
               </li>
             ))}

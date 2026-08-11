@@ -95,9 +95,7 @@ export function ImportPanel() {
   return (
     <div className="mx-auto mt-10 w-full max-w-xl px-4">
       <h2 className="text-lg font-medium">{t("import.title")}</h2>
-      <p className="mt-1 text-sm text-fg-dim">
-        {t("import.hint")}
-      </p>
+      <p className="text-fg-dim mt-1 text-sm">{t("import.hint")}</p>
 
       <div className="mt-4 flex gap-2">
         <input
@@ -108,7 +106,7 @@ export function ImportPanel() {
           }}
           placeholder={t("import.path_placeholder")}
           aria-label={t("import.path_label")}
-          className="min-w-0 flex-1 rounded-xl border border-line bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent"
+          className="border-line bg-bg-soft focus:border-accent min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
         />
         <Button onClick={() => void browse()} variant="ghost">
           {t("import.browse")}
@@ -119,7 +117,7 @@ export function ImportPanel() {
       </div>
 
       {error && (
-        <p role="alert" className="mt-2 text-sm text-danger">
+        <p role="alert" className="text-danger mt-2 text-sm">
           {error}
         </p>
       )}
@@ -136,7 +134,7 @@ export function ImportPanel() {
                 animate="shown"
                 exit="gone"
                 transition={GENTLE}
-                className="rounded-xl border border-line bg-bg-soft p-3"
+                className="border-line bg-bg-soft rounded-xl border p-3"
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate text-sm font-medium">
@@ -144,7 +142,7 @@ export function ImportPanel() {
                   </span>
                   <span
                     className={
-                      job.state === "failed" ? "text-[13px] text-danger" : "text-[13px] text-fg-dim"
+                      job.state === "failed" ? "text-danger text-[13px]" : "text-fg-dim text-[13px]"
                     }
                   >
                     {say(describe(job))}
@@ -153,22 +151,22 @@ export function ImportPanel() {
 
                 {!isFinished(job) && (
                   <div
-                    className="mt-2 h-1 overflow-hidden rounded-full bg-line"
+                    className="bg-line mt-2 h-1 overflow-hidden rounded-full"
                     role="progressbar"
                     aria-valuenow={pct ?? undefined}
                     aria-valuemin={0}
                     aria-valuemax={100}
-                    aria-label={t("import.progress_label", { title: job.title })}
+                    aria-label={t("import.progress_label", {
+                      title: job.title,
+                    })}
                   >
                     {/* Length unknown: an indeterminate sweep, because a bar frozen at 0% is the
                         one thing a five-minute job must not look like. */}
                     <motion.div
-                      className="h-full bg-accent"
+                      className="bg-accent h-full"
                       animate={pct === null ? { x: ["-100%", "100%"] } : { width: `${pct}%` }}
                       transition={
-                        pct === null
-                          ? { repeat: Infinity, duration: 1.2, ease: "linear" }
-                          : METER
+                        pct === null ? { repeat: Infinity, duration: 1.2, ease: "linear" } : METER
                       }
                       style={pct === null ? { width: "40%" } : undefined}
                     />
@@ -184,7 +182,7 @@ export function ImportPanel() {
                         params: { meetingId: job.meeting as string },
                       })
                     }
-                    className="mt-2 text-[13px] font-medium text-accent hover:underline"
+                    className="text-accent mt-2 text-[13px] font-medium hover:underline"
                   >
                     {t("import.open_meeting")}
                   </button>

@@ -162,7 +162,9 @@ impl Translation {
 fn seq_of(line: &str) -> Option<u64> {
     let start = line.find("<!-- seq:")? + "<!-- seq:".len();
     let rest = &line[start..];
-    let end = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
     rest[..end].parse().ok()
 }
 
@@ -190,7 +192,10 @@ pub fn sanitize_lang(lang: &str) -> String {
 pub fn path(paths: &Paths, meeting: &MeetingId, lang: &str) -> Result<PathBuf> {
     let lang = sanitize_lang(lang);
     if lang.is_empty() {
-        return Err(Error::msg("translation.bad_language", format!("`{lang}` không phải mã ngôn ngữ")));
+        return Err(Error::msg(
+            "translation.bad_language",
+            format!("`{lang}` không phải mã ngôn ngữ"),
+        ));
     }
     Ok(dir(paths).join(format!("{meeting}.{lang}.md")))
 }
@@ -324,8 +329,9 @@ mod tests {
 
     #[test]
     fn text_containing_a_comment_marker_does_not_swallow_the_seq() {
-        let t = Translation::parse("<!-- summo:translation lang:en -->\n[00:01] a -- b <!-- seq:7 -->")
-            .unwrap();
+        let t =
+            Translation::parse("<!-- summo:translation lang:en -->\n[00:01] a -- b <!-- seq:7 -->")
+                .unwrap();
         assert_eq!(t.get(7), Some("a -- b"));
     }
 

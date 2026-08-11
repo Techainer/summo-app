@@ -61,7 +61,6 @@ export interface Install {
   error?: string;
 }
 
-
 export class OnboardingClient {
   constructor(private readonly handshake: Handshake) {}
 
@@ -70,7 +69,11 @@ export class OnboardingClient {
   }
 
   async complete(): Promise<void> {
-    await readJson(await fetch(url(this.handshake, "/onboarding/complete"), { method: "POST" }));
+    await readJson(
+      await fetch(url(this.handshake, "/onboarding/complete"), {
+        method: "POST",
+      }),
+    );
   }
 
   async recommend(lang: string): Promise<{ models: Recommended[] }> {

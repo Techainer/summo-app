@@ -57,7 +57,6 @@ export interface Correction {
   corrected_profiles: string[];
 }
 
-
 export class PeopleClient {
   constructor(private readonly handshake: Handshake) {}
 
@@ -88,21 +87,29 @@ export class PeopleClient {
   }
 
   rename(id: string, name: string): Promise<Person> {
-    return this.post<Person>(`/people/${encodeURIComponent(id)}/name`, { name });
+    return this.post<Person>(`/people/${encodeURIComponent(id)}/name`, {
+      name,
+    });
   }
 
   setAvatar(id: string, avatar: string | null): Promise<Person> {
-    return this.post<Person>(`/people/${encodeURIComponent(id)}/avatar`, { avatar });
+    return this.post<Person>(`/people/${encodeURIComponent(id)}/avatar`, {
+      avatar,
+    });
   }
 
   /** Fold `from` into `into`. `from` disappears. */
   merge(into: string, from: string): Promise<Person> {
-    return this.post<Person>(`/people/${encodeURIComponent(into)}/merge`, { from });
+    return this.post<Person>(`/people/${encodeURIComponent(into)}/merge`, {
+      from,
+    });
   }
 
   async forget(id: string): Promise<boolean> {
     const body = await readJson<{ removed: boolean }>(
-      await fetch(url(this.handshake, `/people/${encodeURIComponent(id)}`), { method: "DELETE" }),
+      await fetch(url(this.handshake, `/people/${encodeURIComponent(id)}`), {
+        method: "DELETE",
+      }),
     );
     return body.removed;
   }

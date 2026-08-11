@@ -40,10 +40,10 @@ export function About() {
   }, [handshake]);
 
   return (
-    <section className="mt-10 border-t border-line pt-6 text-sm">
+    <section className="border-line mt-10 border-t pt-6 text-sm">
       <h2 className="text-base font-medium">{t("about.title")}</h2>
 
-      <p className="mt-2 text-fg-dim">{t("about.local_promise")}</p>
+      <p className="text-fg-dim mt-2">{t("about.local_promise")}</p>
 
       <div className="mt-4 flex items-center gap-3">
         <a
@@ -79,7 +79,7 @@ export function About() {
         </p>
       </div>
 
-      <p className="mt-4 text-[13px] text-fg-faint">
+      <p className="text-fg-faint mt-4 text-[13px]">
         {version ? `${t("about.version", { version })} · ` : ""}
         {t("about.source")}
       </p>

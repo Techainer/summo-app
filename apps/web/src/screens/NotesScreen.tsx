@@ -5,13 +5,7 @@ import { Button } from "../components/ui";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
-import {
-  NoteClient,
-  SAVE_DEBOUNCE_MS,
-  byDay,
-  titleFrom,
-  type NoteSummary,
-} from "../lib/notes";
+import { NoteClient, SAVE_DEBOUNCE_MS, byDay, titleFrom, type NoteSummary } from "../lib/notes";
 
 /**
  * Notes: a list on the left, the note on the right.
@@ -46,7 +40,11 @@ export function NotesScreen() {
   // Held in a ref as well as in state: the debounce fires from a timer that closed over an older
   // render, and saving the text from two seconds ago would undo the last two seconds of typing.
   const latest = useRef(text);
-  latest.current = text;
+  // In an effect rather than during render: mutating a ref while rendering is what React forbids,
+  // and it buys nothing here — the timer that reads this fires later than any effect.
+  useEffect(() => {
+    latest.current = text;
+  }, [text]);
   const timer = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
@@ -55,7 +53,7 @@ export function NotesScreen() {
     } catch (e) {
       setError(say(e));
     }
-  }, [client]);
+  }, [client, say]);
 
   useEffect(() => {
     void refresh();
@@ -75,7 +73,7 @@ export function NotesScreen() {
         setError(say(e));
       }
     },
-    [client],
+    [client, say],
   );
 
   const persist = useCallback(async () => {
@@ -91,7 +89,7 @@ export function NotesScreen() {
       // lost quietly rather than loudly.
       setError(say(e));
     }
-  }, [client, openId, refresh]);
+  }, [client, openId, refresh, say]);
 
   const edit = (value: string) => {
     setText(value);
@@ -136,8 +134,8 @@ export function NotesScreen() {
 
   return (
     <div className="flex h-full min-h-0">
-      <aside className="flex w-72 shrink-0 flex-col border-r border-line">
-        <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
+      <aside className="border-line flex w-72 shrink-0 flex-col border-r">
+        <div className="border-line flex items-center justify-between gap-2 border-b px-3 py-2">
           <h1 className="text-sm font-semibold">{t("notes.title")}</h1>
           <Button size="sm" onClick={() => void create()}>
             {t("notes.new")}
@@ -146,11 +144,11 @@ export function NotesScreen() {
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {notes.length === 0 && (
-            <p className="px-2 py-6 text-[13px] text-fg-faint">{t("notes.empty")}</p>
+            <p className="text-fg-faint px-2 py-6 text-[13px]">{t("notes.empty")}</p>
           )}
           {grouped.map(([day, entries]) => (
             <section key={day} className="mb-3">
-              <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
+              <p className="text-fg-faint px-2 pb-1 text-[11px] font-semibold tracking-wider uppercase">
                 {day}
               </p>
               <ul className="space-y-0.5">
@@ -178,23 +176,26 @@ export function NotesScreen() {
 
       <section className="flex min-w-0 flex-1 flex-col">
         {error && (
-          <p role="alert" className="border-b border-danger/30 bg-danger-soft px-4 py-2 text-[13px] text-danger">
+          <p
+            role="alert"
+            className="border-danger/30 bg-danger-soft text-danger border-b px-4 py-2 text-[13px]"
+          >
             {error}
           </p>
         )}
 
         {openId === null ? (
-          <p className="mt-24 text-center text-fg-faint">{t("notes.pick")}</p>
+          <p className="text-fg-faint mt-24 text-center">{t("notes.pick")}</p>
         ) : (
           <>
-            <div className="flex items-center gap-3 border-b border-line px-4 py-2">
+            <div className="border-line flex items-center gap-3 border-b px-4 py-2">
               <AnimatePresence mode="wait">
                 <motion.span
                   key={saved ? "saved" : "editing"}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="text-[12px] text-fg-faint"
+                  className="text-fg-faint text-[12px]"
                 >
                   {saved ? t("notes.saved") : t("notes.saving")}
                 </motion.span>
@@ -214,7 +215,7 @@ export function NotesScreen() {
               placeholder={t("notes.placeholder")}
               // `font-reading` and a measure: a note is prose, and prose at full window width is
               // prose nobody re-reads.
-              className="min-h-0 flex-1 resize-none bg-transparent px-6 py-5 font-reading text-[15px] leading-relaxed outline-none"
+              className="font-reading min-h-0 flex-1 resize-none bg-transparent px-6 py-5 text-[15px] leading-relaxed outline-none"
             />
           </>
         )}

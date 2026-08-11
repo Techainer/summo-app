@@ -57,7 +57,7 @@ export function Sidebar({
   return (
     <div className="flex h-full flex-col">
       <nav aria-label={t("nav.screens")} className="px-3 pt-3">
-        <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
+        <p className="text-fg-faint px-2 pb-1.5 text-[11px] font-semibold tracking-wider uppercase">
           {t("nav.menu")}
         </p>
         <ul className="space-y-0.5">
@@ -70,7 +70,7 @@ export function Sidebar({
                 className={cn(
                   "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors",
                   active === item.key
-                    ? "bg-accent-soft font-medium text-accent"
+                    ? "bg-accent-soft text-accent font-medium"
                     : "text-fg-dim hover:bg-bg-soft hover:text-fg",
                 )}
               >
@@ -79,7 +79,7 @@ export function Sidebar({
                 </span>
                 {item.label}
                 {item.badge ? (
-                  <span className="tabular ml-auto rounded-full bg-rec px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                  <span className="tabular bg-rec ml-auto rounded-full px-1.5 py-0.5 text-[11px] font-semibold text-white">
                     {item.badge}
                   </span>
                 ) : null}
@@ -89,10 +89,10 @@ export function Sidebar({
         </ul>
       </nav>
 
-      <div className="mt-4 border-t border-line" />
+      <div className="border-line mt-4 border-t" />
 
       <nav aria-label={t("nav.folders")} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
+        <p className="text-fg-faint px-2 pb-1.5 text-[11px] font-semibold tracking-wider uppercase">
           {t("nav.folders")}
         </p>
         <ul className="space-y-0.5">
@@ -118,12 +118,12 @@ export function Sidebar({
             </li>
           ))}
           {rows.length === 0 && (
-            <li className="px-2 py-1 text-[13px] text-fg-faint">{t("nav.no_folders")}</li>
+            <li className="text-fg-faint px-2 py-1 text-[13px]">{t("nav.no_folders")}</li>
           )}
         </ul>
       </nav>
 
-      {footer && <div className="border-t border-line p-3">{footer}</div>}
+      {footer && <div className="border-line border-t p-3">{footer}</div>}
     </div>
   );
 }
@@ -150,7 +150,7 @@ function FolderRow({
     <div
       className={cn(
         "flex items-center rounded-lg text-sm transition-colors",
-        selected ? "bg-bg-soft font-medium text-fg" : "text-fg-dim hover:bg-bg-soft",
+        selected ? "bg-bg-soft text-fg font-medium" : "text-fg-dim hover:bg-bg-soft",
       )}
       // Indent by nesting level. Padding rather than margin so the hover target stays full width.
       style={{ paddingLeft: `${depth * 12}px` }}
@@ -159,9 +159,11 @@ function FolderRow({
         <button
           type="button"
           onClick={onToggle}
-          aria-label={t(expanded ? "nav.collapse" : "nav.expand", { name: label })}
+          aria-label={t(expanded ? "nav.collapse" : "nav.expand", {
+            name: label,
+          })}
           aria-expanded={expanded}
-          className="flex size-6 shrink-0 items-center justify-center text-fg-faint hover:text-fg"
+          className="text-fg-faint hover:text-fg flex size-6 shrink-0 items-center justify-center"
         >
           <span
             aria-hidden="true"

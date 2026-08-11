@@ -42,7 +42,10 @@ const CENTROIDS_PER_PERSON: usize = 8;
 /// history log, of which there are hundreds of thousands. Confusing the two is what makes an ANN
 /// index look necessary.
 pub fn identify_scaling() {
-    println!("{:>8}  {:>10}  {:>14}  {:>12}", "people", "centroids", "per utterance", "in a meeting");
+    println!(
+        "{:>8}  {:>10}  {:>14}  {:>12}",
+        "people", "centroids", "per utterance", "in a meeting"
+    );
 
     for people in [10usize, 50, 200, 1_000, 10_000] {
         let centroids: Vec<Vec<f32>> = (0..people * CENTROIDS_PER_PERSON)
@@ -176,7 +179,8 @@ fn binary(dir: &Path, data: &[Vec<Vec<f32>>], centroids: &[Vec<f32>]) -> Result<
 
     let start = Instant::now();
     for (i, meeting) in data.iter().enumerate() {
-        let mut file = std::io::BufWriter::new(std::fs::File::create(root.join(format!("{i}.vec")))?);
+        let mut file =
+            std::io::BufWriter::new(std::fs::File::create(root.join(format!("{i}.vec")))?);
         file.write_all(&(DIMS as u32).to_le_bytes())?;
         file.write_all(&(meeting.len() as u32).to_le_bytes())?;
         for vector in meeting {
@@ -273,10 +277,7 @@ fn sqlite(dir: &Path, data: &[Vec<Vec<f32>>], centroids: &[Vec<f32>]) -> Result<
 
 /// The work a resweep actually does: every vector against every centroid.
 fn score(meeting: &[Vec<f32>], centroids: &[Vec<f32>]) -> f32 {
-    meeting
-        .iter()
-        .map(|v| best_similarity(v, centroids))
-        .sum()
+    meeting.iter().map(|v| best_similarity(v, centroids)).sum()
 }
 
 fn best_similarity(vector: &[f32], centroids: &[Vec<f32>]) -> f32 {

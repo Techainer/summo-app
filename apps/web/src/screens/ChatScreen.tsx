@@ -56,7 +56,9 @@ export function ChatScreen() {
         body: JSON.stringify({ question: asked }),
       });
       if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         throw new Error(body?.error ?? `${response.status}`);
       }
       const answer = (await response.json()) as Answer;
@@ -76,7 +78,7 @@ export function ChatScreen() {
 
       <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto">
         {history.length === 0 && (
-          <p className="mt-16 text-center text-fg-faint">
+          <p className="text-fg-faint mt-16 text-center">
             {t("chat.intro")}
             <br />
             {t("chat.intro_2")}
@@ -86,13 +88,13 @@ export function ChatScreen() {
         {history.map((exchange, i) => (
           <div key={`${exchange.question}-${i}`} className="space-y-2">
             <p className="text-right">
-              <span className="inline-block rounded-2xl bg-accent-soft px-3 py-1.5 text-sm text-accent">
+              <span className="bg-accent-soft text-accent inline-block rounded-2xl px-3 py-1.5 text-sm">
                 {exchange.question}
               </span>
             </p>
 
             {exchange.error && (
-              <p className="rounded-lg border border-rec/30 bg-rec-soft px-3 py-2 text-[13px] text-rec">
+              <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
                 {exchange.error}
               </p>
             )}
@@ -100,9 +102,9 @@ export function ChatScreen() {
             {exchange.answer && (
               <Card>
                 <CardBody className="pt-4">
-                  <p className="whitespace-pre-wrap leading-relaxed">{exchange.answer.text}</p>
+                  <p className="leading-relaxed whitespace-pre-wrap">{exchange.answer.text}</p>
                   {exchange.answer.sources.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1.5 border-t border-line pt-2.5">
+                    <div className="border-line mt-3 flex flex-wrap gap-1.5 border-t pt-2.5">
                       {exchange.answer.sources.map((source) => (
                         <button
                           key={source.meeting}
@@ -114,7 +116,7 @@ export function ChatScreen() {
                             })
                           }
                           className={cn(
-                            "rounded-full border border-line px-2.5 py-1 text-[12px]",
+                            "border-line rounded-full border px-2.5 py-1 text-[12px]",
                             "text-fg-dim hover:border-accent/40 hover:text-accent",
                           )}
                         >
@@ -128,7 +130,7 @@ export function ChatScreen() {
             )}
 
             {!exchange.answer && !exchange.error && (
-              <p className="text-[13px] text-fg-faint">{t("chat.searching")}</p>
+              <p className="text-fg-faint text-[13px]">{t("chat.searching")}</p>
             )}
           </div>
         ))}
@@ -136,7 +138,7 @@ export function ChatScreen() {
       </div>
 
       <form
-        className="mt-3 flex gap-2 border-t border-line pt-3"
+        className="border-line mt-3 flex gap-2 border-t pt-3"
         onSubmit={(e) => {
           e.preventDefault();
           void send();
@@ -148,7 +150,7 @@ export function ChatScreen() {
           placeholder={t("chat.placeholder")}
           aria-label={t("chat.question")}
           disabled={busy}
-          className="flex-1 rounded-lg border border-line bg-bg-soft px-3 py-2 text-sm"
+          className="border-line bg-bg-soft flex-1 rounded-lg border px-3 py-2 text-sm"
         />
         <Button variant="primary" type="submit" busy={busy}>
           {t("chat.ask")}

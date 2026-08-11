@@ -57,11 +57,14 @@ pub fn probe() -> Result<Ffmpeg> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("ffprobe"));
 
-    let output = Command::new(&ffmpeg).arg("-version").output().map_err(|e| {
-        Error::Other(format!(
-            "cannot run ffmpeg ({e}). Cài ffmpeg rồi thử lại, hoặc đặt SUMMO_FFMPEG trỏ tới nó."
-        ))
-    })?;
+    let output = Command::new(&ffmpeg)
+        .arg("-version")
+        .output()
+        .map_err(|e| {
+            Error::Other(format!(
+                "cannot run ffmpeg ({e}). Cài ffmpeg rồi thử lại, hoặc đặt SUMMO_FFMPEG trỏ tới nó."
+            ))
+        })?;
     if !output.status.success() {
         return Err(Error::Other(
             "ffmpeg is installed but refused to report its version".into(),
@@ -257,7 +260,10 @@ pub fn looks_importable(path: &Path) -> bool {
 /// beneath it. A stray `node_modules` full of sample audio is not a meeting archive.
 pub fn importable_in(dir: &Path) -> Result<Vec<PathBuf>> {
     let mut out = Vec::new();
-    for entry in std::fs::read_dir(dir).map_err(|e| Error::io(dir, e))?.flatten() {
+    for entry in std::fs::read_dir(dir)
+        .map_err(|e| Error::io(dir, e))?
+        .flatten()
+    {
         let path = entry.path();
         if path.is_file() && looks_importable(&path) {
             out.push(path);
@@ -298,17 +304,17 @@ mod tests {
 
     #[test]
     fn a_file_with_no_audio_is_recognised_as_such() {
-        let info = parse_probe(r#"{"streams":[{"codec_type":"video"}],"format":{}}"#).expect("parse");
+        let info =
+            parse_probe(r#"{"streams":[{"codec_type":"video"}],"format":{}}"#).expect("parse");
         assert!(!info.has_audio);
         assert!(info.has_video);
     }
 
     #[test]
     fn duration_falls_back_to_the_stream_when_the_container_has_none() {
-        let info = parse_probe(
-            r#"{"streams":[{"codec_type":"audio","duration":"12.5"}],"format":{}}"#,
-        )
-        .expect("parse");
+        let info =
+            parse_probe(r#"{"streams":[{"codec_type":"audio","duration":"12.5"}],"format":{}}"#)
+                .expect("parse");
         assert!((info.duration_s - 12.5).abs() < 1e-9);
     }
 
@@ -325,7 +331,10 @@ mod tests {
 
     #[test]
     fn a_title_drops_a_leading_date() {
-        assert_eq!(title_from(Path::new("2026-08-10 Weekly sync.mp4")), "Weekly sync");
+        assert_eq!(
+            title_from(Path::new("2026-08-10 Weekly sync.mp4")),
+            "Weekly sync"
+        );
         assert_eq!(title_from(Path::new("20260810_hop_tuan.m4a")), "hop tuan");
     }
 
@@ -337,7 +346,10 @@ mod tests {
 
     #[test]
     fn a_title_survives_vietnamese_and_separators() {
-        assert_eq!(title_from(Path::new("hop-ngan-sach_quy-4.mp4")), "hop ngan sach quy 4");
+        assert_eq!(
+            title_from(Path::new("hop-ngan-sach_quy-4.mp4")),
+            "hop ngan sach quy 4"
+        );
         assert_eq!(title_from(Path::new("Họp ngân sách.mp4")), "Họp ngân sách");
     }
 
@@ -351,7 +363,10 @@ mod tests {
     #[test]
     fn the_picker_suggests_audio_and_video_but_not_documents() {
         assert!(looks_importable(Path::new("a.mp4")));
-        assert!(looks_importable(Path::new("a.M4A")), "case should not matter");
+        assert!(
+            looks_importable(Path::new("a.M4A")),
+            "case should not matter"
+        );
         assert!(!looks_importable(Path::new("a.pdf")));
         assert!(!looks_importable(Path::new("a")));
     }
@@ -389,9 +404,16 @@ mod tests {
         // A second of a sine wave at 44.1 kHz stereo — the shape a phone recording arrives in.
         let made = Command::new(&tools.ffmpeg)
             .args([
-                "-hide_banner", "-loglevel", "error", "-y",
-                "-f", "lavfi", "-i", "sine=frequency=440:duration=1:sample_rate=44100",
-                "-ac", "2",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=1:sample_rate=44100",
+                "-ac",
+                "2",
             ])
             .arg(&source)
             .status()
@@ -407,6 +429,10 @@ mod tests {
 
         let converted = tools.info(&out).expect("probe the result");
         assert_eq!(converted.sample_rate, Some(TARGET_RATE));
-        assert_eq!(converted.channels, Some(1), "downmixed, not one channel picked");
+        assert_eq!(
+            converted.channels,
+            Some(1),
+            "downmixed, not one channel picked"
+        );
     }
 }

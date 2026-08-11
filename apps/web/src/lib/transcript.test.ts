@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 import { apply, edit, empty, renameSpeaker } from "./transcript";
 import type { Event } from "./protocol";
 
-const seg = (kind: "partial" | "final" | "revise", seq: number, text: string): Event =>
-  ({ kind, seq, lane: "mic", text, t0: 0, t1: 1, source: "partial" }) as Event;
+const seg = (kind: "partial" | "final" | "revise", seq: number, text: string): Event => ({
+  kind,
+  seq,
+  lane: "mic",
+  text,
+  t0: 0,
+  t1: 1,
+  source: "partial",
+});
 
 describe("transcript store", () => {
   it("adds a new segment", () => {
@@ -61,9 +68,18 @@ describe("transcript store", () => {
 
   it("renames a speaker everywhere at once", () => {
     let state = empty();
-    state = apply(state, { ...(seg("final", 1, "a") as object), speaker: "S1" } as Event);
-    state = apply(state, { ...(seg("final", 2, "b") as object), speaker: "S2" } as Event);
-    state = apply(state, { ...(seg("final", 3, "c") as object), speaker: "S1" } as Event);
+    state = apply(state, {
+      ...(seg("final", 1, "a") as object),
+      speaker: "S1",
+    } as Event);
+    state = apply(state, {
+      ...(seg("final", 2, "b") as object),
+      speaker: "S2",
+    } as Event);
+    state = apply(state, {
+      ...(seg("final", 3, "c") as object),
+      speaker: "S1",
+    } as Event);
 
     state = renameSpeaker(state, "S1", "Ngọc");
     expect(state.segments.map((s) => s.speaker)).toEqual(["Ngọc", "S2", "Ngọc"]);
@@ -90,10 +106,13 @@ describe("live translation", () => {
       seq: 1,
       lang: "en",
       text: "hello",
-    } as Event);
+    });
 
     expect(state.segments[0]?.text).toBe("xin chào");
-    expect(state.segments[0]?.translation).toEqual({ lang: "en", text: "hello" });
+    expect(state.segments[0]?.translation).toEqual({
+      lang: "en",
+      text: "hello",
+    });
   });
 
   // Out-of-order delivery would otherwise invent a segment with no text, no speaker and no timing,
@@ -105,7 +124,7 @@ describe("live translation", () => {
       seq: 99,
       lang: "en",
       text: "hello",
-    } as Event);
+    });
     expect(after).toBe(before);
   });
 
@@ -115,13 +134,13 @@ describe("live translation", () => {
       seq: 1,
       lang: "en",
       text: "hi",
-    } as Event);
+    });
     state = apply(state, {
       kind: "translation",
       seq: 1,
       lang: "en",
       text: "hello there",
-    } as Event);
+    });
     expect(state.segments[0]?.translation?.text).toBe("hello there");
   });
 
@@ -131,7 +150,7 @@ describe("live translation", () => {
       seq: 1,
       lang: "en",
       text: "hello",
-    } as Event);
+    });
     state = apply(state, seg("revise", 1, "xin chào các bạn"));
 
     expect(state.segments[0]?.text).toBe("xin chào các bạn");

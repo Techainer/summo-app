@@ -66,7 +66,10 @@ describe("inOrder", () => {
   });
 
   it("does not mutate what it was given", () => {
-    const input = [note({ id: "b", at: "2026-08-11T18:00:00+07:00" }), note({ id: "a", at: "2026-08-11T09:00:00+07:00" })];
+    const input = [
+      note({ id: "b", at: "2026-08-11T18:00:00+07:00" }),
+      note({ id: "a", at: "2026-08-11T09:00:00+07:00" }),
+    ];
     inOrder(input);
     expect(input[0]?.id).toBe("b");
   });

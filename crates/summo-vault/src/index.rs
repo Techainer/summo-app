@@ -366,7 +366,10 @@ impl MeetingIndex {
         let recent: Vec<&MeetingEntry> = self
             .entries
             .iter()
-            .filter(|e| e.started_at.is_some_and(|t| t >= cutoff && t <= now.unix_timestamp()))
+            .filter(|e| {
+                e.started_at
+                    .is_some_and(|t| t >= cutoff && t <= now.unix_timestamp())
+            })
             .collect();
 
         Stats {
@@ -466,8 +469,9 @@ impl Filter {
         if let Some(folder) = &self.folder {
             // A folder filter includes its subfolders: asking for `khach-hang` should not hide
             // `khach-hang/2026`.
-            let inside =
-                e.folder == *folder || e.folder.starts_with(&format!("{}/", folder.trim_end_matches('/')));
+            let inside = e.folder == *folder
+                || e.folder
+                    .starts_with(&format!("{}/", folder.trim_end_matches('/')));
             if !inside {
                 return false;
             }
@@ -491,7 +495,10 @@ impl Filter {
             }
         }
         if let Some(person) = &self.person
-            && !e.participants.iter().any(|p| fold(&unlink(p)) == fold(person))
+            && !e
+                .participants
+                .iter()
+                .any(|p| fold(&unlink(p)) == fold(person))
         {
             return false;
         }
@@ -524,7 +531,9 @@ fn read_entry(path: &Path, root: &Path) -> Result<MeetingEntry> {
         // No frontmatter means a person wrote this file, not Summo. That is the ordinary way a
         // note gets into a folder somebody was told they own, so it is adopted rather than
         // reported: an id from its path, a date from when it was last written.
-        Err(_) if !head.starts_with("---\n") => Frontmatter::new(MeetingId::from(String::new()), String::new()),
+        Err(_) if !head.starts_with("---\n") => {
+            Frontmatter::new(MeetingId::from(String::new()), String::new())
+        }
         Err(e) => return Err(e),
     };
     // The same two fallbacks whether the file had no frontmatter or partial frontmatter, which is
@@ -572,7 +581,10 @@ fn read_head(path: &Path) -> Result<String> {
     let mut buf = vec![0u8; HEAD_BYTES];
     let mut filled = 0;
     while filled < buf.len() {
-        match file.read(&mut buf[filled..]).map_err(|e| Error::io(path, e))? {
+        match file
+            .read(&mut buf[filled..])
+            .map_err(|e| Error::io(path, e))?
+        {
             0 => break,
             n => filled += n,
         }
@@ -658,9 +670,10 @@ fn modified_at(meta: Option<&std::fs::Metadata>) -> String {
 /// Derived from the document rather than from the folder on purpose. Filing by path would mean a
 /// user dragging a file between folders silently changed what it is.
 fn kind_of(head: &str, duration: u64) -> Kind {
-    let has_transcript = head
-        .lines()
-        .any(|line| line.strip_prefix("## ").is_some_and(|h| h.trim() == "Transcript"));
+    let has_transcript = head.lines().any(|line| {
+        line.strip_prefix("## ")
+            .is_some_and(|h| h.trim() == "Transcript")
+    });
 
     if has_transcript || duration > 0 {
         Kind::Meeting
@@ -827,7 +840,10 @@ mod tests {
     /// listing has to work that out from the head of the file alone.
     #[test]
     fn a_document_with_a_transcript_is_a_meeting() {
-        assert_eq!(kind_of("# Họp\n\n## Transcript\n**[00:00:00] ?** — hi", 0), Kind::Meeting);
+        assert_eq!(
+            kind_of("# Họp\n\n## Transcript\n**[00:00:00] ?** — hi", 0),
+            Kind::Meeting
+        );
     }
 
     #[test]
@@ -840,7 +856,10 @@ mod tests {
     /// the head window. Anything recorded has a duration; nothing typed does.
     #[test]
     fn a_long_meeting_whose_transcript_heading_is_beyond_the_head_is_still_a_meeting() {
-        assert_eq!(kind_of("# Họp\n\n## Tóm tắt\nrất dài…", 1800), Kind::Meeting);
+        assert_eq!(
+            kind_of("# Họp\n\n## Tóm tắt\nrất dài…", 1800),
+            Kind::Meeting
+        );
     }
 
     /// Filing by path would mean dragging a file between folders silently changed what it is.
@@ -930,7 +949,10 @@ mod tests {
             .iter()
             .find(|e| e.path.ends_with("idea.md"))
             .expect("the hand-written file must list");
-        assert_eq!(adopted.title, "Ý tưởng", "its own heading, not its filename");
+        assert_eq!(
+            adopted.title, "Ý tưởng",
+            "its own heading, not its filename"
+        );
         assert!(adopted.kind.is_note());
     }
 
@@ -983,7 +1005,11 @@ mod tests {
     #[test]
     fn a_partly_filled_file_keeps_the_same_id_across_scans() {
         let dir = vault();
-        write(dir.path(), "tagged.md", "---\ntags: [x]\n---\n# Đã gắn thẻ\n");
+        write(
+            dir.path(),
+            "tagged.md",
+            "---\ntags: [x]\n---\n# Đã gắn thẻ\n",
+        );
         let id_of = |index: &MeetingIndex| {
             index
                 .entries()
@@ -1032,7 +1058,10 @@ mod tests {
         let doc = load(entry).expect("an adopted file must open");
         assert_eq!(doc.title, "Ý tưởng");
         assert!(doc.body.contains("vài dòng"));
-        assert_eq!(doc.frontmatter.id, entry.id, "the listing and the document must agree");
+        assert_eq!(
+            doc.frontmatter.id, entry.id,
+            "the listing and the document must agree"
+        );
     }
 
     /// A note written last March belongs in March. Filing it under the day the vault happened to be
@@ -1108,7 +1137,12 @@ mod tests {
         let index = MeetingIndex::scan(dir.path()).unwrap();
         let weeks = index.by_week();
         // 5 Aug 2026 is a Wednesday in W32; 9 Aug is the Sunday that ends W32 — same week.
-        assert_eq!(weeks.len(), 1, "got {:?}", weeks.iter().map(|w| &w.key).collect::<Vec<_>>());
+        assert_eq!(
+            weeks.len(),
+            1,
+            "got {:?}",
+            weeks.iter().map(|w| &w.key).collect::<Vec<_>>()
+        );
         assert_eq!(weeks[0].key, "2026-W32");
         assert_eq!(weeks[0].meetings.len(), 3);
     }
@@ -1273,7 +1307,11 @@ mod tests {
             &meeting("01G", "2026-08-09T11:00:00+07:00", "Đã xoá"),
         );
         let index = MeetingIndex::scan(dir.path()).unwrap();
-        assert_eq!(index.len(), 3, "a file in a dot-folder must stay out of the list");
+        assert_eq!(
+            index.len(),
+            3,
+            "a file in a dot-folder must stay out of the list"
+        );
     }
 
     #[test]

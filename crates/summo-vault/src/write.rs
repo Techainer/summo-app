@@ -25,4 +25,3 @@ pub fn write_atomically(path: &Path, contents: &[u8]) -> Result<()> {
     std::fs::rename(&temporary, path).map_err(|e| Error::io(path, e))?;
     Ok(())
 }
-

@@ -187,7 +187,10 @@ mod tests {
         let home = tmp.path().join("sandboxed").join("summo");
         let embedded = start(&home).await.unwrap();
 
-        assert!(home.join("vault").exists(), "the vault lives under the app's own directory");
+        assert!(
+            home.join("vault").exists(),
+            "the vault lives under the app's own directory"
+        );
         embedded.shutdown();
     }
 }

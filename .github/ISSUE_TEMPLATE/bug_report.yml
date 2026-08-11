@@ -1,0 +1,71 @@
+name: Bug report
+description: Something behaves differently from what you expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not attach a recording of a real meeting.** If audio matters to the bug, record ten
+        seconds of yourself saying the same words. A colleague's voice does not belong in a public
+        issue, and the clip is usually enough to reproduce it anyway.
+
+        Found a security hole? Do not open an issue — see [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: >
+        The part that is hardest to guess and most useful to know. A transcript that is wrong and a
+        transcript that is right but not what you meant are different bugs with different fixes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can somebody else see it?
+      placeholder: |
+        1. Open the library
+        2. Click a tag
+        3. Reload
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`summo --version`, or the commit you built."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Windows, Linux, Other]
+    validations:
+      required: true
+
+  - type: textarea
+    id: models
+    attributes:
+      label: Which models are installed?
+      description: "Output of `summo list`. Skip it if the bug has nothing to do with recognition."
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Anything in the log?
+      description: >
+        Run the daemon with `RUST_LOG=debug`. Read it before pasting — it names your files.
+      render: text

@@ -9,11 +9,11 @@ use summo_core::{ModelId, paths::Paths};
 use summo_models::{Downloader, Manifest, ModelStore, Registry, RegistrySource, hw::HwProfile};
 
 mod ai;
-mod sync;
-mod importer;
 #[cfg(feature = "dub")]
 mod dub;
+mod importer;
 mod library;
+mod sync;
 
 #[cfg(feature = "transcribe")]
 mod transcribe;
@@ -298,11 +298,7 @@ async fn main() -> Result<()> {
             detach,
         } => import(&paths, &path, dry_run, lang.as_deref(), detach).await,
         #[cfg(feature = "serve")]
-        Command::Serve {
-            port,
-            no_open,
-            dev,
-        } => serve(&paths, port, no_open, dev).await,
+        Command::Serve { port, no_open, dev } => serve(&paths, port, no_open, dev).await,
         #[cfg(feature = "mcp")]
         Command::Mcp => mcp(&paths),
         #[cfg(feature = "dub")]
@@ -977,9 +973,11 @@ fn registry_pages(
 
 /// The index page: one row per model, with the two facts that decide whether to read further.
 fn pages_index(manifests: &[Manifest]) -> String {
-    let mut out = String::from("# Models
+    let mut out = String::from(
+        "# Models
 
-");
+",
+    );
     out.push_str(
         "Everything here is generated from the manifests in `models/`. Speech recognition and \
          speaker attribution always run on the user's own machine; these are the files that make \
@@ -987,9 +985,11 @@ fn pages_index(manifests: &[Manifest]) -> String {
 
 ",
     );
-    out.push_str("| Model | Task | Size | Licence | Source |
+    out.push_str(
+        "| Model | Task | Size | Licence | Source |
 |---|---|---|---|---|
-");
+",
+    );
 
     for m in manifests {
         let source = if m.gated {

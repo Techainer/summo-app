@@ -270,9 +270,18 @@ mod tests {
     #[test]
     fn a_day_counts_only_its_own_meetings() {
         let dir = vault_with(&[
-            ("a.md", &meeting("01A", "2026-08-10T09:00:00+07:00", "Sáng", "")),
-            ("b.md", &meeting("01B", "2026-08-10T15:00:00+07:00", "Chiều", "")),
-            ("c.md", &meeting("01C", "2026-08-11T09:00:00+07:00", "Mai", "")),
+            (
+                "a.md",
+                &meeting("01A", "2026-08-10T09:00:00+07:00", "Sáng", ""),
+            ),
+            (
+                "b.md",
+                &meeting("01B", "2026-08-10T15:00:00+07:00", "Chiều", ""),
+            ),
+            (
+                "c.md",
+                &meeting("01C", "2026-08-11T09:00:00+07:00", "Mai", ""),
+            ),
         ]);
         let report = day(dir.path(), "2026-08-10").expect("report");
         assert_eq!(report.meetings.len(), 2);
@@ -311,7 +320,10 @@ mod tests {
              participants: [\"An\"]\ntags: []\n---\n# Ngắn\n";
         let dir = vault_with(&[("a.md", long), ("b.md", short)]);
         let report = day(dir.path(), "2026-08-10").expect("report");
-        assert_eq!(report.people[0].name, "Zung", "two hours outranks ten minutes");
+        assert_eq!(
+            report.people[0].name, "Zung",
+            "two hours outranks ten minutes"
+        );
     }
 
     #[test]
@@ -355,7 +367,12 @@ mod tests {
                 "## Transcript\n- [ ] không phải việc\n",
             ),
         )]);
-        assert!(day(dir.path(), "2026-08-10").unwrap().open_actions.is_empty());
+        assert!(
+            day(dir.path(), "2026-08-10")
+                .unwrap()
+                .open_actions
+                .is_empty()
+        );
     }
 
     /// A heading after the action list closes it.
@@ -487,10 +504,16 @@ mod tests {
         )]);
         let report = day(dir.path(), "2026-08-10").expect("report");
         assert_eq!(report.open_actions.len(), 2);
-        let owners: Vec<Option<&str>> =
-            report.open_actions.iter().map(|a| a.owner.as_deref()).collect();
+        let owners: Vec<Option<&str>> = report
+            .open_actions
+            .iter()
+            .map(|a| a.owner.as_deref())
+            .collect();
         assert!(owners.contains(&Some("Ngọc")), "{owners:?}");
-        assert!(owners.contains(&None), "a mid-line mention is not an owner: {owners:?}");
+        assert!(
+            owners.contains(&None),
+            "a mid-line mention is not an owner: {owners:?}"
+        );
     }
 
     /// The report and the board must agree about what is finished.

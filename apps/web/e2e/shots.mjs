@@ -12,36 +12,36 @@
  *
  *   node e2e/shots.mjs http://127.0.0.1:7788 <token> [locale]
  */
-import { chromium } from 'playwright';
-import { mkdirSync } from 'node:fs';
+import { chromium } from "playwright";
+import { mkdirSync } from "node:fs";
 
-const [, , appUrl, token, locale = 'en-US'] = process.argv;
+const [, , appUrl, token, locale = "en-US"] = process.argv;
 if (!appUrl || !token) {
-  console.error('usage: node e2e/shots.mjs <appUrl> <token> [locale]');
+  console.error("usage: node e2e/shots.mjs <appUrl> <token> [locale]");
   process.exit(2);
 }
 
-const OUT = '/tmp/shots';
+const OUT = "/tmp/shots";
 mkdirSync(OUT, { recursive: true });
 
 /** Routes worth a picture, with the hash the router uses. */
 const SCREENS = [
-  ['record', '/'],
-  ['library', '/library'],
-  ['meeting', null], // reached by clicking, since the id is generated
-  ['notes', '/notes'],
-  ['tasks', '/tasks'],
-  ['agents', '/agents'],
-  ['agenda', '/agenda'],
-  ['chat', '/chat'],
-  ['analytics', '/analytics'],
-  ['people', '/people'],
-  ['settings', '/settings'],
+  ["record", "/"],
+  ["library", "/library"],
+  ["meeting", null], // reached by clicking, since the id is generated
+  ["notes", "/notes"],
+  ["tasks", "/tasks"],
+  ["agents", "/agents"],
+  ["agenda", "/agenda"],
+  ["chat", "/chat"],
+  ["analytics", "/analytics"],
+  ["people", "/people"],
+  ["settings", "/settings"],
 ];
 
 const VIEWPORTS = [
-  ['wide', { width: 1280, height: 860 }],
-  ['narrow', { width: 390, height: 844 }],
+  ["wide", { width: 1280, height: 860 }],
+  ["narrow", { width: 390, height: 844 }],
 ];
 
 const problems = [];
@@ -83,14 +83,14 @@ function contrast(fg, bg) {
  */
 async function textColours(page) {
   return page.evaluate(() => {
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 1;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
     /** Any CSS colour → `[r, g, b, a]`, alpha 0–1. */
     const rgba = (colour) => {
       ctx.clearRect(0, 0, 1, 1);
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = "#000";
       ctx.fillStyle = colour; // Invalid values leave the previous one; black is a safe fallback.
       ctx.fillRect(0, 0, 1, 1);
       // `getImageData` un-premultiplies for us, so these are already straight RGB with a separate
@@ -111,17 +111,17 @@ async function textColours(page) {
     };
 
     const out = [];
-    for (const el of document.querySelectorAll('body *')) {
+    for (const el of document.querySelectorAll("body *")) {
       const text = [...el.childNodes]
         .filter((n) => n.nodeType === 3)
         .map((n) => n.textContent.trim())
-        .join('')
+        .join("")
         .trim();
       if (!text) continue;
       const box = el.getBoundingClientRect();
       if (box.width < 2 || box.height < 2) continue;
       const style = getComputedStyle(el);
-      if (style.visibility === 'hidden' || Number(style.opacity) === 0) continue;
+      if (style.visibility === "hidden" || Number(style.opacity) === 0) continue;
 
       // What is painted under this text, top layer first.
       //
@@ -141,7 +141,7 @@ async function textColours(page) {
       // white text must be scored against the green and not against the page behind the button.
       for (const node of stack.slice(start)) {
         const s = getComputedStyle(node);
-        if (s.backgroundImage && s.backgroundImage !== 'none') {
+        if (s.backgroundImage && s.backgroundImage !== "none") {
           // A gradient's colour cannot be sampled this way; stop trusting the stack.
           gradient = true;
           break;
@@ -170,20 +170,20 @@ async function textColours(page) {
   });
 }
 
-for (const scheme of ['light', 'dark']) {
+for (const scheme of ["light", "dark"]) {
   for (const [width, viewport] of VIEWPORTS) {
     const context = await browser.newContext({ locale, viewport, colorScheme: scheme });
     const page = await context.newPage();
-    page.on('console', (m) => {
-      if (m.type() === 'error') problems.push(`console ${scheme}/${width}: ${m.text()}`);
+    page.on("console", (m) => {
+      if (m.type() === "error") problems.push(`console ${scheme}/${width}: ${m.text()}`);
     });
-    page.on('pageerror', (e) => problems.push(`pageerror ${scheme}/${width}: ${e.message}`));
+    page.on("pageerror", (e) => problems.push(`pageerror ${scheme}/${width}: ${e.message}`));
 
     for (const [name, route] of SCREENS) {
       if (route === null) continue;
-      await page.goto(`${appUrl}/?token=${token}#${route}`, { waitUntil: 'networkidle' });
+      await page.goto(`${appUrl}/?token=${token}#${route}`, { waitUntil: "networkidle" });
       // The router paints after hydration; the shell header is the first thing that exists.
-      await page.locator('header, main').first().waitFor({ timeout: 10000 });
+      await page.locator("header, main").first().waitFor({ timeout: 10000 });
       // Motion runs an entrance on most screens. Let it finish so the picture is the resting state.
       await page.waitForTimeout(700);
       await page.screenshot({ path: `${OUT}/${scheme}-${width}-${name}.png`, fullPage: false });

@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import { currentStep, dueLabel, forOwner, isOverdue, stepProgress, type Task } from "./tasks";
 
 function task(over: Partial<Task> = {}): Task {
-  return { id: "T1", text: "x", status: "todo", file: "m.md", line: 1, ...over };
+  return {
+    id: "T1",
+    text: "x",
+    status: "todo",
+    file: "m.md",
+    line: 1,
+    ...over,
+  };
 }
 
 describe("forOwner", () => {
@@ -30,7 +37,12 @@ describe("stepProgress", () => {
   });
 
   it("counts finished steps", () => {
-    const t = task({ steps: [{ text: "a", done: true }, { text: "b", done: false }] });
+    const t = task({
+      steps: [
+        { text: "a", done: true },
+        { text: "b", done: false },
+      ],
+    });
     expect(stepProgress(t)).toBe(50);
   });
 

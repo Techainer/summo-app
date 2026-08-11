@@ -195,8 +195,12 @@ pub fn read_header(reader: &mut impl Read) -> Result<Header> {
 
 fn put_str(out: &mut Vec<u8>, value: &str) -> Result<()> {
     let bytes = value.as_bytes();
-    let len = u16::try_from(bytes.len())
-        .map_err(|_| Error::Other(format!("string too long for this format: {} bytes", bytes.len())))?;
+    let len = u16::try_from(bytes.len()).map_err(|_| {
+        Error::Other(format!(
+            "string too long for this format: {} bytes",
+            bytes.len()
+        ))
+    })?;
     out.extend_from_slice(&len.to_le_bytes());
     out.extend_from_slice(bytes);
     Ok(())
@@ -218,7 +222,10 @@ impl<'a> Cursor<'a> {
     }
 
     fn take(&mut self, n: usize) -> Result<&'a [u8]> {
-        let end = self.at.checked_add(n).ok_or_else(|| truncated(self.at, n))?;
+        let end = self
+            .at
+            .checked_add(n)
+            .ok_or_else(|| truncated(self.at, n))?;
         if end > self.bytes.len() {
             return Err(truncated(self.at, n));
         }
@@ -264,7 +271,8 @@ pub fn write_atomically(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
     }
     let temporary = path.with_extension("tmp");
     let mut file = std::fs::File::create(&temporary).map_err(|e| Error::io(&temporary, e))?;
-    file.write_all(bytes).map_err(|e| Error::io(&temporary, e))?;
+    file.write_all(bytes)
+        .map_err(|e| Error::io(&temporary, e))?;
     file.sync_all().map_err(|e| Error::io(&temporary, e))?;
     std::fs::rename(&temporary, path).map_err(|e| Error::io(path, e))
 }

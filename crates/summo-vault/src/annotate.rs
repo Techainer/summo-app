@@ -44,11 +44,17 @@ pub enum Kind {
 pub enum Anchor {
     Note,
     /// A transcript utterance, by sequence number.
-    Segment { seq: u64 },
+    Segment {
+        seq: u64,
+    },
     /// A `##` heading in the note.
-    Section { heading: String },
+    Section {
+        heading: String,
+    },
     /// A task, by id.
-    Task { id: String },
+    Task {
+        id: String,
+    },
 }
 
 /// Something the agent is offering to do.
@@ -181,7 +187,13 @@ impl Thread {
     /// Written here rather than by the caller so an annotation always has an id and a timestamp:
     /// an entry with neither cannot be replied to, reacted to or resolved, and one written by hand
     /// eventually has neither.
-    pub fn comment(&mut self, author: &str, body: &str, anchor: Anchor, at: String) -> Result<&Annotation> {
+    pub fn comment(
+        &mut self,
+        author: &str,
+        body: &str,
+        anchor: Anchor,
+        at: String,
+    ) -> Result<&Annotation> {
         let body = body.trim();
         if body.is_empty() {
             return Err(Error::msg("comment.empty", "bình luận không có nội dung"));
@@ -214,7 +226,8 @@ impl Thread {
     /// Proposals nobody has answered yet, oldest first — the agent's call to action.
     #[must_use]
     pub fn pending(&self) -> Vec<&Annotation> {
-        let mut out: Vec<&Annotation> = self.annotations.iter().filter(|a| a.is_pending()).collect();
+        let mut out: Vec<&Annotation> =
+            self.annotations.iter().filter(|a| a.is_pending()).collect();
         out.sort_by(|a, b| a.at.cmp(&b.at));
         out
     }
@@ -343,7 +356,12 @@ mod tests {
     fn a_comment_gets_an_id_and_keeps_what_was_written() {
         let mut thread = Thread::default();
         let added = thread
-            .comment("Ngọc", "  Chốt vào thứ sáu  ", Anchor::Note, "2026-08-11T09:00:00+07:00".into())
+            .comment(
+                "Ngọc",
+                "  Chốt vào thứ sáu  ",
+                Anchor::Note,
+                "2026-08-11T09:00:00+07:00".into(),
+            )
             .unwrap()
             .clone();
 
@@ -356,7 +374,11 @@ mod tests {
     #[test]
     fn an_empty_comment_is_refused() {
         let mut thread = Thread::default();
-        assert!(thread.comment("Ngọc", "   ", Anchor::Note, "t".into()).is_err());
+        assert!(
+            thread
+                .comment("Ngọc", "   ", Anchor::Note, "t".into())
+                .is_err()
+        );
         assert!(thread.annotations.is_empty());
     }
 
@@ -364,7 +386,12 @@ mod tests {
     fn a_comment_can_be_pinned_to_one_utterance() {
         let mut thread = Thread::default();
         thread
-            .comment("Ngọc", "sai chỗ này", Anchor::Segment { seq: 12 }, "t".into())
+            .comment(
+                "Ngọc",
+                "sai chỗ này",
+                Anchor::Segment { seq: 12 },
+                "t".into(),
+            )
             .unwrap();
         assert_eq!(thread.at(&Anchor::Segment { seq: 12 }).len(), 1);
         assert!(thread.at(&Anchor::Note).is_empty());
@@ -389,8 +416,16 @@ mod tests {
     #[test]
     fn two_comments_get_different_ids() {
         let mut thread = Thread::default();
-        let a = thread.comment("x", "một", Anchor::Note, "t".into()).unwrap().id.clone();
-        let b = thread.comment("x", "hai", Anchor::Note, "t".into()).unwrap().id.clone();
+        let a = thread
+            .comment("x", "một", Anchor::Note, "t".into())
+            .unwrap()
+            .id
+            .clone();
+        let b = thread
+            .comment("x", "hai", Anchor::Note, "t".into())
+            .unwrap()
+            .id
+            .clone();
         assert_ne!(a, b);
     }
 
@@ -408,7 +443,11 @@ mod tests {
     fn only_unanswered_proposals_are_pending() {
         let t = thread();
         let pending: Vec<&str> = t.pending().iter().map(|a| a.id.as_str()).collect();
-        assert_eq!(pending, vec!["A2"], "a comment and a question are not decisions to make");
+        assert_eq!(
+            pending,
+            vec!["A2"],
+            "a comment and a question are not decisions to make"
+        );
     }
 
     #[test]
@@ -531,7 +570,9 @@ mod tests {
         let paths = Paths::at(dir.path());
         let mut original = thread();
         original.react("A1", "🎉", "Ngọc").expect("react");
-        original.resolve("A2", Resolution::Accepted).expect("resolve");
+        original
+            .resolve("A2", Resolution::Accepted)
+            .expect("resolve");
 
         save(&paths, "01A", &original).expect("save");
         let reloaded = load(&paths, "01A").expect("load");

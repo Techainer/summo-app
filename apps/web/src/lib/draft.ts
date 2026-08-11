@@ -28,7 +28,6 @@ export interface Draft {
   revisions: number;
 }
 
-
 export class DraftClient {
   constructor(private readonly handshake: Handshake) {}
 
@@ -52,7 +51,11 @@ export class DraftClient {
 
   /** Rewrite one passage. Everything outside the selection stays byte-identical. */
   refine(meeting: string, heading: string, selection: string, instruction: string): Promise<Draft> {
-    return this.post<Draft>(meeting, "refine", { heading, selection, instruction });
+    return this.post<Draft>(meeting, "refine", {
+      heading,
+      selection,
+      instruction,
+    });
   }
 
   chat(meeting: string, message: string): Promise<Draft> {

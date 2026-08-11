@@ -9,7 +9,9 @@
 //! ```
 fn main() -> summo_core::Result<()> {
     let mut args = std::env::args().skip(1);
-    let dir = args.next().expect("usage: speak <voice-dir> [text] [out.wav]");
+    let dir = args
+        .next()
+        .expect("usage: speak <voice-dir> [text] [out.wav]");
     let text = args.next().unwrap_or_else(|| "Hello from Summo".into());
     let out = args.next().unwrap_or_else(|| "/tmp/speak.wav".into());
 

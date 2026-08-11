@@ -168,20 +168,24 @@ fn decide(mine: Option<&str>, theirs: Option<&str>, agreed: Option<&str>) -> Opt
 
         // Both present and different.
         (Some(a), Some(_), Some(base)) if a == base => Some(Action::Download), // only they changed
-        (Some(_), Some(b), Some(base)) if b == base => Some(Action::Upload), // only I changed
+        (Some(_), Some(b), Some(base)) if b == base => Some(Action::Upload),   // only I changed
         (Some(_), Some(_), _) => Some(Action::Merge), // both changed, or both created
 
         // Only mine. They had it at the base and no longer do, so *they* deleted it — and the
         // copy to remove is the one still here.
         (Some(_), None, None) => Some(Action::Upload), // I created it
         (Some(a), None, Some(base)) if a == base => Some(Action::DeleteLocal), // they deleted it
-        (Some(_), None, Some(_)) => Some(Action::Resurrect { edited_on: Side::Local }),
+        (Some(_), None, Some(_)) => Some(Action::Resurrect {
+            edited_on: Side::Local,
+        }),
 
         // Only theirs. I had it at the base and no longer do, so *I* deleted it, and the copy to
         // remove is the one still on the remote.
         (None, Some(_), None) => Some(Action::Download), // they created it
         (None, Some(b), Some(base)) if b == base => Some(Action::DeleteRemote), // I deleted it
-        (None, Some(_), Some(_)) => Some(Action::Resurrect { edited_on: Side::Remote }),
+        (None, Some(_), Some(_)) => Some(Action::Resurrect {
+            edited_on: Side::Remote,
+        }),
     }
 }
 
@@ -208,7 +212,11 @@ mod tests {
         }
     }
 
-    fn action_for(local: &[(&str, &str)], remote: &[(&str, &str)], base: &[(&str, &str)]) -> Option<Action> {
+    fn action_for(
+        local: &[(&str, &str)],
+        remote: &[(&str, &str)],
+        base: &[(&str, &str)],
+    ) -> Option<Action> {
         plan(&snap(local), &snap(remote), &snap(base))
             .steps
             .into_iter()
@@ -218,7 +226,10 @@ mod tests {
 
     #[test]
     fn nothing_changed_means_nothing_to_do() {
-        assert_eq!(action_for(&[("a", "1")], &[("a", "1")], &[("a", "1")]), None);
+        assert_eq!(
+            action_for(&[("a", "1")], &[("a", "1")], &[("a", "1")]),
+            None
+        );
     }
 
     #[test]
@@ -283,11 +294,15 @@ mod tests {
     fn an_edit_beats_a_delete_whichever_side_edited() {
         assert_eq!(
             action_for(&[("a", "2")], &[], &[("a", "1")]),
-            Some(Action::Resurrect { edited_on: Side::Local })
+            Some(Action::Resurrect {
+                edited_on: Side::Local
+            })
         );
         assert_eq!(
             action_for(&[], &[("a", "2")], &[("a", "1")]),
-            Some(Action::Resurrect { edited_on: Side::Remote })
+            Some(Action::Resurrect {
+                edited_on: Side::Remote
+            })
         );
     }
 
@@ -305,7 +320,10 @@ mod tests {
     /// other, and picking one would silently drop the other.
     #[test]
     fn both_of_us_creating_the_same_path_needs_a_merge_too() {
-        assert_eq!(action_for(&[("a", "2")], &[("a", "3")], &[]), Some(Action::Merge));
+        assert_eq!(
+            action_for(&[("a", "2")], &[("a", "3")], &[]),
+            Some(Action::Merge)
+        );
     }
 
     /// Identical contents are identical whatever the history was — two machines that happened to
@@ -313,7 +331,10 @@ mod tests {
     #[test]
     fn the_same_contents_on_both_sides_is_never_a_conflict() {
         assert_eq!(action_for(&[("a", "1")], &[("a", "1")], &[]), None);
-        assert_eq!(action_for(&[("a", "1")], &[("a", "1")], &[("a", "9")]), None);
+        assert_eq!(
+            action_for(&[("a", "1")], &[("a", "1")], &[("a", "9")]),
+            None
+        );
     }
 
     // ---- what arrives from the other side ----------------------------------------------------
@@ -322,7 +343,11 @@ mod tests {
     /// vault, and it must be *reported* rather than quietly dropped.
     #[test]
     fn a_path_that_escapes_the_vault_is_refused_and_named() {
-        let plan = plan(&snap(&[]), &snap(&[("../../.ssh/authorized_keys", "1")]), &snap(&[]));
+        let plan = plan(
+            &snap(&[]),
+            &snap(&[("../../.ssh/authorized_keys", "1")]),
+            &snap(&[]),
+        );
         assert!(plan.is_empty(), "nothing may be done with it");
         assert_eq!(plan.refused, vec!["../../.ssh/authorized_keys"]);
     }
@@ -349,9 +374,21 @@ mod tests {
             // both: we both edited                        → merge
             // mine: unchanged here, gone there            → delete here
             // rip:  I edited, they deleted                → resurrect
-            &snap(&[("up", "2"), ("same", "1"), ("mine", "1"), ("both", "2"), ("rip", "2")]),
+            &snap(&[
+                ("up", "2"),
+                ("same", "1"),
+                ("mine", "1"),
+                ("both", "2"),
+                ("rip", "2"),
+            ]),
             &snap(&[("up", "1"), ("down", "1"), ("same", "1"), ("both", "3")]),
-            &snap(&[("up", "1"), ("same", "1"), ("mine", "1"), ("both", "1"), ("rip", "1")]),
+            &snap(&[
+                ("up", "1"),
+                ("same", "1"),
+                ("mine", "1"),
+                ("both", "1"),
+                ("rip", "1"),
+            ]),
         );
         let summary = plan.summary();
         assert_eq!(summary.uploaded, 1, "{plan:?}");
@@ -368,7 +405,11 @@ mod tests {
         let again = plan(&local, &snap(&[]), &snap(&[]));
         assert_eq!(first, again);
         assert_eq!(
-            first.steps.iter().map(|s| s.path.as_str()).collect::<Vec<_>>(),
+            first
+                .steps
+                .iter()
+                .map(|s| s.path.as_str())
+                .collect::<Vec<_>>(),
             vec!["a.md", "m.md", "z.md"]
         );
     }

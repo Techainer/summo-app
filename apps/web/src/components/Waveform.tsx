@@ -7,8 +7,11 @@ import { useEffect, useRef } from "react";
  * actually picking them up. "The app is recording but hears nothing" and "the app is working" look
  * identical without it, and the first is the most common way a first attempt fails.
  */
+/** Bars in the meter. A constant, because the number of them is not something that varies. */
+const BARS = 28;
+
 export function Waveform({ level, active }: { level: number; active: boolean }) {
-  const history = useRef<number[]>(Array.from({ length: 28 }, () => 0));
+  const history = useRef<number[]>(Array.from({ length: BARS }, () => 0));
   const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,7 +39,11 @@ export function Waveform({ level, active }: { level: number; active: boolean }) 
       aria-hidden
       data-testid="waveform"
     >
-      {history.current.map((_, index) => (
+      {/* From the constant, not from the ref. Reading a ref during render is what React forbids,
+          and here it was reading it only to count to 28 — the levels themselves never render, they
+          are written straight onto the bars' transforms by the effect above, which is the whole
+          reason this meter does not re-render sixty times a second. */}
+      {Array.from({ length: BARS }, (_, index) => (
         <i key={index} />
       ))}
     </div>

@@ -46,7 +46,7 @@ export function Button({
       className={cn(
         "inline-flex items-center justify-center rounded-full font-medium",
         "transition-[background,border-color,filter,opacity] duration-150",
-        "disabled:opacity-50 disabled:pointer-events-none",
+        "disabled:pointer-events-none disabled:opacity-50",
         VARIANTS[variant],
         SIZES[size],
         className,

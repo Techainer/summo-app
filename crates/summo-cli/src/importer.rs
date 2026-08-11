@@ -109,8 +109,8 @@ pub async fn start(
 ) -> Result<Job> {
     // An absolute path, because the daemon's working directory is not the shell's and a relative
     // one would silently resolve somewhere else.
-    let absolute = std::fs::canonicalize(file)
-        .with_context(|| format!("không thấy {}", file.display()))?;
+    let absolute =
+        std::fs::canonicalize(file).with_context(|| format!("không thấy {}", file.display()))?;
 
     let mut body = serde_json::json!({ "path": absolute.to_string_lossy() });
     if let Some(language) = language {
@@ -206,7 +206,10 @@ mod tests {
     fn a_missing_daemon_says_how_to_start_one() {
         let dir = tempfile::tempdir().unwrap();
         let err = handshake(&Paths::at(dir.path())).unwrap_err().to_string();
-        assert!(err.contains("Summo") || err.contains("summo-engine"), "{err}");
+        assert!(
+            err.contains("Summo") || err.contains("summo-engine"),
+            "{err}"
+        );
     }
 
     #[test]

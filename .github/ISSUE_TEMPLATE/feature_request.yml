@@ -1,0 +1,39 @@
+name: Feature request
+description: Something Summo should do and does not.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two things this project will not do, so you do not spend time on a proposal that cannot land:
+
+        - **Send audio or transcripts to a server.** Recognition stays local. That constraint is the
+          product, not an implementation detail — see the README.
+        - **Add a database for a user's content.** Measured and settled in
+          [ADR 0002](../blob/main/docs/adr/0002-no-database.md) and
+          [ADR 0006](../blob/main/docs/adr/0006-organisation-without-a-database.md). Both name the
+          measurement that would change the answer; if you have it, that is a good issue to open.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        The situation, not the feature. "I need to find last quarter's client meetings" leads
+        somewhere better than "add a date-range picker", and sometimes somewhere that already works.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you do it today?
+      description: Including "I don't", which is itself useful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What did you have in mind?
+      description: Optional. The problem above matters more.

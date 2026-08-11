@@ -45,8 +45,8 @@
   --color-blocked: #e0a458;
   --color-blocked-soft: #e0a4581a;
 
-  --font-sans: "Inter", "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
+  --font-sans:
+    "Inter", "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   /* Reading mode for long transcripts: designed for Vietnamese, tone marks do not collide. */
   --font-reading: "Be Vietnam Pro", "Inter", Georgia, serif;
   /* Tabular figures, so a timestamp column does not jitter as the seconds change. */

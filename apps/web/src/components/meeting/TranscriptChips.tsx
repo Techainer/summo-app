@@ -70,7 +70,7 @@ export function TranscriptChips({ segments, at, onSeek, reading = false }: Props
   }, [segments, at]);
 
   if (segments.length === 0) {
-    return <p className="p-6 text-center text-fg-faint">{t("meeting.no_transcript")}</p>;
+    return <p className="text-fg-faint p-6 text-center">{t("meeting.no_transcript")}</p>;
   }
 
   return (
@@ -88,12 +88,7 @@ export function TranscriptChips({ segments, at, onSeek, reading = false }: Props
               className="absolute inset-x-0 top-0 pb-2"
               style={{ transform: `translateY(${row.start}px)` }}
             >
-              <Chip
-                segment={segment}
-                active={isActive}
-                reading={reading}
-                onSeek={onSeek}
-              />
+              <Chip segment={segment} active={isActive} reading={reading} onSeek={onSeek} />
             </div>
           );
         })}
@@ -113,20 +108,27 @@ function Chip({
   reading: boolean;
   onSeek?: (seconds: number) => void;
 }) {
+  // Unconditionally, at the top. Below the early return this was a hook called only on some
+  // renders, which is the one thing React's rules forbid outright — the hook order changes the
+  // first time a chip becomes seekable and every hook after it in the tree reads somebody else's
+  // state.
+  const t = useT();
   const seekable = onSeek !== undefined;
 
   const body = (
     <>
       <span className="flex items-baseline gap-2">
         {segment.speaker && (
-          <span className="text-[12px] font-semibold text-fg-dim">{segment.speaker}</span>
+          <span className="text-fg-dim text-[12px] font-semibold">{segment.speaker}</span>
         )}
-        <span className="tabular text-[11px] text-fg-faint">{clock(segment.t0)}</span>
+        <span className="tabular text-fg-faint text-[11px]">{clock(segment.t0)}</span>
       </span>
       <span
         className={cn(
           "mt-0.5 block",
-          reading ? "font-[var(--font-reading)] text-[15px] leading-[1.75]" : "text-sm leading-relaxed",
+          reading
+            ? "text-[15px] leading-[1.75] font-[var(--font-reading)]"
+            : "text-sm leading-relaxed",
           // A partial is still being revised; showing it as settled text makes the app look like
           // it changes its mind.
           segment.source === "partial" && "text-fg-dim italic",
@@ -134,10 +136,7 @@ function Chip({
       >
         {segment.text}
         {segment.translation && (
-          <span
-            lang={segment.translation.lang}
-            className="mt-1 block italic text-fg-dim"
-          >
+          <span lang={segment.translation.lang} className="text-fg-dim mt-1 block italic">
             {segment.translation.text}
           </span>
         )}
@@ -155,7 +154,6 @@ function Chip({
   if (!seekable) {
     return <div className={className}>{body}</div>;
   }
-  const t = useT();
   return (
     <button
       type="button"

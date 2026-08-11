@@ -91,7 +91,12 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         body: JSON.stringify(body),
       });
       const parsed = (await response.json()) as Record<string, unknown>;
-      if (!response.ok) throw new Error(String(parsed.error ?? response.statusText));
+      if (!response.ok) {
+        // `parsed.error` is `unknown`: a daemon that answered with an object would otherwise be
+        // reported to the user as "[object Object]", which is worse than saying nothing.
+        const reason = typeof parsed.error === "string" ? parsed.error : response.statusText;
+        throw new Error(reason);
+      }
       return parsed;
     },
     [handshake],
@@ -108,7 +113,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         setStatus(e instanceof Error ? e.message : String(e));
       }
     },
-    [post],
+    [post, t],
   );
 
   const test = useCallback(async () => {
@@ -124,7 +129,8 @@ export function Settings({ handshake }: { handshake: Handshake }) {
     }
   }, [llm, post]);
 
-  if (!llm) return <p className="mt-16 text-center text-fg-faint">{status ?? t("settings.loading")}</p>;
+  if (!llm)
+    return <p className="text-fg-faint mt-16 text-center">{status ?? t("settings.loading")}</p>;
 
   // The stored provider is either a known id or a URL; the picker shows t("settings.other_endpoint") for a URL.
   const selected = providers.some((p) => p.id === llm.provider) ? llm.provider : CUSTOM;
@@ -141,7 +147,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       <LanguagePicker />
 
       <h2 className="text-xl font-semibold tracking-tight">{t("settings.llm_heading")}</h2>
-      <p className="my-4 text-[13px] leading-normal text-fg-faint">
+      <p className="text-fg-faint my-4 text-[13px] leading-normal">
         {t("settings.llm_hint_head")}
         <b>{t("settings.always_local")}</b>
         {t("settings.llm_hint_tail")}
@@ -155,7 +161,10 @@ export function Settings({ handshake }: { handshake: Handshake }) {
           aria-label={t("settings.provider")}
           onChange={(e) => {
             const value = e.target.value;
-            void save({ ...llm, provider: value === "custom" ? custom || "http://" : value });
+            void save({
+              ...llm,
+              provider: value === "custom" ? custom || "http://" : value,
+            });
           }}
         >
           <optgroup label={t("settings.group_local")}>
@@ -225,7 +234,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         />
       </label>
 
-      <label className="mt-3.5 flex items-center gap-2.5 text-[13px] text-fg-dim">
+      <label className="text-fg-dim mt-3.5 flex items-center gap-2.5 text-[13px]">
         <input
           type="checkbox"
           checked={llm.summarize_on_stop}
@@ -236,10 +245,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
 
       {needsKey && (
         <p className={`${HINT} ${keyPresent ? "" : "text-blocked"}`}>
-          {keyPresent
-            ? t("settings.key_present")
-            : t("settings.key_missing")}
-          {" "}
+          {keyPresent ? t("settings.key_present") : t("settings.key_missing")}{" "}
           {t("settings.key_not_stored")}
         </p>
       )}
@@ -249,29 +255,25 @@ export function Settings({ handshake }: { handshake: Handshake }) {
           type="button"
           onClick={() => void test()}
           disabled={testing}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="bg-accent text-accent-fg rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {testing ? t("settings.testing") : t("settings.test")}
         </button>
-        {status && <span className="text-[12px] text-fg-faint">{status}</span>}
+        {status && <span className="text-fg-faint text-[12px]">{status}</span>}
       </div>
 
       {result && (
         <p
           data-testid="test-result"
           className={`mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-[13px] ${
-            result.ok
-              ? "border-accent/30 bg-accent-soft"
-              : "border-rec/30 bg-rec-soft text-rec"
+            result.ok ? "border-accent/30 bg-accent-soft" : "border-rec/30 bg-rec-soft text-rec"
           }`}
         >
           {result.ok ? t("settings.connected") : t("settings.not_connected")} — {result.base_url}
           <br />
-          {result.local
-            ? t("settings.local_only_comma")
-            : t("settings.sent_here")}
+          {result.local ? t("settings.local_only_comma") : t("settings.sent_here")}
           <br />
-          <span className="text-[12px] text-fg-faint">{result.detail}</span>
+          <span className="text-fg-faint text-[12px]">{result.detail}</span>
         </p>
       )}
       <About />
@@ -308,7 +310,7 @@ function LanguagePicker() {
           ))}
         </select>
       </label>
-      <p className="my-4 text-[13px] leading-normal text-fg-faint">{t("settings.language_hint")}</p>
+      <p className="text-fg-faint my-4 text-[13px] leading-normal">{t("settings.language_hint")}</p>
     </>
   );
 }

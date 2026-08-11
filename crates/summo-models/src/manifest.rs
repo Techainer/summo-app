@@ -559,16 +559,21 @@ mod tests {
         let err = parse(v.clone()).unwrap_err().to_string();
         assert!(err.contains("gated"), "got: {err}");
 
-        v["files"][0]["url"] = serde_json::json!("https://huggingface.co/pyannote/x/resolve/main/y");
+        v["files"][0]["url"] =
+            serde_json::json!("https://huggingface.co/pyannote/x/resolve/main/y");
         v["files"][0]["mirror"] = serde_json::json!([]);
-        assert!(parse(v).is_ok(), "upstream is where a gated model must come from");
+        assert!(
+            parse(v).is_ok(),
+            "upstream is where a gated model must come from"
+        );
     }
 
     #[test]
     fn the_gated_flag_survives_a_round_trip() {
         let mut v = base();
         v["gated"] = serde_json::json!(true);
-        v["files"][0]["url"] = serde_json::json!("https://huggingface.co/pyannote/x/resolve/main/y");
+        v["files"][0]["url"] =
+            serde_json::json!("https://huggingface.co/pyannote/x/resolve/main/y");
         v["files"][0]["mirror"] = serde_json::json!([]);
 
         let parsed = parse(v).expect("parse");

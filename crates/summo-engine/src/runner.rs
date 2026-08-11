@@ -16,7 +16,10 @@ use summo_asr::{Decoder, SessionConfig};
 use summo_core::{Error, Event, ModelId, Result, segment::Lane};
 use summo_diar::{ClusterConfig, OnlineClusterer, embed::SpeakerEmbedder};
 use summo_models::{ModelStore, hw::HwProfile};
-use summo_pipeline::{Frame, Pipeline, processors::{Reframe, Tap}};
+use summo_pipeline::{
+    Frame, Pipeline,
+    processors::{Reframe, Tap},
+};
 use summo_vad::{Vad, silero::SileroVad};
 
 use crate::protocol::SessionSpec;
@@ -141,9 +144,11 @@ impl SessionRunner {
 
         let diarize = self.diarizer.is_some() && lane == Lane::System;
 
-        let produced = runner
-            .chain
-            .push(Frame::audio(lane, samples.to_vec(), summo_core::audio::SAMPLE_RATE))?;
+        let produced = runner.chain.push(Frame::audio(
+            lane,
+            samples.to_vec(),
+            summo_core::audio::SAMPLE_RATE,
+        ))?;
         let mut events = events_of(produced);
 
         if diarize {

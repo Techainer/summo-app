@@ -204,7 +204,10 @@ mod tests {
     fn setting_a_colour_the_app_does_not_know_is_an_error_with_the_options_in_it() {
         let err = parse("chartreuse").unwrap_err().to_string();
         assert!(err.contains("chartreuse"), "{err}");
-        assert!(err.contains("teal"), "the message must list what is allowed: {err}");
+        assert!(
+            err.contains("teal"),
+            "the message must list what is allowed: {err}"
+        );
     }
 
     #[test]

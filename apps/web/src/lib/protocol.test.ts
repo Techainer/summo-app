@@ -56,7 +56,15 @@ describe("frame encoding", () => {
 
 describe("event narrowing", () => {
   it("recognises the three transcript kinds", () => {
-    const partial = { kind: "partial", seq: 1, lane: "mic", text: "x", t0: 0, t1: 1, source: "partial" } as Event;
+    const partial = {
+      kind: "partial",
+      seq: 1,
+      lane: "mic",
+      text: "x",
+      t0: 0,
+      t1: 1,
+      source: "partial",
+    } as Event;
     expect(isTranscript(partial)).toBe(true);
     expect(isTranscript({ kind: "info", text: "hi" })).toBe(false);
     expect(isTranscript({ kind: "stat", rtf: 0.1, rss_mb: 10, queue_ms: 0 })).toBe(false);

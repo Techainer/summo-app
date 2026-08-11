@@ -48,7 +48,6 @@ export interface Report {
   quiet_days: string[];
 }
 
-
 export class ReportClient {
   constructor(private readonly handshake: Handshake) {}
 

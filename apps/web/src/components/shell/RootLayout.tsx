@@ -43,7 +43,12 @@ export function RootLayout({ children }: { children: ReactNode }) {
   const narrow = useIsNarrow();
   const t = useT();
   const navItems = useMemo(
-    () => NAV.map((item) => ({ key: item.key, label: t(item.labelKey), icon: item.icon })),
+    () =>
+      NAV.map((item) => ({
+        key: item.key,
+        label: t(item.labelKey),
+        icon: item.icon,
+      })),
     [t],
   );
   // Initialised from the breakpoint rather than defaulting open and correcting in an effect: on a
@@ -53,7 +58,9 @@ export function RootLayout({ children }: { children: ReactNode }) {
   const [folders, setFolders] = useState<string[]>([]);
 
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const search = useRouterState({ select: (s) => s.location.search }) as { folder?: string };
+  const search = useRouterState({ select: (s) => s.location.search }) as {
+    folder?: string;
+  };
 
   // Crossing the breakpoint by resizing resets the sidebar to that layout's natural state.
   useEffect(() => setNavOpen(!narrow), [narrow]);
@@ -74,7 +81,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
     (folder: string | null) => {
       // `null` clears the filter; `""` is the vault root, which is a folder like any other. A
       // truthiness test collapses the two and makes "unfiled" impossible to select.
-      void navigate({ to: "/library", search: folder === null ? {} : { folder } });
+      void navigate({
+        to: "/library",
+        search: folder === null ? {} : { folder },
+      });
     },
     [navigate],
   );
@@ -85,17 +95,14 @@ export function RootLayout({ children }: { children: ReactNode }) {
 
   if (compact) {
     return (
-      <div
-        data-testid="compact"
-        className="drag-region flex h-full items-center gap-3 bg-bg px-3"
-      >
+      <div data-testid="compact" className="drag-region bg-bg flex h-full items-center gap-3 px-3">
         <RecordButton
           recording={engine.session.recording}
           elapsed={engine.elapsed}
           onToggle={engine.toggle}
         />
         <Waveform level={engine.level} active={engine.session.recording} />
-        <p className="min-w-0 flex-1 truncate text-[13px] text-fg-dim">
+        <p className="text-fg-dim min-w-0 flex-1 truncate text-[13px]">
           {latest?.text ?? t("record.listening")}
         </p>
         <button
@@ -103,7 +110,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           onClick={() => setCompact(false)}
           aria-label={t("nav.expand")}
           title={t("nav.expand_hint")}
-          className="rounded-lg px-2 py-1 text-fg-faint hover:bg-bg-soft hover:text-fg"
+          className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1"
         >
           ⤢
         </button>
@@ -115,22 +122,22 @@ export function RootLayout({ children }: { children: ReactNode }) {
     <>
       <header
         aria-label={t("status.top_bar")}
-        className="drag-region flex items-center gap-3 border-b border-line px-3 py-2.5"
+        className="drag-region border-line flex items-center gap-3 border-b px-3 py-2.5"
       >
         <button
           type="button"
           onClick={() => setNavOpen((open) => !open)}
           aria-label={navOpen ? t("nav.hide_sidebar") : t("nav.show_sidebar")}
           aria-expanded={navOpen}
-          className="rounded-lg px-2 py-1.5 text-fg-faint hover:bg-bg-soft hover:text-fg"
+          className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1.5"
         >
           ☰
         </button>
         <div className="flex items-center gap-2 font-semibold tracking-tight">
           <span className="flex h-4 items-end gap-[2.5px]" aria-hidden="true">
-            <i className="h-2 w-[3px] rounded-sm bg-accent" />
-            <i className="h-4 w-[3px] rounded-sm bg-accent" />
-            <i className="h-1.5 w-[3px] rounded-sm bg-accent" />
+            <i className="bg-accent h-2 w-[3px] rounded-sm" />
+            <i className="bg-accent h-4 w-[3px] rounded-sm" />
+            <i className="bg-accent h-1.5 w-[3px] rounded-sm" />
           </span>
           Summo
         </div>
@@ -153,7 +160,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
             onClick={() => setCompact(true)}
             aria-label={t("nav.shrink")}
             title={t("nav.shrink_hint")}
-            className="hidden rounded-lg px-2 py-1.5 text-fg-faint hover:bg-bg-soft hover:text-fg sm:block"
+            className="text-fg-faint hover:bg-bg-soft hover:text-fg hidden rounded-lg px-2 py-1.5 sm:block"
           >
             ⤡
           </button>
@@ -163,12 +170,12 @@ export function RootLayout({ children }: { children: ReactNode }) {
       <NudgeBar />
 
       {engine.session.error && (
-        <p className="border-b border-rec/30 bg-rec-soft px-4 py-2 text-[13px] text-rec">
+        <p className="border-rec/30 bg-rec-soft text-rec border-b px-4 py-2 text-[13px]">
           {engine.session.error}
         </p>
       )}
       {warning && (
-        <p className="border-b border-blocked/30 bg-blocked-soft px-4 py-2 text-[13px] text-blocked">
+        <p className="border-blocked/30 bg-blocked-soft text-blocked border-b px-4 py-2 text-[13px]">
           {warning}
         </p>
       )}

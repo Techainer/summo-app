@@ -221,7 +221,13 @@ mod tests {
     }
 
     fn detector(lane: Lane) -> Detect {
-        Detect::new(lane, Box::new(LoudIsSpeech { width: 160, resets: 0 }))
+        Detect::new(
+            lane,
+            Box::new(LoudIsSpeech {
+                width: 160,
+                resets: 0,
+            }),
+        )
     }
 
     fn recogniser(lane: Lane) -> Recognise {
@@ -370,7 +376,10 @@ mod tests {
             .filter(|e| matches!(e, Event::Final(_)))
             .collect();
 
-        assert!(!finals.is_empty(), "expected a committed utterance: {produced:?}");
+        assert!(
+            !finals.is_empty(),
+            "expected a committed utterance: {produced:?}"
+        );
         match finals[0] {
             Event::Final(segment) => {
                 assert_eq!(segment.text, "xin chào");

@@ -313,7 +313,10 @@ mod tests {
     #[test]
     fn an_unmeasured_model_admits_it_rather_than_claiming_to_be_fast() {
         let page = render(&manifest(), None);
-        assert!(page.contains("No real-time factor has been measured"), "{page}");
+        assert!(
+            page.contains("No real-time factor has been measured"),
+            "{page}"
+        );
         assert!(!page.to_lowercase().contains("blazing"));
     }
 

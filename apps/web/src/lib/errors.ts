@@ -34,9 +34,7 @@ export function failureFrom(body: unknown, status?: number): Failure {
     if (typeof record.error === "string" && record.error.length > 0) {
       return {
         error: record.error,
-        ...(typeof record.code === "string" && record.code.length > 0
-          ? { code: record.code }
-          : {}),
+        ...(typeof record.code === "string" && record.code.length > 0 ? { code: record.code } : {}),
       };
     }
   }

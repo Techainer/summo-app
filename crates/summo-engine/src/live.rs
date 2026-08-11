@@ -153,7 +153,11 @@ pub async fn translate_batch(
     let messages = prompt::translate(&lines, lang, glossary);
     let response = client.complete(&messages).await?;
 
-    Ok(pair(batch, &prompt::parse_translation(&response, lines.len()), lang))
+    Ok(pair(
+        batch,
+        &prompt::parse_translation(&response, lines.len()),
+        lang,
+    ))
 }
 
 /// Match a parsed response back to the sequence numbers it belongs to.
@@ -190,7 +194,6 @@ impl LiveConfig {
         !self.lang.trim().is_empty()
     }
 }
-
 
 /// A live translation running alongside one recording.
 ///
@@ -330,7 +333,6 @@ impl LiveTranslator {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     fn unreachable_client() -> summo_llm::LlmClient {
         // Nothing listens on port 1; a dispatched request fails fast and comes back as an error

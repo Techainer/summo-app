@@ -64,7 +64,7 @@ export function NudgeBar() {
           animate="shown"
           exit="gone"
           transition={GENTLE}
-          className="overflow-hidden border-b border-accent/25 bg-accent-soft"
+          className="border-accent/25 bg-accent-soft overflow-hidden border-b"
         >
           <div className="flex items-center gap-3 px-4 py-2">
             <span aria-hidden="true" className="text-accent">
@@ -80,7 +80,7 @@ export function NudgeBar() {
                 go(nudge.route);
                 dismiss(nudge.key);
               }}
-              className="rounded-full px-2.5 py-1 text-[13px] font-medium text-accent hover:bg-accent/10"
+              className="text-accent hover:bg-accent/10 rounded-full px-2.5 py-1 text-[13px] font-medium"
             >
               {t("nudge.view")}
             </button>
@@ -88,7 +88,7 @@ export function NudgeBar() {
               type="button"
               onClick={() => dismiss(nudge.key)}
               aria-label={t("nudge.dismiss", { title: nudge.title })}
-              className="rounded-lg px-2 py-1 text-fg-faint hover:text-fg"
+              className="text-fg-faint hover:text-fg rounded-lg px-2 py-1"
             >
               ✕
             </button>

@@ -120,7 +120,12 @@ impl Snapshot {
     /// Every path in either snapshot, in order and without repeats.
     #[must_use]
     pub fn paths_union(&self, other: &Self) -> Vec<String> {
-        let mut all: Vec<String> = self.files.keys().chain(other.files.keys()).cloned().collect();
+        let mut all: Vec<String> = self
+            .files
+            .keys()
+            .chain(other.files.keys())
+            .cloned()
+            .collect();
         all.sort();
         all.dedup();
         all
@@ -182,9 +187,9 @@ pub fn is_safe(relative: &str) -> bool {
         && !relative.starts_with('/')
         && !relative.contains('\\')
         && !relative.contains("//")
-        && !relative.split('/').any(|part| {
-            part.is_empty() || part == ".." || part == "." || part.contains(':')
-        })
+        && !relative
+            .split('/')
+            .any(|part| part.is_empty() || part == ".." || part == "." || part.contains(':'))
 }
 
 #[cfg(test)]
@@ -208,7 +213,11 @@ mod tests {
 
         assert_eq!(snap.len(), 2);
         assert!(snap.get("a.md").is_some());
-        assert!(snap.get("Product/b.md").is_some(), "{:?}", snap.files.keys());
+        assert!(
+            snap.get("Product/b.md").is_some(),
+            "{:?}",
+            snap.files.keys()
+        );
     }
 
     /// Content is the identity. A file restored from a backup has a new mtime and the same bytes,
@@ -220,7 +229,10 @@ mod tests {
 
         let path = dir.path().join("a.md");
         let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
-        std::fs::File::open(&path).unwrap().set_modified(later).unwrap();
+        std::fs::File::open(&path)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
 
         let again = Snapshot::scan(dir.path()).unwrap();
         assert_eq!(
@@ -233,7 +245,10 @@ mod tests {
     fn different_contents_hash_differently() {
         let dir = vault(&[("a.md", "one"), ("b.md", "two")]);
         let snap = Snapshot::scan(dir.path()).unwrap();
-        assert_ne!(snap.get("a.md").unwrap().hash, snap.get("b.md").unwrap().hash);
+        assert_ne!(
+            snap.get("a.md").unwrap().hash,
+            snap.get("b.md").unwrap().hash
+        );
     }
 
     /// Derived data is rebuilt from the vault by design, so syncing it moves bytes to reconstruct

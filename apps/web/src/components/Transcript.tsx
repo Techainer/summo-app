@@ -50,7 +50,7 @@ export function Transcript({
               }}
             >
               <div className="flex items-baseline gap-2.5">
-                <span className="tabular text-[0.76rem] text-fg-faint">
+                <span className="tabular text-fg-faint text-[0.76rem]">
                   {formatTime(segment.t0)}
                 </span>
                 <span
@@ -78,7 +78,7 @@ export function Transcript({
               {segment.translation && (
                 <p
                   lang={segment.translation.lang}
-                  className="mt-0.5 mb-0 leading-relaxed text-fg-dim italic opacity-[0.72]"
+                  className="text-fg-dim mt-0.5 mb-0 leading-relaxed italic opacity-[0.72]"
                 >
                   {segment.translation.text}
                 </p>

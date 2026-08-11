@@ -24,7 +24,6 @@ export interface Nudge {
   key: string;
 }
 
-
 export class NudgeClient {
   constructor(private readonly handshake: Handshake) {}
 

@@ -215,7 +215,13 @@ mod tests {
     #[test]
     fn a_blob_that_is_not_there_is_none_rather_than_an_error() {
         let tmp = tempfile::tempdir().unwrap();
-        assert!(Directory::open(tmp.path()).unwrap().get(&id(9)).unwrap().is_none());
+        assert!(
+            Directory::open(tmp.path())
+                .unwrap()
+                .get(&id(9))
+                .unwrap()
+                .is_none()
+        );
     }
 
     /// Each machine keeping its own salt meant each derived a different key from the same

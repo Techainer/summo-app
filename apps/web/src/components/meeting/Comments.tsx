@@ -56,7 +56,7 @@ export function Comments({
     } catch (e) {
       setError(say(e));
     }
-  }, [client]);
+  }, [client, say]);
 
   useEffect(() => {
     void refresh();
@@ -100,12 +100,12 @@ export function Comments({
 
   return (
     <section className="flex min-h-0 flex-col">
-      <h2 className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
+      <h2 className="text-fg-faint px-1 pb-2 text-[11px] font-semibold tracking-wider uppercase">
         {t("comments.title")}
       </h2>
 
       {error && (
-        <p role="alert" className="mb-2 text-[13px] text-danger">
+        <p role="alert" className="text-danger mb-2 text-[13px]">
           {error}
         </p>
       )}
@@ -137,7 +137,7 @@ export function Comments({
                       type="button"
                       disabled={seq === null || !onSeek}
                       onClick={() => seq !== null && onSeek?.(seq)}
-                      className="tabular rounded-full bg-bg px-1.5 text-[11px] text-fg-dim enabled:hover:text-accent disabled:cursor-default"
+                      className="tabular bg-bg text-fg-dim enabled:hover:text-accent rounded-full px-1.5 text-[11px] disabled:cursor-default"
                     >
                       {label}
                     </button>
@@ -149,13 +149,13 @@ export function Comments({
                     onClick={() => void remove(annotation.id)}
                     // Revealed on hover: a delete button on every comment, always visible, is a
                     // thread that looks like a list of things to get rid of.
-                    className="opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 text-fg-faint hover:text-danger"
+                    className="text-fg-faint hover:text-danger opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
                   >
                     ✕
                   </button>
                 </div>
 
-                <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed">
+                <p className="mt-1 text-[13px] leading-relaxed whitespace-pre-wrap">
                   {annotation.body}
                 </p>
 
@@ -193,7 +193,7 @@ export function Comments({
         </AnimatePresence>
 
         {ordered.length === 0 && (
-          <li className="px-1 py-4 text-[13px] text-fg-faint">{t("comments.empty")}</li>
+          <li className="text-fg-faint px-1 py-4 text-[13px]">{t("comments.empty")}</li>
         )}
       </ul>
 
@@ -209,7 +209,7 @@ export function Comments({
           }}
           placeholder={t("comments.placeholder")}
           aria-label={t("comments.title")}
-          className="min-w-0 flex-1 rounded-xl border border-line bg-bg-soft px-3 py-1.5 text-[13px] outline-none focus:border-accent"
+          className="border-line bg-bg-soft focus:border-accent min-w-0 flex-1 rounded-xl border px-3 py-1.5 text-[13px] outline-none"
         />
         <Button size="sm" onClick={() => void send()} disabled={!draft.trim() || busy}>
           {t("comments.send")}

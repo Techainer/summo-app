@@ -65,8 +65,9 @@ export function FirstRun({ children }: { children: ReactNode }) {
   return (
     <>
       {stuck && (
-        <p className="border-b border-blocked/30 bg-blocked-soft px-4 py-2 text-[13px] text-blocked">
-          <b className="font-medium">{t(`setup.step_${stuck.step}`)}</b> — {t(`setup.why_${stuck.step}`)}{" "}
+        <p className="border-blocked/30 bg-blocked-soft text-blocked border-b px-4 py-2 text-[13px]">
+          <b className="font-medium">{t(`setup.step_${stuck.step}`)}</b> —{" "}
+          {t(`setup.why_${stuck.step}`)}{" "}
           <button
             type="button"
             onClick={() => {

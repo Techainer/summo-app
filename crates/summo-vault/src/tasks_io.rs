@@ -32,7 +32,10 @@ pub fn update(
         let Ok(body) = std::fs::read_to_string(&path) else {
             continue;
         };
-        let Some(mut task) = tasks::parse(&body, &relative).into_iter().find(|t| t.id == id) else {
+        let Some(mut task) = tasks::parse(&body, &relative)
+            .into_iter()
+            .find(|t| t.id == id)
+        else {
             continue;
         };
 
@@ -102,4 +105,3 @@ pub fn create(
         .find(|t| t.id == task.id)
         .ok_or_else(|| Error::Other("the task was written but could not be read back".into()))
 }
-

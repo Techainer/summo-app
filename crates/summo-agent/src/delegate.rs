@@ -24,9 +24,9 @@ use std::sync::Arc;
 
 use aion_agent::engine::AgentEngine;
 use aion_config::config::{CliArgs, Config};
+use aion_protocol::events::ToolCategory;
 use aion_tools::Tool;
 use aion_tools::registry::ToolRegistry;
-use aion_protocol::events::ToolCategory;
 use aion_types::tool::ToolResult;
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -281,7 +281,11 @@ mod tests {
             .await;
 
         assert!(result.is_error);
-        assert!(result.content.contains("không được phép"), "{}", result.content);
+        assert!(
+            result.content.contains("không được phép"),
+            "{}",
+            result.content
+        );
     }
 
     #[tokio::test]

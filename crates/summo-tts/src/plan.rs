@@ -102,9 +102,7 @@ impl Plan {
 /// end — a caller passing a stale duration should not silently lose the final sentence.
 #[must_use]
 pub fn plan(lines: &[Line], total_s: f64) -> Plan {
-    let end_of_audio = lines
-        .last()
-        .map_or(total_s, |last| total_s.max(last.t1));
+    let end_of_audio = lines.last().map_or(total_s, |last| total_s.max(last.t1));
 
     let mut slots = Vec::with_capacity(lines.len());
     let mut overflows = 0usize;
@@ -113,7 +111,9 @@ pub fn plan(lines: &[Line], total_s: f64) -> Plan {
     for (i, line) in lines.iter().enumerate() {
         // The gap up to the next speaker is usable; the guard keeps the two from touching.
         let next_start = lines.get(i + 1).map_or(end_of_audio, |next| next.t0);
-        let room_s = (next_start - GUARD_S - line.t0).max(line.t1 - line.t0).max(0.0);
+        let room_s = (next_start - GUARD_S - line.t0)
+            .max(line.t1 - line.t0)
+            .max(0.0);
 
         let (speed, fit) = fit_into(line.spoken_s, room_s);
         let length_s = if speed > 0.0 {

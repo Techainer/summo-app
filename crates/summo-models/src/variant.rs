@@ -241,7 +241,11 @@ fn rank(variant: &Variant, hw: &HwProfile) -> f32 {
         && accel != Accel::Cpu
     {
         // Earlier in the profile's list is better; the profile ranks what this machine actually has.
-        let position = hw.accel.iter().position(|a| *a == accel).unwrap_or(usize::MAX);
+        let position = hw
+            .accel
+            .iter()
+            .position(|a| *a == accel)
+            .unwrap_or(usize::MAX);
         score += 100.0 - position as f32;
     }
 
@@ -362,7 +366,10 @@ mod tests {
     #[test]
     fn an_accelerator_this_machine_lacks_is_refused_with_a_reason() {
         let m = manifest(
-            vec![v("cuda", Some(Accel::Cuda), None), v("cpu", Some(Accel::Cpu), None)],
+            vec![
+                v("cuda", Some(Accel::Cuda), None),
+                v("cpu", Some(Accel::Cpu), None),
+            ],
             vec![
                 file("cuda.onnx", Some("cuda"), None),
                 file("cpu.onnx", Some("cpu"), None),
@@ -372,7 +379,10 @@ mod tests {
         let choice = choose(&m, &hw(vec![Accel::Cpu], 8_000));
         assert_eq!(choice.variant.as_deref(), Some("cpu"));
         assert!(
-            choice.rejected.iter().any(|r| r.variant == "cuda" && r.why.contains("Cuda")),
+            choice
+                .rejected
+                .iter()
+                .any(|r| r.variant == "cuda" && r.why.contains("Cuda")),
             "{:?}",
             choice.rejected
         );
@@ -381,7 +391,10 @@ mod tests {
     #[test]
     fn an_accelerator_this_machine_has_beats_the_cpu_build() {
         let m = manifest(
-            vec![v("cuda", Some(Accel::Cuda), None), v("cpu", Some(Accel::Cpu), None)],
+            vec![
+                v("cuda", Some(Accel::Cuda), None),
+                v("cpu", Some(Accel::Cpu), None),
+            ],
             vec![
                 file("cuda.onnx", Some("cuda"), None),
                 file("cpu.onnx", Some("cpu"), None),
@@ -515,7 +528,11 @@ mod tests {
         );
         let choice = choose(&m, &hw(vec![Accel::Cpu], 32_000));
         assert_eq!(choice.variant.as_deref(), Some("fp32"));
-        assert_eq!(choice.alternatives, ["int8"], "the smaller build is offered, not hidden");
+        assert_eq!(
+            choice.alternatives,
+            ["int8"],
+            "the smaller build is offered, not hidden"
+        );
     }
 
     /// Nothing is read out of a filename. `model-int8-calibration-fp32.onnx` is the case that

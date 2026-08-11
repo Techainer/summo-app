@@ -163,7 +163,10 @@ mod tests {
         assert_eq!(Frame::Start.lane(), None);
         assert_eq!(Frame::Flush.lane(), None);
         assert_eq!(Frame::End.lane(), None);
-        assert_eq!(Frame::audio(Lane::System, vec![], 16_000).lane(), Some(Lane::System));
+        assert_eq!(
+            Frame::audio(Lane::System, vec![], 16_000).lane(),
+            Some(Lane::System)
+        );
         assert_eq!(
             Frame::Voice {
                 lane: Lane::Mic,

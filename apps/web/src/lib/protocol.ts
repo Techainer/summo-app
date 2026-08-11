@@ -69,7 +69,7 @@ export type Command =
 /** Whether an event carries transcript text. */
 export function isTranscript(
   event: Event,
-): event is ({ kind: "partial" | "final" | "revise" } & Segment) {
+): event is { kind: "partial" | "final" | "revise" } & Segment {
   return event.kind === "partial" || event.kind === "final" || event.kind === "revise";
 }
 

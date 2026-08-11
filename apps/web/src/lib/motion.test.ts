@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { GENTLE, METER, SNAPPY, SPRING, collapse, listItem, screen, stagger, travel } from "./motion";
+import {
+  GENTLE,
+  METER,
+  SNAPPY,
+  SPRING,
+  collapse,
+  listItem,
+  screen,
+  stagger,
+  travel,
+} from "./motion";
 
 /**
  * These are constants, so the tests are about the *rules* they have to obey rather than about the
@@ -16,7 +26,11 @@ const duration = (t: unknown): number | null => {
 describe("durations", () => {
   // Above roughly 300 ms an animation stops reading as motion and starts reading as lag.
   it("never runs long enough to feel like waiting", () => {
-    for (const [name, transition] of Object.entries({ SNAPPY, GENTLE, METER })) {
+    for (const [name, transition] of Object.entries({
+      SNAPPY,
+      GENTLE,
+      METER,
+    })) {
       const seconds = duration(transition);
       expect(seconds, `${name} has no duration`).not.toBeNull();
       expect(seconds!, `${name} is too slow`).toBeLessThanOrEqual(0.3);
@@ -25,7 +39,11 @@ describe("durations", () => {
 
   // Below about 80 ms it may as well not be there, and the change becomes a jump.
   it("never runs so short that nothing is communicated", () => {
-    for (const [name, transition] of Object.entries({ SNAPPY, GENTLE, METER })) {
+    for (const [name, transition] of Object.entries({
+      SNAPPY,
+      GENTLE,
+      METER,
+    })) {
       expect(duration(transition)!, `${name} is imperceptible`).toBeGreaterThanOrEqual(0.08);
     }
   });
@@ -39,7 +57,10 @@ describe("durations", () => {
 describe("the drag spring", () => {
   // Overshoot on a task card landing in a column reads as sloppiness, not as playfulness.
   it("is damped enough not to overshoot a UI control", () => {
-    const { stiffness, damping } = SPRING as { stiffness: number; damping: number };
+    const { stiffness, damping } = SPRING as {
+      stiffness: number;
+      damping: number;
+    };
     // Critical damping is 2·sqrt(k·m); anything at or above it cannot overshoot.
     const mass = (SPRING as { mass: number }).mass;
     expect(damping).toBeGreaterThan(0.9 * 2 * Math.sqrt(stiffness * mass));

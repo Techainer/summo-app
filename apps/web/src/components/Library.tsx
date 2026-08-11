@@ -121,7 +121,7 @@ export function Library({
     } catch (e) {
       setError(say(e));
     }
-  }, [client, group, folder, tags, colour]);
+  }, [client, group, folder, tags, colour, say]);
 
   useEffect(() => {
     void refresh();
@@ -156,7 +156,7 @@ export function Library({
       .search(query)
       .then(setHits)
       .catch((e: unknown) => setError(say(e)));
-  }, [client, query]);
+  }, [client, query, say]);
 
   useEffect(() => {
     if (selected === null) {
@@ -167,7 +167,7 @@ export function Library({
       .detail(selected)
       .then(setDetail)
       .catch((e: unknown) => setError(say(e)));
-  }, [client, selected]);
+  }, [client, selected, say]);
 
   const mutate = useCallback(
     async (action: () => Promise<unknown>) => {
@@ -183,7 +183,7 @@ export function Library({
         setBusy(false);
       }
     },
-    [client, refresh, selected],
+    [client, refresh, selected, say],
   );
 
   const stats = view?.stats;
@@ -198,11 +198,11 @@ export function Library({
        * phone does with a master and a detail, and it is why `selected` gets a way back out. */}
       <aside
         hidden={narrow && selected !== null}
-        className="flex min-h-0 flex-col gap-2.5 overflow-y-auto border-b border-line p-3 md:border-r md:border-b-0"
+        className="border-line flex min-h-0 flex-col gap-2.5 overflow-y-auto border-b p-3 md:border-r md:border-b-0"
       >
         <div className="flex gap-2">
           <input
-            className="w-full rounded-lg border border-line bg-bg-soft px-3 py-2 text-sm text-fg focus:outline-none focus-visible:border-accent"
+            className="border-line bg-bg-soft text-fg focus-visible:border-accent w-full rounded-lg border px-3 py-2 text-sm focus:outline-none"
             type="search"
             value={typed}
             placeholder={t("library.search_placeholder")}
@@ -212,16 +212,18 @@ export function Library({
         </div>
 
         {hits === null && (
-          <div className="flex gap-0.5 rounded-lg bg-bg-soft p-0.5" role="group" aria-label={t("library.group_by")}>
+          <div
+            className="bg-bg-soft flex gap-0.5 rounded-lg p-0.5"
+            role="group"
+            aria-label={t("library.group_by")}
+          >
             {GROUPS.map((g) => (
               <button
                 key={g.value}
                 type="button"
                 className={cn(
                   "flex-1 rounded-md px-3 py-1.5 text-[13px] transition-colors",
-                  group === g.value
-                    ? "bg-bg font-medium text-fg"
-                    : "text-fg-dim hover:text-fg",
+                  group === g.value ? "bg-bg text-fg font-medium" : "text-fg-dim hover:text-fg",
                 )}
                 onClick={() => setGroup(g.value)}
               >
@@ -266,14 +268,16 @@ export function Library({
           )}
 
           {hits === null && view?.total === 0 && (
-            <p className="mt-10 text-center text-fg-faint">
+            <p className="text-fg-faint mt-10 text-center">
               {t("library.empty")}
               <button type="button" className="text-accent hover:underline" onClick={onRecord}>
                 {t("library.empty_cta")}
               </button>
             </p>
           )}
-          {hits?.length === 0 && <p className="mt-10 text-center text-fg-faint">{t("library.no_hits", { query })}</p>}
+          {hits?.length === 0 && (
+            <p className="text-fg-faint mt-10 text-center">{t("library.no_hits", { query })}</p>
+          )}
         </div>
 
         {/* A file that would not parse is on disk but not on screen; saying so is the only way the
@@ -281,7 +285,7 @@ export function Library({
         {view?.skipped.map((s) => (
           <p
             key={s.path}
-            className="rounded-lg border border-blocked/30 bg-blocked-soft px-2.5 py-1.5 text-[12px]"
+            className="border-blocked/30 bg-blocked-soft rounded-lg border px-2.5 py-1.5 text-[12px]"
           >
             {t("library.unreadable", { path: s.path, reason: s.reason })}
           </p>
@@ -293,7 +297,7 @@ export function Library({
         className="min-h-0 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
       >
         {error && (
-          <p className="rounded-lg border border-rec/30 bg-rec-soft px-3 py-2 text-[13px] text-rec">
+          <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
             {error}
           </p>
         )}
@@ -304,7 +308,7 @@ export function Library({
           <button
             type="button"
             onClick={() => setSelected(null)}
-            className="mb-3 -ms-1 rounded-lg px-2 py-1 text-[13px] text-fg-dim hover:bg-bg-soft hover:text-fg"
+            className="text-fg-dim hover:bg-bg-soft hover:text-fg -ms-1 mb-3 rounded-lg px-2 py-1 text-[13px]"
           >
             <span aria-hidden="true">←</span> {t("library.title")}
           </button>
@@ -368,7 +372,7 @@ function MeetingRow({
     >
       {/* A note has no time of day worth showing — it was typed, not scheduled — so the column
           carries a mark instead. Same width either way, so the titles still line up. */}
-      <span className="tabular shrink-0 text-[12px] text-fg-faint">
+      <span className="tabular text-fg-faint shrink-0 text-[12px]">
         {meeting.kind === "note" ? "✎" : timeOfDay(meeting.date)}
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
@@ -378,10 +382,8 @@ function MeetingRow({
           {meeting.color && <Dot colour={meeting.color} />}
           <span className="truncate">{meeting.title}</span>
         </span>
-        <span className="text-[12px] text-fg-faint">
-          {meeting.kind === "note"
-            ? t("library.a_note")
-            : formatDuration(meeting.duration, locale)}
+        <span className="text-fg-faint text-[12px]">
+          {meeting.kind === "note" ? t("library.a_note") : formatDuration(meeting.duration, locale)}
           {meeting.participants.length > 0 && ` · ${meeting.participants.join(", ")}`}
           {meeting.kind !== "note" && !meeting.has_summary && t("meeting.not_summarised_suffix")}
         </span>
@@ -410,13 +412,24 @@ function SearchResults({
             onSelect={() => onSelect(hit.meeting.id)}
           />
           {hit.excerpts.map((excerpt, i) => (
-            <p key={i} className="my-0.5 ml-[42px] text-[13px] leading-normal text-fg-dim [&_b]:font-medium [&_b]:text-fg">
-              {excerpt.t0 !== null && <span className="tabular mr-1.5 text-[11px] text-fg-faint">{timestamp(excerpt.t0)}</span>}
+            <p
+              key={i}
+              className="text-fg-dim [&_b]:text-fg my-0.5 ml-[42px] text-[13px] leading-normal [&_b]:font-medium"
+            >
+              {excerpt.t0 !== null && (
+                <span className="tabular text-fg-faint mr-1.5 text-[11px]">
+                  {timestamp(excerpt.t0)}
+                </span>
+              )}
               {excerpt.speaker && <b>{excerpt.speaker}</b>} {excerpt.text}
             </p>
           ))}
           {hit.matches > hit.excerpts.length && (
-            <p className="my-0.5 ml-[42px] text-[12px] text-fg-faint">{t("library.more_lines", { count: hit.matches - hit.excerpts.length })}</p>
+            <p className="text-fg-faint my-0.5 ml-[42px] text-[12px]">
+              {t("library.more_lines", {
+                count: hit.matches - hit.excerpts.length,
+              })}
+            </p>
           )}
         </section>
       ))}
@@ -426,13 +439,16 @@ function SearchResults({
 
 function Dashboard({ stats, onRecord }: { stats?: Stats; onRecord: () => void }) {
   const { t, locale } = useI18n();
-  if (!stats) return <p className="mt-10 text-center text-fg-faint">{t("library.loading")}</p>;
+  if (!stats) return <p className="text-fg-faint mt-10 text-center">{t("library.loading")}</p>;
   return (
     <div className="max-w-2xl">
       <h2>{t("library.heading")}</h2>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2.5">
         <Tile label={t("library.meeting")} value={String(stats.meetings)} />
-        <Tile label={t("library.recorded")} value={formatDuration(stats.total_duration, locale, "short")} />
+        <Tile
+          label={t("library.recorded")}
+          value={formatDuration(stats.total_duration, locale, "short")}
+        />
         <Tile
           label={t("library.last_7")}
           value={`${stats.last_seven_days}`}
@@ -441,10 +457,12 @@ function Dashboard({ stats, onRecord }: { stats?: Stats; onRecord: () => void })
         <Tile label={t("library.people")} value={String(stats.people)} />
         <Tile label={t("meeting.no_summary")} value={String(stats.without_summary)} />
       </div>
-      <p className="my-4 text-[13px] text-fg-faint">
-        {t("library.vault_hint")}
-      </p>
-      <button type="button" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg transition-opacity hover:opacity-90" onClick={onRecord}>
+      <p className="text-fg-faint my-4 text-[13px]">{t("library.vault_hint")}</p>
+      <button
+        type="button"
+        className="bg-accent text-accent-fg rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+        onClick={onRecord}
+      >
         {t("library.record_new")}
       </button>
     </div>
@@ -455,10 +473,10 @@ type Stats = NonNullable<LibraryView["stats"]>;
 
 function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-card border border-line bg-bg-soft p-3.5">
+    <div className="rounded-card border-line bg-bg-soft flex flex-col gap-0.5 border p-3.5">
       <span className="tabular text-2xl font-semibold tracking-tight">{value}</span>
-      <span className="text-[12px] text-fg-dim">{label}</span>
-      {note && <span className="text-[11px] text-fg-faint">{note}</span>}
+      <span className="text-fg-dim text-[12px]">{label}</span>
+      {note && <span className="text-fg-faint text-[11px]">{note}</span>}
     </div>
   );
 }
@@ -498,7 +516,10 @@ function MeetingPane({
   }, [summary.id, summary.title, summary.tags]);
 
   const words = useDayWords();
-  const known = useMemo(() => [...new Set([...folders, summary.folder])].sort(), [folders, summary.folder]);
+  const known = useMemo(
+    () => [...new Set([...folders, summary.folder])].sort(),
+    [folders, summary.folder],
+  );
 
   return (
     <article className="max-w-3xl" data-testid="meeting">
@@ -507,23 +528,24 @@ function MeetingPane({
           the folder, tags and colour off the edge of the pane. */}
       <header className="flex flex-col gap-1">
         <input
-          className="w-full border-0 border-b border-transparent bg-transparent px-0 py-0.5 text-[22px] font-semibold tracking-tight text-fg hover:border-line focus:border-accent focus:outline-none"
+          className="text-fg hover:border-line focus:border-accent w-full border-0 border-b border-transparent bg-transparent px-0 py-0.5 text-[22px] font-semibold tracking-tight focus:outline-none"
           value={title}
           aria-label={t("meeting.title_label")}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={() => title.trim() && title !== summary.title && onRename(title.trim())}
         />
-        <p className="text-[13px] text-fg-faint">
+        <p className="text-fg-faint text-[13px]">
           {dayLabel(summary.day, localDay(), words)} · {timeOfDay(summary.date)} ·{" "}
           {formatDuration(summary.duration, locale)}
-          {detail.audio.length > 0 && ` · ${t("library.recordings", { count: detail.audio.length })}`}
+          {detail.audio.length > 0 &&
+            ` · ${t("library.recordings", { count: detail.audio.length })}`}
         </p>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2.5 border-b border-line pb-4">
-          <label className="flex items-center gap-1.5 text-[13px] text-fg-faint">
+        <div className="border-line mt-2 flex flex-wrap items-center gap-x-4 gap-y-2.5 border-b pb-4">
+          <label className="text-fg-faint flex items-center gap-1.5 text-[13px]">
             {t("library.by_folder")}
             <select
-              className="rounded-lg border border-line bg-bg-soft px-2 py-1 text-[13px] text-fg focus:outline-none focus-visible:border-accent"
+              className="border-line bg-bg-soft text-fg focus-visible:border-accent rounded-lg border px-2 py-1 text-[13px] focus:outline-none"
               value={summary.folder}
               disabled={busy}
               onChange={(e) => onMove(e.target.value)}
@@ -536,16 +558,23 @@ function MeetingPane({
               ))}
             </select>
           </label>
-          <label className="flex min-w-0 grow basis-56 items-center gap-1.5 text-[13px] text-fg-faint">
+          <label className="text-fg-faint flex min-w-0 grow basis-56 items-center gap-1.5 text-[13px]">
             {t("library.by_tag")}
             <input
-              className="min-w-32 flex-1 rounded-lg border border-line bg-bg-soft px-2 py-1 text-[13px] text-fg focus:outline-none focus-visible:border-accent"
+              className="border-line bg-bg-soft text-fg focus-visible:border-accent min-w-32 flex-1 rounded-lg border px-2 py-1 text-[13px] focus:outline-none"
               value={tags}
               disabled={busy}
               aria-label={t("library.by_tag")}
               placeholder="weekly, product"
               onChange={(e) => setTags(e.target.value)}
-              onBlur={() => onTags(tags.split(",").map((t) => t.trim()).filter(Boolean))}
+              onBlur={() =>
+                onTags(
+                  tags
+                    .split(",")
+                    .map((t) => t.trim())
+                    .filter(Boolean),
+                )
+              }
             />
           </label>
           <ColourPicker
@@ -555,13 +584,13 @@ function MeetingPane({
             onChoose={onColour}
           />
           {confirming ? (
-            <span className="flex items-center gap-1.5 text-[13px] text-fg-dim">
+            <span className="text-fg-dim flex items-center gap-1.5 text-[13px]">
               {t("library.trash_confirm")}
               <button
                 type="button"
                 onClick={onTrash}
                 disabled={busy}
-                className="rounded-md border border-rec px-2.5 py-1 text-[13px] text-rec hover:bg-rec-soft disabled:opacity-50"
+                className="border-rec text-rec hover:bg-rec-soft rounded-md border px-2.5 py-1 text-[13px] disabled:opacity-50"
               >
                 {t("library.trash_yes")}
               </button>
@@ -586,11 +615,15 @@ function MeetingPane({
 
       <section className="mt-5">
         <h3>{t("library.transcript_lines", { count: detail.transcript.length })}</h3>
-        {detail.transcript.length === 0 && <p className="mt-10 text-center text-fg-faint">{t("library.no_content")}</p>}
+        {detail.transcript.length === 0 && (
+          <p className="text-fg-faint mt-10 text-center">{t("library.no_content")}</p>
+        )}
         <ol className="m-0 list-none p-0">
           {detail.transcript.map((segment) => (
             <li key={segment.seq}>
-              <span className="tabular mr-1.5 text-[11px] text-fg-faint">{timestamp(segment.t0)}</span>
+              <span className="tabular text-fg-faint mr-1.5 text-[11px]">
+                {timestamp(segment.t0)}
+              </span>
               <b>{segment.speaker ?? "?"}</b>
               <span>{segment.text}</span>
             </li>
