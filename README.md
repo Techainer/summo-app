@@ -12,16 +12,26 @@ device; only summarisation and translation call out to a language model you conf
 
 ## Run it
 
-One binary, the way `ollama` is one binary — the interface is compiled in, so there is nothing to
-install beside it and no second process to start.
+One command, the way `ollama` is one command. The interface is compiled into the binary, so there is
+no web server to start, no directory of static files to keep in step, and no install step.
+
+```bash
+./scripts/bundle.sh          # a tarball in dist/, ready to move to another machine
+tar -xzf dist/summo-*.tar.gz && cd summo-* && ./summo serve
+```
+
+Or from source, without packaging:
 
 ```bash
 pnpm install && pnpm --filter @summo/web build     # the interface, once
 cargo run --release -p summo-cli --features bundled,models -- serve
 ```
 
-That prints an address and opens it. `--features models` is what makes it transcribe; without it
-you get everything except recognition, which is a smaller build and enough to browse a vault.
+That prints an address and opens it.
+
+Two bundles. The default carries speech recognition — 24 MB, and the ONNX Runtime and sherpa-onnx
+libraries travel beside the binary, which finds them there. `--no-models` is 8.5 MB and genuinely
+one file: it browses a vault, imports, summarises and answers questions, and cannot transcribe.
 
 First run has one decision in it: which speech model to download. Summo ranks what is available
 against your machine and says why — memory, measured real-time factor, licence — and you can

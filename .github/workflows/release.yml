@@ -1,0 +1,89 @@
+name: release
+
+# Bundles are built from a tag, on the platform they target.
+#
+# Cross-compiling would be cheaper and would be wrong here: the recognition build links ONNX Runtime
+# and sherpa-onnx, both C++ libraries whose prebuilt artefacts are per-platform, and a cross build
+# that "succeeds" tends to produce a binary that fails to load them on the machine it was built for.
+# Native runners cost minutes and remove a whole class of report we could not reproduce.
+on:
+  push:
+    tags: ["v*"]
+  # Buildable on demand, because the first time anyone finds out the release job is broken should
+  # not be the day of a release.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    strategy:
+      # One platform failing should not cancel the others: a macOS toolchain problem is not a reason
+      # to withhold the Linux build somebody is waiting for.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # ALSA headers: `summo-audio` links cpal, which needs them to build even though this bundle
+      # never opens a microphone on CI.
+      - name: System dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Bundle
+        run: ./scripts/bundle.sh
+
+      # The smaller build, for anyone who wants the vault and the agent without 15 MB of ONNX
+      # Runtime — a server, a container, a machine that will never record anything.
+      - name: Bundle without recognition
+        run: ./scripts/bundle.sh --no-models
+
+      # The claim the product is sold on, checked on the artefact that is about to be published
+      # rather than on a debug build from a developer's machine.
+      - name: First run
+        if: runner.os == 'Linux'
+        run: |
+          npx playwright install --with-deps chromium
+          node apps/web/e2e/first-run.mjs \
+            "dist/summo-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)-${{ matrix.target }}/summo"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: summo-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          # Written by hand. A changelog generated from commit subjects tells a user what changed in
+          # the code; they want to know what changed for them.
+          draft: true
