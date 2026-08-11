@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { useT } from "../i18n/context";
 import {
   PeopleClient,
   confidenceLabel,
@@ -24,6 +25,7 @@ interface Props {
  * thing on the screen that needs the user to do something.
  */
 export function People({ client, meeting }: Props) {
+  const t = useT();
   const [people, setPeople] = useState<Person[]>([]);
   const [space, setSpace] = useState<string | undefined>();
   const [voices, setVoices] = useState<UnknownVoice[]>([]);
@@ -118,7 +120,7 @@ export function People({ client, meeting }: Props) {
 
       {voices.length > 0 && (
         <>
-          <h2>Chưa biết là ai</h2>
+          <h2>{t("people.unknown")}</h2>
           <ul className="voice-list">
             {voices.map((voice) => (
               <li key={voice.label} className="voice">
@@ -166,7 +168,7 @@ export function People({ client, meeting }: Props) {
                     <input
                       name="name"
                       type="text"
-                      placeholder="Tên người mới"
+                      placeholder={t("people.new_name")}
                       aria-label={`Đặt tên cho ${voice.label}`}
                       disabled={busy === voice.label}
                     />
@@ -181,7 +183,7 @@ export function People({ client, meeting }: Props) {
         </>
       )}
 
-      <h2>Giọng đã biết</h2>
+      <h2>{t("people.known")}</h2>
       {space && <p className="muted">Nhận diện bằng {space}</p>}
 
       {people.length === 0 ? (
@@ -234,7 +236,7 @@ export function People({ client, meeting }: Props) {
                 type="button"
                 className="icon-button"
                 aria-label={`Xoá ${person.name}`}
-                title="Xoá khỏi danh sách giọng nói"
+                title={t("people.remove")}
                 onClick={() => void forget(person)}
               >
                 ✕

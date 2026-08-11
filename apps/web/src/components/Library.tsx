@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useT } from "../i18n/context";
 import {
   LibraryClient,
   dayLabel,
@@ -17,10 +18,12 @@ import {
 /** How long to wait after the last keystroke before searching. */
 const SEARCH_DEBOUNCE_MS = 180;
 
-const GROUPS: { value: GroupBy; label: string }[] = [
-  { value: "day", label: "Ngày" },
-  { value: "week", label: "Tuần" },
-  { value: "folder", label: "Thư mục" },
+// Keys, resolved at render: a module-level array is built before any provider exists, so baking
+// the text in would freeze whichever language loaded first.
+const GROUPS: { value: GroupBy; labelKey: string }[] = [
+  { value: "day", labelKey: "library.by_day" },
+  { value: "week", labelKey: "library.by_week" },
+  { value: "folder", labelKey: "library.by_folder" },
 ];
 
 interface Props {
@@ -39,6 +42,7 @@ interface Props {
  * disagreeing with the files it claims to describe.
  */
 export function Library({ client, onRecord, onOpen }: Props) {
+  const t = useT();
   const [view, setView] = useState<LibraryView | null>(null);
   const [group, setGroup] = useState<GroupBy>("day");
   const [folder, setFolder] = useState<string | undefined>();
@@ -123,14 +127,14 @@ export function Library({ client, onRecord, onOpen }: Props) {
             className="search"
             type="search"
             value={query}
-            placeholder="Tìm trong mọi cuộc họp…"
-            aria-label="Tìm kiếm"
+            placeholder={t("library.search_placeholder")}
+            aria-label={t("library.search")}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
 
         {hits === null && (
-          <div className="segmented" role="group" aria-label="Nhóm theo">
+          <div className="segmented" role="group" aria-label={t("library.group_by")}>
             {GROUPS.map((g) => (
               <button
                 key={g.value}
@@ -138,7 +142,7 @@ export function Library({ client, onRecord, onOpen }: Props) {
                 className={group === g.value ? "on" : ""}
                 onClick={() => setGroup(g.value)}
               >
-                {g.label}
+                {t(g.labelKey)}
               </button>
             ))}
           </div>
@@ -148,7 +152,7 @@ export function Library({ client, onRecord, onOpen }: Props) {
           <div className="chips">
             {folder !== undefined && (
               <button type="button" className="chip on" onClick={() => setFolder(undefined)}>
-                📁 {folder === "" ? "Chưa phân loại" : folder} ✕
+                📁 {folder === "" ? t("library.unfiled") : folder} ✕
               </button>
             )}
             {tag !== undefined && (
@@ -191,17 +195,17 @@ export function Library({ client, onRecord, onOpen }: Props) {
         </div>
 
         {view && view.folders.length > 1 && hits === null && (
-          <nav className="facets" aria-label="Lọc theo thư mục">
+          <nav className="facets" aria-label={t("library.filter_folder")}>
             {view.folders.map((f) => (
               <button key={f} type="button" onClick={() => setFolder(f)}>
-                {f === "" ? "Chưa phân loại" : f}
+                {f === "" ? t("library.unfiled") : f}
               </button>
             ))}
           </nav>
         )}
 
         {view && view.tags.length > 0 && hits === null && (
-          <nav className="facets" aria-label="Lọc theo thẻ">
+          <nav className="facets" aria-label={t("library.filter_tag")}>
             {view.tags.map((t) => (
               <button key={t.name} type="button" onClick={() => setTag(t.name)}>
                 #{t.name} <span>{t.count}</span>
@@ -256,6 +260,7 @@ function MeetingRow({
   onSelect: () => void;
   onOpen?: () => void;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -278,7 +283,7 @@ function MeetingRow({
         <span className="row-meta">
           {formatDuration(meeting.duration)}
           {meeting.participants.length > 0 && ` · ${meeting.participants.join(", ")}`}
-          {!meeting.has_summary && " · chưa tóm tắt"}
+          {!meeting.has_summary && t("meeting.not_summarised_suffix")}
         </span>
       </span>
     </button>
@@ -319,20 +324,21 @@ function SearchResults({
 }
 
 function Dashboard({ stats, onRecord }: { stats?: Stats; onRecord: () => void }) {
-  if (!stats) return <p className="empty">Đang đọc kho họp…</p>;
+  const t = useT();
+  if (!stats) return <p className="empty">{t("library.loading")}</p>;
   return (
     <div className="dashboard">
-      <h2>Kho họp của bạn</h2>
+      <h2>{t("library.heading")}</h2>
       <div className="tiles">
-        <Tile label="Cuộc họp" value={String(stats.meetings)} />
-        <Tile label="Đã ghi" value={formatDuration(stats.total_duration)} />
+        <Tile label={t("library.meeting")} value={String(stats.meetings)} />
+        <Tile label={t("library.recorded")} value={formatDuration(stats.total_duration)} />
         <Tile
-          label="7 ngày qua"
+          label={t("library.last_7")}
           value={`${stats.last_seven_days}`}
           note={formatDuration(stats.last_seven_days_duration)}
         />
-        <Tile label="Người" value={String(stats.people)} />
-        <Tile label="Chưa tóm tắt" value={String(stats.without_summary)} />
+        <Tile label={t("library.people")} value={String(stats.people)} />
+        <Tile label={t("meeting.no_summary")} value={String(stats.without_summary)} />
       </div>
       <p className="hint">
         Mọi thứ nằm trong <code>~/.summo/vault</code> — mở bằng Obsidian, grep, hay sao lưu tuỳ bạn.
@@ -373,6 +379,7 @@ function MeetingPane({
   onTags: (tags: string[]) => void;
   onTrash: () => void;
 }) {
+  const t = useT();
   const { summary } = detail;
   const [title, setTitle] = useState(summary.title);
   const [tags, setTags] = useState(summary.tags.join(", "));
@@ -393,7 +400,7 @@ function MeetingPane({
         <input
           className="title-input"
           value={title}
-          aria-label="Tên cuộc họp"
+          aria-label={t("meeting.title_label")}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={() => title.trim() && title !== summary.title && onRename(title.trim())}
         />
@@ -404,27 +411,23 @@ function MeetingPane({
         </p>
 
         <div className="meeting-actions">
-          <label>
-            Thư mục
-            <select
+          <label>{t("library.by_folder")}<select
               value={summary.folder}
               disabled={busy}
               onChange={(e) => onMove(e.target.value)}
-              aria-label="Thư mục"
+              aria-label={t("library.by_folder")}
             >
               {known.map((f) => (
                 <option key={f} value={f}>
-                  {f === "" ? "Chưa phân loại" : f}
+                  {f === "" ? t("library.unfiled") : f}
                 </option>
               ))}
             </select>
           </label>
-          <label>
-            Thẻ
-            <input
+          <label>{t("library.by_tag")}<input
               value={tags}
               disabled={busy}
-              aria-label="Thẻ"
+              aria-label={t("library.by_tag")}
               placeholder="weekly, product"
               onChange={(e) => setTags(e.target.value)}
               onBlur={() => onTags(tags.split(",").map((t) => t.trim()).filter(Boolean))}
@@ -457,7 +460,7 @@ function MeetingPane({
 
       <section className="meeting-section">
         <h3>Bản ghi ({detail.transcript.length} dòng)</h3>
-        {detail.transcript.length === 0 && <p className="empty">Chưa có nội dung.</p>}
+        {detail.transcript.length === 0 && <p className="empty">{t("library.no_content")}</p>}
         <ol className="lines">
           {detail.transcript.map((segment) => (
             <li key={segment.seq}>

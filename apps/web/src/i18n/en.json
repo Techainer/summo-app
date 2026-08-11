@@ -136,7 +136,14 @@
     "unfiled": "Unfiled",
     "empty": "No meetings yet.",
     "meetings_one": "{count} meeting",
-    "meetings_other": "{count} meetings"
+    "meetings_other": "{count} meetings",
+    "heading": "Your meetings",
+    "loading": "Reading the vault…",
+    "no_content": "Nothing here yet.",
+    "recorded": "Recorded",
+    "meeting": "Meeting",
+    "people": "People",
+    "last_7": "Last 7 days"
   },
   "analytics": {
     "title": "Analytics",
@@ -165,7 +172,10 @@
     "unmerge": "split back out",
     "similarity_high": "very close",
     "similarity_mid": "fairly close",
-    "similarity_low": "somewhat close"
+    "similarity_low": "somewhat close",
+    "known": "Known voices",
+    "unknown": "Not identified",
+    "remove": "Remove from the voice list"
   },
   "settings": {
     "title": "Settings",
@@ -188,7 +198,13 @@
     "local_only": "Runs on your machine. Nothing leaves it.",
     "notifications": "Notifications",
     "notifications_ask": "Turn notifications on",
-    "saved": "Saved"
+    "saved": "Saved",
+    "llm_heading": "Language model",
+    "always_local": "always run on your machine",
+    "address": "Address",
+    "summarise_on_stop": "Summarise when recording stops",
+    "sent_here": "Transcript text is sent here. Audio never is.",
+    "local_only_comma": "Runs on your machine, nothing leaves it."
   },
   "status": {
     "top_bar": "Top bar",

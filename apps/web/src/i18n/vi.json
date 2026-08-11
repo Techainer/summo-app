@@ -136,7 +136,14 @@
     "unfiled": "Chưa phân loại",
     "empty": "Chưa có buổi họp nào.",
     "meetings_one": "{count} buổi họp",
-    "meetings_other": "{count} buổi họp"
+    "meetings_other": "{count} buổi họp",
+    "heading": "Kho họp của bạn",
+    "loading": "Đang đọc kho họp…",
+    "no_content": "Chưa có nội dung.",
+    "recorded": "Đã ghi",
+    "meeting": "Cuộc họp",
+    "people": "Người",
+    "last_7": "7 ngày qua"
   },
   "analytics": {
     "title": "Thống kê",
@@ -165,7 +172,10 @@
     "unmerge": "gỡ nhầm",
     "similarity_high": "rất giống",
     "similarity_mid": "khá giống",
-    "similarity_low": "hơi giống"
+    "similarity_low": "hơi giống",
+    "known": "Giọng đã biết",
+    "unknown": "Chưa biết là ai",
+    "remove": "Xoá khỏi danh sách giọng nói"
   },
   "settings": {
     "title": "Cài đặt",
@@ -188,7 +198,13 @@
     "local_only": "Chạy trên máy bạn. Không có gì rời khỏi máy.",
     "notifications": "Thông báo",
     "notifications_ask": "Bật thông báo",
-    "saved": "Đã lưu"
+    "saved": "Đã lưu",
+    "llm_heading": "Mô hình ngôn ngữ",
+    "always_local": "luôn chạy trên máy bạn",
+    "address": "Địa chỉ",
+    "summarise_on_stop": "Tự tóm tắt khi dừng ghi",
+    "sent_here": "Văn bản bản ghi sẽ được gửi tới đây. Âm thanh thì không bao giờ.",
+    "local_only_comma": "Chạy trên máy bạn, không có gì rời khỏi máy."
   },
   "status": {
     "top_bar": "Thanh trên cùng",

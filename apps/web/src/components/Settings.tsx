@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { useI18n } from "../i18n/context";
+import { useI18n, useT } from "../i18n/context";
 import { url } from "../lib/library";
 import type { Handshake } from "../lib/engine";
 
@@ -13,13 +13,15 @@ import type { Handshake } from "../lib/engine";
  * somewhere else — so it is the only thing this screen asks about.
  */
 
+// Product names stay as they are — "Ollama" is "Ollama" in every language. The labels and hints
+// that are prose carry keys and resolve at render.
 const PROVIDERS = [
-  { value: "ollama", label: "Ollama", hint: "Chạy trên máy bạn. Không có gì rời khỏi máy." },
-  { value: "lm-studio", label: "LM Studio", hint: "Chạy trên máy bạn. Không có gì rời khỏi máy." },
-  { value: "openai", label: "OpenAI", hint: "Cần SUMMO_API_KEY. Văn bản bản ghi sẽ được gửi đi." },
-  { value: "anthropic", label: "Anthropic", hint: "Cần SUMMO_API_KEY. Văn bản bản ghi sẽ được gửi đi." },
-  { value: "custom", label: "Endpoint khác", hint: "Bất cứ API nào tương thích OpenAI." },
-];
+  { value: "ollama", label: "Ollama", hintKey: "settings.local_only" },
+  { value: "lm-studio", label: "LM Studio", hintKey: "settings.local_only" },
+  { value: "openai", label: "OpenAI", hintKey: "settings.key_needed" },
+  { value: "anthropic", label: "Anthropic", hintKey: "settings.key_needed" },
+  { value: "custom", labelKey: "settings.other_endpoint", hintKey: "settings.endpoint_hint" },
+] as { value: string; label?: string; labelKey?: string; hintKey: string }[];
 
 interface Llm {
   provider: string;
@@ -36,6 +38,7 @@ interface TestResult {
 }
 
 export function Settings({ handshake }: { handshake: Handshake }) {
+  const t = useT();
   const [llm, setLlm] = useState<Llm | null>(null);
   const [keyPresent, setKeyPresent] = useState(false);
   const [custom, setCustom] = useState("");
@@ -74,7 +77,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       setResult(null);
       try {
         await post("/settings/llm", next);
-        setStatus("Đã lưu");
+        setStatus(t("settings.saved"));
       } catch (e) {
         setStatus(e instanceof Error ? e.message : String(e));
       }
@@ -95,9 +98,9 @@ export function Settings({ handshake }: { handshake: Handshake }) {
     }
   }, [llm, post]);
 
-  if (!llm) return <p className="empty">{status ?? "Đang đọc cài đặt…"}</p>;
+  if (!llm) return <p className="empty">{status ?? t("settings.loading")}</p>;
 
-  // The stored provider is either a known name or a URL; the picker shows "Endpoint khác" for a URL.
+  // The stored provider is either a known name or a URL; the picker shows t("settings.other_endpoint") for a URL.
   const selected = PROVIDERS.some((p) => p.value === llm.provider) ? llm.provider : "custom";
   const chosen = PROVIDERS.find((p) => p.value === selected);
   const needsKey = selected === "openai" || selected === "anthropic";
@@ -106,17 +109,17 @@ export function Settings({ handshake }: { handshake: Handshake }) {
     <div className="settings" data-testid="settings">
       <LanguagePicker />
 
-      <h2>Mô hình ngôn ngữ</h2>
+      <h2>{t("settings.llm_heading")}</h2>
       <p className="hint">
-        Nhận dạng giọng nói và tách người nói <b>luôn chạy trên máy bạn</b>. Chỉ tóm tắt, dịch và hỏi
+        Nhận dạng giọng nói và tách người nói <b>{t("settings.always_local")}</b>. Chỉ tóm tắt, dịch và hỏi
         đáp mới dùng mô hình ngôn ngữ — và bạn chọn nó chạy ở đâu.
       </p>
 
       <label className="field">
-        <span>Nhà cung cấp</span>
+        <span>{t("settings.provider")}</span>
         <select
           value={selected}
-          aria-label="Nhà cung cấp"
+          aria-label={t("settings.provider")}
           onChange={(e) => {
             const value = e.target.value;
             void save({ ...llm, provider: value === "custom" ? custom || "http://" : value });
@@ -124,19 +127,19 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         >
           {PROVIDERS.map((p) => (
             <option key={p.value} value={p.value}>
-              {p.label}
+              {p.label ?? t(p.labelKey ?? "")}
             </option>
           ))}
         </select>
       </label>
-      {chosen && <p className="field-hint">{chosen.hint}</p>}
+      {chosen && <p className="field-hint">{t(chosen.hintKey)}</p>}
 
       {selected === "custom" && (
         <label className="field">
-          <span>Địa chỉ</span>
+          <span>{t("settings.address")}</span>
           <input
             value={custom}
-            aria-label="Địa chỉ endpoint"
+            aria-label={t("settings.endpoint")}
             placeholder="http://127.0.0.1:1234/v1"
             onChange={(e) => setCustom(e.target.value)}
             onBlur={() => custom.startsWith("http") && void save({ ...llm, provider: custom })}
@@ -145,10 +148,10 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       )}
 
       <label className="field">
-        <span>Mô hình</span>
+        <span>{t("settings.model")}</span>
         <input
           value={llm.model ?? ""}
-          aria-label="Mô hình"
+          aria-label={t("settings.model")}
           placeholder="qwen3:8b"
           onChange={(e) => setLlm({ ...llm, model: e.target.value })}
           onBlur={() => void save(llm)}
@@ -156,10 +159,10 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       </label>
 
       <label className="field">
-        <span>Ngôn ngữ tóm tắt</span>
+        <span>{t("settings.summary_language")}</span>
         <input
           value={llm.language}
-          aria-label="Ngôn ngữ tóm tắt"
+          aria-label={t("settings.summary_language")}
           onChange={(e) => setLlm({ ...llm, language: e.target.value })}
           onBlur={() => void save(llm)}
         />
@@ -171,14 +174,14 @@ export function Settings({ handshake }: { handshake: Handshake }) {
           checked={llm.summarize_on_stop}
           onChange={(e) => void save({ ...llm, summarize_on_stop: e.target.checked })}
         />
-        <span>Tự tóm tắt khi dừng ghi</span>
+        <span>{t("settings.summarise_on_stop")}</span>
       </label>
 
       {needsKey && (
         <p className={`field-hint${keyPresent ? "" : " warn"}`}>
           {keyPresent
-            ? "Đã có SUMMO_API_KEY."
-            : "Chưa có SUMMO_API_KEY. Đặt biến môi trường rồi khởi động lại Summo."}
+            ? t("settings.key_present")
+            : t("settings.key_missing")}
           {" "}
           Khoá không được lưu vào tệp cài đặt — nếu lưu, nó sẽ theo vào bản sao lưu và bản đồng bộ.
         </p>
@@ -186,18 +189,18 @@ export function Settings({ handshake }: { handshake: Handshake }) {
 
       <div className="settings-actions">
         <button type="button" className="primary" onClick={() => void test()} disabled={testing}>
-          {testing ? "Đang thử…" : "Thử kết nối"}
+          {testing ? t("settings.testing") : t("settings.test")}
         </button>
         {status && <span className="field-hint">{status}</span>}
       </div>
 
       {result && (
         <p className={`banner ${result.ok ? "ok" : "error"}`} data-testid="test-result">
-          {result.ok ? "Kết nối được" : "Không kết nối được"} — {result.base_url}
+          {result.ok ? t("settings.connected") : t("settings.not_connected")} — {result.base_url}
           <br />
           {result.local
-            ? "Chạy trên máy bạn, không có gì rời khỏi máy."
-            : "Văn bản bản ghi sẽ được gửi tới đây. Âm thanh thì không bao giờ."}
+            ? t("settings.local_only_comma")
+            : t("settings.sent_here")}
           <br />
           <span className="field-hint">{result.detail}</span>
         </p>
