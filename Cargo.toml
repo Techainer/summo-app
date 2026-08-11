@@ -15,6 +15,7 @@ members = [
     "crates/summo-sync",
     "crates/summo-tts",
     "crates/summo-calendar",
+    "crates/summo-mcp",
     "crates/summo-engine",
     "crates/summo-bench",
     "crates/summo-cli",
@@ -46,6 +47,7 @@ summo-agent = { path = "crates/summo-agent" }
 summo-sync = { path = "crates/summo-sync" }
 summo-tts = { path = "crates/summo-tts" }
 summo-calendar = { path = "crates/summo-calendar" }
+summo-mcp = { path = "crates/summo-mcp" }
 
 # --- error / logging ---
 anyhow = "1"

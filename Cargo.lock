@@ -4774,6 +4774,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "summo-mcp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "summo-core",
+ "summo-vault",
+ "tempfile",
+ "time",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "summo-media"
 version = "0.1.0"
 dependencies = [
