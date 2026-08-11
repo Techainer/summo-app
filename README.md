@@ -3,12 +3,22 @@
 Meeting notes that run on your machine. Speech recognition and speaker attribution never leave the
 device; only summarisation and translation call out to a language model you configure yourself.
 
+![Recording, with the transcript arriving as people speak](docs/images/dark-wide-record.png)
+
 > Status: usable end to end. Record or import, get a transcript with speakers named, an agent-drafted
 > summary you approve, tasks on a board, questions answered from the vault with citations, live
-> translation of whatever is playing, notes, calendars and comments. 2.4 % WER on Fleurs VI, RTF 0.11
-> with live partials. Not done: dubbing has a synthesiser trait and no backend, mobile is scaffolded
-> and has never been compiled, and sync does not exist. See [`docs/benchmarks.md`](docs/benchmarks.md)
-> for numbers and `docs/adr/` for decisions.
+> translation of whatever is playing, dubbing, notes, calendars, comments, a roster of agents you
+> edit as files, and encrypted sync between machines. 2.4 % WER on Fleurs VI, RTF 0.11 with live
+> partials. **Not done:** mobile is scaffolded and has never been compiled, and the hosted relay is
+> not built — sync works today through any folder you both can reach. See
+> [`docs/benchmarks.md`](docs/benchmarks.md) for numbers and `docs/adr/` for decisions.
+
+|  |  |
+|---|---|
+| ![The library](docs/images/dark-wide-library.png) | ![The task board](docs/images/light-wide-tasks.png) |
+| Every meeting and note, one index over both. | Tasks people own, and tasks the agent runs. |
+| ![Agents](docs/images/dark-wide-agents.png) | ![Settings](docs/images/light-wide-settings.png) |
+| Each agent is a folder of Markdown in the vault. | Thirteen language-model endpoints, or your own. |
 
 ## Run it
 
