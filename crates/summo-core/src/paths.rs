@@ -182,6 +182,17 @@ impl Paths {
         self.root.join("skills")
     }
 
+    /// The agents, one directory each. See `summo_agent::roster`.
+    ///
+    /// Inside the vault rather than beside it, and that is the whole design: an agent is Markdown,
+    /// so it is greppable, editable in Obsidian, diffable in git, and carried by whatever syncs the
+    /// notes. An agent that lived in a database would need its own editor, its own sync and its own
+    /// backup story, and would be the one part of Summo the user could not open.
+    #[must_use]
+    pub fn agents(&self) -> PathBuf {
+        self.vault().join("agents")
+    }
+
     #[must_use]
     pub fn hw_profile(&self) -> PathBuf {
         self.root.join("hw.json")

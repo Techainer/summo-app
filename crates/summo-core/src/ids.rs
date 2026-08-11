@@ -151,3 +151,35 @@ mod tests {
         assert!(!SpeakerId::auto(0).is_me());
     }
 }
+
+/// Today, as `YYYY-MM-DD`, in the user's own timezone.
+///
+/// Local rather than UTC: a note belongs to the day it was written *where the writer was*, and a
+/// team in Hanoi filing the morning's meeting under yesterday is a bug they would report.
+///
+/// Here rather than in each crate that needs it. There were two copies already — one in the daemon
+/// and one about to appear in the agent — and two copies of a date function is how a vault ends up
+/// with files dated by different rules.
+#[must_use]
+pub fn today() -> String {
+    use time::OffsetDateTime;
+    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    format!(
+        "{:04}-{:02}-{:02}",
+        now.year(),
+        u8::from(now.month()),
+        now.day()
+    )
+}
+
+#[cfg(test)]
+mod today_tests {
+    #[test]
+    fn today_is_an_iso_date() {
+        let today = super::today();
+        assert_eq!(today.len(), 10, "{today}");
+        assert_eq!(today.as_bytes()[4], b'-');
+        assert_eq!(today.as_bytes()[7], b'-');
+        assert!(today.starts_with("20"), "{today}");
+    }
+}

@@ -14,6 +14,6 @@ pub mod settings;
 pub use audio::{FRAME_LEN, FRAME_MS, SAMPLE_RATE};
 pub use error::{Error, Result};
 pub use event::{Event, ModelProgress, ProgressStage, Stat};
-pub use ids::{MeetingId, ModelId, SpeakerId};
+pub use ids::{MeetingId, ModelId, SpeakerId, today};
 pub use segment::{Lane, Segment, SegmentSource, Word};
 pub use settings::Settings;

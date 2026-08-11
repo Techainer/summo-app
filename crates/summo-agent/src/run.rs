@@ -138,17 +138,21 @@ fn describe(name: &str, input: &str) -> String {
         "list_tasks" => "Xem danh sách việc".to_string(),
         "create_task" => format!("Thêm việc: {}", arg("text")),
         "update_task" => format!("Cập nhật việc {}", arg("id")),
+        // Naming the delegate matters: "called spawn_agent" tells the user nothing, and who did
+        // the work is the first thing they will want to know when the answer is wrong.
+        "spawn_agent" => format!("Giao cho {}: {}", arg("agent"), arg("instruction")),
+        "remember" => format!("Ghi nhớ: {}", arg("fact")),
         other => format!("Gọi {other}"),
     }
 }
 
 /// The endpoint the agent should use, translated into what `aion-agent` accepts.
-struct Chosen {
+pub(crate) struct Chosen {
     /// `anthropic` or `openai`; those are the two request shapes aion implements.
-    provider: String,
-    model: String,
-    api_key: String,
-    base_url: Option<String>,
+    pub(crate) provider: String,
+    pub(crate) model: String,
+    pub(crate) api_key: String,
+    pub(crate) base_url: Option<String>,
 }
 
 /// Route the agent at whatever the user configured for everything else.
@@ -161,23 +165,27 @@ struct Chosen {
 /// Every preset except Anthropic speaks the OpenAI shape, so the mapping is the wire format plus a
 /// base URL. If settings cannot be read or name something unresolvable, aion's defaults stand:
 /// refusing to run a task because a settings file is unreadable helps nobody.
-fn chosen_provider(paths: &Paths) -> Chosen {
+pub(crate) fn chosen_provider(paths: &Paths, agent: Option<&crate::roster::AgentDef>) -> Chosen {
     let settings = summo_core::Settings::load(&paths.settings()).unwrap_or_default();
-    let id = settings.llm.provider.trim();
+    // An agent may name its own endpoint: a cheap local model for a summariser and a strong hosted
+    // one for a planner is the ordinary reason, and it is a line in a file rather than a setting.
+    let override_provider = agent.and_then(|a| a.head.provider.clone());
+    let override_model = agent.and_then(|a| a.head.model.clone());
+    let id = override_provider
+        .as_deref()
+        .unwrap_or(&settings.llm.provider)
+        .trim();
 
     let catalogue = summo_llm::provider::catalogue(&paths.providers());
-    let provider = summo_llm::provider::Provider::resolve_in(
-        &catalogue,
-        id,
-        settings.llm.model.as_deref(),
-        None,
-    );
+    let model = override_model.or_else(|| settings.llm.model.clone());
+    let provider =
+        summo_llm::provider::Provider::resolve_in(&catalogue, id, model.as_deref(), None);
 
     let Ok(provider) = provider else {
         tracing::warn!(provider = id, "cannot resolve the configured provider for the agent");
         return Chosen {
             provider: "anthropic".into(),
-            model: settings.llm.model.unwrap_or_else(|| "claude-opus-5".into()),
+            model: model.unwrap_or_else(|| "claude-opus-5".into()),
             api_key: std::env::var("ANTHROPIC_API_KEY").unwrap_or_default(),
             base_url: None,
         };
@@ -201,17 +209,36 @@ fn chosen_provider(paths: &Paths) -> Chosen {
     }
 }
 
-/// Run one `@agent` task to completion.
+/// Run one `@agent` task to completion, with whichever agent the roster says owns it.
 ///
 /// `instruction` is the task's own text — the agent is told to do the thing the checkbox says, and
 /// nothing broader.
 pub async fn run(paths: &Paths, task: &Task) -> Result<Ran> {
+    run_as(paths, task, None).await
+}
+
+/// Run a task as a named agent.
+///
+/// `slug` picks one out of `vault/agents/`; `None` uses the coordinator, or falls back to the flat
+/// behaviour from before there were several agents. Which agent ran a task changes three things —
+/// the system prompt, the tools it may call, and the endpoint it calls — and all three come from
+/// files the user can read.
+pub async fn run_as(paths: &Paths, task: &Task, slug: Option<&str>) -> Result<Ran> {
     if !task.is_agent() {
         return Err(Error::Other(format!(
             "task {} is not the agent's to run",
             task.id
         )));
     }
+
+    // A roster that cannot be read must not stop a task running: the agent that existed before
+    // this feature is still a correct answer, and a broken YAML file is a bad reason to refuse
+    // work the user asked for.
+    let roster = crate::roster::Roster::load_or_seed(&paths.agents()).unwrap_or_default();
+    let agent = slug
+        .and_then(|slug| roster.get(slug))
+        .or_else(|| roster.coordinators().next())
+        .cloned();
 
     // Mark it running and clear any plan from a previous attempt, so a retry does not append to
     // the steps of the run that failed.
@@ -222,7 +249,22 @@ pub async fn run(paths: &Paths, task: &Task) -> Result<Ran> {
 
     let recorder = Arc::new(StepRecorder::new(paths.clone(), task.clone()));
 
-    let chosen = chosen_provider(paths);
+    let chosen = chosen_provider(paths, agent.as_ref());
+
+    // The agent's own brief and memory, or the built-in prompt when there is no roster.
+    let system_prompt = match &agent {
+        Some(agent) => {
+            let memory = crate::memory::render(&crate::memory::load(&agent.memory_path()));
+            agent.system_prompt(roster.base(), &memory)
+        }
+        None => SYSTEM_PROMPT.to_string(),
+    };
+    let max_turns = agent
+        .as_ref()
+        .and_then(|a| a.head.max_turns)
+        // A task that has not finished in a dozen turns is stuck, and a loop that keeps paying for
+        // tokens while stuck is worse than one that stops and says so.
+        .unwrap_or(12);
 
     let config = Config::resolve(&CliArgs {
         provider: Some(chosen.provider),
@@ -234,10 +276,10 @@ pub async fn run(paths: &Paths, task: &Task) -> Result<Ran> {
         thinking_budget: None,
         // A task that has not finished in a dozen turns is stuck, and a loop that keeps paying for
         // tokens while stuck is worse than one that stops and says so.
-        max_turns: Some(12),
+        max_turns: Some(max_turns),
         max_tool_call_malformed_turns: Some(3),
         max_tool_call_failure_turns: Some(3),
-        system_prompt: Some(SYSTEM_PROMPT.to_string()),
+        system_prompt: Some(system_prompt),
         profile: None,
         // The tool set has no shell and no file writes; approving each call would be ceremony.
         auto_approve: true,
@@ -245,10 +287,38 @@ pub async fn run(paths: &Paths, task: &Task) -> Result<Ran> {
     })
     .map_err(|e| Error::Other(format!("cannot configure the agent: {e}")))?;
 
+    // Only what this agent is allowed to call. An allow-list read from its own file is the
+    // difference between "the agent can do things" and "the agent can do these things", which is
+    // the difference between a user being able to consent to a run and not.
+    let base_tools = roster.base_tools().to_vec();
     let mut registry = ToolRegistry::new();
-    for tool in crate::tools::all(Arc::new(paths.clone())) {
+    let mut granted = Vec::new();
+    let today = summo_core::today();
+    for tool in crate::tools::all_for(Arc::new(paths.clone()), agent.as_ref(), &today) {
+        let name = tool.name().to_string();
+        if let Some(agent) = &agent
+            && !agent.may_call(&name, &base_tools)
+        {
+            continue;
+        }
+        granted.push(name);
         registry.register(tool);
     }
+    if let Some(agent) = &agent
+        && !agent.head.spawns.is_empty()
+    {
+        granted.push("spawn_agent".to_string());
+        registry.register(Box::new(crate::delegate::SpawnAgent::new(
+            Arc::new(paths.clone()),
+            agent.head.spawns.clone(),
+            0,
+        )));
+    }
+    tracing::info!(
+        agent = agent.as_ref().map_or("default", |a| a.slug.as_str()),
+        tools = granted.join(","),
+        "running an agent task"
+    );
 
     let mut engine = AgentEngine::new(
         config,
@@ -294,6 +364,24 @@ Trả lời bằng tiếng Việt, ngắn gọn: một hai câu về việc đã
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What the user reads in their own notes. "Gọi spawn_agent" tells them nothing; who did the
+    /// work is the first thing they will want when the answer is wrong.
+    #[test]
+    fn a_handover_names_the_agent_it_went_to() {
+        let step = describe(
+            "spawn_agent",
+            r#"{"agent":"release-writer","instruction":"viết release note"}"#,
+        );
+        assert!(step.contains("release-writer"), "{step}");
+        assert!(step.contains("viết release note"), "{step}");
+    }
+
+    #[test]
+    fn remembering_something_says_what() {
+        let step = describe("remember", r#"{"fact":"Ngọc phụ trách sản phẩm"}"#);
+        assert!(step.contains("Ngọc phụ trách sản phẩm"), "{step}");
+    }
 
     fn task(owner: &str) -> Task {
         Task {

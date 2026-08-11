@@ -15,8 +15,12 @@
 //!                          └─ aion-agent drives this; the tools are ours
 //! ```
 
+pub mod delegate;
+pub mod memory;
+pub mod roster;
 pub mod run;
 pub mod steps;
 pub mod tools;
 
+pub use roster::{AgentDef, Head, Roster};
 pub use tools::all as summo_tools;

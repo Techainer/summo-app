@@ -449,19 +449,104 @@ fn read_all_tasks(paths: &Paths) -> summo_core::Result<Vec<tasks::Task>> {
     Ok(all)
 }
 
+/// Write something down for next time.
+///
+/// The only tool that changes the agent itself. It appends one line to that agent's `MEMORY.md`,
+/// which is a file in the vault the user can read, edit and delete lines from — the whole reason
+/// memory is a document rather than a store.
+///
+/// Scoped to *this* agent's directory, not given a path. An agent that could write to an arbitrary
+/// file could rewrite another agent's brief, and "the agent edited itself" is only acceptable while
+/// it means one bullet in one known file.
+pub struct Remember {
+    memory: std::path::PathBuf,
+    today: String,
+}
+
+impl Remember {
+    #[must_use]
+    pub fn new(memory: std::path::PathBuf, today: impl Into<String>) -> Self {
+        Self {
+            memory,
+            today: today.into(),
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for Remember {
+    fn name(&self) -> &str {
+        "remember"
+    }
+
+    fn description(&self) -> &str {
+        "Ghi nhớ một điều sẽ còn đúng vào tuần sau — ai là ai, nhóm gọi thứ gì là gì, điều người dùng đã bảo đừng làm nữa. Đừng dùng cho nội dung buổi họp: cái đó đã nằm trong kho rồi."
+    }
+
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "fact": { "type": "string", "description": "Một câu, ngắn gọn" }
+            },
+            "required": ["fact"]
+        })
+    }
+
+    fn category(&self) -> ToolCategory {
+        ToolCategory::Edit
+    }
+
+    fn is_concurrency_safe(&self, _input: &Value) -> bool {
+        // Two appends to the same Markdown file would race.
+        false
+    }
+
+    async fn execute(&self, input: Value) -> ToolResult {
+        let Some(fact) = input.get("fact").and_then(Value::as_str) else {
+            return fail("cần `fact`");
+        };
+        match crate::memory::remember(&self.memory, &self.today, fact) {
+            // Saying it was already known matters: otherwise the model reads "ok" and has no way to
+            // tell that its memory is filling with the same line.
+            Ok(true) => ok("đã ghi nhớ"),
+            Ok(false) => ok("đã biết rồi, không ghi thêm"),
+            Err(e) => fail(format!("không ghi được: {e}")),
+        }
+    }
+}
+
 /// Every Summo tool, ready to hand to the engine.
 ///
 /// Boxed rather than shared: `ToolRegistry` owns what it is given, and nothing else needs a handle
 /// on a tool once the engine has it.
+///
+/// `agent` is the directory of the agent being run, when there is one. `remember` needs it because
+/// memory belongs to an agent rather than to the installation; without it that tool is simply
+/// absent, which is the right answer for a run that has no agent to remember anything.
 #[must_use]
-pub fn all(paths: Arc<Paths>) -> Vec<Box<dyn Tool>> {
-    vec![
+pub fn all_for(
+    paths: Arc<Paths>,
+    agent: Option<&crate::roster::AgentDef>,
+    today: &str,
+) -> Vec<Box<dyn Tool>> {
+    let mut tools: Vec<Box<dyn Tool>> = vec![
         Box::new(SearchTranscripts::new(paths.clone())),
         Box::new(GetMeeting::new(paths.clone())),
         Box::new(ListTasks::new(paths.clone())),
         Box::new(CreateTask::new(paths.clone())),
         Box::new(UpdateTask::new(paths)),
-    ]
+    ];
+    if let Some(agent) = agent {
+        tools.push(Box::new(Remember::new(agent.memory_path(), today)));
+    }
+    tools
+}
+
+/// The tools available with no agent in play.
+#[must_use]
+pub fn all(paths: Arc<Paths>) -> Vec<Box<dyn Tool>> {
+    all_for(paths, None, "")
 }
 
 #[cfg(test)]

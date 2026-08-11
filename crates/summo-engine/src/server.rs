@@ -1788,17 +1788,7 @@ struct NoteBody {
     day: Option<String>,
 }
 
-fn today() -> String {
-    use time::OffsetDateTime;
-    // Local rather than UTC: a note belongs to the day it was written where the writer was.
-    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
-    format!(
-        "{:04}-{:02}-{:02}",
-        now.year(),
-        u8::from(now.month()),
-        now.day()
-    )
-}
+use summo_core::today;
 
 /// Notes the user typed, newest first.
 async fn list_notes(
