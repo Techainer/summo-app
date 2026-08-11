@@ -175,6 +175,20 @@ enum RegistryCmd {
         #[arg(long)]
         registry: Option<String>,
     },
+    /// Generate a Markdown page per model, Ollama-style.
+    ///
+    /// Everything on a page is derived from its manifest, so the pages cannot drift from the models
+    /// they describe. Run in CI on the registry repository after `check`.
+    Pages {
+        /// Registry directory, containing `models/*.json`.
+        dir: std::path::PathBuf,
+        /// Where to write the pages. Defaults to `<dir>/pages`.
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+        /// Print what would be written without writing it.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[tokio::main]
@@ -214,6 +228,9 @@ async fn main() -> Result<()> {
         } => setup(&paths, &lang, registry.as_deref(), dry_run).await,
         Command::Registry(RegistryCmd::Check { dir }) => check_registry(&dir),
         Command::Registry(RegistryCmd::Ls { registry }) => list_registry(registry.as_deref()).await,
+        Command::Registry(RegistryCmd::Pages { dir, out, dry_run }) => {
+            registry_pages(&dir, out.as_deref(), dry_run)
+        }
         Command::Summarize {
             meeting,
             style,
@@ -343,7 +360,7 @@ fn list(paths: &Paths) -> Result<()> {
         println!(
             "{:<24} {:<8} {:<7} {:>10}  {}",
             m.id.as_str(),
-            format!("{:?}", m.task).to_lowercase(),
+            summo_models::page::task_name(m.task),
             format!("{:?}", m.mode).to_lowercase(),
             human_bytes(m.total_bytes()),
             m.license
@@ -459,7 +476,7 @@ async fn list_registry(spec: Option<&str>) -> Result<()> {
         println!(
             "{:<24} {:<8} {:<7} {:>10}  {}",
             m.id.as_str(),
-            format!("{:?}", m.task).to_lowercase(),
+            summo_models::page::task_name(m.task),
             format!("{:?}", m.mode).to_lowercase(),
             human_bytes(m.size_bytes),
             m.license
@@ -756,4 +773,114 @@ async fn import(
 
     println!("\n{} xong, {failed} lỗi", jobs.len() - failed);
     Ok(())
+}
+
+/// Write one Markdown page per model, plus an index.
+///
+/// The upstream README, when the registry has one at `models/<id>.md`, is copied in verbatim rather
+/// than summarised: a paraphrase of somebody else's documentation is how a licence notice quietly
+/// loses the sentence that mattered.
+fn registry_pages(
+    dir: &std::path::Path,
+    out: Option<&std::path::Path>,
+    dry_run: bool,
+) -> Result<()> {
+    let models_dir = dir.join("models");
+    let out_dir = out.map_or_else(|| dir.join("pages"), std::path::Path::to_path_buf);
+
+    let entries = std::fs::read_dir(&models_dir)
+        .with_context(|| format!("cannot read {}", models_dir.display()))?;
+
+    let mut manifests = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let body = std::fs::read_to_string(&path)
+            .with_context(|| format!("cannot read {}", path.display()))?;
+        // A malformed manifest is `registry check`'s job to report. Failing here too would mean two
+        // commands blaming the same file with different wording.
+        match Manifest::parse(&body) {
+            Ok(m) => manifests.push(m),
+            Err(e) => bail!("{}: {e} — run `summo registry check` first", path.display()),
+        }
+    }
+
+    if manifests.is_empty() {
+        bail!("no manifests in {}", models_dir.display());
+    }
+    manifests.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+
+    if !dry_run {
+        std::fs::create_dir_all(&out_dir)
+            .with_context(|| format!("cannot create {}", out_dir.display()))?;
+    }
+
+    for manifest in &manifests {
+        // `models/<id>.md` beside the manifest is the upstream README, if somebody has saved one.
+        let readme_path = models_dir.join(format!("{}.md", manifest.id));
+        let readme = std::fs::read_to_string(&readme_path).ok();
+        let page = summo_models::page::render(manifest, readme.as_deref());
+
+        let target = out_dir.join(summo_models::page::file_name(manifest));
+        if dry_run {
+            println!("would write {} ({} bytes)", target.display(), page.len());
+        } else {
+            std::fs::write(&target, page)
+                .with_context(|| format!("cannot write {}", target.display()))?;
+            println!("wrote {}", target.display());
+        }
+    }
+
+    let index = pages_index(&manifests);
+    let index_path = out_dir.join("README.md");
+    if dry_run {
+        println!("would write {}", index_path.display());
+    } else {
+        std::fs::write(&index_path, index)
+            .with_context(|| format!("cannot write {}", index_path.display()))?;
+        println!("wrote {}", index_path.display());
+    }
+
+    println!("\n{} model page(s)", manifests.len());
+    Ok(())
+}
+
+/// The index page: one row per model, with the two facts that decide whether to read further.
+fn pages_index(manifests: &[Manifest]) -> String {
+    let mut out = String::from("# Models
+
+");
+    out.push_str(
+        "Everything here is generated from the manifests in `models/`. Speech recognition and \
+         speaker attribution always run on the user's own machine; these are the files that make \
+         that possible.
+
+",
+    );
+    out.push_str("| Model | Task | Size | Licence | Source |
+|---|---|---|---|---|
+");
+
+    for m in manifests {
+        let source = if m.gated {
+            "upstream, gated"
+        } else if m.redistributable {
+            "mirrored"
+        } else {
+            "upstream"
+        };
+        out.push_str(&format!(
+            "| [{}]({}) | {} | {} | {} | {} |\n",
+            m.name,
+            summo_models::page::file_name(m),
+            summo_models::page::task_name(m.task),
+            summo_models::page::human_bytes(m.size_bytes),
+            m.license,
+            source,
+        ));
+    }
+    out.push('\n');
+    out
 }
