@@ -1854,10 +1854,12 @@ async fn update_note(
     if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
+    let title = body.title.trim();
     let result = summo_vault::note::set_body(
         state.engine.paths(),
         &summo_core::MeetingId::from(id),
         &body.body,
+        (!title.is_empty()).then_some(title),
     )
     .map(|path| serde_json::json!({ "file": path.display().to_string() }));
     as_response(result)

@@ -41,7 +41,20 @@ pub fn read(paths: &Paths) -> Result<Board> {
         let Ok(body) = std::fs::read_to_string(&path) else {
             continue;
         };
-        all.extend(tasks::parse(&body, &entry.path.display().to_string()));
+
+        // A typed note is entirely the user's, so every checkbox in it is a task they meant. A
+        // recorded meeting has a model-written summary, so only the actions section counts —
+        // otherwise a checkbox the model produced inside "Quyết định" becomes a task nobody agreed
+        // to. The document decides, not the folder: moving a file must not change what it means.
+        let scope = match summo_vault::MeetingDoc::parse(&body) {
+            Ok(doc) if summo_vault::note::is_note(&doc) => tasks::Scope::Everywhere,
+            _ => tasks::Scope::ActionSections,
+        };
+        all.extend(tasks::parse_scoped(
+            &body,
+            &entry.path.display().to_string(),
+            scope,
+        ));
     }
 
     let mut owners: Vec<String> = all

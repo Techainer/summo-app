@@ -18,7 +18,9 @@
     "hide_sidebar": "Hide sidebar",
     "screens": "Screens",
     "all_folders": "All",
-    "no_folders": "No folders yet"
+    "no_folders": "No folders yet",
+    "notes": "Notes",
+    "agenda": "Calendar"
   },
   "record": {
     "source": "Source",
@@ -335,5 +337,29 @@
     "local_promise": "Speech recognition and speaker attribution run entirely on your machine. Audio never leaves it.",
     "version": "Version {version}",
     "source": "Open source, AGPL-3.0"
+  },
+  "notes": {
+    "title": "Notes",
+    "new": "New",
+    "empty": "No notes yet.",
+    "pick": "Pick a note, or make one.",
+    "untitled": "New note",
+    "saved": "Saved",
+    "saving": "Saving…",
+    "body": "Note body",
+    "placeholder": "The first line is the title.\n\nWrite anything. For a task, write `- [ ] @name …`."
+  },
+  "agenda": {
+    "title": "Calendar",
+    "hint": "Read from .ics files you add. Summo never records on a schedule — this only helps title a meeting note.",
+    "path_placeholder": "/path/to/calendar.ics",
+    "path_label": "Calendar file path",
+    "name_placeholder": "calendar name",
+    "name_label": "Calendar name",
+    "add": "Add",
+    "empty": "No calendars yet. Export an .ics from Google Calendar or Fastmail and add it here.",
+    "attendees": "{count} people",
+    "repeats": "repeats",
+    "remove_calendar": "Remove calendar {name}"
   }
 }

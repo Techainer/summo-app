@@ -7,10 +7,12 @@ import {
 } from "@tanstack/react-router";
 
 import { RootLayout } from "./components/shell/RootLayout";
+import { AgendaScreen } from "./screens/AgendaScreen";
 import { AnalyticsScreen } from "./screens/AnalyticsScreen";
 import { ChatScreen } from "./screens/ChatScreen";
 import { LibraryScreen } from "./screens/LibraryScreen";
 import { MeetingScreen } from "./screens/MeetingScreen";
+import { NotesScreen } from "./screens/NotesScreen";
 import { PeopleScreen } from "./screens/PeopleScreen";
 import { RecordScreen } from "./screens/RecordScreen";
 import { TasksScreen } from "./screens/TasksScreen";
@@ -66,6 +68,18 @@ const meetingRoute = createRoute({
   component: MeetingScreen,
 });
 
+const notesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/notes",
+  component: NotesScreen,
+});
+
+const agendaRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agenda",
+  component: AgendaScreen,
+});
+
 const chatRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/chat",
@@ -100,6 +114,8 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   libraryRoute,
   meetingRoute,
+  notesRoute,
+  agendaRoute,
   tasksRoute,
   chatRoute,
   peopleRoute,

@@ -237,9 +237,11 @@ export function Setup({ onDone }: { onDone: () => void }) {
         <Button onClick={() => void finish()} disabled={!status.can_record}>
           {t("setup.start")}
         </Button>
-        {/* Available even while blocked: someone who wants to look around before downloading half a
-            gigabyte should be able to, and the checklist comes straight back. */}
-        <Button variant="ghost" onClick={onDone}>
+        {/* Available even while blocked: someone who wants to look around before downloading half
+            a gigabyte should be able to. It acknowledges as well — a welcome screen that returns on
+            every launch after being dismissed is nagging, and the banner still says a model is
+            missing. */}
+        <Button variant="ghost" onClick={() => void finish()}>
           {t("setup.skip")}
         </Button>
       </div>

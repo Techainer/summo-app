@@ -17,6 +17,8 @@ import { NudgeBar } from "./NudgeBar";
 const NAV: { key: string; labelKey: string; icon: string }[] = [
   { key: "/", labelKey: "nav.record", icon: "●" },
   { key: "/library", labelKey: "nav.library", icon: "▤" },
+  { key: "/notes", labelKey: "nav.notes", icon: "✎" },
+  { key: "/agenda", labelKey: "nav.agenda", icon: "◫" },
   { key: "/tasks", labelKey: "nav.tasks", icon: "☑" },
   { key: "/chat", labelKey: "nav.chat", icon: "◇" },
   { key: "/people", labelKey: "nav.people", icon: "◍" },

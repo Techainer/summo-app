@@ -182,12 +182,20 @@ fn llm_check(paths: &Paths) -> Check {
     }
 }
 
-/// Whether the vault has any meetings in it.
+/// Whether the vault has anything in it at all.
+///
+/// Notes count, not just meetings. A user who typed three notes before installing a model has an
+/// install with work in it, and greeting them with a welcome screen every launch reads as an app
+/// that has not noticed they are already using it.
 fn is_fresh(paths: &Paths) -> bool {
-    let Ok(entries) = std::fs::read_dir(paths.meetings()) else {
-        return true;
+    !has_markdown(&paths.meetings()) && !has_markdown(&paths.notes())
+}
+
+fn has_markdown(dir: &std::path::Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
     };
-    !entries
+    entries
         .flatten()
         .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some("md"))
 }
@@ -313,6 +321,18 @@ mod tests {
         let paths = Paths::at(tmp.path());
         std::fs::create_dir_all(paths.meetings()).unwrap();
         std::fs::write(paths.meetings().join("hop.md"), "# Họp").unwrap();
+
+        assert!(!status(&paths, &hw()).fresh);
+    }
+
+    /// A user who typed a few notes before installing a model is already using the app; greeting
+    /// them every launch reads as an app that has not noticed.
+    #[test]
+    fn a_vault_with_only_notes_is_not_a_fresh_install_either() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        std::fs::create_dir_all(paths.notes()).unwrap();
+        std::fs::write(paths.notes().join("y-tuong.md"), "# Ý tưởng").unwrap();
 
         assert!(!status(&paths, &hw()).fresh);
     }

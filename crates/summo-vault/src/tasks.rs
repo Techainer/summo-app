@@ -143,8 +143,30 @@ impl Task {
 /// change back to the right place.
 #[must_use]
 pub fn parse(markdown: &str, file: &str) -> Vec<Task> {
+    parse_scoped(markdown, file, Scope::ActionSections)
+}
+
+/// Where in a document checkboxes count as tasks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    /// Only under a heading that names actions.
+    ///
+    /// Right for a meeting note, where the summary is written by a model: a checkbox the model
+    /// produced inside "Quyết định" is prose about a decision, not a task somebody agreed to own.
+    ActionSections,
+    /// Anywhere in the document.
+    ///
+    /// Right for a note a person typed, where every line is theirs. Somebody writing
+    /// `- [ ] @ngoc gọi khách` in the middle of a paragraph means it, and requiring them to first
+    /// invent a heading is the kind of rule that makes people keep their todos somewhere else.
+    Everywhere,
+}
+
+/// Parse tasks, choosing how much of the document to look at.
+#[must_use]
+pub fn parse_scoped(markdown: &str, file: &str, scope: Scope) -> Vec<Task> {
     let mut out: Vec<Task> = Vec::new();
-    let mut inside = false;
+    let mut inside = scope == Scope::Everywhere;
     // Indentation of the most recent task, so a step can be recognised by being deeper than it
     // rather than by being indented at all.
     let mut parent_indent: Option<usize> = None;
@@ -154,7 +176,11 @@ pub fn parse(markdown: &str, file: &str) -> Vec<Task> {
 
         if let Some(heading) = trimmed.strip_prefix('#') {
             let title = heading.trim_start_matches('#').trim().to_lowercase();
-            inside = TASK_HEADINGS.iter().any(|h| title.contains(h));
+            // In `Everywhere`, a heading is just a heading — including the transcript's, which is
+            // why that scope is only ever used on a document with no transcript.
+            if scope == Scope::ActionSections {
+                inside = TASK_HEADINGS.iter().any(|h| title.contains(h));
+            }
             continue;
         }
         if !inside {
@@ -346,6 +372,37 @@ fn stable_id(file: &str, line: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A person typing `- [ ] @ngoc gọi khách` in the middle of a note means it. Requiring them to
+    /// invent a heading first is the rule that makes people keep their todos somewhere else.
+    #[test]
+    fn in_a_note_a_checkbox_anywhere_is_a_task() {
+        let markdown = "# Ý tưởng\n\nMột dòng bất kỳ.\n- [ ] @ngoc Gọi khách\n";
+        assert!(parse(markdown, "notes/x.md").is_empty(), "not in the default scope");
+
+        let found = parse_scoped(markdown, "notes/x.md", Scope::Everywhere);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].owner.as_deref(), Some("ngoc"));
+    }
+
+    /// The reason the default is narrow: a model writing a summary produces checkboxes inside
+    /// sections that are prose, and none of those are work anybody agreed to own.
+    #[test]
+    fn in_a_meeting_only_the_actions_section_counts() {
+        let markdown = "# Họp\n\n## Quyết định\n- [ ] có vẻ như là một gạch đầu dòng\n\
+## Việc cần làm\n- [ ] @ngoc Chốt spec\n";
+        let found = parse(markdown, "meetings/x.md");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].text.trim(), "Chốt spec");
+    }
+
+    #[test]
+    fn the_everywhere_scope_still_reads_steps_under_their_parent() {
+        let markdown = "- [ ] @agent Tạo lịch\n  - [x] Quét ghi chú\n  - [ ] Đăng lên lịch\n";
+        let found = parse_scoped(markdown, "notes/x.md", Scope::Everywhere);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].steps.len(), 2);
+    }
 
     const DOC: &str = "\
 # Họp tuần

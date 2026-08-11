@@ -78,14 +78,24 @@ async function open(scheme, viewport) {
   }
 
   // Every screen must render something rather than a blank frame.
+  //
+  // `exact` on every label: "Ghi" is a prefix of "Ghi chú", and a substring match resolves to both
+  // the record screen and the notes screen.
   for (const [label, marker] of [
     ['Thư viện', /thư viện|họp|hôm/i],
+    ['Ghi chú', /ghi chú|chưa có ghi chú|chọn một ghi chú/i],
+    ['Lịch', /lịch|chưa có lịch/i],
+    ['Việc', /việc|agent|chưa có/i],
+    ['Hỏi đáp', /hỏi|kho họp/i],
     ['Giọng nói', /giọng|chưa có ai/i],
     ['Thống kê', /thống kê/i],
-    ['Cài đặt', /cài đặt|mô hình|llm/i],
+    ['Cài đặt', /cài đặt|mô hình|llm|ngôn ngữ/i],
     ['Ghi', /ghi|đang nghe|bấm ghi/i],
   ]) {
-    await page.getByRole('navigation', { name: 'Màn hình' }).getByRole('button', { name: label }).click();
+    await page
+      .getByRole('navigation', { name: 'Màn hình' })
+      .getByRole('button', { name: label, exact: true })
+      .click();
     await page.waitForTimeout(400);
     const body = await page.locator('main').innerText();
     if (!marker.test(body)) problems.push(`screen ${label} rendered nothing recognisable`);

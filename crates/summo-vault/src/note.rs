@@ -99,15 +99,25 @@ pub fn read(paths: &Paths, id: &MeetingId) -> Result<MeetingDoc> {
     MeetingDoc::parse(&markdown)
 }
 
-/// Replace a note's body, keeping everything else.
+/// Replace a note's body, and optionally its title.
 ///
-/// The title and frontmatter are not touched: an edit to the text of a note must not silently
-/// rename its file, because the user has links and a folder full of names that would stop matching.
-pub fn set_body(paths: &Paths, id: &MeetingId, body: &str) -> Result<PathBuf> {
+/// The *file name* is never changed, whatever the title becomes. Those are two different things and
+/// conflating them costs the user their links: renaming on every save means a note called "Ý tưởng"
+/// becomes a different file the moment they finish the sentence. The heading inside the document is
+/// what a person reads, and that does change.
+///
+/// A blank title is ignored rather than applied — an editor whose first line is momentarily empty
+/// is an editor mid-edit, not a request to un-name the note.
+pub fn set_body(paths: &Paths, id: &MeetingId, body: &str, title: Option<&str>) -> Result<PathBuf> {
     let path = find(paths, id)?;
     let markdown = std::fs::read_to_string(&path).map_err(|e| Error::io(&path, e))?;
     let mut doc = MeetingDoc::parse(&markdown)?;
 
+    if let Some(title) = title
+        && !title.trim().is_empty()
+    {
+        doc.title = title.trim().to_string();
+    }
     doc.body = body.trim().to_string();
     crate::write::write_atomically(&path, doc.to_markdown()?.as_bytes())?;
     Ok(path)
@@ -250,7 +260,7 @@ mod tests {
         let (_tmp, paths) = vault();
         let (id, path) = create(&paths, "Ý tưởng", "2026-08-10", "một").unwrap();
 
-        let after = set_body(&paths, &id, "hai").unwrap();
+        let after = set_body(&paths, &id, "hai", None).unwrap();
         assert_eq!(after, path);
         assert_eq!(read(&paths, &id).unwrap().body.trim(), "hai");
         assert_eq!(read(&paths, &id).unwrap().title, "Ý tưởng");
@@ -259,10 +269,34 @@ mod tests {
     #[test]
     fn editing_a_note_that_is_not_there_says_so() {
         let (_tmp, paths) = vault();
-        let err = set_body(&paths, &MeetingId::new(), "x")
+        let err = set_body(&paths, &MeetingId::new(), "x", None)
             .unwrap_err()
             .to_string();
         assert!(err.contains("không có ghi chú"), "{err}");
+    }
+
+    /// The user types over the first line and expects the note to be called that. Dropping the edit
+    /// because the file is named after the old title would be losing their keystrokes to a filing
+    /// decision they never made.
+    #[test]
+    fn retitling_changes_the_heading_and_leaves_the_file_where_it_is() {
+        let (_tmp, paths) = vault();
+        let (id, path) = create(&paths, "Cũ", "2026-08-10", "nội dung").unwrap();
+
+        let after = set_body(&paths, &id, "nội dung", Some("Mới")).unwrap();
+        assert_eq!(after, path, "the file does not move");
+        assert_eq!(read(&paths, &id).unwrap().title, "Mới");
+    }
+
+    /// An editor whose first line is momentarily empty is an editor mid-edit, not a request to
+    /// un-name the note.
+    #[test]
+    fn a_blank_title_is_ignored_rather_than_applied() {
+        let (_tmp, paths) = vault();
+        let (id, _) = create(&paths, "Giữ tên", "2026-08-10", "x").unwrap();
+
+        set_body(&paths, &id, "x", Some("   ")).unwrap();
+        assert_eq!(read(&paths, &id).unwrap().title, "Giữ tên");
     }
 
     #[test]

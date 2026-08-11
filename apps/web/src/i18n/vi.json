@@ -18,7 +18,9 @@
     "hide_sidebar": "Ẩn thanh bên",
     "screens": "Màn hình",
     "all_folders": "Tất cả",
-    "no_folders": "Chưa có thư mục nào"
+    "no_folders": "Chưa có thư mục nào",
+    "notes": "Ghi chú",
+    "agenda": "Lịch"
   },
   "record": {
     "source": "Nguồn",
@@ -335,5 +337,29 @@
     "local_promise": "Nhận dạng giọng nói và tách người nói chạy hoàn toàn trên máy bạn. Âm thanh không rời khỏi máy.",
     "version": "Phiên bản {version}",
     "source": "Mã nguồn mở, AGPL-3.0"
+  },
+  "notes": {
+    "title": "Ghi chú",
+    "new": "Mới",
+    "empty": "Chưa có ghi chú nào.",
+    "pick": "Chọn một ghi chú, hoặc tạo mới.",
+    "untitled": "Ghi chú mới",
+    "saved": "Đã lưu",
+    "saving": "Đang lưu…",
+    "body": "Nội dung ghi chú",
+    "placeholder": "Dòng đầu là tiêu đề.\n\nViết gì cũng được. Việc thì viết `- [ ] @tên …`."
+  },
+  "agenda": {
+    "title": "Lịch",
+    "hint": "Đọc từ file .ics bạn thêm vào. Summo không tự ghi âm theo lịch — chỉ dùng để đặt tên cho biên bản.",
+    "path_placeholder": "/duong/dan/toi/lich.ics",
+    "path_label": "Đường dẫn file lịch",
+    "name_placeholder": "tên lịch",
+    "name_label": "Tên lịch",
+    "add": "Thêm",
+    "empty": "Chưa có lịch nào. Xuất .ics từ Google Calendar hay Fastmail rồi thêm vào đây.",
+    "attendees": "{count} người",
+    "repeats": "lặp lại",
+    "remove_calendar": "Xoá lịch {name}"
   }
 }
