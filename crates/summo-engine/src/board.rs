@@ -141,8 +141,14 @@ mod tests {
     #[test]
     fn tasks_are_gathered_across_meetings() {
         let dir = vault(&[
-            ("a.md", &meeting("01A", "## Việc cần làm\n- [ ] một <!-- id:A -->\n")),
-            ("b.md", &meeting("01B", "## Việc cần làm\n- [ ] hai <!-- id:B -->\n")),
+            (
+                "a.md",
+                &meeting("01A", "## Việc cần làm\n- [ ] một <!-- id:A -->\n"),
+            ),
+            (
+                "b.md",
+                &meeting("01B", "## Việc cần làm\n- [ ] hai <!-- id:B -->\n"),
+            ),
         ]);
         let board = read(&Paths::at(dir.path())).expect("read");
         assert_eq!(board.todo.len(), 2);
@@ -169,7 +175,10 @@ mod tests {
 
         let body = std::fs::read_to_string(paths.meetings().join("a.md")).unwrap();
         assert!(body.contains("- [ ] @binh Gọi khách"), "{body}");
-        assert!(body.contains("  - [x] Quét ghi chú"), "the agent's steps kept their indent");
+        assert!(
+            body.contains("  - [x] Quét ghi chú"),
+            "the agent's steps kept their indent"
+        );
         assert!(body.contains("# Họp 01A"));
     }
 
@@ -189,7 +198,16 @@ mod tests {
     #[test]
     fn updating_a_task_that_is_not_there_is_an_error() {
         let dir = vault(&[("a.md", &meeting("01A", TASKS))]);
-        assert!(update(&Paths::at(dir.path()), "NOPE", Some(Status::Done), None, None).is_err());
+        assert!(
+            update(
+                &Paths::at(dir.path()),
+                "NOPE",
+                Some(Status::Done),
+                None,
+                None
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -206,7 +224,10 @@ mod tests {
         )
         .expect("create");
 
-        assert_eq!(created.text, "Việc mới", "surrounding space is not part of the task");
+        assert_eq!(
+            created.text, "Việc mới",
+            "surrounding space is not part of the task"
+        );
         assert_eq!(created.owner.as_deref(), Some("binh"));
         assert_eq!(created.due.as_deref(), Some("2026-08-20"));
 
@@ -218,8 +239,14 @@ mod tests {
     fn creating_in_a_meeting_without_a_task_section_still_works() {
         let dir = vault(&[("a.md", &meeting("01A", "## Tóm tắt\nChỉ có tóm tắt.\n"))]);
         let paths = Paths::at(dir.path());
-        create(&paths, &summo_core::MeetingId::from("01A".to_string()), "Đầu tiên", None, None)
-            .expect("create");
+        create(
+            &paths,
+            &summo_core::MeetingId::from("01A".to_string()),
+            "Đầu tiên",
+            None,
+            None,
+        )
+        .expect("create");
         assert_eq!(read(&paths).expect("read").todo.len(), 1);
     }
 

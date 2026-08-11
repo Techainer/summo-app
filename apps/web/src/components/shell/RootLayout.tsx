@@ -8,6 +8,7 @@ import { deviceWarning } from "../../lib/session";
 import { RecordButton } from "../RecordButton";
 import { StatusBar } from "../StatusBar";
 import { Waveform } from "../Waveform";
+import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
 import { NudgeBar } from "./NudgeBar";
 
@@ -173,7 +174,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           onNavOpenChange={setNavOpen}
           header={header}
         >
-          {children}
+          <FirstRun>{children}</FirstRun>
         </AppShell>
       </div>
       <StatusBar

@@ -16,7 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
-use summo_core::{Error, MeetingId, Result, segment::Lane, paths::Paths};
+use summo_core::{Error, MeetingId, Result, paths::Paths, segment::Lane};
 
 /// A byte range to send, resolved against the file's real length.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,7 +138,8 @@ pub fn read_span(path: &Path, span: Span) -> Result<Vec<u8>> {
         .map_err(|e| Error::io(path, e))?;
 
     let mut buffer = vec![0u8; usize::try_from(span.len()).unwrap_or(usize::MAX)];
-    file.read_exact(&mut buffer).map_err(|e| Error::io(path, e))?;
+    file.read_exact(&mut buffer)
+        .map_err(|e| Error::io(path, e))?;
     Ok(buffer)
 }
 

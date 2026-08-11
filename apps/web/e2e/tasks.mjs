@@ -10,7 +10,10 @@ import { chromium } from 'playwright';
 const [, , appUrl, port, token] = process.argv;
 
 const browser = await chromium.launch();
-const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, colorScheme: 'dark' });
+// The suites assert Vietnamese wording, so the browser has to ask for Vietnamese. Without
+// this the app honours the machine's locale — which is exactly what it should do, and which made
+// every assertion here fail the moment translation landed.
+const context = await browser.newContext({ locale: 'vi-VN', viewport: { width: 1400, height: 900 }, colorScheme: 'dark' });
 const page = await context.newPage();
 
 const problems = [];

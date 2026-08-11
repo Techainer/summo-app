@@ -467,8 +467,14 @@ mod tests {
             paths,
             &meeting(),
             &[
-                Section { heading: "Tóm tắt".into(), body: "Câu một. Câu hai.".into() },
-                Section { heading: "Quyết định".into(), body: "- Dùng Rust".into() },
+                Section {
+                    heading: "Tóm tắt".into(),
+                    body: "Câu một. Câu hai.".into(),
+                },
+                Section {
+                    heading: "Quyết định".into(),
+                    body: "- Dùng Rust".into(),
+                },
             ],
         )
         .expect("put");
@@ -493,7 +499,10 @@ mod tests {
         let body = note(&paths);
         assert!(body.contains("Câu một."), "{body}");
         assert!(body.contains("## Tóm tắt <!-- summo:draft -->"), "{body}");
-        assert!(body.contains("Tôi tự viết."), "a human's section is untouched");
+        assert!(
+            body.contains("Tôi tự viết."),
+            "a human's section is untouched"
+        );
     }
 
     #[test]
@@ -503,7 +512,10 @@ mod tests {
 
         let draft = load(&paths, &meeting()).expect("load").expect("some");
         assert_eq!(draft.sections.len(), 2);
-        assert_eq!(draft.sections[0].heading, "Tóm tắt", "the mark is not part of the heading");
+        assert_eq!(
+            draft.sections[0].heading, "Tóm tắt",
+            "the mark is not part of the heading"
+        );
         assert_eq!(draft.sections[1].body, "- Dùng Rust");
     }
 
@@ -513,7 +525,10 @@ mod tests {
         drafted(&paths);
         let draft = load(&paths, &meeting()).expect("load").expect("some");
         assert!(
-            !draft.sections.iter().any(|s| s.heading == "Ghi chú của tôi"),
+            !draft
+                .sections
+                .iter()
+                .any(|s| s.heading == "Ghi chú của tôi"),
             "{:?}",
             draft.sections
         );
@@ -557,7 +572,10 @@ mod tests {
         let body = note(&paths);
         assert!(!body.contains("Câu một."), "{body}");
         assert!(body.contains("Tôi tự viết."), "{body}");
-        assert!(!discard(&paths, &meeting()).expect("again"), "nothing left to discard");
+        assert!(
+            !discard(&paths, &meeting()).expect("again"),
+            "nothing left to discard"
+        );
     }
 
     #[test]
@@ -567,12 +585,19 @@ mod tests {
         put(
             &paths,
             &meeting(),
-            &[Section { heading: "Tóm tắt".into(), body: "Bản hai.".into() }],
+            &[Section {
+                heading: "Tóm tắt".into(),
+                body: "Bản hai.".into(),
+            }],
         )
         .expect("put");
 
         let draft = load(&paths, &meeting()).expect("load").expect("some");
-        let summaries: Vec<_> = draft.sections.iter().filter(|s| s.heading == "Tóm tắt").collect();
+        let summaries: Vec<_> = draft
+            .sections
+            .iter()
+            .filter(|s| s.heading == "Tóm tắt")
+            .collect();
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].body, "Bản hai.");
     }
@@ -586,7 +611,10 @@ mod tests {
             &meeting(),
             &Sidecar {
                 template: "standard".into(),
-                turns: vec![Turn { role: "you".into(), text: "ngắn hơn".into() }],
+                turns: vec![Turn {
+                    role: "you".into(),
+                    text: "ngắn hơn".into(),
+                }],
                 revisions: 1,
             },
         )
@@ -595,7 +623,10 @@ mod tests {
         let draft = load(&paths, &meeting()).expect("load").expect("some");
         assert_eq!(draft.revisions, 1);
         assert_eq!(draft.turns.len(), 1);
-        assert!(!note(&paths).contains("ngắn hơn"), "the conversation is not in the user's prose");
+        assert!(
+            !note(&paths).contains("ngắn hơn"),
+            "the conversation is not in the user's prose"
+        );
     }
 
     #[test]
@@ -605,7 +636,11 @@ mod tests {
         write_sidecar(
             &paths,
             &meeting(),
-            &Sidecar { template: "standard".into(), turns: vec![], revisions: 3 },
+            &Sidecar {
+                template: "standard".into(),
+                turns: vec![],
+                revisions: 3,
+            },
         )
         .expect("sidecar");
 
@@ -630,8 +665,14 @@ mod tests {
     #[test]
     fn markdown_round_trips_through_sections() {
         let sections = vec![
-            Section { heading: "A".into(), body: "một".into() },
-            Section { heading: "B".into(), body: "hai".into() },
+            Section {
+                heading: "A".into(),
+                body: "một".into(),
+            },
+            Section {
+                heading: "B".into(),
+                body: "hai".into(),
+            },
         ];
         let draft = Draft {
             meeting: meeting(),

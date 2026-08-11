@@ -19,7 +19,11 @@ const browser = await chromium.launch({
     '--autoplay-policy=no-user-gesture-required',
   ],
 });
+// The suites assert Vietnamese wording, so the browser has to ask for Vietnamese. Without
+// this the app honours the machine's locale — which is exactly what it should do, and which made
+// every assertion here fail the moment translation landed.
 const context = await browser.newContext({
+  locale: 'vi-VN',
   permissions: ['microphone'],
   viewport: { width: 1180, height: 760 },
   colorScheme: 'dark',

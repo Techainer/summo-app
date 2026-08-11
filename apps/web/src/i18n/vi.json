@@ -10,12 +10,13 @@
     "tasks": "Việc",
     "chat": "Hỏi đáp",
     "analytics": "Thống kê",
-    "people": "Người",
+    "people": "Giọng nói",
     "settings": "Cài đặt",
     "menu": "Menu",
     "folders": "Thư mục",
     "show_sidebar": "Hiện thanh bên",
-    "hide_sidebar": "Ẩn thanh bên"
+    "hide_sidebar": "Ẩn thanh bên",
+    "screens": "Màn hình"
   },
   "record": {
     "source": "Nguồn",
@@ -211,5 +212,44 @@
     "close": "Đóng",
     "retry": "Thử lại",
     "loading": "Đang tải…"
+  },
+  "setup": {
+    "title": "Chào mừng tới Summo",
+    "promise": "Nhận dạng giọng nói và tách người nói chạy hoàn toàn trên máy bạn. Âm thanh không rời khỏi máy.",
+    "pick_model": "Chọn mô hình nhận dạng",
+    "machine": "Máy này: {cores} nhân, {ram} GB RAM.",
+    "no_models": "Không lấy được danh sách mô hình. Kiểm tra mạng, hoặc chạy `summo pull` nếu bạn đã có file.",
+    "installed": "đã cài",
+    "install": "Tải và cài",
+    "downloading": "Đang tải…",
+    "upstream": "tải từ nguồn gốc",
+    "upstream_note": "Mô hình này Summo không phân phối. File tải thẳng từ nơi phát hành, theo giấy phép của họ.",
+    "ready": "Sẵn sàng ghi.",
+    "ready_hint": "Bấm Bắt đầu, rồi nói thử một câu.",
+    "later": "Có thể làm sau",
+    "step_ffmpeg": "ffmpeg",
+    "why_ffmpeg": "cần để nhập file ghi âm hoặc video có sẵn.",
+    "step_llm": "Mô hình ngôn ngữ",
+    "why_llm": "cần để tóm tắt, dịch và hỏi đáp. Ghi và nhận dạng không cần.",
+    "step_models": "Mô hình nhận dạng",
+    "why_models": "cần để ghi được.",
+    "start": "Bắt đầu",
+    "skip": "Để sau",
+    "fix": "Cài ngay"
+  },
+  "tour": {
+    "title": "Hướng dẫn nhanh",
+    "step": "Bước {current}/{total}",
+    "next": "Tiếp",
+    "done": "Xong",
+    "skip": "Bỏ qua",
+    "record_title": "Ghi hoặc nhập file",
+    "record_body": "Bấm nút ghi để bắt đầu một buổi họp, hoặc chuyển sang Nhập file nếu bạn đã có bản ghi.",
+    "summary_title": "Agent viết tóm tắt",
+    "summary_body": "Họp xong, agent soạn tóm tắt ngay trong ghi chú và tô sáng phần chờ bạn duyệt. Sửa hoặc nhắn cho agent, rồi xác nhận.",
+    "tasks_title": "Việc tách ra từ buổi họp",
+    "tasks_body": "Việc gán cho người thì nằm ở bảng của mọi người. Việc gán cho @agent thì agent tự làm và ghi lại từng bước.",
+    "ask_title": "Hỏi lại mọi thứ đã nói",
+    "ask_body": "Hỏi đáp tìm trong tất cả buổi họp và trả lời kèm mốc thời gian bấm được."
   }
 }

@@ -11,7 +11,10 @@ import { chromium } from 'playwright';
 const [, , appUrl, port, token] = process.argv;
 
 const browser = await chromium.launch();
-const context = await browser.newContext({ viewport: { width: 1280, height: 820 }, colorScheme: 'dark' });
+// The suites assert Vietnamese wording, so the browser has to ask for Vietnamese. Without
+// this the app honours the machine's locale — which is exactly what it should do, and which made
+// every assertion here fail the moment translation landed.
+const context = await browser.newContext({ locale: 'vi-VN', viewport: { width: 1280, height: 820 }, colorScheme: 'dark' });
 const page = await context.newPage();
 
 const problems = [];
@@ -40,13 +43,14 @@ console.log(`meetings listed: ${rows.join(' | ')}`);
 if (rows.length < 2) fail(`expected the seeded meetings, got ${rows.length}`);
 
 // Grouping by week must not lose meetings.
-await page.getByRole('button', { name: 'Tuần' }).click();
+// `exact`: the seeded meetings are called "Họp tuần N", so a substring match finds five buttons.
+await page.getByRole('button', { name: 'Tuần', exact: true }).click();
 await page.waitForTimeout(300);
 const weekly = await page.locator('.row-title').count();
 if (weekly !== rows.length) fail(`grouping by week changed the count: ${rows.length} → ${weekly}`);
 const weekHeadings = await page.locator('.group h3').allInnerTexts();
 if (!weekHeadings.some((h) => /^tuần/i.test(h))) fail(`week headings missing: ${JSON.stringify(weekHeadings)}`);
-await page.getByRole('button', { name: 'Ngày' }).click();
+await page.getByRole('button', { name: 'Ngày', exact: true }).click();
 
 // Search without tone marks is the point of the fold table.
 await page.getByLabel('Tìm kiếm').fill('ngan sach');
@@ -61,10 +65,21 @@ await page.screenshot({ path: '/tmp/shots/library-search.png' });
 await page.getByLabel('Tìm kiếm').fill('');
 await page.waitForTimeout(300);
 
-// Open one meeting and check the transcript actually arrived.
-await page.locator('.row').first().click();
-await page.locator('[data-testid="meeting"]').waitFor({ timeout: 5000 });
-const lines = await page.locator('.lines li').count();
+// Open meetings until one has a transcript, and check it arrived.
+//
+// Not simply the first row: a vault accumulates meetings, and several of them legitimately have no
+// transcript — a note filed by hand, or a recording that captured silence. Asserting on whichever
+// happens to sort first tests the fixture, not the code.
+let lines = 0;
+const rowCount = await page.locator('[data-testid="meeting-list"] .row').count();
+for (let i = 0; i < rowCount && lines === 0; i += 1) {
+  await page.locator('[data-testid="meeting-list"] .row').nth(i).click();
+  await page.locator('[data-testid="meeting"]').waitFor({ timeout: 5000 });
+  // The frame renders before the transcript fetch resolves; counting immediately reads zero on a
+  // meeting that does have one.
+  await page.waitForTimeout(400);
+  lines = await page.locator('.lines li').count();
+}
 console.log(`transcript lines in detail view: ${lines}`);
 if (lines === 0) fail('the meeting detail showed no transcript');
 await page.screenshot({ path: '/tmp/shots/library-meeting.png' });

@@ -72,7 +72,10 @@ pub async fn run(
     // A template may pin a language; otherwise the user's setting decides, and only if neither is
     // set does the model follow the transcript.
     let settings = summo_core::settings::Settings::load(&paths.settings()).ok();
-    let configured = settings.as_ref().map(|s| s.llm.language.as_str()).unwrap_or("");
+    let configured = settings
+        .as_ref()
+        .map(|s| s.llm.language.as_str())
+        .unwrap_or("");
     let language = [template.language.as_str(), configured]
         .into_iter()
         .find(|l| !l.is_empty())

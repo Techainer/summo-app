@@ -43,7 +43,9 @@ pub enum JobState {
         segments: usize,
         duration_s: f64,
     },
-    Failed { error: String },
+    Failed {
+        error: String,
+    },
 }
 
 impl JobState {
@@ -362,12 +364,7 @@ mod tests {
         let imports = Imports::new();
         let done = imports.add("xong", Path::new("/tmp/a.mp4"));
         imports.add("đang chạy", Path::new("/tmp/b.mp4"));
-        imports.set(
-            &done,
-            JobState::Failed {
-                error: "x".into(),
-            },
-        );
+        imports.set(&done, JobState::Failed { error: "x".into() });
 
         assert_eq!(imports.clear_finished(), 1);
         let left: Vec<_> = imports.list().into_iter().map(|j| j.title).collect();
@@ -402,7 +399,9 @@ mod tests {
 
     #[test]
     fn a_missing_file_is_refused_before_a_job_exists() {
-        let err = check(Path::new("/nonexistent/x.mp4")).unwrap_err().to_string();
+        let err = check(Path::new("/nonexistent/x.mp4"))
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("không thấy"), "{err}");
     }
 

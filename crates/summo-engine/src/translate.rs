@@ -261,6 +261,10 @@ mod tests {
         .expect("no request needed");
 
         assert_eq!(outcome.requests, 0);
-        assert!(summo_vault::translation::load(&paths, &id, "en").unwrap().is_some());
+        assert!(
+            summo_vault::translation::load(&paths, &id, "en")
+                .unwrap()
+                .is_some()
+        );
     }
 }

@@ -120,7 +120,9 @@ fn decode(mut reader: hound::WavReader<std::io::BufReader<std::fs::File>>) -> Re
     let bad = |e: hound::Error| Error::Other(format!("file âm thanh hỏng: {e}"));
 
     match (spec.sample_format, spec.bits_per_sample) {
-        (hound::SampleFormat::Float, _) => reader.samples::<f32>().map(|s| s.map_err(bad)).collect(),
+        (hound::SampleFormat::Float, _) => {
+            reader.samples::<f32>().map(|s| s.map_err(bad)).collect()
+        }
         (hound::SampleFormat::Int, 16) => reader
             .samples::<i16>()
             .map(|s| s.map(|v| f32::from(v) / 32_768.0).map_err(bad))

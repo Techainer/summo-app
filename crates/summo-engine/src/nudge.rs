@@ -167,7 +167,8 @@ pub fn due(
     //
     // Read over a window rather than out of today's report: a task is overdue *because* it came
     // from an older meeting, so today's report is the one place it will never appear.
-    let history = summo_vault::report::between(&paths.vault(), &shift(today, -OVERDUE_WINDOW), today)?;
+    let history =
+        summo_vault::report::between(&paths.vault(), &shift(today, -OVERDUE_WINDOW), today)?;
     let overdue: Vec<_> = history
         .open_actions
         .iter()
@@ -350,7 +351,10 @@ mod tests {
             "## Việc cần làm\n- [ ] một\n- [ ] hai\n- [ ] ba\n- [ ] bốn\n",
         )]);
         let nudges = due(&paths, &Seen::default(), TODAY, 18, 2, false).expect("due");
-        let overdue: Vec<_> = nudges.iter().filter(|n| n.reason == Reason::Overdue).collect();
+        let overdue: Vec<_> = nudges
+            .iter()
+            .filter(|n| n.reason == Reason::Overdue)
+            .collect();
         assert_eq!(overdue.len(), 1, "{nudges:?}");
         assert!(overdue[0].title.contains('4'));
     }
@@ -399,7 +403,11 @@ mod tests {
 
         // A fresh daemon reads the file rather than starting quiet.
         let reloaded = load(&paths).expect("load");
-        assert!(due(&paths, &reloaded, TODAY, 18, 2, false).expect("due").is_empty());
+        assert!(
+            due(&paths, &reloaded, TODAY, 18, 2, false)
+                .expect("due")
+                .is_empty()
+        );
     }
 
     #[test]

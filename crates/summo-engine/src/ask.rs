@@ -111,7 +111,11 @@ mod tests {
     fn timestamps_match_the_citation_form_the_prompt_asks_for() {
         assert_eq!(clock(0.0), "00:00");
         assert_eq!(clock(64.7), "01:04");
-        assert_eq!(clock(3_725.0), "62:05", "past an hour, minutes keep counting");
+        assert_eq!(
+            clock(3_725.0),
+            "62:05",
+            "past an hour, minutes keep counting"
+        );
     }
 
     #[test]

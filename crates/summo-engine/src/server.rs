@@ -125,10 +125,18 @@ impl Server {
             .route("/meetings/{id}/tasks", post(create_task))
             .route("/templates", get(templates))
             .route("/locales", get(locales))
+            .route("/onboarding", get(onboarding))
+            .route("/onboarding/complete", post(complete_onboarding))
+            .route("/onboarding/recommend", get(recommend_models))
+            .route("/installs", get(list_installs).post(start_install))
+            .route("/installs/{id}", get(get_install))
             .route("/meetings/{id}/summarize", post(summarize_meeting))
             .route("/meetings/{id}/translate", post(translate_meeting))
             .route("/meetings/{id}/translations", get(meeting_translations))
-            .route("/meetings/{id}/translations/{lang}", get(meeting_translation))
+            .route(
+                "/meetings/{id}/translations/{lang}",
+                get(meeting_translation),
+            )
             .route("/meetings/{id}/subtitles", get(meeting_subtitles))
             .route("/people", get(people))
             .route("/people/{id}/name", post(rename_person))
@@ -208,7 +216,11 @@ impl Server {
 /// The two must never drift, so this asks the same function rather than keeping its own list.
 ///
 /// In a shipped build no origin is allowed, so no page gets these headers.
-async fn cors(State(state): State<AppState>, request: Request<axum::body::Body>, next: Next) -> Response {
+async fn cors(
+    State(state): State<AppState>,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
     let origin = request
         .headers()
         .get(header::ORIGIN)
@@ -387,8 +399,7 @@ async fn library(
     }
     // The clock is read here rather than inside the vault so "the last seven days" is anchored to
     // the machine the user is looking at, in its own offset.
-    let now = time::OffsetDateTime::now_local()
-        .unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    let now = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
     as_response(state.library.view(&q, now))
 }
 
@@ -591,8 +602,8 @@ async fn prune_storage(
     let paths = state.engine.paths();
     as_response((|| {
         let settings = summo_core::Settings::load(&paths.settings())?;
-        let now = time::OffsetDateTime::now_local()
-            .unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+        let now =
+            time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
         summo_vault::storage::prune(
             paths,
             settings.storage.audio_retention_days,
@@ -684,13 +695,23 @@ async fn meeting_audio(
     let meeting = summo_core::MeetingId::from(id);
     let path = match crate::audio_stream::locate(state.engine.paths(), &meeting, &lane) {
         Ok(path) => path,
-        Err(e) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response();
+        }
     };
     let total = match std::fs::metadata(&path) {
         Ok(meta) => meta.len(),
         Err(e) => {
             let message = format!("cannot read {}: {e}", path.display());
-            return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": message }))).into_response();
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": message })),
+            )
+                .into_response();
         }
     };
 
@@ -1049,21 +1070,19 @@ async fn run_task(
         Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
     };
     let Some(task) = board.agent.into_iter().find(|t| t.id == id) else {
-        return as_response(Err::<serde_json::Value, _>(summo_core::Error::Other(format!(
-            "no task with id {id} belongs to the agent"
-        ))));
+        return as_response(Err::<serde_json::Value, _>(summo_core::Error::Other(
+            format!("no task with id {id} belongs to the agent"),
+        )));
     };
 
-    as_response(
-        summo_agent::run::run(&paths, &task)
-            .await
-            .map(|ran| serde_json::json!({
-                "task": ran.task,
-                "status": ran.status.as_str(),
-                "outcome": ran.outcome,
-                "steps": ran.steps,
-            })),
-    )
+    as_response(summo_agent::run::run(&paths, &task).await.map(|ran| {
+        serde_json::json!({
+            "task": ran.task,
+            "status": ran.status.as_str(),
+            "outcome": ran.outcome,
+            "steps": ran.steps,
+        })
+    }))
 }
 
 /// Build an LLM client from settings, or say why not.
@@ -1466,8 +1485,8 @@ async fn meeting_translation(
         return rejection.into_response();
     }
     let meeting = summo_core::MeetingId::from(id);
-    let result = summo_vault::translation::load(state.engine.paths(), &meeting, &lang).and_then(
-        |found| {
+    let result =
+        summo_vault::translation::load(state.engine.paths(), &meeting, &lang).and_then(|found| {
             let translation = found.ok_or_else(|| {
                 summo_core::Error::Other(format!("chưa dịch buổi họp này sang `{lang}`"))
             })?;
@@ -1480,8 +1499,7 @@ async fn meeting_translation(
                     "text": l.text,
                 })).collect::<Vec<_>>(),
             }))
-        },
-    );
+        });
     as_response(result)
 }
 
@@ -1527,17 +1545,15 @@ async fn meeting_subtitles(
     };
 
     let doc = match &q.lang {
-        Some(lang) => {
-            match summo_vault::translation::load(state.engine.paths(), &meeting, lang) {
-                Ok(Some(translation)) => crate::translate::applied(&doc, &translation),
-                Ok(None) => {
-                    return as_response(Err::<serde_json::Value, _>(summo_core::Error::Other(
-                        format!("chưa dịch buổi họp này sang `{lang}`"),
-                    )));
-                }
-                Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+        Some(lang) => match summo_vault::translation::load(state.engine.paths(), &meeting, lang) {
+            Ok(Some(translation)) => crate::translate::applied(&doc, &translation),
+            Ok(None) => {
+                return as_response(Err::<serde_json::Value, _>(summo_core::Error::Other(
+                    format!("chưa dịch buổi họp này sang `{lang}`"),
+                )));
             }
-        }
+            Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+        },
         None => doc,
     };
 
@@ -1566,8 +1582,7 @@ fn load_meeting_doc(
     meeting: &summo_core::MeetingId,
 ) -> summo_core::Result<summo_vault::MeetingDoc> {
     let path = crate::summarize::find_meeting_file(&state.engine.paths().vault(), meeting)?;
-    let markdown =
-        std::fs::read_to_string(&path).map_err(|e| summo_core::Error::io(&path, e))?;
+    let markdown = std::fs::read_to_string(&path).map_err(|e| summo_core::Error::io(&path, e))?;
     summo_vault::MeetingDoc::parse(&markdown)
 }
 
@@ -1592,6 +1607,307 @@ async fn locales(
     as_response(Ok::<_, summo_core::Error>(crate::locales::load(
         state.engine.paths(),
     )))
+}
+
+/// What still stands between this install and a working recording.
+async fn onboarding(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let status = crate::onboarding::status(state.engine.paths(), state.engine.hardware());
+    let should_prompt = status.should_prompt();
+    let needs_attention = status.needs_attention();
+    as_response(Ok::<_, summo_core::Error>(serde_json::json!({
+        "acknowledged": status.acknowledged,
+        "can_record": status.can_record,
+        "fresh": status.fresh,
+        "should_prompt": should_prompt,
+        "needs_attention": needs_attention,
+        "checks": status.checks,
+        "hardware": status.hardware,
+    })))
+}
+
+/// Remember that the user has been through setup.
+async fn complete_onboarding(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(
+        crate::onboarding::acknowledge(state.engine.paths())
+            .map(|()| serde_json::json!({ "acknowledged": true })),
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct RecommendQuery {
+    #[serde(default)]
+    token: Option<String>,
+    #[serde(default = "default_lang")]
+    lang: String,
+    /// Registry to read from. Defaults to the built-in one.
+    #[serde(default)]
+    registry: Option<String>,
+}
+
+fn default_lang() -> String {
+    "vi".into()
+}
+
+/// Rank the models available for a language on this machine, and say why.
+///
+/// The reasons matter more than the ranking. "Fits in 8 GB" and "Vietnamese word error rate 9.1%"
+/// let a user disagree with the choice; a bare list asks them to trust it.
+async fn recommend_models(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<RecommendQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+
+    let manifests = match candidates(&state, q.registry.as_deref()).await {
+        Ok(manifests) => manifests,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+
+    let installed: std::collections::HashSet<String> = state
+        .engine
+        .store()
+        .list()
+        .into_iter()
+        .map(|m| m.id.to_string())
+        .collect();
+
+    let ranked = summo_models::recommend::recommend(&manifests, state.engine.hardware(), &q.lang);
+    let models: Vec<_> = ranked
+        .ranked
+        .iter()
+        .map(|scored| {
+            let manifest = manifests.iter().find(|m| m.id.as_str() == scored.id);
+            serde_json::json!({
+                "id": scored.id,
+                "name": scored.name,
+                "score": scored.score,
+                "reason": scored.reason,
+                "live_capable": scored.live_capable,
+                "expected_rtf": scored.expected_rtf,
+                "accuracy": scored.accuracy,
+                "installed": installed.contains(&scored.id),
+                "size_bytes": manifest.map(|m| m.size_bytes),
+                "license": manifest.map(|m| m.license.clone()),
+                // Shown, not hidden: a non-redistributable or gated model is a real choice the user
+                // is allowed to make, and they should know which one they are making.
+                "redistributable": manifest.map(|m| m.redistributable),
+                "gated": manifest.map(|m| m.gated),
+            })
+        })
+        .collect();
+
+    as_response(Ok::<_, summo_core::Error>(serde_json::json!({
+        "lang": q.lang,
+        "models": models,
+        "rejected": ranked.rejected,
+    })))
+}
+
+/// Every manifest worth ranking: what is installed, plus the registry when it can be reached.
+///
+/// An unreachable registry ranks the installed models rather than failing. Offline is a supported
+/// state for a local-first tool, and a setup screen that refuses to render without a network is the
+/// opposite of the promise.
+async fn candidates(
+    state: &AppState,
+    registry: Option<&str>,
+) -> summo_core::Result<Vec<summo_models::Manifest>> {
+    let mut manifests = state.engine.store().list();
+
+    let reg = match registry {
+        Some(spec) => {
+            summo_models::Registry::with_sources(vec![summo_models::RegistrySource::parse(spec)?])?
+        }
+        None => summo_models::Registry::discover()?,
+    };
+
+    match reg.index().await {
+        Ok(index) => {
+            for entry in index.models {
+                if manifests.iter().any(|m| m.id == entry.id) {
+                    continue;
+                }
+                match reg.manifest(&entry.id).await {
+                    Ok(m) => manifests.push(m),
+                    Err(e) => tracing::warn!(id = %entry.id, error = %e, "skipping"),
+                }
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "registry unavailable; ranking installed models only"),
+    }
+    Ok(manifests)
+}
+
+#[derive(Debug, Deserialize)]
+struct InstallBody {
+    /// Model id, as it appears in the registry.
+    id: String,
+    #[serde(default)]
+    registry: Option<String>,
+}
+
+/// Start downloading a model. Returns immediately; poll `/installs/{id}`.
+async fn start_install(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<InstallBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+
+    let id = match summo_core::ModelId::parse(&body.id) {
+        Ok(id) => id,
+        Err(e) => {
+            return as_response(Err::<serde_json::Value, _>(summo_core::Error::Other(e)));
+        }
+    };
+
+    let registry = match match &body.registry {
+        Some(spec) => summo_models::RegistrySource::parse(spec)
+            .and_then(|source| summo_models::Registry::with_sources(vec![source])),
+        None => summo_models::Registry::discover(),
+    } {
+        Ok(registry) => registry,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+
+    let manifest = match registry.manifest(&id).await {
+        Ok(manifest) => manifest,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+
+    let installs = state.engine.installs().clone();
+    let job = installs.claim(&id, &manifest.name);
+    if !matches!(job.state, crate::install::State::Queued) {
+        // Already running: hand back the job in flight rather than starting a second download that
+        // would fight it for the same staging file.
+        return as_response(Ok::<_, summo_core::Error>(job));
+    }
+
+    let store = state.engine.store();
+    let downloads = state.engine.paths().downloads();
+    let home = state.engine.paths().root().to_path_buf();
+    let key = id.to_string();
+
+    tokio::spawn(async move {
+        let outcome = async {
+            let downloader = summo_models::Downloader::new(downloads)?
+                .with_credentials(summo_models::credentials::Credentials::discover(&home));
+            installs.set(
+                &key,
+                crate::install::State::Downloading { done: 0, total: 0 },
+            );
+
+            let progress = installs.clone();
+            let progress_key = key.clone();
+            store
+                .install(&manifest, &downloader, move |p| {
+                    progress.set(
+                        &progress_key,
+                        crate::install::State::Downloading {
+                            done: p.done,
+                            total: p.total,
+                        },
+                    );
+                })
+                .await?;
+            Ok::<_, summo_core::Error>(())
+        }
+        .await;
+
+        match outcome {
+            Ok(()) => installs.set(&key, crate::install::State::Done),
+            Err(e) => installs.set(
+                &key,
+                crate::install::State::Failed {
+                    // Resume is automatic, so a failure is not wasted work and the message says so.
+                    error: format!("{e} — thử lại sẽ tiếp tục từ chỗ dừng"),
+                },
+            ),
+        }
+    });
+
+    as_response(Ok::<_, summo_core::Error>(
+        state.engine.installs().get(&body.id).unwrap_or(job),
+    ))
+}
+
+async fn list_installs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(Ok::<_, summo_core::Error>(state.engine.installs().list()))
+}
+
+async fn get_install(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(
+        state
+            .engine
+            .installs()
+            .get(&id)
+            .ok_or_else(|| summo_core::Error::Other(format!("không có lần tải nào cho `{id}`"))),
+    )
 }
 
 /// Everyone Summo can recognise.
@@ -1792,7 +2108,9 @@ struct LlmBody {
 /// Read at the moment it is used rather than held, so a key rotated in the shell that launched the
 /// daemon does not require a restart to take effect on the next call.
 fn api_key() -> Option<String> {
-    std::env::var("SUMMO_API_KEY").ok().filter(|k| !k.trim().is_empty())
+    std::env::var("SUMMO_API_KEY")
+        .ok()
+        .filter(|k| !k.trim().is_empty())
 }
 
 async fn set_llm(
@@ -1845,11 +2163,14 @@ async fn test_llm(
         return rejection.into_response();
     }
 
-    let provider =
-        match summo_llm::Provider::resolve(&body.provider, body.model.as_deref(), api_key().as_deref()) {
-            Ok(provider) => provider,
-            Err(e) => return as_response(Err::<(), _>(e)),
-        };
+    let provider = match summo_llm::Provider::resolve(
+        &body.provider,
+        body.model.as_deref(),
+        api_key().as_deref(),
+    ) {
+        Ok(provider) => provider,
+        Err(e) => return as_response(Err::<(), _>(e)),
+    };
     let local = provider.is_local();
     let base_url = provider.base_url.clone();
 
@@ -2137,8 +2458,7 @@ fn start_session(
         .unwrap_or(true);
     let archive = crate::archive::AudioArchive::new(engine.paths(), &id, keep_audio);
 
-    let recorder =
-        crate::recorder::Recorder::start(engine.paths(), id, &title, &date, models)?;
+    let recorder = crate::recorder::Recorder::start(engine.paths(), id, &title, &date, models)?;
 
     Ok(ActiveSession {
         runner,
@@ -2321,7 +2641,10 @@ mod tests {
         seed_audio(&tmp, "01A", "mic", 100);
 
         let resp = client()
-            .get(format!("http://{}/meetings/01A/audio/system", server.addr()))
+            .get(format!(
+                "http://{}/meetings/01A/audio/system",
+                server.addr()
+            ))
             .bearer_auth(server.token().as_str())
             .send()
             .await
@@ -2338,7 +2661,10 @@ mod tests {
 
         for lane in ["..%2F..%2Fsecret", "..", "mic%2F..%2F..%2Fsecret"] {
             let resp = client()
-                .get(format!("http://{}/meetings/01A/audio/{lane}", server.addr()))
+                .get(format!(
+                    "http://{}/meetings/01A/audio/{lane}",
+                    server.addr()
+                ))
                 .bearer_auth(server.token().as_str())
                 .send()
                 .await
@@ -2399,7 +2725,11 @@ mod tests {
         assert_eq!(body["todo"].as_array().unwrap().len(), 1);
         assert_eq!(body["agent"].as_array().unwrap().len(), 1);
         assert_eq!(body["agent"][0]["steps"].as_array().unwrap().len(), 1);
-        assert_eq!(body["owners"].as_array().unwrap().len(), 2, "the agent is not an owner");
+        assert_eq!(
+            body["owners"].as_array().unwrap().len(),
+            2,
+            "the agent is not an owner"
+        );
     }
 
     #[tokio::test]
@@ -2435,13 +2765,22 @@ mod tests {
 
         let path = Paths::at(tmp.path()).meetings().join("01A.md");
         let body = std::fs::read_to_string(&path).unwrap();
-        assert!(body.contains("Giữ nguyên câu này."), "the notes were rewritten: {body}");
+        assert!(
+            body.contains("Giữ nguyên câu này."),
+            "the notes were rewritten: {body}"
+        );
     }
 
     #[tokio::test]
     async fn a_summary_bullet_can_become_a_task() {
         let (tmp, server) = running().await;
-        seed_with_body(&tmp, "01A", "2026-08-10T09:00:00+07:00", "Họp", "## Tóm tắt\nX.\n");
+        seed_with_body(
+            &tmp,
+            "01A",
+            "2026-08-10T09:00:00+07:00",
+            "Họp",
+            "## Tóm tắt\nX.\n",
+        );
 
         let created: serde_json::Value = client()
             .post(format!("http://{}/meetings/01A/tasks", server.addr()))
@@ -2565,7 +2904,10 @@ mod tests {
     async fn summarising_a_meeting_that_is_not_there_is_reported() {
         let (_tmp, server) = running().await;
         let resp = client()
-            .post(format!("http://{}/meetings/01NOPE/summarize", server.addr()))
+            .post(format!(
+                "http://{}/meetings/01NOPE/summarize",
+                server.addr()
+            ))
             .bearer_auth(server.token().as_str())
             .json(&serde_json::json!({}))
             .send()
@@ -2575,7 +2917,10 @@ mod tests {
         // and both must come back as a 4xx with a message rather than a 500.
         assert!(resp.status().is_client_error(), "got {}", resp.status());
         let body: serde_json::Value = resp.json().await.unwrap();
-        assert!(body["error"].is_string(), "expected an explanation, got {body}");
+        assert!(
+            body["error"].is_string(),
+            "expected an explanation, got {body}"
+        );
     }
 
     #[tokio::test]
@@ -2763,7 +3108,10 @@ mod tests {
         let id = seed_meeting(&Paths::at(tmp.path()));
 
         let langs: Vec<String> = client()
-            .get(format!("http://{}/meetings/{id}/translations", server.addr()))
+            .get(format!(
+                "http://{}/meetings/{id}/translations",
+                server.addr()
+            ))
             .bearer_auth(server.token().as_str())
             .send()
             .await
@@ -2882,7 +3230,10 @@ mod tests {
             .json()
             .await
             .unwrap();
-        assert!(jobs.is_empty(), "a rejected import must leave no job behind");
+        assert!(
+            jobs.is_empty(),
+            "a rejected import must leave no job behind"
+        );
         server.shutdown();
     }
 
@@ -2902,7 +3253,14 @@ mod tests {
     #[tokio::test]
     async fn everything_else_requires_the_token() {
         let (_tmp, server) = running().await;
-        for path in ["hw", "models", "status", "library", "library/search", "imports"] {
+        for path in [
+            "hw",
+            "models",
+            "status",
+            "library",
+            "library/search",
+            "imports",
+        ] {
             let resp = client()
                 .get(format!("http://{}/{path}", server.addr()))
                 .send()
@@ -3051,7 +3409,10 @@ mod tests {
         seed(&tmp, "01A", "2026-08-09T10:00:00+07:00", "Weekly Sync");
 
         let body: serde_json::Value = client()
-            .get(format!("http://{}/library/search?q=ngan+sach", server.addr()))
+            .get(format!(
+                "http://{}/library/search?q=ngan+sach",
+                server.addr()
+            ))
             .bearer_auth(server.token().as_str())
             .send()
             .await
@@ -3283,8 +3644,7 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), 200);
 
-        let saved =
-            summo_core::Settings::load(&Paths::at(tmp.path()).settings()).unwrap();
+        let saved = summo_core::Settings::load(&Paths::at(tmp.path()).settings()).unwrap();
         assert_eq!(saved.llm.provider, "http://127.0.0.1:1234/v1");
         assert_eq!(saved.llm.model.as_deref(), Some("qwen3-8b"));
         assert!(saved.llm.summarize_on_stop);
@@ -3303,9 +3663,11 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), 400);
 
-        let saved =
-            summo_core::Settings::load(&Paths::at(tmp.path()).settings()).unwrap();
-        assert_eq!(saved.llm.provider, "ollama", "a bad provider must not be written");
+        let saved = summo_core::Settings::load(&Paths::at(tmp.path()).settings()).unwrap();
+        assert_eq!(
+            saved.llm.provider, "ollama",
+            "a bad provider must not be written"
+        );
         server.shutdown();
     }
 
@@ -3335,7 +3697,8 @@ mod tests {
     async fn storage_is_reported_and_pruning_defaults_to_a_dry_run() {
         let (tmp, server) = running().await;
         seed(&tmp, "01A", "2020-01-01T10:00:00+07:00", "Rất cũ");
-        let audio = Paths::at(tmp.path()).audio_for(&summo_core::MeetingId::from("01A".to_string()));
+        let audio =
+            Paths::at(tmp.path()).audio_for(&summo_core::MeetingId::from("01A".to_string()));
         std::fs::create_dir_all(&audio).unwrap();
         std::fs::write(audio.join("mic.opus"), vec![0u8; 2_048]).unwrap();
 
@@ -3366,7 +3729,10 @@ mod tests {
         assert!(audio.exists(), "a default prune deleted audio");
 
         let resp = client()
-            .post(format!("http://{}/storage/prune?dry_run=false", server.addr()))
+            .post(format!(
+                "http://{}/storage/prune?dry_run=false",
+                server.addr()
+            ))
             .bearer_auth(server.token().as_str())
             .send()
             .await

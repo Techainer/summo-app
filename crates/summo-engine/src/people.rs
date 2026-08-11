@@ -336,13 +336,21 @@ mod tests {
         let ngoc = &view.people[0];
         assert_eq!(ngoc.name, "Ngọc");
         assert_eq!(ngoc.samples, 1);
-        assert_eq!(ngoc.confirmed, 1, "the user said so, the model did not guess");
+        assert_eq!(
+            ngoc.confirmed, 1,
+            "the user said so, the model did not guess"
+        );
     }
 
     #[test]
     fn a_meeting_with_no_log_has_no_unknowns() {
         let dir = voices();
-        let found = unknowns(&open(dir.path()), dir.path(), &MeetingId::from(String::from("01NOPE"))).expect("unknowns");
+        let found = unknowns(
+            &open(dir.path()),
+            dir.path(),
+            &MeetingId::from(String::from("01NOPE")),
+        )
+        .expect("unknowns");
         assert!(found.is_empty());
     }
 
@@ -396,12 +404,17 @@ mod tests {
         let meeting = MeetingId::from(String::from("01D"));
         seed_log(dir.path(), &meeting, "S2", BINH, 40.0);
 
-        let result = name_voice(&open(dir.path()), dir.path(), &meeting, "S2", "Bình").expect("name");
+        let result =
+            name_voice(&open(dir.path()), dir.path(), &meeting, "S2", "Bình").expect("name");
         assert_eq!(result.person.name, "Bình");
         assert_eq!(result.relabelled_here, 1);
 
         // And the voice is no longer a question.
-        assert!(unknowns(&open(dir.path()), dir.path(), &meeting).expect("unknowns").is_empty());
+        assert!(
+            unknowns(&open(dir.path()), dir.path(), &meeting)
+                .expect("unknowns")
+                .is_empty()
+        );
         assert_eq!(list(&open(dir.path())).expect("list").people.len(), 1);
     }
 
@@ -412,7 +425,8 @@ mod tests {
         let meeting = MeetingId::from(String::from("01E"));
         seed_log(dir.path(), &meeting, "S2", NGOC_ON_A_PHONE, 30.0);
 
-        let result = name_voice(&open(dir.path()), dir.path(), &meeting, "S2", "Ngọc").expect("name");
+        let result =
+            name_voice(&open(dir.path()), dir.path(), &meeting, "S2", "Ngọc").expect("name");
         assert_eq!(result.person.id, "ngoc");
         assert_eq!(
             list(&open(dir.path())).expect("list").people.len(),
@@ -436,7 +450,16 @@ mod tests {
     #[test]
     fn naming_in_a_meeting_with_no_log_is_an_error() {
         let dir = voices();
-        assert!(name_voice(&open(dir.path()), dir.path(), &MeetingId::from(String::from("01NOPE")), "S2", "Bình").is_err());
+        assert!(
+            name_voice(
+                &open(dir.path()),
+                dir.path(),
+                &MeetingId::from(String::from("01NOPE")),
+                "S2",
+                "Bình"
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -458,7 +481,12 @@ mod tests {
     fn an_avatar_can_be_set_and_cleared() {
         let dir = voices();
         seed_book(dir.path());
-        let with = set_avatar(&open(dir.path()), "ngoc", Some("attachments/ngoc.jpg".into())).expect("set");
+        let with = set_avatar(
+            &open(dir.path()),
+            "ngoc",
+            Some("attachments/ngoc.jpg".into()),
+        )
+        .expect("set");
         assert_eq!(with.avatar.as_deref(), Some("attachments/ngoc.jpg"));
         let without = set_avatar(&open(dir.path()), "ngoc", None).expect("clear");
         assert!(without.avatar.is_none());
@@ -468,7 +496,8 @@ mod tests {
     fn merging_folds_one_profile_into_another() {
         let dir = voices();
         let book = open(dir.path());
-        book.write(|b| b.enroll("Ngọc", &[NGOC.to_vec()], true)).expect("a");
+        book.write(|b| b.enroll("Ngọc", &[NGOC.to_vec()], true))
+            .expect("a");
         book.write(|b| b.enroll("Ngoc B", &[NGOC_ON_A_PHONE.to_vec()], true))
             .expect("b");
 
@@ -493,13 +522,16 @@ mod tests {
         let dir = voices();
         let book = open(dir.path());
         // Ngọc's profile has wrongly absorbed a voice that is not hers.
-        book.write(|b| b.enroll("Ngọc", &[NGOC.to_vec()], true)).expect("real");
-        book.write(|b| b.enroll("Ngọc", &[BINH.to_vec()], false)).expect("wrong");
+        book.write(|b| b.enroll("Ngọc", &[NGOC.to_vec()], true))
+            .expect("real");
+        book.write(|b| b.enroll("Ngọc", &[BINH.to_vec()], false))
+            .expect("wrong");
         assert_eq!(list(&open(dir.path())).expect("list").people[0].samples, 2);
 
         let meeting = MeetingId::from(String::from("01G"));
         seed_log(dir.path(), &meeting, "S3", BINH, 25.0);
-        let result = name_voice(&open(dir.path()), dir.path(), &meeting, "S3", "Bình").expect("correct");
+        let result =
+            name_voice(&open(dir.path()), dir.path(), &meeting, "S3", "Bình").expect("correct");
 
         assert_eq!(result.person.name, "Bình");
         assert!(

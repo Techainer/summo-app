@@ -21,9 +21,11 @@ pub mod board;
 pub mod collaborate;
 pub mod draft;
 pub mod imports;
+pub mod install;
 pub mod locales;
-pub mod people;
 pub mod nudge;
+pub mod onboarding;
+pub mod people;
 pub mod protocol;
 pub mod recorder;
 

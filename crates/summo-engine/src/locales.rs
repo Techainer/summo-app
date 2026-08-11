@@ -117,9 +117,7 @@ fn parse(path: &Path) -> Result<Locale> {
 pub fn is_tag(code: &str) -> bool {
     !code.is_empty()
         && code.len() <= 16
-        && code
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        && code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
 #[cfg(test)]
@@ -159,7 +157,11 @@ mod tests {
     fn a_bare_string_tree_is_accepted_too() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::at(tmp.path());
-        write(&paths.locales(), "fr.json", r#"{ "nav": { "record": "Enregistrer" } }"#);
+        write(
+            &paths.locales(),
+            "fr.json",
+            r#"{ "nav": { "record": "Enregistrer" } }"#,
+        );
 
         let loaded = load(&paths);
         assert_eq!(loaded["fr"].strings["nav"]["record"], "Enregistrer");
@@ -173,7 +175,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::at(tmp.path());
         write(&paths.locales(), "bad.json", "{ oops,,, }");
-        write(&paths.locales(), "de.json", r#"{ "nav": { "record": "Aufnehmen" } }"#);
+        write(
+            &paths.locales(),
+            "de.json",
+            r#"{ "nav": { "record": "Aufnehmen" } }"#,
+        );
 
         let loaded = load(&paths);
         assert!(!loaded.contains_key("bad"));
@@ -212,7 +218,11 @@ mod tests {
     fn a_file_with_one_string_in_it_is_valid() {
         let tmp = tempfile::tempdir().unwrap();
         let paths = Paths::at(tmp.path());
-        write(&paths.locales(), "ko.json", r#"{ "nav": { "record": "녹음" } }"#);
+        write(
+            &paths.locales(),
+            "ko.json",
+            r#"{ "nav": { "record": "녹음" } }"#,
+        );
         assert_eq!(load(&paths)["ko"].strings["nav"]["record"], "녹음");
     }
 }

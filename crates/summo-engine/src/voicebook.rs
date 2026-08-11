@@ -132,7 +132,10 @@ mod tests {
             .expect("enroll");
 
         // An empty name is refused by the book itself.
-        assert!(book.write(|b| b.enroll("  ", &[BINH.to_vec()], true)).is_err());
+        assert!(
+            book.write(|b| b.enroll("  ", &[BINH.to_vec()], true))
+                .is_err()
+        );
 
         let reopened = SharedBook::load(dir.path()).expect("reload");
         assert_eq!(reopened.read(summo_diar::VoiceBook::len), 1);

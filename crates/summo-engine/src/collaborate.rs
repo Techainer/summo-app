@@ -171,7 +171,8 @@ pub fn say(paths: &Paths, saying: Saying<'_>) -> Result<Annotation> {
     }
     if kind == Kind::Proposal && action.is_none() {
         return Err(Error::Other(
-            "a proposal must carry the action it is proposing, or there is nothing to accept".into(),
+            "a proposal must carry the action it is proposing, or there is nothing to accept"
+                .into(),
         ));
     }
 
@@ -295,7 +296,10 @@ mod tests {
         );
 
         accept(&paths, "01A", &proposal.id).expect("first");
-        assert!(accept(&paths, "01A", &proposal.id).is_err(), "accepted twice");
+        assert!(
+            accept(&paths, "01A", &proposal.id).is_err(),
+            "accepted twice"
+        );
         assert_eq!(crate::board::read(&paths).expect("board").todo.len(), 1);
     }
 

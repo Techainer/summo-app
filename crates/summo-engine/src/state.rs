@@ -45,6 +45,7 @@ struct Inner {
     hw: HwProfile,
     status: RwLock<SessionStatus>,
     imports: crate::imports::Imports,
+    installs: crate::install::Installs,
 }
 
 impl EngineState {
@@ -56,6 +57,7 @@ impl EngineState {
                 hw: HwProfile::detect(),
                 status: RwLock::new(SessionStatus::Idle),
                 imports: crate::imports::Imports::new(),
+                installs: crate::install::Installs::new(),
             }),
         })
     }
@@ -65,6 +67,13 @@ impl EngineState {
     #[must_use]
     pub fn imports(&self) -> &crate::imports::Imports {
         &self.inner.imports
+    }
+
+    /// Model downloads running in this daemon. Shared for the same reason imports are: a download
+    /// started in one window has to be visible in every other.
+    #[must_use]
+    pub fn installs(&self) -> &crate::install::Installs {
+        &self.inner.installs
     }
 
     #[must_use]

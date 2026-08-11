@@ -182,7 +182,11 @@ mod tests {
         // is wrong once every sixteen runs: when the token already ends in that character, the
         // "almost" token is the real one, and the test asserts a valid credential is rejected.
         let prefix = &token.as_str()[..TOKEN_BYTES * 2 - 1];
-        let last = token.as_str().chars().next_back().expect("a token is not empty");
+        let last = token
+            .as_str()
+            .chars()
+            .next_back()
+            .expect("a token is not empty");
         let almost = format!("{prefix}{}", if last == '0' { '1' } else { '0' });
         assert_ne!(almost, token.as_str(), "the near miss must actually differ");
         assert!(!token.matches(&almost));
