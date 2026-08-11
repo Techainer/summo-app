@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useT } from "../../i18n/context";
 import { useIsNarrow } from "../../lib/breakpoint";
+import { SPRING } from "../../lib/motion";
 import { Sheet } from "../ui";
 import { Sidebar, type NavItem } from "./Sidebar";
 
@@ -79,7 +80,7 @@ export function AppShell({
             initial={{ width: 0 }}
             animate={{ width: 270 }}
             exit={{ width: 0 }}
-            transition={{ type: "spring", stiffness: 420, damping: 40 }}
+            transition={SPRING}
           >
             <div className="h-full w-[270px]">{sidebar}</div>
           </motion.aside>

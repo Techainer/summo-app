@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useT } from "../../i18n/context";
+import { GENTLE, METER, listItem } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
 import {
   ImportClient,
@@ -128,9 +129,11 @@ export function ImportPanel() {
             return (
               <motion.li
                 key={job.id}
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
+                variants={listItem}
+                initial="hidden"
+                animate="shown"
+                exit="gone"
+                transition={GENTLE}
                 className="rounded-xl border border-line bg-bg-soft p-3"
               >
                 <div className="flex items-baseline justify-between gap-3">
@@ -163,7 +166,7 @@ export function ImportPanel() {
                       transition={
                         pct === null
                           ? { repeat: Infinity, duration: 1.2, ease: "linear" }
-                          : { duration: 0.3 }
+                          : METER
                       }
                       style={pct === null ? { width: "40%" } : undefined}
                     />

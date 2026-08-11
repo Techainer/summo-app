@@ -8,6 +8,9 @@ import { deviceWarning } from "../../lib/session";
 import { RecordButton } from "../RecordButton";
 import { StatusBar } from "../StatusBar";
 import { Waveform } from "../Waveform";
+import { AnimatePresence, motion } from "motion/react";
+
+import { SNAPPY, screen as screenVariants } from "../../lib/motion";
 import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
 import { NudgeBar } from "./NudgeBar";
@@ -176,7 +179,25 @@ export function RootLayout({ children }: { children: ReactNode }) {
           onNavOpenChange={setNavOpen}
           header={header}
         >
-          <FirstRun>{children}</FirstRun>
+          <FirstRun>
+            {/* Keyed on the path so a route change is a change of element, which is what gives
+                `AnimatePresence` something to animate out. `mode="wait"` rather than a cross-fade:
+                two screens overlapping mid-transition means two scroll positions and two sets of
+                focusable controls, and a keyboard user can tab into the screen that is leaving. */}
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={pathname}
+                variants={screenVariants}
+                initial="hidden"
+                animate="shown"
+                exit="gone"
+                transition={SNAPPY}
+                className="h-full"
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </FirstRun>
         </AppShell>
       </div>
       <StatusBar

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useT } from "../../i18n/context";
+import { GENTLE, collapse } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
 import { NudgeClient, POLL_MS, canNotify, iconFor, notify, type Nudge } from "../../lib/nudges";
 
@@ -58,10 +59,11 @@ export function NudgeBar() {
       {queue.map((nudge) => (
         <motion.div
           key={nudge.key}
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: "auto", opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.18 }}
+          variants={collapse}
+          initial="hidden"
+          animate="shown"
+          exit="gone"
+          transition={GENTLE}
           className="overflow-hidden border-b border-accent/25 bg-accent-soft"
         >
           <div className="flex items-center gap-3 px-4 py-2">

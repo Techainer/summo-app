@@ -2,6 +2,7 @@ import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { motion } from "motion/react";
 import { useId } from "react";
 
+import { SPRING } from "../../lib/motion";
 import { cn } from "../../lib/cn";
 
 export interface Segment<T extends string> {
@@ -67,7 +68,7 @@ export function SegmentedControl<T extends string>({
               <motion.span
                 layoutId={layoutId}
                 className="absolute inset-0 rounded-full bg-accent"
-                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                transition={SPRING}
               />
             )}
             <span className="relative">{option.label}</span>

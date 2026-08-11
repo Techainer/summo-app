@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
 
+import { SNAPPY, SPRING } from "../../lib/motion";
 import { cn } from "../../lib/cn";
 
 /**
@@ -47,7 +48,7 @@ export function Sheet({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                transition={SNAPPY}
               />
             </Dialog.Overlay>
             <Dialog.Content asChild>
@@ -63,7 +64,7 @@ export function Sheet({
                 initial={enter}
                 animate={settled}
                 exit={enter}
-                transition={{ type: "spring", stiffness: 380, damping: 38 }}
+                transition={SPRING}
               >
                 {side === "bottom" && (
                   <div className="flex justify-center pt-2.5" aria-hidden="true">

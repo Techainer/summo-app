@@ -30,8 +30,14 @@ console.log(`title: ${await page.locator('h1').innerText()}`);
 if (await page.getByRole('button', { name: 'Phát' }).count() === 0) problems.push('no play button');
 if (await page.getByRole('slider', { name: 'Vị trí phát' }).count() === 0) problems.push('no scrubber');
 
+// The rail opens on comments, so the thread is what a reader sees first.
+if (await page.getByRole('radio', { name: 'Bình luận' }).count() === 0) {
+  problems.push('no comments pane');
+}
+
 // Radix renders a single-choice toggle group as radios; that is correct, and the test should say so.
-await page.getByRole('radio', { name: 'Transcript' }).click();
+// The label is translated now — this suite runs in Vietnamese, where it reads "Bản ghi".
+await page.getByRole('radio', { name: 'Bản ghi' }).click();
 await page.waitForTimeout(400);
 
 const chips = await page.getByRole('button', { name: /Nghe từ/ }).count();

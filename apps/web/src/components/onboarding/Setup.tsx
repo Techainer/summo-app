@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
+import { METER } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
 import {
   OnboardingClient,
@@ -181,7 +182,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
                               transition={
                                 pct === null
                                   ? { repeat: Infinity, duration: 1.2, ease: "linear" }
-                                  : { duration: 0.3 }
+                                  : METER
                               }
                               style={pct === null ? { width: "40%" } : undefined}
                             />

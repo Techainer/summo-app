@@ -12,6 +12,7 @@ import {
   writtenAt,
   type Annotation,
 } from "../../lib/comments";
+import { GENTLE, listItem } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
 import { Button } from "../ui";
 
@@ -117,9 +118,11 @@ export function Comments({
             return (
               <motion.li
                 key={annotation.id}
-                initial={{ opacity: 0, y: -3 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
+                variants={listItem}
+                initial="hidden"
+                animate="shown"
+                exit="gone"
+                transition={GENTLE}
                 className={`group rounded-xl border p-2.5 ${
                   fromAgent ? "border-accent/30 bg-accent-soft" : "border-line bg-bg-soft"
                 }`}

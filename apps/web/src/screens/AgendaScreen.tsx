@@ -5,6 +5,7 @@ import { Button } from "../components/ui";
 import { useI18n } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
 import { pickFile } from "../lib/imports";
+import { GENTLE, listItem } from "../lib/motion";
 import { AgendaClient, byDay, clock, length, service, type AgendaEntry } from "../lib/notes";
 
 /**
@@ -139,8 +140,10 @@ export function AgendaScreen() {
                 {items.map((entry) => (
                   <motion.li
                     key={`${entry.calendar}:${entry.uid}:${entry.start_epoch}`}
-                    initial={{ opacity: 0, y: -2 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    variants={listItem}
+                    initial="hidden"
+                    animate="shown"
+                    transition={GENTLE}
                     className="flex items-baseline gap-3 rounded-xl border border-line bg-bg-soft px-3 py-2"
                   >
                     <span className="tabular w-24 shrink-0 text-sm text-fg-dim">
