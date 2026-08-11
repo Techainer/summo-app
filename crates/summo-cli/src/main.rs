@@ -10,6 +10,8 @@ use summo_models::{Downloader, Manifest, ModelStore, Registry, RegistrySource, h
 
 mod ai;
 mod importer;
+#[cfg(feature = "dub")]
+mod dub;
 mod library;
 
 #[cfg(feature = "transcribe")]
@@ -90,6 +92,28 @@ enum Command {
     /// rewrite somebody's meeting notes.
     #[cfg(feature = "mcp")]
     Mcp,
+
+    /// Speak a meeting's translation over its own recording.
+    ///
+    /// Needs a translation on disk — `summo translate` first — and a VITS voice directory.
+    #[cfg(feature = "dub")]
+    Dub {
+        /// Meeting id.
+        meeting: String,
+        /// Language to speak, as it was translated.
+        #[arg(long)]
+        lang: String,
+        /// Directory holding the voice's model files.
+        #[arg(long)]
+        voice: std::path::PathBuf,
+        #[arg(long, default_value = "dub.wav")]
+        out: std::path::PathBuf,
+        /// Gain for the original underneath. 0 removes it.
+        #[arg(long, default_value_t = 0.18)]
+        under: f32,
+        #[arg(long, default_value_t = 4)]
+        threads: usize,
+    },
 
     /// Rank the models available for a language on this machine, and say why.
     Recommend {
@@ -266,6 +290,25 @@ async fn main() -> Result<()> {
         } => serve(&paths, port, no_open, dev).await,
         #[cfg(feature = "mcp")]
         Command::Mcp => mcp(&paths),
+        #[cfg(feature = "dub")]
+        Command::Dub {
+            meeting,
+            lang,
+            voice,
+            out,
+            under,
+            threads,
+        } => dub::run(
+            &paths,
+            &dub::Options {
+                meeting,
+                lang,
+                voice,
+                out,
+                under,
+                threads,
+            },
+        ),
         Command::Hw => show_hw(),
         Command::Recommend { lang, registry } => {
             show_recommendation(&paths, &lang, registry.as_deref()).await

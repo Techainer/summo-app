@@ -28,7 +28,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-FEATURES="bundled,mcp,models"
+FEATURES="bundled,mcp,models,dub"
 SUFFIX=""
 if [[ "${1:-}" == "--no-models" ]]; then
   FEATURES="bundled,mcp"

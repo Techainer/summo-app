@@ -18,6 +18,8 @@ serve = ["dep:summo-engine"]
 # `summo mcp`: the vault as tools for an MCP client. Tiny and pure Rust, so it is on by default —
 # the one-binary story only holds if the binary actually has everything in it.
 mcp = ["dep:summo-mcp"]
+# `summo dub`: speak a translation over the recording it came from.
+dub = ["dep:summo-tts", "summo-tts/sherpa", "dep:summo-engine", "dep:hound"]
 bundled = ["serve", "summo-engine/bundled"]
 # Real recognition inside `summo serve`.
 models = ["serve", "summo-engine/models"]
@@ -35,6 +37,7 @@ summo-vault.workspace = true
 summo-engine = { workspace = true, optional = true }
 summo-mcp = { workspace = true, optional = true }
 summo-pipeline = { workspace = true, optional = true }
+summo-tts = { workspace = true, optional = true }
 time.workspace = true
 summo-asr = { workspace = true, optional = true }
 summo-vad = { workspace = true, optional = true }

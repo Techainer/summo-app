@@ -4707,6 +4707,7 @@ dependencies = [
  "summo-media",
  "summo-models",
  "summo-pipeline",
+ "summo-tts",
  "summo-vad",
  "summo-vault",
  "tempfile",
