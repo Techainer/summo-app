@@ -42,6 +42,7 @@ summo-diar.workspace = true
 summo-agent.workspace = true
 summo-media.workspace = true
 summo-calendar.workspace = true
+summo-pipeline.workspace = true
 
 hound.workspace = true
 

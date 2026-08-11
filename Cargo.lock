@@ -4769,6 +4769,7 @@ dependencies = [
  "summo-llm",
  "summo-media",
  "summo-models",
+ "summo-pipeline",
  "summo-vad",
  "summo-vault",
  "tempfile",
@@ -4839,6 +4840,16 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "summo-pipeline"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "summo-core",
+ "tempfile",
  "tracing",
 ]
 

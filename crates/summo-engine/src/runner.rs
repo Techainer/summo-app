@@ -345,6 +345,7 @@ mod tests {
             attribution: None,
             redistributable: true,
             gated: false,
+            installed_variant: None,
             size_bytes: 0,
             profile: summo_models::Profile::default(),
             files: vec![],

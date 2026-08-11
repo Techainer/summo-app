@@ -37,6 +37,8 @@ pub mod recorder;
 pub mod offline;
 #[cfg(feature = "models")]
 pub mod runner;
+#[cfg(feature = "models")]
+pub mod stages;
 pub mod server;
 pub mod state;
 pub mod summarize;
