@@ -78,6 +78,11 @@ tower-http = { version = "0.6", features = ["cors", "fs"] }
 sha2 = "0.10"
 hex = "0.4"
 blake3 = "1"
+# Sync encrypts every file before it leaves the machine, so the relay stores ciphertext it cannot
+# read. Pure Rust, no C dependency: this has to cross-compile to the phone alongside everything
+# else, and a native crypto library is the thing most likely to stop it.
+chacha20poly1305 = "0.10"
+argon2 = "0.5"
 
 # --- util ---
 clap = { version = "4", features = ["derive", "env"] }

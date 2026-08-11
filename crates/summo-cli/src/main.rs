@@ -9,6 +9,7 @@ use summo_core::{ModelId, paths::Paths};
 use summo_models::{Downloader, Manifest, ModelStore, Registry, RegistrySource, hw::HwProfile};
 
 mod ai;
+mod sync;
 mod importer;
 #[cfg(feature = "dub")]
 mod dub;
@@ -157,6 +158,20 @@ enum Command {
         dry_run: bool,
         #[command(flatten)]
         provider: ai::ProviderArgs,
+    },
+
+    /// Keep this vault in step with a folder — a NAS mount, a synced drive, a USB stick.
+    ///
+    /// Everything is encrypted before it leaves, so whatever holds the folder cannot read it.
+    Sync {
+        /// The folder to sync through.
+        to: std::path::PathBuf,
+        /// A name for this machine, used in the name of any conflict copy it produces.
+        #[arg(long)]
+        machine: Option<String>,
+        /// Show what would happen and change nothing.
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Ask a question about the meetings on disk.
@@ -338,6 +353,11 @@ async fn main() -> Result<()> {
             };
             ai::summarize(&meeting, style, &language, &provider, !dry_run).await
         }
+        Command::Sync {
+            to,
+            machine,
+            dry_run,
+        } => sync::run(&paths, &to, machine.as_deref(), dry_run),
         Command::Ask {
             question,
             language,

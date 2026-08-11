@@ -8,3 +8,18 @@ repository.workspace = true
 
 [dependencies]
 summo-core.workspace = true
+summo-vault.workspace = true
+
+argon2.workspace = true
+blake3.workspace = true
+chacha20poly1305.workspace = true
+getrandom.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+walkdir.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+pretty_assertions.workspace = true
