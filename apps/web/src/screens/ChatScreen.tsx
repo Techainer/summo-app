@@ -77,9 +77,9 @@ export function ChatScreen() {
       <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto">
         {history.length === 0 && (
           <p className="mt-16 text-center text-fg-faint">
-            Hỏi bất cứ điều gì đã được nói trong các buổi họp.
+            {t("chat.intro")}
             <br />
-            Câu trả lời luôn kèm buổi họp mà nó dựa vào.
+            {t("chat.intro_2")}
           </p>
         )}
 
@@ -151,7 +151,7 @@ export function ChatScreen() {
           className="flex-1 rounded-lg border border-line bg-bg-soft px-3 py-2 text-sm"
         />
         <Button variant="primary" type="submit" busy={busy}>
-          Hỏi
+          {t("chat.ask")}
         </Button>
       </form>
     </div>

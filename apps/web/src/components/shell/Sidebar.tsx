@@ -98,7 +98,7 @@ export function Sidebar({
         <ul className="space-y-0.5">
           <li>
             <FolderRow
-              label="Tất cả"
+              label={t("nav.all_folders")}
               depth={0}
               selected={activeFolder === null}
               onSelect={() => onSelectFolder(null)}
@@ -118,7 +118,7 @@ export function Sidebar({
             </li>
           ))}
           {rows.length === 0 && (
-            <li className="px-2 py-1 text-[13px] text-fg-faint">Chưa có thư mục nào</li>
+            <li className="px-2 py-1 text-[13px] text-fg-faint">{t("nav.no_folders")}</li>
           )}
         </ul>
       </nav>

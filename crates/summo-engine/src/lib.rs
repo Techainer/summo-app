@@ -15,6 +15,7 @@
 
 pub mod agenda;
 pub mod archive;
+pub mod assets;
 pub mod ask;
 pub mod audio_stream;
 pub mod auth;

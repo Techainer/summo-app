@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useI18n, useT } from "../i18n/context";
+import { About } from "./About";
 import { url } from "../lib/library";
 import type { Handshake } from "../lib/engine";
 
@@ -111,8 +112,9 @@ export function Settings({ handshake }: { handshake: Handshake }) {
 
       <h2>{t("settings.llm_heading")}</h2>
       <p className="hint">
-        Nhận dạng giọng nói và tách người nói <b>{t("settings.always_local")}</b>. Chỉ tóm tắt, dịch và hỏi
-        đáp mới dùng mô hình ngôn ngữ — và bạn chọn nó chạy ở đâu.
+        {t("settings.llm_hint_head")}
+        <b>{t("settings.always_local")}</b>
+        {t("settings.llm_hint_tail")}
       </p>
 
       <label className="field">
@@ -183,7 +185,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
             ? t("settings.key_present")
             : t("settings.key_missing")}
           {" "}
-          Khoá không được lưu vào tệp cài đặt — nếu lưu, nó sẽ theo vào bản sao lưu và bản đồng bộ.
+          {t("settings.key_not_stored")}
         </p>
       )}
 
@@ -205,6 +207,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
           <span className="field-hint">{result.detail}</span>
         </p>
       )}
+      <About />
     </div>
   );
 }

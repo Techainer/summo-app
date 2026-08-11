@@ -32,8 +32,23 @@ import vi from "./vi.json";
 /** A flat key-to-string map. Nested JSON is flattened on load, so `t("meeting.stop")` works. */
 export type Catalog = Record<string, string>;
 
-/** The language the strings were written in, and the fallback of last resort. */
+/**
+ * The language the strings were written in, and the fallback of last resort.
+ *
+ * Not the same thing as the default. Vietnamese is where the wording came from, so a key a locale
+ * has not translated falls back to it rather than to a key name — but a first-time user with no
+ * saved choice and an English browser gets {@link DEFAULT}.
+ */
 export const SOURCE = "vi";
+
+/**
+ * What to show when nothing else decides.
+ *
+ * English, because it is the language most people who arrive without a preference can read. The
+ * browser's own language still wins over it, so a Vietnamese machine still opens in Vietnamese —
+ * this only settles the case where the browser asks for something Summo does not have.
+ */
+export const DEFAULT = "en";
 
 export interface Language {
   code: string;
@@ -174,8 +189,8 @@ export function translator(
  * The locale to start in.
  *
  * A saved choice wins; otherwise the browser's language, matched on the primary subtag so `en-GB`
- * finds `en`; otherwise Vietnamese. Never throws — a locale lookup failing must not stop the app
- * from rendering.
+ * finds `en`; otherwise {@link DEFAULT}. Never throws — a locale lookup failing must not stop the
+ * app from rendering.
  */
 export function detectLocale(available: string[], saved?: string | null): string {
   if (saved && available.includes(saved)) return saved;
@@ -190,7 +205,8 @@ export function detectLocale(available: string[], saved?: string | null): string
     const primary = tag.split("-")[0];
     if (primary && available.includes(primary)) return primary;
   }
-  return available.includes(SOURCE) ? SOURCE : (available[0] ?? SOURCE);
+  if (available.includes(DEFAULT)) return DEFAULT;
+  return available.includes(SOURCE) ? SOURCE : (available[0] ?? DEFAULT);
 }
 
 /**

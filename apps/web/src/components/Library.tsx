@@ -185,13 +185,13 @@ export function Library({ client, onRecord, onOpen }: Props) {
 
           {hits === null && view?.total === 0 && (
             <p className="empty">
-              Chưa có cuộc họp nào.
+              {t("library.empty")}
               <button type="button" className="link" onClick={onRecord}>
-                Ghi buổi đầu tiên
+                {t("library.empty_cta")}
               </button>
             </p>
           )}
-          {hits?.length === 0 && <p className="empty">Không tìm thấy “{query}”.</p>}
+          {hits?.length === 0 && <p className="empty">{t("library.no_hits", { query })}</p>}
         </div>
 
         {view && view.folders.length > 1 && hits === null && (
@@ -218,7 +218,7 @@ export function Library({ client, onRecord, onOpen }: Props) {
             user can go and fix it. */}
         {view?.skipped.map((s) => (
           <p key={s.path} className="banner warn small">
-            Không đọc được {s.path}: {s.reason}
+            {t("library.unreadable", { path: s.path, reason: s.reason })}
           </p>
         ))}
       </aside>
@@ -299,6 +299,7 @@ function SearchResults({
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
+  const t = useT();
   return (
     <>
       {hits.map((hit) => (
@@ -315,7 +316,7 @@ function SearchResults({
             </p>
           ))}
           {hit.matches > hit.excerpts.length && (
-            <p className="excerpt more">+{hit.matches - hit.excerpts.length} dòng nữa</p>
+            <p className="excerpt more">{t("library.more_lines", { count: hit.matches - hit.excerpts.length })}</p>
           )}
         </section>
       ))}
@@ -341,10 +342,10 @@ function Dashboard({ stats, onRecord }: { stats?: Stats; onRecord: () => void })
         <Tile label={t("meeting.no_summary")} value={String(stats.without_summary)} />
       </div>
       <p className="hint">
-        Mọi thứ nằm trong <code>~/.summo/vault</code> — mở bằng Obsidian, grep, hay sao lưu tuỳ bạn.
+        {t("library.vault_hint")}
       </p>
       <button type="button" className="primary" onClick={onRecord}>
-        Ghi cuộc họp mới
+        {t("library.record_new")}
       </button>
     </div>
   );
@@ -407,7 +408,7 @@ function MeetingPane({
         <p className="meeting-meta">
           {dayLabel(summary.day, localDay())} · {timeOfDay(summary.date)} ·{" "}
           {formatDuration(summary.duration)}
-          {detail.audio.length > 0 && ` · ${detail.audio.length} bản ghi âm`}
+          {detail.audio.length > 0 && ` · ${t("library.recordings", { count: detail.audio.length })}`}
         </p>
 
         <div className="meeting-actions">
@@ -435,17 +436,17 @@ function MeetingPane({
           </label>
           {confirming ? (
             <span className="confirm">
-              Chuyển vào thùng rác?
+              {t("library.trash_confirm")}
               <button type="button" className="danger" onClick={onTrash} disabled={busy}>
-                Chuyển
+                {t("library.trash_yes")}
               </button>
               <button type="button" onClick={() => setConfirming(false)}>
-                Huỷ
+                {t("common.cancel")}
               </button>
             </span>
           ) : (
             <button type="button" className="ghost" onClick={() => setConfirming(true)}>
-              Xoá
+              {t("common.delete")}
             </button>
           )}
         </div>
@@ -459,7 +460,7 @@ function MeetingPane({
       ))}
 
       <section className="meeting-section">
-        <h3>Bản ghi ({detail.transcript.length} dòng)</h3>
+        <h3>{t("library.transcript_lines", { count: detail.transcript.length })}</h3>
         {detail.transcript.length === 0 && <p className="empty">{t("library.no_content")}</p>}
         <ol className="lines">
           {detail.transcript.map((segment) => (

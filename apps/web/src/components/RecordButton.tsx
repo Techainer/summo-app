@@ -29,7 +29,7 @@ export function RecordButton({
       {recording ? (
         <span className="record-time">{formatTime(elapsed)}</span>
       ) : (
-        <span>Ghi</span>
+        <span>{t("record.short")}</span>
       )}
     </button>
   );

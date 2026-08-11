@@ -16,7 +16,9 @@
     "folders": "Thư mục",
     "show_sidebar": "Hiện thanh bên",
     "hide_sidebar": "Ẩn thanh bên",
-    "screens": "Màn hình"
+    "screens": "Màn hình",
+    "all_folders": "Tất cả",
+    "no_folders": "Chưa có thư mục nào"
   },
   "record": {
     "source": "Nguồn",
@@ -36,7 +38,8 @@
     "expand_window": "Mở rộng cửa sổ",
     "translate_live": "Dịch trực tiếp",
     "translate_hint": "Mỗi câu nói xong sẽ được dịch và hiện ngay dưới câu gốc.",
-    "translate_needs_system": "Đang bật dịch nhưng chỉ nghe micro — bật thêm Hệ thống để dịch thứ đang phát."
+    "translate_needs_system": "Đang bật dịch nhưng chỉ nghe micro — bật thêm Hệ thống để dịch thứ đang phát.",
+    "short": "Ghi"
   },
   "import": {
     "title": "Nhập bản ghi có sẵn",
@@ -110,7 +113,10 @@
     "opening": "Đang mở…",
     "no_plan": "Agent chưa lập kế hoạch cho việc này.",
     "steps_example": "đã quét ghi chú → đang soạn sự kiện",
-    "show_steps_n": "Xem {count} bước"
+    "show_steps_n": "Xem {count} bước",
+    "agent_empty_head": "Agent chưa có việc nào. Giao việc bằng cách viết",
+    "agent_empty_tail": "trong ghi chú buổi họp.",
+    "run": "Chạy"
   },
   "chat": {
     "title": "Hỏi đáp",
@@ -120,7 +126,9 @@
     "sources": "Nguồn",
     "thinking": "Đang tìm…",
     "heading": "Hỏi kho họp",
-    "searching": "Đang tìm trong kho họp…"
+    "searching": "Đang tìm trong kho họp…",
+    "intro": "Hỏi bất cứ điều gì đã được nói trong các buổi họp.",
+    "intro_2": "Câu trả lời luôn kèm buổi họp mà nó dựa vào."
   },
   "library": {
     "title": "Thư viện",
@@ -143,7 +151,17 @@
     "recorded": "Đã ghi",
     "meeting": "Cuộc họp",
     "people": "Người",
-    "last_7": "7 ngày qua"
+    "last_7": "7 ngày qua",
+    "empty_cta": "Ghi buổi đầu tiên",
+    "no_hits": "Không tìm thấy “{query}”.",
+    "unreadable": "Không đọc được {path}: {reason}",
+    "more_lines": "+{count} dòng nữa",
+    "vault_hint": "Mọi thứ nằm trong ~/.summo/vault — mở bằng Obsidian, grep, hay sao lưu tuỳ bạn.",
+    "record_new": "Ghi cuộc họp mới",
+    "recordings": "{count} bản ghi âm",
+    "trash_confirm": "Chuyển vào thùng rác?",
+    "trash_yes": "Chuyển",
+    "transcript_lines": "Bản ghi ({count} dòng)"
   },
   "analytics": {
     "title": "Thống kê",
@@ -160,7 +178,10 @@
     "empty": "Không có buổi họp nào trong khoảng này.",
     "days_7": "7 ngày",
     "days_30": "30 ngày",
-    "today": "Hôm nay"
+    "today": "Hôm nay",
+    "people_count": "{count} người",
+    "tasks_count": "{count} việc",
+    "quiet_days": "Không họp: {days}"
   },
   "people": {
     "title": "Người",
@@ -175,7 +196,19 @@
     "similarity_low": "hơi giống",
     "known": "Giọng đã biết",
     "unknown": "Chưa biết là ai",
-    "remove": "Xoá khỏi danh sách giọng nói"
+    "remove": "Xoá khỏi danh sách giọng nói",
+    "forget_confirm": "Xoá {name} khỏi danh sách giọng nói?",
+    "forget_note": "Các biên bản cũ vẫn giữ tên. Summo sẽ không tự nhận ra giọng này nữa.",
+    "utterances": "{count} câu",
+    "maybe": "Có thể là",
+    "name_this": "Đặt tên cho {label}",
+    "identified_by": "Nhận diện bằng {space}",
+    "empty": "Chưa có ai. Ghi một buổi họp, rồi đặt tên cho giọng nói — lần sau Summo tự nhận ra.",
+    "rename_who": "Đổi tên {name}",
+    "forget_who": "Xoá {name}",
+    "samples": "{count} mẫu giọng",
+    "confirmed_by_you": "{count} do bạn xác nhận",
+    "voice_styles": "{count} kiểu giọng"
   },
   "settings": {
     "title": "Cài đặt",
@@ -204,7 +237,10 @@
     "address": "Địa chỉ",
     "summarise_on_stop": "Tự tóm tắt khi dừng ghi",
     "sent_here": "Văn bản bản ghi sẽ được gửi tới đây. Âm thanh thì không bao giờ.",
-    "local_only_comma": "Chạy trên máy bạn, không có gì rời khỏi máy."
+    "local_only_comma": "Chạy trên máy bạn, không có gì rời khỏi máy.",
+    "llm_hint_tail": ". Chỉ tóm tắt, dịch và hỏi đáp mới dùng mô hình ngôn ngữ — và bạn chọn nó chạy ở đâu.",
+    "llm_hint_head": "Nhận dạng giọng nói và tách người nói ",
+    "key_not_stored": "Khoá không được lưu vào tệp cài đặt — nếu lưu, nó sẽ theo vào bản sao lưu và bản đồng bộ."
   },
   "status": {
     "top_bar": "Thanh trên cùng",
@@ -213,7 +249,8 @@
     "recorded": "Đã ghi",
     "error": "Lỗi",
     "speakers_one": "{count} người nói",
-    "speakers_other": "{count} người nói"
+    "speakers_other": "{count} người nói",
+    "behind": "đang chậm hơn thời gian thực"
   },
   "nudge": {
     "dismiss": "Bỏ qua: {title}",
@@ -288,5 +325,15 @@
     "tasks_body": "Việc gán cho người thì nằm ở bảng của mọi người. Việc gán cho @agent thì agent tự làm và ghi lại từng bước.",
     "ask_title": "Hỏi lại mọi thứ đã nói",
     "ask_body": "Hỏi đáp tìm trong tất cả buổi họp và trả lời kèm mốc thời gian bấm được."
+  },
+  "about": {
+    "title": "Về Summo",
+    "built_by": "Xây dựng bởi",
+    "role": "CEO, Techainer",
+    "company_line": "AI solutions to empower humanity's potential",
+    "site": "techainer.com",
+    "local_promise": "Nhận dạng giọng nói và tách người nói chạy hoàn toàn trên máy bạn. Âm thanh không rời khỏi máy.",
+    "version": "Phiên bản {version}",
+    "source": "Mã nguồn mở, AGPL-3.0"
   }
 }

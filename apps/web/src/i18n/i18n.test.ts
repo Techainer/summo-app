@@ -2,6 +2,7 @@ import { describe, expect, it, vi as vitest } from "vitest";
 
 import {
   BUILT_IN,
+  DEFAULT,
   catalogFor,
   detectLocale,
   flatten,
@@ -143,12 +144,24 @@ describe("detectLocale", () => {
     expect(detectLocale(available, "ja")).not.toBe("ja");
   });
 
-  it("falls back to Vietnamese, which is the language the app was written in", () => {
-    expect(detectLocale(available, null)).toBe(
-      typeof navigator !== "undefined" && navigator.languages?.some((l) => l.startsWith("en"))
-        ? "en"
-        : "vi",
+  // The browser still wins: a Vietnamese machine opens in Vietnamese. This only settles the case
+  // where the browser asks for a language Summo does not have.
+  it("falls back to English when the browser asks for something we do not have", () => {
+    expect(detectLocale(["vi", "en"], null)).toBe(
+      typeof navigator !== "undefined" && navigator.languages?.some((l) => l.startsWith("vi"))
+        ? "vi"
+        : "en",
     );
+  });
+
+  it("still falls back to the source language when English is not installed", () => {
+    expect(detectLocale(["vi"], null)).toBe("vi");
+  });
+});
+
+describe("defaults", () => {
+  it("ships the default language", () => {
+    expect(Object.keys(BUILT_IN)).toContain(DEFAULT);
   });
 });
 

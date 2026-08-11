@@ -9,6 +9,10 @@ repository.workspace = true
 
 [features]
 default = []
+# Compile the built interface into the binary, so one executable is the whole app — the way
+# `ollama` is one executable. Requires `apps/web/dist` to exist, which is why it is not default:
+# `cargo test` on a machine with no Node must still work.
+bundled = ["dep:include_dir"]
 # Real recognition. Off by default so the protocol and server can be built and tested anywhere.
 models = [
     "dep:summo-vad",
@@ -55,6 +59,7 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 time.workspace = true
 getrandom.workspace = true
+include_dir = { version = "0.7.4", optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros", "test-util"] }

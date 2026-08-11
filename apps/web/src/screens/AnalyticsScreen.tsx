@@ -88,7 +88,7 @@ export function AnalyticsScreen() {
 
           {report.people.length > 0 && (
             <Card>
-              <CardHeader title={t("analytics.time_with")} count={`${report.people.length} người`} />
+              <CardHeader title={t("analytics.time_with")} count={t("analytics.people_count", { count: report.people.length })} />
               <CardBody className="space-y-2">
                 {report.people.slice(0, 8).map((person) => (
                   <div key={person.name} className="flex items-center gap-3">
@@ -112,7 +112,7 @@ export function AnalyticsScreen() {
             <Card>
               <CardHeader
                 title={t("analytics.todo")}
-                count={`${report.open_actions.length} việc`}
+                count={t("analytics.tasks_count", { count: report.open_actions.length })}
               />
               <CardBody className="space-y-1.5">
                 {report.open_actions.map((action, i) => (
@@ -135,7 +135,7 @@ export function AnalyticsScreen() {
 
           {report.quiet_days.length > 0 && (
             <p className="text-[13px] text-fg-faint">
-              Không họp: {report.quiet_days.join(", ")}
+              {t("analytics.quiet_days", { days: report.quiet_days.join(", ") })}
             </p>
           )}
         </>

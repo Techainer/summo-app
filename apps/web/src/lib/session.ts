@@ -155,9 +155,23 @@ export function deviceWarning(state: SessionState): string | null {
 
 /** Read the daemon's address from the URL, for development and for the desktop shell. */
 export function handshakeFromLocation(search: string): Handshake | null {
+  // Injected by the daemon when it serves the page itself — see `summo_engine::assets`. Preferred
+  // over the query string, because a token in a URL lands in history, in the window title and in
+  // whatever the user pastes into a bug report. The query string stays for the Tauri webview,
+  // which is loaded from a custom scheme and has nowhere to inject into.
+  const injected = (globalThis as { __SUMMO__?: unknown }).__SUMMO__;
+  const fromInjection = readHandshake(injected);
+  if (fromInjection) return fromInjection;
+
   const params = new URLSearchParams(search);
-  const port = Number(params.get("port"));
-  const token = params.get("token");
-  if (!Number.isInteger(port) || port <= 0 || !token) return null;
+  return readHandshake({ port: Number(params.get("port")), token: params.get("token") });
+}
+
+/** Accept a handshake only if both halves are usable; half of one is not a connection. */
+function readHandshake(value: unknown): Handshake | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { port, token } = value as { port?: unknown; token?: unknown };
+  if (typeof port !== "number" || !Number.isInteger(port) || port <= 0) return null;
+  if (typeof token !== "string" || token.length === 0) return null;
   return { port, token };
 }

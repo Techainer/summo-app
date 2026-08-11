@@ -62,6 +62,27 @@ enum Command {
         detach: bool,
     },
 
+    /// Run Summo: the daemon and the interface, in this process.
+    ///
+    /// One command and one binary, the way `ollama serve` is. Nothing to install beside it, no
+    /// second process to start, no directory of static files to keep in step.
+    #[cfg(feature = "serve")]
+    Serve {
+        /// Port to listen on. `0` lets the OS pick, which is what avoids a collision on a machine
+        /// already running something on 8710.
+        #[arg(long, default_value_t = 8710)]
+        port: u16,
+        /// Print the address instead of opening a browser.
+        #[arg(long)]
+        no_open: bool,
+        /// Allow pages served from this machine to reach the daemon.
+        ///
+        /// For developing the interface with Vite. Off by default, because the check it removes is
+        /// the one that stops a web page reaching the microphone.
+        #[arg(long)]
+        dev: bool,
+    },
+
     /// Rank the models available for a language on this machine, and say why.
     Recommend {
         /// ISO language code, e.g. `vi` or `en`.
@@ -217,6 +238,12 @@ async fn main() -> Result<()> {
             lang,
             detach,
         } => import(&paths, &path, dry_run, lang.as_deref(), detach).await,
+        #[cfg(feature = "serve")]
+        Command::Serve {
+            port,
+            no_open,
+            dev,
+        } => serve(&paths, port, no_open, dev).await,
         Command::Hw => show_hw(),
         Command::Recommend { lang, registry } => {
             show_recommendation(&paths, &lang, registry.as_deref()).await
@@ -883,4 +910,70 @@ fn pages_index(manifests: &[Manifest]) -> String {
     }
     out.push('\n');
     out
+}
+
+/// Run the daemon and the interface until interrupted.
+#[cfg(feature = "serve")]
+async fn serve(paths: &Paths, port: u16, no_open: bool, dev: bool) -> Result<()> {
+    let engine = summo_engine::EngineState::new(paths.clone())?;
+    let server = summo_engine::Server::start(
+        engine,
+        summo_engine::ServerConfig {
+            port,
+            // Written so `summo import`, the desktop shell and anything else on this machine can
+            // find the running daemon rather than starting a second one.
+            write_token_file: true,
+            allow_loopback_origins: dev,
+        },
+    )
+    .await?;
+
+    let url = format!("http://127.0.0.1:{}/", server.addr().port());
+
+    if summo_engine::assets::bundled() {
+        println!("Summo đang chạy tại {url}");
+    } else {
+        // Said plainly rather than left as a blank page: a build without the interface is a
+        // perfectly good API server, and the user should know which one they have.
+        println!("Daemon đang chạy tại {url} (bản build này không kèm giao diện)");
+    }
+    println!("Ctrl-C để dừng.");
+
+    if !no_open && summo_engine::assets::bundled() {
+        open_browser(&url);
+    }
+
+    // Ctrl-C rather than running forever: a recording in progress is flushed on its own interval,
+    // so stopping here costs seconds of audio at worst.
+    tokio::signal::ctrl_c().await.ok();
+    println!("\nDừng.");
+    server.shutdown();
+    Ok(())
+}
+
+/// Open the default browser, and say nothing if there is not one.
+///
+/// A headless server, a container, an SSH session — all of them have no browser and all of them are
+/// legitimate places to run this. The address is already printed, so failing quietly loses nothing.
+#[cfg(feature = "serve")]
+fn open_browser(url: &str) {
+    let (program, args): (&str, Vec<&str>) = if cfg!(target_os = "macos") {
+        ("open", vec![])
+    } else if cfg!(target_os = "windows") {
+        ("cmd", vec!["/C", "start", ""])
+    } else {
+        ("xdg-open", vec![])
+    };
+
+    let opened = std::process::Command::new(program)
+        .args(args)
+        .arg(url)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .is_ok();
+
+    if !opened {
+        tracing::debug!("no browser to open; the address is printed above");
+    }
 }

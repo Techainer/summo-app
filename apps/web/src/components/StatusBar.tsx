@@ -41,7 +41,7 @@ export function StatusBar({
         <>
           <span className={behind ? "chip warn" : "chip"}>RTF {stat.rtf.toFixed(3)}</span>
           <span className="chip">{stat.rss_mb} MB</span>
-          {behind && <span className="chip warn">đang chậm hơn thời gian thực</span>}
+          {behind && <span className="chip warn">{t("status.behind")}</span>}
         </>
       )}
     </footer>

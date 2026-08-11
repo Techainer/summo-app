@@ -16,7 +16,9 @@
     "folders": "Folders",
     "show_sidebar": "Show sidebar",
     "hide_sidebar": "Hide sidebar",
-    "screens": "Screens"
+    "screens": "Screens",
+    "all_folders": "All",
+    "no_folders": "No folders yet"
   },
   "record": {
     "source": "Source",
@@ -36,7 +38,8 @@
     "expand_window": "Expand window",
     "translate_live": "Live translation",
     "translate_hint": "Each finished line is translated and shown under the original.",
-    "translate_needs_system": "Translation is on but only the microphone is captured — turn on System to translate what is playing."
+    "translate_needs_system": "Translation is on but only the microphone is captured — turn on System to translate what is playing.",
+    "short": "Record"
   },
   "import": {
     "title": "Import a recording",
@@ -110,7 +113,10 @@
     "opening": "Opening…",
     "no_plan": "The agent has not planned this one yet.",
     "steps_example": "scanned the notes → drafting events",
-    "show_steps_n": "Show {count} steps"
+    "show_steps_n": "Show {count} steps",
+    "agent_empty_head": "The agent has nothing to do. Give it work by writing",
+    "agent_empty_tail": "in a meeting note.",
+    "run": "Run"
   },
   "chat": {
     "title": "Ask",
@@ -120,7 +126,9 @@
     "sources": "Sources",
     "thinking": "Searching…",
     "heading": "Ask the vault",
-    "searching": "Searching the vault…"
+    "searching": "Searching the vault…",
+    "intro": "Ask anything that was said in a meeting.",
+    "intro_2": "Every answer names the meeting it came from."
   },
   "library": {
     "title": "Library",
@@ -143,7 +151,17 @@
     "recorded": "Recorded",
     "meeting": "Meeting",
     "people": "People",
-    "last_7": "Last 7 days"
+    "last_7": "Last 7 days",
+    "empty_cta": "Record your first",
+    "no_hits": "Nothing found for “{query}”.",
+    "unreadable": "Could not read {path}: {reason}",
+    "more_lines": "+{count} more lines",
+    "vault_hint": "Everything lives in ~/.summo/vault — open it in Obsidian, grep it, back it up however you like.",
+    "record_new": "Record a meeting",
+    "recordings": "{count} recordings",
+    "trash_confirm": "Move to trash?",
+    "trash_yes": "Move",
+    "transcript_lines": "Transcript ({count} lines)"
   },
   "analytics": {
     "title": "Analytics",
@@ -160,7 +178,10 @@
     "empty": "No meetings in this range.",
     "days_7": "7 days",
     "days_30": "30 days",
-    "today": "Today"
+    "today": "Today",
+    "people_count": "{count} people",
+    "tasks_count": "{count} tasks",
+    "quiet_days": "No meetings: {days}"
   },
   "people": {
     "title": "People",
@@ -175,7 +196,19 @@
     "similarity_low": "somewhat close",
     "known": "Known voices",
     "unknown": "Not identified",
-    "remove": "Remove from the voice list"
+    "remove": "Remove from the voice list",
+    "forget_confirm": "Remove {name} from the voice list?",
+    "forget_note": "Older transcripts keep the name. Summo will stop recognising this voice.",
+    "utterances": "{count} lines",
+    "maybe": "Might be",
+    "name_this": "Name {label}",
+    "identified_by": "Identified by {space}",
+    "empty": "Nobody yet. Record a meeting, then name a voice — Summo recognises it next time.",
+    "rename_who": "Rename {name}",
+    "forget_who": "Remove {name}",
+    "samples": "{count} voice samples",
+    "confirmed_by_you": "{count} confirmed by you",
+    "voice_styles": "{count} voice styles"
   },
   "settings": {
     "title": "Settings",
@@ -204,7 +237,10 @@
     "address": "Address",
     "summarise_on_stop": "Summarise when recording stops",
     "sent_here": "Transcript text is sent here. Audio never is.",
-    "local_only_comma": "Runs on your machine, nothing leaves it."
+    "local_only_comma": "Runs on your machine, nothing leaves it.",
+    "llm_hint_tail": ". Only summaries, translation and questions use a language model — and you choose where it runs.",
+    "llm_hint_head": "Speech recognition and speaker attribution ",
+    "key_not_stored": "The key is not stored in the settings file — if it were, it would follow into backups and sync."
   },
   "status": {
     "top_bar": "Top bar",
@@ -213,7 +249,8 @@
     "recorded": "Recorded",
     "error": "Error",
     "speakers_one": "{count} speaker",
-    "speakers_other": "{count} speakers"
+    "speakers_other": "{count} speakers",
+    "behind": "falling behind real time"
   },
   "nudge": {
     "dismiss": "Dismiss: {title}",
@@ -288,5 +325,15 @@
     "tasks_body": "Tasks assigned to a person go on the people board. Tasks assigned to @agent are run by the agent, one logged step at a time.",
     "ask_title": "Ask about anything that was said",
     "ask_body": "Ask searches every meeting and answers with timestamps you can click."
+  },
+  "about": {
+    "title": "About Summo",
+    "built_by": "Built by",
+    "role": "CEO, Techainer",
+    "company_line": "AI solutions to empower humanity's potential",
+    "site": "techainer.com",
+    "local_promise": "Speech recognition and speaker attribution run entirely on your machine. Audio never leaves it.",
+    "version": "Version {version}",
+    "source": "Open source, AGPL-3.0"
   }
 }

@@ -124,6 +124,34 @@ pub fn token_path(root: &Path) -> PathBuf {
 /// up shipped.
 #[must_use]
 pub fn origin_is_allowed(origin: Option<&str>, allow_loopback: bool) -> bool {
+    origin_is_allowed_from(origin, allow_loopback, None)
+}
+
+/// The same check, told which port this daemon is on.
+///
+/// `own_port` is what makes the bundled build work. When the daemon serves the interface itself, the
+/// page's own `POST` carries `Origin: http://127.0.0.1:<our port>` — a browser always sends one on a
+/// write, even same-origin — and refusing it means an app that reads and never writes. That was a
+/// real bug: every note, every task, every confirmation came back 403.
+///
+/// Allowing it gives away nothing. A page at *our* origin is a page we served; anything that could
+/// put a hostile page there could equally replace the binary. It is narrower than `allow_loopback`,
+/// which trusts every port on the machine — including whatever a user has running on 3000.
+#[must_use]
+pub fn origin_is_allowed_from(
+    origin: Option<&str>,
+    allow_loopback: bool,
+    own_port: Option<u16>,
+) -> bool {
+    if let (Some(origin), Some(port)) = (origin, own_port)
+        && is_own_origin(origin, port)
+    {
+        return true;
+    }
+    origin_is_allowed_inner(origin, allow_loopback)
+}
+
+fn origin_is_allowed_inner(origin: Option<&str>, allow_loopback: bool) -> bool {
     let Some(origin) = origin else {
         return true;
     };
@@ -143,6 +171,25 @@ pub fn origin_is_allowed(origin: Option<&str>, allow_loopback: bool) -> bool {
 ///
 /// Matched on the host alone. A remote host is refused even in development, so a page at
 /// `https://evil.example` cannot reach a developer's daemon while they have it open.
+/// Whether an origin is this daemon's own address, port included.
+///
+/// The port is the whole point: `http://127.0.0.1:3000` is somebody else's dev server, and it must
+/// not be trusted merely for being on loopback.
+#[must_use]
+pub fn is_own_origin(origin: &str, port: u16) -> bool {
+    let Some(rest) = origin.strip_prefix("http://") else {
+        return false;
+    };
+    let authority = rest.split('/').next().unwrap_or("");
+    let Some((host, given)) = authority.rsplit_once(':') else {
+        return false;
+    };
+    if given.parse::<u16>() != Ok(port) {
+        return false;
+    }
+    host == "localhost" || host == "127.0.0.1" || host == "[::1]"
+}
+
 fn is_loopback_origin(origin: &str) -> bool {
     let Some(rest) = origin
         .strip_prefix("http://")
@@ -159,6 +206,63 @@ fn is_loopback_origin(origin: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The bug this fixes: with the interface served by the daemon, every write from the page came
+    /// back 403, because a browser sends `Origin` on a POST even when it is same-origin. The app
+    /// could read and never write.
+    #[test]
+    fn the_page_this_daemon_served_may_write_back_to_it() {
+        assert!(origin_is_allowed_from(
+            Some("http://127.0.0.1:8715"),
+            false,
+            Some(8715)
+        ));
+        assert!(origin_is_allowed_from(
+            Some("http://localhost:8715"),
+            false,
+            Some(8715)
+        ));
+    }
+
+    /// Narrower than trusting loopback: `http://127.0.0.1:3000` is somebody else's dev server.
+    #[test]
+    fn another_port_on_this_machine_is_still_refused() {
+        assert!(!origin_is_allowed_from(
+            Some("http://127.0.0.1:3000"),
+            false,
+            Some(8715)
+        ));
+        assert!(!origin_is_allowed_from(
+            Some("http://127.0.0.1"),
+            false,
+            Some(8715)
+        ));
+    }
+
+    #[test]
+    fn a_remote_host_is_refused_however_it_dresses_itself_up() {
+        for origin in [
+            "https://evil.example",
+            "http://127.0.0.1.evil.example:8715",
+            "http://evil.example:8715",
+            "https://127.0.0.1:8715",
+        ] {
+            assert!(
+                !origin_is_allowed_from(Some(origin), false, Some(8715)),
+                "{origin} should have been refused"
+            );
+        }
+    }
+
+    #[test]
+    fn without_a_port_the_check_behaves_exactly_as_it_did() {
+        assert!(origin_is_allowed_from(None, false, None));
+        assert!(!origin_is_allowed_from(
+            Some("http://127.0.0.1:8715"),
+            false,
+            None
+        ));
+    }
 
     #[test]
     fn tokens_are_long_and_unique() {

@@ -166,8 +166,8 @@ export function TasksScreen() {
         <div className="mt-4 space-y-3">
           {board.agent.length === 0 ? (
             <p className="mt-16 text-center text-fg-faint">
-              Agent chưa có việc nào. Giao việc bằng cách viết{" "}
-              <code className="tabular text-[13px]">- [ ] @agent …</code> trong ghi chú buổi họp.
+              {t("tasks.agent_empty_head")}{" "}
+              <code className="tabular text-[13px]">- [ ] @agent …</code> {t("tasks.agent_empty_tail")}
             </p>
           ) : (
             board.agent.map((task) => (
@@ -332,7 +332,7 @@ function AgentCard({
             <StatusChip status={running ? "running" : mapStatus(task.status)} />
             {task.status !== "done" && (
               <Button size="sm" variant="primary" busy={running} onClick={onRun}>
-                Chạy
+                {t("tasks.run")}
               </Button>
             )}
           </>

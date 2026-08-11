@@ -92,8 +92,7 @@ export function People({ client, meeting }: Props) {
     async (person: Person) => {
       // Destructive and not obvious: the transcripts keep the name, the recognition does not.
       const ok = window.confirm(
-        `Xoá ${person.name} khỏi danh sách giọng nói?\n\n` +
-          `Các biên bản cũ vẫn giữ tên. Summo sẽ không tự nhận ra giọng này nữa.`,
+        t("people.forget_confirm", { name: person.name }) + "\n\n" + t("people.forget_note"),
       );
       if (!ok) return;
       try {
@@ -113,7 +112,7 @@ export function People({ client, meeting }: Props) {
         <div className="banner info">
           {notice}
           <button type="button" className="link" onClick={() => setNotice(null)}>
-            Đóng
+            {t("common.close")}
           </button>
         </div>
       )}
@@ -127,13 +126,13 @@ export function People({ client, meeting }: Props) {
                 <div className="voice-head">
                   <strong>{voice.label}</strong>
                   <span className="muted">
-                    {speakingTime(voice.seconds)} · {voice.utterances} câu
+                    {speakingTime(voice.seconds)} · {t("people.utterances", { count: voice.utterances })}
                   </span>
                 </div>
 
                 {voice.suggestions.length > 0 && (
                   <p className="muted suggestion-hint">
-                    Có thể là{" "}
+                    {t("people.maybe")}{" "}
                     {voice.suggestions.map((s, i) => (
                       <span key={s.id}>
                         {i > 0 && ", "}
@@ -169,11 +168,11 @@ export function People({ client, meeting }: Props) {
                       name="name"
                       type="text"
                       placeholder={t("people.new_name")}
-                      aria-label={`Đặt tên cho ${voice.label}`}
+                      aria-label={t("people.name_this", { label: voice.label })}
                       disabled={busy === voice.label}
                     />
                     <button type="submit" disabled={busy === voice.label}>
-                      Lưu
+                      {t("common.save")}
                     </button>
                   </form>
                 </div>
@@ -184,11 +183,11 @@ export function People({ client, meeting }: Props) {
       )}
 
       <h2>{t("people.known")}</h2>
-      {space && <p className="muted">Nhận diện bằng {space}</p>}
+      {space && <p className="muted">{t("people.identified_by", { space })}</p>}
 
       {people.length === 0 ? (
         <p className="empty">
-          Chưa có ai. Ghi một buổi họp, rồi đặt tên cho giọng nói — lần sau Summo tự nhận ra.
+          {t("people.empty")}
         </p>
       ) : (
         <ul className="person-list">
@@ -209,7 +208,7 @@ export function People({ client, meeting }: Props) {
                       type="text"
                       value={draft}
                       autoFocus
-                      aria-label={`Đổi tên ${person.name}`}
+                      aria-label={t("people.rename_who", { name: person.name })}
                       onChange={(e) => setDraft(e.target.value)}
                       onBlur={() => void commitRename(person.id)}
                     />
@@ -227,15 +226,15 @@ export function People({ client, meeting }: Props) {
                   </button>
                 )}
                 <span className="muted">
-                  {person.samples} mẫu giọng
-                  {person.confirmed > 0 && ` · ${person.confirmed} do bạn xác nhận`}
-                  {person.centroids > 1 && ` · ${person.centroids} kiểu giọng`}
+                  {t("people.samples", { count: person.samples })}
+                  {person.confirmed > 0 && ` · ${t("people.confirmed_by_you", { count: person.confirmed })}`}
+                  {person.centroids > 1 && ` · ${t("people.voice_styles", { count: person.centroids })}`}
                 </span>
               </div>
               <button
                 type="button"
                 className="icon-button"
-                aria-label={`Xoá ${person.name}`}
+                aria-label={t("people.forget_who", { name: person.name })}
                 title={t("people.remove")}
                 onClick={() => void forget(person)}
               >

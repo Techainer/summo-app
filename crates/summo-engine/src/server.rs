@@ -22,7 +22,7 @@ use summo_core::{Error, Event, Result};
 use summo_vault::library::{Library, LibraryQuery};
 
 use crate::{
-    auth::{SessionToken, origin_is_allowed, token_path},
+    auth::{SessionToken, token_path},
     protocol::{Command, decode_frame},
     state::EngineState,
 };
@@ -36,7 +36,7 @@ pub struct ServerConfig {
     /// Accept requests from pages served on this machine.
     ///
     /// Off in anything shipped. It exists so the interface can be developed against a Vite server
-    /// and driven in a browser test; see [`crate::auth::origin_is_allowed`] for why it is opt-in.
+    /// and driven in a browser test; see [`crate::auth::origin_is_allowed_from`] for why it is opt-in.
     pub allow_loopback_origins: bool,
 }
 
@@ -68,6 +68,39 @@ struct AppState {
     library: Library,
     token: SessionToken,
     allow_loopback_origins: bool,
+    /// The bound port, filled in after the listener exists.
+    ///
+    ///
+    /// The router is built before the socket is bound — it has to be, since `axum::serve` takes
+    /// both — and `port: 0` means the OS chooses. So the one handler that needs to *tell* the page
+    /// which port it is on reads it from here rather than from a value that would have been zero.
+    port: std::sync::Arc<std::sync::atomic::AtomicU16>,
+}
+
+impl AppState {
+    /// The port this daemon actually bound. Zero until the listener exists.
+    fn own_port(&self) -> u16 {
+        self.port.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Refuse a request that has no business being served.
+    ///
+    /// One method rather than the same five arguments at sixty-odd call sites — which is how the
+    /// port came to be missing from the check in the first place, and why the bundled interface
+    /// could read and never write.
+    fn guard(
+        &self,
+        headers: &HeaderMap,
+        query_token: Option<&str>,
+    ) -> std::result::Result<(), (StatusCode, &'static str)> {
+        authorize_from(
+            headers,
+            query_token,
+            &self.token,
+            self.allow_loopback_origins,
+            Some(self.own_port()),
+        )
+    }
 }
 
 /// A running daemon.
@@ -87,7 +120,9 @@ impl Server {
             engine: engine.clone(),
             token: token.clone(),
             allow_loopback_origins: cfg.allow_loopback_origins,
+            port: std::sync::Arc::new(std::sync::atomic::AtomicU16::new(0)),
         };
+        let port_slot = state.port.clone();
 
         if cfg.allow_loopback_origins {
             tracing::warn!(
@@ -161,6 +196,9 @@ impl Server {
             .route("/meetings/{id}/title", post(set_title))
             .route("/meetings/{id}/trash", post(trash))
             .route("/ws", get(websocket))
+            // Last: a fallback claims every path no route above matched, which is how a
+            // single-page app's own routes reach it. Registering it earlier would shadow the API.
+            .fallback(interface)
             .layer(middleware::from_fn_with_state(state.clone(), cors))
             .with_state(state);
 
@@ -186,7 +224,8 @@ impl Server {
                 .map_err(|e| Error::io(&json_path, e))?;
         }
 
-        tracing::info!(%addr, "engine listening");
+        port_slot.store(addr.port(), std::sync::atomic::Ordering::Relaxed);
+        tracing::info!(%addr, bundled = crate::assets::bundled(), "engine listening");
         let handle = tokio::spawn(async move {
             if let Err(e) = axum::serve(listener, app).await {
                 tracing::error!(error = %e, "server stopped");
@@ -217,12 +256,12 @@ impl Server {
 
 /// Tell the browser what the daemon already decided.
 ///
-/// [`origin_is_allowed`] governs whether a request is served at all; this reports that same
+/// [`crate::auth::origin_is_allowed_from`] governs whether a request is served at all; this reports that same
 /// decision back as CORS headers, because a browser blocks a cross-origin reply it was not
 /// explicitly promised — the daemon would answer 200 and the app would still see a network error.
 /// The two must never drift, so this asks the same function rather than keeping its own list.
 ///
-/// In a shipped build no origin is allowed, so no page gets these headers.
+/// In a shipped build the only origin allowed is this daemon's own, which is the page it served.
 async fn cors(
     State(state): State<AppState>,
     request: Request<axum::body::Body>,
@@ -236,7 +275,13 @@ async fn cors(
 
     let allowed = origin
         .as_deref()
-        .is_some_and(|o| origin_is_allowed(Some(o), state.allow_loopback_origins));
+        .is_some_and(|o| {
+            crate::auth::origin_is_allowed_from(
+                Some(o),
+                state.allow_loopback_origins,
+                Some(state.own_port()),
+            )
+        });
 
     // A preflight carries no token — it is the browser asking whether it may send one — so it is
     // answered before authorization rather than rejected for lacking it.
@@ -268,14 +313,16 @@ async fn cors(
 /// Reject anything that is not an authenticated native client.
 ///
 /// Returns `Ok(())` or the status and message to send back.
-fn authorize(
+/// The same check, told which port this daemon is on so it can recognise its own page.
+fn authorize_from(
     headers: &HeaderMap,
     query_token: Option<&str>,
     expected: &SessionToken,
     allow_loopback_origins: bool,
+    own_port: Option<u16>,
 ) -> std::result::Result<(), (StatusCode, &'static str)> {
     let origin = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok());
-    if !origin_is_allowed(origin, allow_loopback_origins) {
+    if !crate::auth::origin_is_allowed_from(origin, allow_loopback_origins, own_port) {
         // A web page cannot forge this header, so an origin at all means a browser is calling.
         return Err((
             StatusCode::FORBIDDEN,
@@ -317,12 +364,7 @@ async fn hardware(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     Json(state.engine.hardware().clone()).into_response()
@@ -333,12 +375,7 @@ async fn status(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     Json(state.engine.status()).into_response()
@@ -349,12 +386,7 @@ async fn models(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     Json(state.engine.store().list()).into_response()
@@ -396,12 +428,7 @@ async fn library(
     headers: HeaderMap,
     Query(q): Query<LibraryQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     // The clock is read here rather than inside the vault so "the last seven days" is anchored to
@@ -423,12 +450,7 @@ async fn search(
     headers: HeaderMap,
     Query(query): Query<SearchQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        query.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, query.token.as_deref()) {
         return rejection.into_response();
     }
     // A search box sends a request per keystroke; the cap keeps the worst case bounded no matter
@@ -443,12 +465,7 @@ async fn meeting(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(state.library.detail(&summo_core::MeetingId::from(id)))
@@ -466,12 +483,7 @@ async fn set_folder(
     Query(q): Query<TokenQuery>,
     Json(body): Json<FolderBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let id = summo_core::MeetingId::from(id);
@@ -495,12 +507,7 @@ async fn set_tags(
     Query(q): Query<TokenQuery>,
     Json(body): Json<TagsBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let id = summo_core::MeetingId::from(id);
@@ -524,12 +531,7 @@ async fn set_title(
     Query(q): Query<TokenQuery>,
     Json(body): Json<TitleBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let id = summo_core::MeetingId::from(id);
@@ -547,12 +549,7 @@ async fn trash(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let id = summo_core::MeetingId::from(id);
@@ -569,12 +566,7 @@ async fn storage(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(summo_vault::storage::usage(state.engine.paths()))
@@ -598,12 +590,7 @@ async fn prune_storage(
     headers: HeaderMap,
     Query(q): Query<PruneQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let paths = state.engine.paths();
@@ -626,12 +613,7 @@ async fn forget_audio(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(
@@ -661,12 +643,7 @@ async fn report(
     headers: HeaderMap,
     Query(q): Query<ReportQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     // The daemon's own day. A report asked for "today" means the user's today.
@@ -690,12 +667,7 @@ async fn meeting_audio(
     Path((id, lane)): Path<(String, String)>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
 
@@ -773,12 +745,7 @@ async fn tasks(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(crate::board::read(state.engine.paths()))
@@ -812,12 +779,7 @@ async fn update_task(
     Query(q): Query<TokenQuery>,
     Json(body): Json<TaskUpdateBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(crate::board::update(
@@ -845,12 +807,7 @@ async fn create_task(
     Query(q): Query<TokenQuery>,
     Json(body): Json<TaskCreateBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(crate::board::create(
@@ -874,12 +831,7 @@ async fn ask(
     Query(q): Query<TokenQuery>,
     Json(body): Json<AskBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let client = match llm_client(&state) {
@@ -914,12 +866,7 @@ async fn start_import(
     Query(q): Query<TokenQuery>,
     Json(body): Json<ImportBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(spawn_import(&state, body))
@@ -996,12 +943,7 @@ async fn list_imports(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(Ok::<_, summo_core::Error>(state.engine.imports().list()))
@@ -1014,12 +956,7 @@ async fn get_import(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(
@@ -1037,12 +974,7 @@ async fn clear_imports(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let cleared = state.engine.imports().clear_finished();
@@ -1062,12 +994,7 @@ async fn run_task(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
 
@@ -1119,12 +1046,7 @@ async fn get_draft(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(crate::draft::load(
@@ -1146,12 +1068,7 @@ async fn generate_draft(
     Query(q): Query<TokenQuery>,
     Json(body): Json<GenerateBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let client = match llm_client(&state) {
@@ -1185,12 +1102,7 @@ async fn refine_draft(
     Query(q): Query<TokenQuery>,
     Json(body): Json<RefineBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let client = match llm_client(&state) {
@@ -1222,12 +1134,7 @@ async fn chat_draft(
     Query(q): Query<TokenQuery>,
     Json(body): Json<ChatBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let client = match llm_client(&state) {
@@ -1251,12 +1158,7 @@ async fn confirm_draft(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(
@@ -1271,12 +1173,7 @@ async fn discard_draft(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(
@@ -1294,12 +1191,7 @@ async fn nudges(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
 
@@ -1329,12 +1221,7 @@ async fn templates(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(
@@ -1361,12 +1248,7 @@ async fn summarize_meeting(
     Query(q): Query<TokenQuery>,
     Json(body): Json<SummarizeBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
 
@@ -1419,12 +1301,7 @@ async fn translate_meeting(
     Query(q): Query<TokenQuery>,
     Json(body): Json<TranslateBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let client = match llm_client(&state) {
@@ -1472,12 +1349,7 @@ async fn meeting_translations(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let langs =
@@ -1492,12 +1364,7 @@ async fn meeting_translation(
     Path((id, lang)): Path<(String, String)>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let meeting = summo_core::MeetingId::from(id);
@@ -1545,12 +1412,7 @@ async fn meeting_subtitles(
     Path(id): Path<String>,
     Query(q): Query<SubtitleQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
 
@@ -1612,12 +1474,7 @@ async fn locales(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(Ok::<_, summo_core::Error>(crate::locales::load(
@@ -1631,12 +1488,7 @@ async fn onboarding(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let status = crate::onboarding::status(state.engine.paths(), state.engine.hardware());
@@ -1659,12 +1511,7 @@ async fn complete_onboarding(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(
@@ -1697,12 +1544,7 @@ async fn recommend_models(
     headers: HeaderMap,
     Query(q): Query<RecommendQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
 
@@ -1801,12 +1643,7 @@ async fn start_install(
     Query(q): Query<TokenQuery>,
     Json(body): Json<InstallBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
 
@@ -1892,12 +1729,7 @@ async fn list_installs(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(Ok::<_, summo_core::Error>(state.engine.installs().list()))
@@ -1909,12 +1741,7 @@ async fn get_install(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(
@@ -1957,12 +1784,7 @@ async fn list_notes(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let result = summo_vault::note::list(state.engine.paths()).map(|entries| {
@@ -1987,12 +1809,7 @@ async fn create_note(
     Query(q): Query<TokenQuery>,
     Json(body): Json<NoteBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let day = body.day.unwrap_or_else(today);
@@ -2009,12 +1826,7 @@ async fn read_note(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let result = summo_vault::note::read(state.engine.paths(), &summo_core::MeetingId::from(id))
@@ -2039,12 +1851,7 @@ async fn update_note(
     Query(q): Query<TokenQuery>,
     Json(body): Json<NoteBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let result = summo_vault::note::set_body(
@@ -2062,12 +1869,7 @@ async fn delete_note(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(
@@ -2076,18 +1878,26 @@ async fn delete_note(
     )
 }
 
+/// The interface itself, when it is compiled in.
+///
+/// No token check. This is the page that *receives* the token — asking for one first would be a
+/// chicken-and-egg, and the assets are the same public bundle anybody can download. Everything the
+/// page then does is authenticated.
+async fn interface(
+    State(state): State<AppState>,
+    uri: axum::http::Uri,
+) -> impl IntoResponse {
+    let port = state.port.load(std::sync::atomic::Ordering::Relaxed);
+    crate::assets::serve(uri.path(), port, state.token.as_str())
+}
+
 /// Meetings from the user's calendars, in time order.
 async fn agenda(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(Ok::<_, summo_core::Error>(crate::agenda::agenda(
@@ -2113,12 +1923,7 @@ async fn suggest_meeting(
     headers: HeaderMap,
     Query(q): Query<SuggestQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(Ok::<_, summo_core::Error>(crate::agenda::suggest(
@@ -2142,12 +1947,7 @@ async fn add_calendar(
     Query(q): Query<TokenQuery>,
     Json(body): Json<CalendarBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let result = crate::agenda::install(
@@ -2165,12 +1965,7 @@ async fn remove_calendar(
     Path(name): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(
@@ -2185,12 +1980,7 @@ async fn people(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(crate::people::list(&state.book))
@@ -2208,12 +1998,7 @@ async fn rename_person(
     Query(q): Query<TokenQuery>,
     Json(body): Json<NameBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(crate::people::rename(&state.book, &id, &body.name))
@@ -2233,12 +2018,7 @@ async fn set_person_avatar(
     Query(q): Query<TokenQuery>,
     Json(body): Json<AvatarBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(crate::people::set_avatar(&state.book, &id, body.avatar))
@@ -2257,12 +2037,7 @@ async fn merge_person(
     Query(q): Query<TokenQuery>,
     Json(body): Json<MergeBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(crate::people::merge(&state.book, &body.from, &id))
@@ -2274,12 +2049,7 @@ async fn forget_person(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(
@@ -2295,12 +2065,7 @@ async fn unknown_voices(
     Path(id): Path<String>,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(crate::people::unknowns(
@@ -2318,12 +2083,7 @@ async fn name_voice(
     Query(q): Query<TokenQuery>,
     Json(body): Json<NameBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     as_response(crate::people::name_voice(
@@ -2345,12 +2105,7 @@ async fn settings(
     headers: HeaderMap,
     Query(q): Query<TokenQuery>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     let path = state.engine.paths().settings();
@@ -2388,12 +2143,7 @@ async fn set_llm(
     Query(q): Query<TokenQuery>,
     Json(body): Json<LlmBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
 
@@ -2423,12 +2173,7 @@ async fn test_llm(
     Query(q): Query<TokenQuery>,
     Json(body): Json<LlmBody>,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
 
@@ -2472,12 +2217,7 @@ async fn websocket(
     Query(q): Query<TokenQuery>,
     upgrade: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    if let Err(rejection) = authorize(
-        &headers,
-        q.token.as_deref(),
-        &state.token,
-        state.allow_loopback_origins,
-    ) {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
     upgrade
@@ -3492,6 +3232,42 @@ mod tests {
 
     /// A note is the same document as a meeting, so everything already built for meetings works on
     /// it. The round trip through HTTP is what proves it end to end.
+    /// The bug this guards: a browser sends `Origin` on every write, even same-origin. With the
+    /// interface served by the daemon itself, refusing that origin meant an app that could read and
+    /// never write — every note, task and confirmation came back 403.
+    #[tokio::test]
+    async fn the_page_this_daemon_serves_may_write_back_to_it() {
+        let (_tmp, server) = running().await;
+        let origin = format!("http://127.0.0.1:{}", server.addr().port());
+
+        let response = client()
+            .post(format!("http://{}/notes", server.addr()))
+            .header("origin", &origin)
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "title": "Ghi chú", "body": "x" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200, "same-origin write must be allowed");
+        server.shutdown();
+    }
+
+    /// Narrower than trusting loopback: another port on this machine is somebody else's server.
+    #[tokio::test]
+    async fn a_page_on_another_local_port_still_cannot_write() {
+        let (_tmp, server) = running().await;
+        let response = client()
+            .post(format!("http://{}/notes", server.addr()))
+            .header("origin", "http://127.0.0.1:3000")
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "title": "Ghi chú", "body": "x" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 403);
+        server.shutdown();
+    }
+
     #[tokio::test]
     async fn a_note_can_be_written_read_edited_and_deleted_over_http() {
         let (_tmp, server) = running().await;

@@ -12,6 +12,12 @@ default = []
 # Real transcription: Silero VAD plus a Zipformer transducer. Both link native code, so the
 # default build stays a pure registry client.
 transcribe = ["dep:summo-asr", "dep:summo-vad", "dep:hound", "summo-asr/sherpa", "summo-vad/silero"]
+# `summo serve`: the daemon and the interface in this binary, the way `ollama serve` is one
+# executable. `bundled` additionally bakes the built interface in.
+serve = ["dep:summo-engine"]
+bundled = ["serve", "summo-engine/bundled"]
+# Real recognition inside `summo serve`.
+models = ["serve", "summo-engine/models"]
 
 [[bin]]
 name = "summo"
@@ -23,6 +29,7 @@ summo-media.workspace = true
 summo-models.workspace = true
 summo-llm.workspace = true
 summo-vault.workspace = true
+summo-engine = { workspace = true, optional = true }
 time.workspace = true
 summo-asr = { workspace = true, optional = true }
 summo-vad = { workspace = true, optional = true }
