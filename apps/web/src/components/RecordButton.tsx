@@ -1,3 +1,4 @@
+import { useT } from "../i18n/context";
 import { formatTime } from "../lib/protocol";
 
 /**
@@ -15,13 +16,14 @@ export function RecordButton({
   elapsed: number;
   onToggle: () => void;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
       className={recording ? "record recording" : "record"}
       onClick={onToggle}
       aria-pressed={recording}
-      aria-label={recording ? "Dừng ghi" : "Bắt đầu ghi"}
+      aria-label={recording ? t("record.stop") : t("record.start")}
     >
       <span className="record-dot" aria-hidden />
       {recording ? (

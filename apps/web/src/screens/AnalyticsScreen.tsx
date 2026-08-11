@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
+import { useT } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
 import {
   ReportClient,
@@ -13,10 +14,12 @@ import {
 
 type Range = "day" | "week" | "month";
 
+// Labels are keys, resolved at render: a module-level array is built once, before any provider
+// exists, so baking the text in would freeze the first language forever.
 const RANGES = [
-  { value: "day" as const, label: "Hôm nay" },
-  { value: "week" as const, label: "7 ngày" },
-  { value: "month" as const, label: "30 ngày" },
+  { value: "day" as const, labelKey: "analytics.today" },
+  { value: "week" as const, labelKey: "analytics.days_7" },
+  { value: "month" as const, labelKey: "analytics.days_30" },
 ];
 
 const DAYS: Record<Range, number> = { day: 0, week: 6, month: 29 };
@@ -28,6 +31,7 @@ const DAYS: Record<Range, number> = { day: 0, week: 6, month: 29 };
  * rather than inventing activity: an empty range says so.
  */
 export function AnalyticsScreen() {
+  const t = useT();
   const { handshake } = useEngine();
   const client = useMemo(() => new ReportClient(handshake), [handshake]);
   const [range, setRange] = useState<Range>("week");
@@ -52,11 +56,11 @@ export function AnalyticsScreen() {
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-5">
       <div className="flex items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Thống kê</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{t("analytics.title")}</h1>
         <SegmentedControl
           className="ml-auto"
-          label="Khoảng thời gian"
-          options={RANGES}
+          label={t("analytics.range")}
+          options={RANGES.map((r) => ({ value: r.value, label: t(r.labelKey) }))}
           value={range}
           onChange={setRange}
           size="sm"
@@ -70,21 +74,21 @@ export function AnalyticsScreen() {
       )}
 
       {report && report.meetings.length === 0 && (
-        <p className="mt-16 text-center text-fg-faint">Không có buổi họp nào trong khoảng này.</p>
+        <p className="mt-16 text-center text-fg-faint">{t("analytics.empty")}</p>
       )}
 
       {report && report.meetings.length > 0 && (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Metric label="Buổi họp" value={String(report.meetings.length)} />
-            <Metric label="Thời gian" value={duration(report.total_seconds)} />
-            <Metric label="Việc còn treo" value={String(report.open_actions.length)} />
-            <Metric label="Chưa tóm tắt" value={String(report.without_summary.length)} />
+            <Metric label={t("analytics.meetings")} value={String(report.meetings.length)} />
+            <Metric label={t("analytics.time")} value={duration(report.total_seconds)} />
+            <Metric label={t("analytics.open_tasks")} value={String(report.open_actions.length)} />
+            <Metric label={t("analytics.unsummarised")} value={String(report.without_summary.length)} />
           </div>
 
           {report.people.length > 0 && (
             <Card>
-              <CardHeader title="Thời gian với ai" count={`${report.people.length} người`} />
+              <CardHeader title={t("analytics.time_with")} count={`${report.people.length} người`} />
               <CardBody className="space-y-2">
                 {report.people.slice(0, 8).map((person) => (
                   <div key={person.name} className="flex items-center gap-3">
@@ -107,7 +111,7 @@ export function AnalyticsScreen() {
           {report.open_actions.length > 0 && (
             <Card>
               <CardHeader
-                title="Còn phải làm"
+                title={t("analytics.todo")}
                 count={`${report.open_actions.length} việc`}
               />
               <CardBody className="space-y-1.5">

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 
+import { useT } from "../../i18n/context";
 import { cn } from "../../lib/cn";
 import { isRefinable, readable, selectionWithin, type Draft } from "../../lib/draft";
 import { Button, Card, CardBody, CardHeader } from "../ui";
@@ -26,6 +27,7 @@ interface Props {
  * used for the expensive job.
  */
 export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard }: Props) {
+  const t = useT();
   const [picked, setPicked] = useState<{ heading: string; text: string } | null>(null);
   const [instruction, setInstruction] = useState("");
   const [message, setMessage] = useState("");
@@ -50,8 +52,8 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
   return (
     <Card className="border-accent/40">
       <CardHeader
-        title="Bản tóm tắt agent viết"
-        count={draft.revisions > 0 ? `đã sửa ${draft.revisions} lần` : "chưa duyệt"}
+        title={t("draft.heading")}
+        count={draft.revisions > 0 ? `đã sửa ${draft.revisions} lần` : t("draft.pending")}
         actions={
           <>
             <Button size="sm" variant="ghost" onClick={onDiscard} disabled={busy}>
@@ -101,8 +103,8 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
                 autoFocus
                 value={instruction}
                 onChange={(e) => setInstruction(e.target.value)}
-                placeholder="ngắn hơn, bỏ tên khách, thêm mốc thời gian…"
-                aria-label="Muốn sửa thế nào"
+                placeholder={t("draft.revise_placeholder")}
+                aria-label={t("draft.revise_label")}
                 disabled={busy}
                 className="flex-1 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-sm"
               />
@@ -145,8 +147,8 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
           <input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Nhắn cho agent để sửa cả bản tóm tắt…"
-            aria-label="Nhắn cho agent"
+            placeholder={t("draft.chat_placeholder")}
+            aria-label={t("draft.chat_send")}
             disabled={busy}
             className="flex-1 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-sm"
           />

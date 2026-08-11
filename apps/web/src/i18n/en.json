@@ -86,7 +86,8 @@
     "revise_label": "What should change",
     "revise_placeholder": "shorter, drop the client's name, add dates…",
     "edited": "lines edited",
-    "edited_by_hand": "edited by hand"
+    "edited_by_hand": "edited by hand",
+    "you": "You"
   },
   "tasks": {
     "title": "Tasks",
@@ -103,7 +104,13 @@
     "open_other": "{count} tasks still open",
     "show_steps": "Show steps",
     "hide_steps": "Hide steps",
-    "add": "Add task"
+    "add": "Add task",
+    "all": "All",
+    "heading": "To do",
+    "opening": "Opening…",
+    "no_plan": "The agent has not planned this one yet.",
+    "steps_example": "scanned the notes → drafting events",
+    "show_steps_n": "Show {count} steps"
   },
   "chat": {
     "title": "Ask",
@@ -111,7 +118,9 @@
     "placeholder": "What did Ngọc say about the budget?",
     "ask": "Ask",
     "sources": "Sources",
-    "thinking": "Searching…"
+    "thinking": "Searching…",
+    "heading": "Ask the vault",
+    "searching": "Searching the vault…"
   },
   "library": {
     "title": "Library",
@@ -137,7 +146,14 @@
     "time": "Time",
     "time_with": "Time with people",
     "decisions": "Decisions",
-    "todo": "Still to do"
+    "todo": "Still to do",
+    "meetings": "Meetings",
+    "unsummarised": "Not summarised",
+    "open_tasks": "Open tasks",
+    "empty": "No meetings in this range.",
+    "days_7": "7 days",
+    "days_30": "30 days",
+    "today": "Today"
   },
   "people": {
     "title": "People",
@@ -179,7 +195,9 @@
     "connecting": "connecting…",
     "reconnecting": "reconnecting…",
     "recorded": "Recorded",
-    "error": "Error"
+    "error": "Error",
+    "speakers_one": "{count} speaker",
+    "speakers_other": "{count} speakers"
   },
   "nudge": {
     "dismiss": "Dismiss: {title}",

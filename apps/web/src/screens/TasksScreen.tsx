@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button, Card, CardBody, CardHeader, SegmentedControl, StatusChip } from "../components/ui";
 import { cn } from "../lib/cn";
+import { useT } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
 import { today } from "../lib/report";
 import {
@@ -20,9 +21,10 @@ import {
 
 type View = "people" | "agent";
 
+// Labels are keys, resolved at render — see the note in AnalyticsScreen.
 const VIEWS = [
-  { value: "people" as const, label: "Của mọi người" },
-  { value: "agent" as const, label: "Của agent" },
+  { value: "people" as const, labelKey: "tasks.mine" },
+  { value: "agent" as const, labelKey: "tasks.agent" },
 ];
 
 /**
@@ -33,6 +35,7 @@ const VIEWS = [
  * same way would invite the user to drag an agent task to "Xong", which is not how it gets there.
  */
 export function TasksScreen() {
+  const t = useT();
   const { handshake } = useEngine();
   const client = useMemo(() => new TaskClient(handshake), [handshake]);
   const [board, setBoard] = useState<Board | null>(null);
@@ -96,17 +99,17 @@ export function TasksScreen() {
       </div>
     );
   }
-  if (!board) return <p className="mt-24 text-center text-fg-faint">Đang mở…</p>;
+  if (!board) return <p className="mt-24 text-center text-fg-faint">{t("tasks.opening")}</p>;
 
   return (
     <div className="p-5">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Việc cần làm</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{t("tasks.heading")}</h1>
         <SegmentedControl
           className="ml-auto"
-          label="Loại việc"
+          label={t("tasks.kind")}
           size="sm"
-          options={VIEWS}
+          options={VIEWS.map((v) => ({ value: v.value, label: t(v.labelKey) }))}
           value={view}
           onChange={setView}
         />
@@ -122,7 +125,7 @@ export function TasksScreen() {
         <>
           {board.owners.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <FilterChip label="Tất cả" on={owner === null} onClick={() => setOwner(null)} />
+              <FilterChip label={t("tasks.all")} on={owner === null} onClick={() => setOwner(null)} />
               {board.owners.map((name) => (
                 <FilterChip
                   key={name}
@@ -314,6 +317,7 @@ function AgentCard({
   running: boolean;
   onRun: () => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(task.status === "doing");
   const progress = stepProgress(task);
   const step = currentStep(task);
@@ -347,7 +351,7 @@ function AgentCard({
               aria-expanded={open}
               className="mt-2 text-[13px] font-medium text-fg-dim underline-offset-2 hover:text-fg hover:underline"
             >
-              {open ? "Ẩn các bước" : `Xem ${task.steps?.length} bước`}
+              {open ? t("tasks.hide_steps") : t("tasks.show_steps_n", { count: task.steps?.length ?? 0 })}
             </button>
             {open && (
               <ul className="mt-2 space-y-1">
@@ -369,7 +373,7 @@ function AgentCard({
         )}
 
         {(task.steps?.length ?? 0) === 0 && (
-          <p className="text-[13px] text-fg-faint">Agent chưa lập kế hoạch cho việc này.</p>
+          <p className="text-[13px] text-fg-faint">{t("tasks.no_plan")}</p>
         )}
       </CardBody>
     </Card>

@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/context";
 import type { ConnectionState } from "../lib/engine";
 
 /**
@@ -20,6 +21,8 @@ export function StatusBar({
   connection: ConnectionState;
   device: string | null;
 }) {
+  // `n`, not `t`: English needs "1 speaker" and "2 speakers"; Vietnamese needs one form for both.
+  const { t, n } = useI18n();
   const behind = stat !== null && (stat.rtf >= 1 || stat.queue_ms > 3000);
   const disconnected = connection === "reconnecting" || connection === "connecting";
 
@@ -29,11 +32,11 @@ export function StatusBar({
       <span className="spacer" />
       {disconnected && (
         <span className="chip warn" data-testid="connection">
-          {connection === "reconnecting" ? "đang kết nối lại…" : "đang kết nối…"}
+          {connection === "reconnecting" ? t("status.reconnecting") : t("status.connecting")}
         </span>
       )}
       {device && <span className="chip">{device}</span>}
-      {speakers.length > 0 && <span className="chip">{speakers.length} người nói</span>}
+      {speakers.length > 0 && <span className="chip">{n("status.speakers", speakers.length)}</span>}
       {stat && (
         <>
           <span className={behind ? "chip warn" : "chip"}>RTF {stat.rtf.toFixed(3)}</span>

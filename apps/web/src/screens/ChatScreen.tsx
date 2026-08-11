@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { Button, Card, CardBody } from "../components/ui";
 import { cn } from "../lib/cn";
+import { useT } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
 import { url } from "../lib/library";
 
@@ -32,6 +33,7 @@ interface Exchange {
  * whether it obeyed is by opening the meeting and reading the line.
  */
 export function ChatScreen() {
+  const t = useT();
   const { handshake } = useEngine();
   const navigate = useNavigate();
   const [history, setHistory] = useState<Exchange[]>([]);
@@ -70,7 +72,7 @@ export function ChatScreen() {
 
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col p-5">
-      <h1 className="text-xl font-semibold tracking-tight">Hỏi kho họp</h1>
+      <h1 className="text-xl font-semibold tracking-tight">{t("chat.heading")}</h1>
 
       <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto">
         {history.length === 0 && (
@@ -126,7 +128,7 @@ export function ChatScreen() {
             )}
 
             {!exchange.answer && !exchange.error && (
-              <p className="text-[13px] text-fg-faint">Đang tìm trong kho họp…</p>
+              <p className="text-[13px] text-fg-faint">{t("chat.searching")}</p>
             )}
           </div>
         ))}
@@ -143,8 +145,8 @@ export function ChatScreen() {
         <input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ngọc nói gì về ngân sách?"
-          aria-label="Câu hỏi"
+          placeholder={t("chat.placeholder")}
+          aria-label={t("chat.question")}
           disabled={busy}
           className="flex-1 rounded-lg border border-line bg-bg-soft px-3 py-2 text-sm"
         />

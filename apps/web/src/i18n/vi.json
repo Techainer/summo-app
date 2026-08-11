@@ -86,7 +86,8 @@
     "revise_label": "Muốn sửa thế nào",
     "revise_placeholder": "ngắn hơn, bỏ tên khách, thêm mốc thời gian…",
     "edited": "câu đã sửa",
-    "edited_by_hand": "đã sửa tay"
+    "edited_by_hand": "đã sửa tay",
+    "you": "Bạn"
   },
   "tasks": {
     "title": "Việc",
@@ -103,7 +104,13 @@
     "open_other": "{count} việc còn treo",
     "show_steps": "Xem các bước",
     "hide_steps": "Ẩn các bước",
-    "add": "Thêm việc"
+    "add": "Thêm việc",
+    "all": "Tất cả",
+    "heading": "Việc cần làm",
+    "opening": "Đang mở…",
+    "no_plan": "Agent chưa lập kế hoạch cho việc này.",
+    "steps_example": "đã quét ghi chú → đang soạn sự kiện",
+    "show_steps_n": "Xem {count} bước"
   },
   "chat": {
     "title": "Hỏi đáp",
@@ -111,7 +118,9 @@
     "placeholder": "Ngọc nói gì về ngân sách?",
     "ask": "Hỏi",
     "sources": "Nguồn",
-    "thinking": "Đang tìm…"
+    "thinking": "Đang tìm…",
+    "heading": "Hỏi kho họp",
+    "searching": "Đang tìm trong kho họp…"
   },
   "library": {
     "title": "Thư viện",
@@ -137,7 +146,14 @@
     "time": "Thời gian",
     "time_with": "Thời gian với ai",
     "decisions": "Quyết định",
-    "todo": "Còn phải làm"
+    "todo": "Còn phải làm",
+    "meetings": "Buổi họp",
+    "unsummarised": "Chưa tóm tắt",
+    "open_tasks": "Việc còn treo",
+    "empty": "Không có buổi họp nào trong khoảng này.",
+    "days_7": "7 ngày",
+    "days_30": "30 ngày",
+    "today": "Hôm nay"
   },
   "people": {
     "title": "Người",
@@ -179,7 +195,9 @@
     "connecting": "đang kết nối…",
     "reconnecting": "đang kết nối lại…",
     "recorded": "Đã ghi",
-    "error": "Lỗi"
+    "error": "Lỗi",
+    "speakers_one": "{count} người nói",
+    "speakers_other": "{count} người nói"
   },
   "nudge": {
     "dismiss": "Bỏ qua: {title}",
