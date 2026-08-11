@@ -4827,6 +4827,7 @@ dependencies = [
  "serde",
  "serde_json",
  "summo-core",
+ "tempfile",
  "tokio",
  "tracing",
 ]

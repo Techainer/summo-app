@@ -105,8 +105,7 @@ fn set_section(paths: &Paths, note: &str, heading: &str, body: &str) -> Result<(
         .ok_or_else(|| Error::Other(format!("no meeting with id {note}")))?;
 
     let path = vault.join(&entry.path);
-    let markdown = std::fs::read_to_string(&path).map_err(|e| Error::io(&path, e))?;
-    let mut doc = summo_vault::meeting::MeetingDoc::parse(&markdown)?;
+    let mut doc = summo_vault::open(&vault, &path)?;
     doc.set_section(heading, body);
     summo_vault::write::write_atomically(&path, doc.to_markdown()?.as_bytes())
 }

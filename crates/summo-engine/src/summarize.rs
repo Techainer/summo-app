@@ -55,8 +55,7 @@ pub async fn run(
     template_id: Option<&str>,
 ) -> Result<Summarized> {
     let path = find_meeting_file(&paths.vault(), meeting)?;
-    let markdown = std::fs::read_to_string(&path).map_err(|e| Error::io(&path, e))?;
-    let mut doc = MeetingDoc::parse(&markdown)?;
+    let mut doc = summo_vault::open(&paths.vault(), &path)?;
 
     let transcript = prompt::render_transcript(&doc.transcript);
     if transcript.chars().count() < MIN_CHARACTERS {

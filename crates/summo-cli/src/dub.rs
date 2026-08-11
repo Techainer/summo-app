@@ -39,7 +39,7 @@ pub fn run(paths: &Paths, opts: &Options) -> Result<()> {
 
     let path = summo_engine::summarize::find_meeting_file(&paths.vault(), &id)
         .with_context(|| format!("no meeting {}", opts.meeting))?;
-    let doc = summo_vault::MeetingDoc::parse(&std::fs::read_to_string(&path)?)?;
+    let doc = summo_vault::open(&paths.vault(), &path)?;
 
     let translation = summo_vault::translation::load(paths, &id, &opts.lang)?
         .with_context(|| format!("meeting {} has no {} translation — run `summo translate` first", opts.meeting, opts.lang))?;

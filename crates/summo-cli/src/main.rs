@@ -749,17 +749,16 @@ fn export(
     out: Option<&std::path::Path>,
     readable: bool,
 ) -> Result<()> {
-    use summo_vault::{
-        MeetingDoc,
-        export::{Format, Options},
-    };
+    use summo_vault::export::{Format, Options};
 
     let format = Format::parse(format).with_context(|| {
         format!("unknown format `{format}`. Use md, txt, srt, vtt, json or csv.")
     })?;
-    let body = std::fs::read_to_string(meeting)
-        .with_context(|| format!("cannot read {}", meeting.display()))?;
-    let doc = MeetingDoc::parse(&body)?;
+    // Exporting takes a path to any file, which may be outside a vault entirely. Its own parent
+    // stands in as the root: the id only matters for a file that has no frontmatter, and nothing
+    // downstream of an export writes that id back.
+    let root = meeting.parent().unwrap_or(std::path::Path::new("."));
+    let doc = summo_vault::open(root, meeting)?;
 
     let options = if readable {
         Options::readable()

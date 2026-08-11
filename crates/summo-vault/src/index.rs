@@ -760,6 +760,23 @@ pub fn load(entry: &MeetingEntry) -> Result<MeetingDoc> {
     MeetingDoc::adopt(&text, entry.id.clone(), &entry.date)
 }
 
+/// Read a document from a path, adopting it if a person wrote it.
+///
+/// The one way anything should open a vault file. Adoption first landed in the listing and in
+/// [`load`], and every *other* reader — `summo summarize`, `summo export`, `summo dub`, the
+/// daemon's summariser — went on calling [`MeetingDoc::parse`] and went on refusing the same files.
+/// One fix behind four doors, three of which were still shut.
+///
+/// `vault` is the root the id is derived relative to, so a file has the same identity here as it
+/// does in the listing. Getting that wrong would mean `summo summarize` writing an id into a file
+/// that the library then disagrees with.
+pub fn open(vault: &Path, path: &Path) -> Result<MeetingDoc> {
+    let text = std::fs::read_to_string(path).map_err(|e| Error::io(path, e))?;
+    let relative = path.strip_prefix(vault).unwrap_or(path);
+    let meta = std::fs::metadata(path).ok();
+    MeetingDoc::adopt(&text, adopted_id(relative), modified_at(meta.as_ref()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

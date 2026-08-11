@@ -46,7 +46,7 @@ pub fn read(paths: &Paths) -> Result<Board> {
         // recorded meeting has a model-written summary, so only the actions section counts —
         // otherwise a checkbox the model produced inside "Quyết định" becomes a task nobody agreed
         // to. The document decides, not the folder: moving a file must not change what it means.
-        let scope = match summo_vault::MeetingDoc::parse(&body) {
+        let scope = match summo_vault::open(&vault, &path) {
             Ok(doc) if summo_vault::note::is_note(&doc) => tasks::Scope::Everywhere,
             _ => tasks::Scope::ActionSections,
         };

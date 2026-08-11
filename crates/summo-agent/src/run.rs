@@ -165,10 +165,12 @@ fn chosen_provider(paths: &Paths) -> Chosen {
     let settings = summo_core::Settings::load(&paths.settings()).unwrap_or_default();
     let id = settings.llm.provider.trim();
 
-    let provider = summo_llm::provider::Provider::resolve(
+    let catalogue = summo_llm::provider::catalogue(&paths.providers());
+    let provider = summo_llm::provider::Provider::resolve_in(
+        &catalogue,
         id,
         settings.llm.model.as_deref(),
-        summo_llm::provider::key_from_env(id).as_deref(),
+        None,
     );
 
     let Ok(provider) = provider else {

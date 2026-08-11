@@ -1045,7 +1045,8 @@ fn llm_client(state: &AppState) -> Result<summo_llm::LlmClient> {
 /// different models.
 fn llm_for_engine(engine: &EngineState) -> Result<summo_llm::LlmClient> {
     let settings = summo_core::settings::Settings::load(&engine.paths().settings())?;
-    let provider = summo_llm::Provider::resolve(
+    let provider = summo_llm::Provider::resolve_in(
+        &summo_llm::provider::catalogue(&engine.paths().providers()),
         &settings.llm.provider,
         settings.llm.model.as_deref(),
         // Where a key comes from is `Provider::resolve`'s decision: SUMMO_API_KEY first, then
@@ -1273,7 +1274,8 @@ async fn summarize_meeting(
         Ok(settings) => settings,
         Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
     };
-    let provider = match summo_llm::Provider::resolve(
+    let provider = match summo_llm::Provider::resolve_in(
+        &summo_llm::provider::catalogue(&state.engine.paths().providers()),
         &settings.llm.provider,
         settings.llm.model.as_deref(),
         // Where a key comes from is `Provider::resolve`'s decision: SUMMO_API_KEY first, then
@@ -1479,9 +1481,9 @@ fn load_meeting_doc(
     state: &AppState,
     meeting: &summo_core::MeetingId,
 ) -> summo_core::Result<summo_vault::MeetingDoc> {
-    let path = crate::summarize::find_meeting_file(&state.engine.paths().vault(), meeting)?;
-    let markdown = std::fs::read_to_string(&path).map_err(|e| summo_core::Error::io(&path, e))?;
-    summo_vault::MeetingDoc::parse(&markdown)
+    let vault = state.engine.paths().vault();
+    let path = crate::summarize::find_meeting_file(&vault, meeting)?;
+    summo_vault::open(&vault, &path)
 }
 
 /// Interface translations the user dropped into `~/.summo/locales/`.
@@ -2316,20 +2318,21 @@ async fn llm_providers(
     if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
-    let presets: Vec<serde_json::Value> = summo_llm::provider::PRESETS
-        .iter()
-        .map(|preset| {
-            serde_json::json!({
-                "id": preset.id,
-                "name": preset.name,
-                "base_url": preset.base_url,
-                "model": preset.model,
-                "local": preset.local,
-                "key_env": preset.key_env,
-                "key_set": summo_llm::provider::key_from_env(preset.id).is_some(),
+    let presets: Vec<serde_json::Value> =
+        summo_llm::provider::catalogue(&state.engine.paths().providers())
+            .iter()
+            .map(|endpoint| {
+                serde_json::json!({
+                    "id": endpoint.id,
+                    "name": endpoint.name,
+                    "base_url": endpoint.base_url,
+                    "model": endpoint.model,
+                    "local": endpoint.local(),
+                    "key_env": endpoint.key_env,
+                    "key_set": summo_llm::provider::key_for(Some(endpoint), &endpoint.id).is_some(),
+                })
             })
-        })
-        .collect();
+            .collect();
     Json(serde_json::json!({ "providers": presets })).into_response()
 }
 
@@ -2347,7 +2350,12 @@ async fn set_llm(
     as_response((|| {
         // Refuse a provider that cannot be resolved rather than writing it and failing later, when
         // the user has moved on and the error has nothing to do with what they are doing.
-        summo_llm::Provider::resolve(&body.provider, body.model.as_deref(), Some("probe"))?;
+        summo_llm::Provider::resolve_in(
+            &summo_llm::provider::catalogue(&state.engine.paths().providers()),
+            &body.provider,
+            body.model.as_deref(),
+            Some("probe"),
+        )?;
 
         let mut settings = summo_core::Settings::load(&path)?;
         settings.llm.provider = body.provider.trim().to_string();
@@ -2373,7 +2381,8 @@ async fn test_llm(
         return rejection.into_response();
     }
 
-    let provider = match summo_llm::Provider::resolve(
+    let provider = match summo_llm::Provider::resolve_in(
+        &summo_llm::provider::catalogue(&state.engine.paths().providers()),
         &body.provider,
         body.model.as_deref(),
         // Where a key comes from is `Provider::resolve`'s decision: SUMMO_API_KEY first, then

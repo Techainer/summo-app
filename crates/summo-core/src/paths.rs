@@ -161,6 +161,16 @@ impl Paths {
         self.root.join("locales")
     }
 
+    /// Extra language-model endpoints the user added. See `summo_llm::provider::catalogue`.
+    ///
+    /// The same shape as `locales/`: a JSON file dropped in, no rebuild. Summo cannot ship a list
+    /// of every gateway that will ever exist, and a provider that needs a new release to appear in
+    /// the picker is a provider the product does not really support.
+    #[must_use]
+    pub fn providers(&self) -> PathBuf {
+        self.root.join("providers.json")
+    }
+
     /// Summary shapes the user can edit. See `summo_vault::template`.
     #[must_use]
     pub fn templates(&self) -> PathBuf {

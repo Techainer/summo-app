@@ -213,7 +213,97 @@ pub const PRESETS: &[Preset] = &[
     },
 ];
 
-/// Look up a preset by id.
+/// One endpoint in the catalogue, whoever put it there.
+///
+/// The owned twin of [`Preset`]. A built-in and one a user added have to be the same thing
+/// everywhere downstream — the picker, `resolve`, the key lookup — or "add your own provider"
+/// becomes a second-class path that works differently and breaks separately.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Endpoint {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    #[serde(default = "default_model")]
+    pub model: String,
+    #[serde(default = "default_wire")]
+    pub wire: Wire,
+    #[serde(default)]
+    pub key_env: Option<String>,
+    #[serde(default)]
+    pub url_env: Option<String>,
+}
+
+fn default_model() -> String {
+    "default".into()
+}
+
+fn default_wire() -> Wire {
+    Wire::OpenAi
+}
+
+impl Endpoint {
+    /// Whether text stays on this machine.
+    ///
+    /// Computed from the address rather than stored, so a user-supplied entry cannot claim to be
+    /// local while pointing somewhere else. The one fact the product promise turns on is not a
+    /// field anybody gets to assert.
+    #[must_use]
+    pub fn local(&self) -> bool {
+        Provider::custom(&self.name, &self.base_url, &self.model).is_local()
+    }
+}
+
+impl From<&Preset> for Endpoint {
+    fn from(preset: &Preset) -> Self {
+        Self {
+            id: preset.id.into(),
+            name: preset.name.into(),
+            base_url: preset.base_url.into(),
+            model: preset.model.into(),
+            wire: preset.wire,
+            key_env: preset.key_env.map(str::to_string),
+            url_env: preset.url_env.map(str::to_string),
+        }
+    }
+}
+
+/// Every endpoint available, built-in and user-added.
+///
+/// `file` is `~/.summo/providers.json` — a JSON array of [`Endpoint`]. An entry whose `id` matches
+/// a built-in **replaces** it, so somebody whose company runs a proxy can redefine `openai` rather
+/// than living with a name that points at the wrong host. A missing or malformed file leaves the
+/// built-ins alone: a typo in an optional config should cost the user that entry, not the feature.
+#[must_use]
+pub fn catalogue(file: &std::path::Path) -> Vec<Endpoint> {
+    let mut out: Vec<Endpoint> = PRESETS.iter().map(Endpoint::from).collect();
+
+    let Ok(text) = std::fs::read_to_string(file) else {
+        return out;
+    };
+    let added: Vec<Endpoint> = match serde_json::from_str(&text) {
+        Ok(added) => added,
+        Err(e) => {
+            tracing::warn!(path = %file.display(), error = %e, "cannot read the extra providers");
+            return out;
+        }
+    };
+
+    for entry in added {
+        // An id has to survive into `settings.json` and back; a blank or whitespace one would save
+        // fine and never resolve.
+        if entry.id.trim().is_empty() || !entry.base_url.starts_with("http") {
+            tracing::warn!(id = %entry.id, "ignoring a provider with no id or no http address");
+            continue;
+        }
+        match out.iter_mut().find(|p| p.id == entry.id) {
+            Some(existing) => *existing = entry,
+            None => out.push(entry),
+        }
+    }
+    out
+}
+
+/// Look up a built-in preset by id.
 #[must_use]
 pub fn preset(id: &str) -> Option<&'static Preset> {
     PRESETS.iter().find(|p| p.id == id)
@@ -227,15 +317,35 @@ pub fn preset(id: &str) -> Option<&'static Preset> {
 /// key, so a local server is never handed a stray credential.
 #[must_use]
 pub fn key_from_env(id: &str) -> Option<String> {
-    // A bare base URL is not a preset, but it is almost always an OpenAI-compatible gateway put
-    // there by an organisation that also exported `OPENAI_API_KEY`. Sending nothing meant that
-    // setup — the most common corporate one there is — failed with "no api key passed in".
-    let env = match preset(id) {
-        Some(preset) => preset.key_env?,
-        None if id.starts_with("http") => "OPENAI_API_KEY",
+    key_for(preset(id).map(Endpoint::from).as_ref(), id)
+}
+
+/// The key for an endpoint, from the environment.
+///
+/// `SUMMO_API_KEY` is the universal answer and works for anything, including an endpoint Summo has
+/// never heard of. The endpoint's own variable is a convenience on top: a machine that already runs
+/// `claude` has `ANTHROPIC_API_KEY` set, and asking the user to copy it into a Summo-specific name
+/// is make-work.
+///
+/// A bare base URL gets `OPENAI_API_KEY` as its second guess. That is a convention, not a rule —
+/// an OpenAI-shaped gateway is what a bare URL nearly always is — and `SUMMO_API_KEY` overrides it
+/// for anyone it guesses wrong for.
+#[must_use]
+pub fn key_for(endpoint: Option<&Endpoint>, id: &str) -> Option<String> {
+    let mut names = vec!["SUMMO_API_KEY".to_string()];
+    match endpoint {
+        // A loopback server is somebody else's process, not a service with an account. It never
+        // gets a credential, whatever happens to be exported in this shell.
+        Some(endpoint) if endpoint.local() => return None,
+        Some(endpoint) => names.extend(endpoint.key_env.clone()),
+        None if id.starts_with("http") => names.push("OPENAI_API_KEY".into()),
         None => return None,
-    };
-    ["SUMMO_API_KEY", env]
+    }
+    env_first(&names.iter().map(String::as_str).collect::<Vec<_>>())
+}
+
+fn env_first(names: &[&str]) -> Option<String> {
+    names
         .iter()
         .find_map(|name| std::env::var(name).ok())
         .map(|k| k.trim().to_string())
@@ -249,12 +359,23 @@ pub fn key_from_env(id: &str) -> Option<String> {
 /// and a redirect nobody expects.
 #[must_use]
 pub fn base_url_from_env(id: &str) -> Option<String> {
-    let candidates = [Some("SUMMO_BASE_URL"), preset(id).and_then(|p| p.url_env)];
-    candidates
+    preset(id).map(Endpoint::from).as_ref().and_then(base_url_for)
+}
+
+/// The gateway to use instead of an endpoint's own address, if the environment names one.
+#[must_use]
+pub fn base_url_for(endpoint: &Endpoint) -> Option<String> {
+    // A local endpoint is never redirected: an environment variable must not be able to point
+    // "runs on your machine" at somebody else's server while the interface still says local.
+    if endpoint.local() {
+        return None;
+    }
+    let names = ["SUMMO_BASE_URL".to_string()]
         .into_iter()
-        .flatten()
-        .find_map(|name| std::env::var(name).ok())
-        .map(|url| url.trim().trim_end_matches('/').to_string())
+        .chain(endpoint.url_env.clone())
+        .collect::<Vec<_>>();
+    env_first(&names.iter().map(String::as_str).collect::<Vec<_>>())
+        .map(|url| url.trim_end_matches('/').to_string())
         .filter(|url| url.starts_with("http"))
 }
 
@@ -340,29 +461,56 @@ impl Provider {
     /// The key is never stored — it is read from the environment or the keychain at the moment it
     /// is needed, so it cannot end up in a settings file, a backup or a support bundle.
     pub fn resolve(name: &str, model: Option<&str>, api_key: Option<&str>) -> Result<Self> {
+        let built_in: Vec<Endpoint> = PRESETS.iter().map(Endpoint::from).collect();
+        Self::resolve_in(&built_in, name, model, api_key)
+    }
+
+    /// Resolve against a catalogue, which may include endpoints the user added.
+    ///
+    /// Callers that have a data directory should use this with [`catalogue`], so a provider from
+    /// `providers.json` behaves exactly like a built-in rather than only appearing in the picker.
+    pub fn resolve_in(
+        catalogue: &[Endpoint],
+        name: &str,
+        model: Option<&str>,
+        api_key: Option<&str>,
+    ) -> Result<Self> {
         let name = match name.trim() {
             "" => "ollama",
             other => other,
         };
 
-        if let Some(preset) = preset(name) {
-            // The caller's key wins; otherwise the provider's own environment variable, which a
+        if let Some(endpoint) = catalogue.iter().find(|p| p.id == name) {
+            // The caller's key wins; otherwise the endpoint's own environment variable, which a
             // machine that already talks to it will have set.
             let key = api_key
                 .map(str::trim)
                 .filter(|k| !k.is_empty())
                 .map(str::to_string)
-                .or_else(|| key_from_env(name));
+                .or_else(|| key_for(Some(endpoint), name));
 
-            if preset.key_env.is_some() && key.is_none() {
-                let env = preset.key_env.unwrap_or("SUMMO_API_KEY");
+            if endpoint.key_env.is_some() && key.is_none() {
+                let env = endpoint.key_env.as_deref().unwrap_or("SUMMO_API_KEY");
                 return Err(Error::Config(format!(
                     "{} needs an API key: set {env} or SUMMO_API_KEY",
-                    preset.name
+                    endpoint.name
                 )));
             }
-            let mut provider = Self::from_preset(preset, model, key.as_deref());
-            if let Some(url) = base_url_from_env(name) {
+
+            let mut provider = Self {
+                name: endpoint.name.clone(),
+                base_url: endpoint.base_url.trim_end_matches('/').to_string(),
+                model: model
+                    .map(str::trim)
+                    .filter(|m| !m.is_empty())
+                    .unwrap_or(&endpoint.model)
+                    .to_string(),
+                wire: endpoint.wire,
+                api_key: key,
+                max_tokens: 2048,
+                temperature: 0.2,
+            };
+            if let Some(url) = base_url_for(endpoint) {
                 provider.base_url = url;
             }
             return Ok(provider);
@@ -376,12 +524,12 @@ impl Provider {
                 .map(str::trim)
                 .filter(|k| !k.is_empty())
                 .map(str::to_string)
-                .or_else(|| key_from_env(name))
+                .or_else(|| key_for(None, name))
                 .filter(|k| !k.trim().is_empty());
             return Ok(provider);
         }
 
-        let known: Vec<&str> = PRESETS.iter().map(|p| p.id).collect();
+        let known: Vec<&str> = catalogue.iter().map(|p| p.id.as_str()).collect();
         Err(Error::Config(format!(
             "unknown provider `{name}`. Use one of {}, or a base URL.",
             known.join(", ")
@@ -868,5 +1016,103 @@ mod tests {
     #[test]
     fn an_empty_name_still_means_ollama() {
         assert_eq!(Provider::resolve("", None, None).unwrap().name, "Ollama");
+    }
+
+    // ---- the catalogue a user can extend --------------------------------------------------
+
+    fn with_providers(json: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("providers.json");
+        std::fs::write(&path, json).unwrap();
+        (tmp, path)
+    }
+
+    #[test]
+    fn a_missing_file_leaves_the_built_ins_alone() {
+        let list = catalogue(std::path::Path::new("/nonexistent/providers.json"));
+        assert_eq!(list.len(), PRESETS.len());
+    }
+
+    /// A typo in an optional config should cost the user that file, not the feature.
+    #[test]
+    fn a_malformed_file_leaves_the_built_ins_alone() {
+        let (_tmp, path) = with_providers("{ not an array");
+        assert_eq!(catalogue(&path).len(), PRESETS.len());
+    }
+
+    #[test]
+    fn a_user_can_add_an_endpoint_without_a_rebuild() {
+        let (_tmp, path) = with_providers(
+            r#"[{"id":"nexai","name":"NexAI","base_url":"https://getnexai.net/api/v1",
+                 "model":"gpt-4o-mini","key_env":"NEXAI_API_KEY"}]"#,
+        );
+        let list = catalogue(&path);
+        assert_eq!(list.len(), PRESETS.len() + 1);
+
+        let built = Provider::resolve_in(&list, "nexai", None, Some("k")).unwrap();
+        assert_eq!(built.base_url, "https://getnexai.net/api/v1");
+        assert_eq!(built.model, "gpt-4o-mini");
+        assert_eq!(built.wire, Wire::OpenAi, "OpenAI shape is the default");
+    }
+
+    /// Redefining a built-in is the point for anyone whose company runs a proxy: they should be
+    /// able to keep the familiar name and change where it points.
+    #[test]
+    fn a_user_entry_replaces_a_built_in_with_the_same_id() {
+        let (_tmp, path) = with_providers(
+            r#"[{"id":"openai","name":"Work OpenAI","base_url":"https://gateway.corp/v1","model":"house"}]"#,
+        );
+        let list = catalogue(&path);
+        assert_eq!(list.len(), PRESETS.len(), "replaced, not appended");
+
+        let built = Provider::resolve_in(&list, "openai", None, None).unwrap();
+        assert_eq!(built.base_url, "https://gateway.corp/v1");
+        assert_eq!(built.name, "Work OpenAI");
+    }
+
+    #[test]
+    fn an_entry_with_no_id_or_no_address_is_ignored() {
+        let (_tmp, path) = with_providers(
+            r#"[{"id":"  ","name":"blank","base_url":"https://x/v1"},
+                {"id":"nowhere","name":"nowhere","base_url":"ftp://x"}]"#,
+        );
+        assert_eq!(catalogue(&path).len(), PRESETS.len());
+    }
+
+    /// `local` is computed from the address, so a user-supplied entry cannot claim to keep text on
+    /// the machine while pointing at a server.
+    #[test]
+    fn a_user_entry_cannot_lie_about_being_local() {
+        let (_tmp, path) = with_providers(
+            r#"[{"id":"sneaky","name":"Sneaky","base_url":"https://example.com/v1"}]"#,
+        );
+        let endpoint = catalogue(&path)
+            .into_iter()
+            .find(|p| p.id == "sneaky")
+            .unwrap();
+        assert!(!endpoint.local());
+    }
+
+    #[test]
+    fn a_user_entry_can_speak_the_anthropic_shape() {
+        let (_tmp, path) = with_providers(
+            r#"[{"id":"corp-claude","name":"Corp","base_url":"https://gw.corp/v1",
+                 "wire":"anthropic","key_env":"CORP_KEY"}]"#,
+        );
+        let built = Provider::resolve_in(&catalogue(&path), "corp-claude", None, Some("k")).unwrap();
+        assert_eq!(built.wire, Wire::Anthropic);
+        assert!(built.endpoint().ends_with("/messages"));
+    }
+
+    /// The failure that sends people to the documentation: a name that is not in the list.
+    #[test]
+    fn an_unknown_name_lists_user_entries_too() {
+        let (_tmp, path) = with_providers(
+            r#"[{"id":"nexai","name":"NexAI","base_url":"https://getnexai.net/api/v1"}]"#,
+        );
+        let err = Provider::resolve_in(&catalogue(&path), "nope", None, None)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("nexai"), "{err}");
     }
 }

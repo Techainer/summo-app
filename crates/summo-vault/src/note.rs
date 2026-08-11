@@ -95,8 +95,7 @@ pub fn find(paths: &Paths, id: &MeetingId) -> Result<PathBuf> {
 /// Read a note.
 pub fn read(paths: &Paths, id: &MeetingId) -> Result<MeetingDoc> {
     let path = find(paths, id)?;
-    let markdown = std::fs::read_to_string(&path).map_err(|e| Error::io(&path, e))?;
-    MeetingDoc::parse(&markdown)
+    crate::index::open(&paths.vault(), &path)
 }
 
 /// Replace a note's body, and optionally its title.
@@ -110,8 +109,7 @@ pub fn read(paths: &Paths, id: &MeetingId) -> Result<MeetingDoc> {
 /// is an editor mid-edit, not a request to un-name the note.
 pub fn set_body(paths: &Paths, id: &MeetingId, body: &str, title: Option<&str>) -> Result<PathBuf> {
     let path = find(paths, id)?;
-    let markdown = std::fs::read_to_string(&path).map_err(|e| Error::io(&path, e))?;
-    let mut doc = MeetingDoc::parse(&markdown)?;
+    let mut doc = crate::index::open(&paths.vault(), &path)?;
 
     if let Some(title) = title
         && !title.trim().is_empty()

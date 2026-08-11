@@ -34,7 +34,13 @@ pub struct ProviderArgs {
 impl ProviderArgs {
     /// Build a client, defaulting to whatever the named provider usually runs.
     pub fn client(&self) -> Result<LlmClient> {
-        let provider = Provider::resolve(
+        // The user's own `providers.json` counts here as much as it does in the interface: a
+        // command that cannot reach an endpoint the settings screen offers is a split product.
+        let catalogue = summo_core::paths::Paths::discover()
+            .map(|paths| summo_llm::provider::catalogue(&paths.providers()))
+            .unwrap_or_default();
+        let provider = Provider::resolve_in(
+            &catalogue,
             &self.provider,
             self.model.as_deref(),
             self.api_key.as_deref(),
@@ -59,9 +65,11 @@ impl ProviderArgs {
 }
 
 fn load(path: &std::path::Path) -> Result<MeetingDoc> {
-    let body =
-        std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
-    MeetingDoc::parse(&body).map_err(Into::into)
+    // Its own parent as the vault root: this takes a path to any file, which need not be inside a
+    // vault at all, and the derived id only matters for a file that has no frontmatter.
+    let root = path.parent().unwrap_or(std::path::Path::new("."));
+    summo_vault::open(root, path)
+        .with_context(|| format!("cannot read {}", path.display()))
 }
 
 /// Summarise a meeting and write the result back into its own file.
@@ -183,33 +191,28 @@ pub fn search(paths: &Paths, question: &str, limit: usize) -> Result<Vec<Excerpt
         return Ok(Vec::new());
     }
 
-    let dir = paths.meetings();
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Ok(Vec::new());
-    };
+    // The listing, not a `read_dir`.
+    //
+    // `read_dir` is not recursive, so a meeting filed into a folder — which the interface encourages
+    // with a drag-and-drop folder tree — was invisible to every question asked here. Notes were too,
+    // since they live in a different directory entirely. The answer would come back confidently
+    // sourced from whatever *was* reachable, which is worse than saying nothing was found.
+    let vault = paths.vault();
+    let meetings = paths.meetings();
+    let notes = paths.notes();
+    let index =
+        summo_vault::MeetingIndex::scan_all([meetings.as_path(), notes.as_path()])?;
+
+    let mut entries: Vec<_> = index.entries().iter().collect();
+    // Newest first: recent meetings are far more often what someone is asking about.
+    entries.sort_by(|a, b| b.date.cmp(&a.date));
 
     let mut out = Vec::new();
-    let mut files: Vec<_> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "md"))
-        .collect();
-    // Newest first: recent meetings are far more often what someone is asking about.
-    files.sort();
-    files.reverse();
-
-    for path in files {
-        let Ok(body) = std::fs::read_to_string(&path) else {
+    for entry in entries {
+        let Ok(doc) = summo_vault::open(&vault, &entry.path) else {
             continue;
         };
-        let Ok(doc) = MeetingDoc::parse(&body) else {
-            continue;
-        };
-        let name = path
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
+        let name = entry.title.clone();
 
         for segment in &doc.transcript {
             let haystack = segment.text.to_lowercase();
@@ -279,6 +282,40 @@ mod tests {
         let (_tmp, paths) = vault_with(&refs);
 
         assert_eq!(search(&paths, "ngân sách", 5).unwrap().len(), 5);
+    }
+
+    /// A meeting dragged into a folder — which the sidebar's folder tree exists to encourage — was
+    /// invisible to every question, because the scan was a non-recursive `read_dir`. The answer
+    /// still came back, sourced from whatever happened to be at the top level.
+    #[test]
+    fn a_meeting_inside_a_folder_is_searched() {
+        let (_tmp, paths) = vault_with(&[("00:00:01", "gì đó")]);
+        let folder = paths.meetings().join("Sản phẩm");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(
+            folder.join("2026-08-11-ngan-sach.md"),
+            "---\nid: m2\ndate: 2026-08-11\n---\n# Ngân sách\n\n## Transcript\n**[00:00:02] me** — ngân sách quý tới tăng gấp đôi\n",
+        )
+        .unwrap();
+
+        let hits = search(&paths, "ngân sách quý tới", 10).unwrap();
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert!(hits[0].text.contains("gấp đôi"));
+    }
+
+    /// Notes live in a different directory, so after the note-centric refactor they were missing
+    /// from every answer — the one place a user is most likely to have written a decision down.
+    #[test]
+    fn a_note_is_searched_too() {
+        let (_tmp, paths) = vault_with(&[("00:00:01", "gì đó")]);
+        std::fs::write(
+            paths.notes().join("ghi-chu.md"),
+            "# Ghi chú\n\n## Transcript\n**[00:00:03] me** — chốt hạ tầng dùng Cloudflare\n",
+        )
+        .unwrap();
+
+        let hits = search(&paths, "hạ tầng Cloudflare", 10).unwrap();
+        assert_eq!(hits.len(), 1, "{hits:?}");
     }
 
     #[test]
