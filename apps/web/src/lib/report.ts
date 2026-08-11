@@ -73,16 +73,6 @@ export function today(): string {
   return local.toISOString().slice(0, 10);
 }
 
-/** Hours and minutes, as a person would say them. */
-export function duration(seconds: number): string {
-  if (seconds <= 0) return "—";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} phút`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest === 0 ? `${hours} giờ` : `${hours} giờ ${rest} phút`;
-}
-
 /**
  * Share of the total, as a percentage, for a bar's width.
  *

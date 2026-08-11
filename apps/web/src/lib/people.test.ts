@@ -4,7 +4,6 @@ import {
   confidenceLabel,
   correctionSummary,
   nameOptions,
-  speakingTime,
   type Correction,
   type Person,
   type UnknownVoice,
@@ -23,37 +22,17 @@ function voice(suggestions: { id: string; similarity: number }[]): UnknownVoice 
   };
 }
 
-describe("speakingTime", () => {
-  it("uses seconds for a short interjection", () => {
-    expect(speakingTime(12)).toBe("12 giây");
-    expect(speakingTime(59)).toBe("59 giây");
-  });
-
-  it("uses minutes for a normal contribution", () => {
-    expect(speakingTime(240)).toBe("4 phút");
-  });
-
-  it("uses hours once minutes stop being readable", () => {
-    expect(speakingTime(3600)).toBe("1 giờ");
-    expect(speakingTime(5400)).toBe("1 giờ 30 phút");
-  });
-
-  it("does not say zero minutes", () => {
-    expect(speakingTime(7200)).toBe("2 giờ");
-  });
-});
-
 describe("confidenceLabel", () => {
   it("describes a match in words, not a cosine", () => {
-    expect(confidenceLabel(0.9)).toBe("rất giống");
-    expect(confidenceLabel(0.65)).toBe("khá giống");
-    expect(confidenceLabel(0.45)).toBe("hơi giống");
+    expect(confidenceLabel(0.9)).toBe("people.similarity_high");
+    expect(confidenceLabel(0.65)).toBe("people.similarity_mid");
+    expect(confidenceLabel(0.45)).toBe("people.similarity_low");
   });
 
   it("puts the boundaries where the thresholds are", () => {
     // 0.62 is SAME_VOICE in summo-diar; a match at exactly that should not read as a weak one.
-    expect(confidenceLabel(0.62)).toBe("khá giống");
-    expect(confidenceLabel(0.619)).toBe("hơi giống");
+    expect(confidenceLabel(0.62)).toBe("people.similarity_mid");
+    expect(confidenceLabel(0.619)).toBe("people.similarity_low");
   });
 });
 
@@ -67,7 +46,7 @@ describe("correctionSummary", () => {
 
   it("says nothing when only the current meeting changed", () => {
     // Naming a voice obviously names the voice. Announcing it is noise.
-    expect(correctionSummary(base)).toBeNull();
+    expect(correctionSummary(base)).toEqual([]);
   });
 
   it("reports past meetings, because rewriting them unannounced is alarming", () => {
@@ -78,13 +57,14 @@ describe("correctionSummary", () => {
         { meeting: "01B", utterances: 3 },
       ],
     });
-    expect(summary).toContain("11 câu");
-    expect(summary).toContain("2 buổi họp");
+    expect(summary).toEqual([
+      { key: "people.relabelled", params: { utterances: "11", meetings: "2" } },
+    ]);
   });
 
   it("reports profiles the correction took samples away from", () => {
     const summary = correctionSummary({ ...base, corrected_profiles: ["ngoc"] });
-    expect(summary).toContain("gỡ nhầm khỏi 1 người");
+    expect(summary).toEqual([{ key: "people.unmerged", params: { count: "1" } }]);
   });
 
   it("reports both at once", () => {
@@ -93,8 +73,10 @@ describe("correctionSummary", () => {
       relabelled_elsewhere: [{ meeting: "01A", utterances: 5 }],
       corrected_profiles: ["ngoc"],
     });
-    expect(summary).toContain("5 câu");
-    expect(summary).toContain("gỡ nhầm");
+    expect(summary.map((phrase) => phrase.key)).toEqual([
+      "people.relabelled",
+      "people.unmerged",
+    ]);
   });
 });
 

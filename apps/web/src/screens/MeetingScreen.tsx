@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Comments } from "../components/meeting/Comments";
 import { useErrorText } from "../lib/errors";
-import { useT } from "../i18n/context";
+import { useI18n } from "../i18n/context";
 import { DraftPanel } from "../components/meeting/DraftPanel";
 import { Player, type PlayerHandle } from "../components/meeting/Player";
 import { TranscriptChips } from "../components/meeting/TranscriptChips";
@@ -11,7 +11,7 @@ import { Button, Card, CardBody, CardHeader, SegmentedControl } from "../compone
 import { useEngine } from "../lib/engine-context";
 import { DraftClient, readable, type Draft } from "../lib/draft";
 import { url, type MeetingDetail } from "../lib/library";
-import { duration } from "../lib/report";
+import { formatDuration } from "../lib/duration";
 
 type Pane = "comments" | "transcript";
 
@@ -29,7 +29,7 @@ const PANES = [
  * rest of Phase 1; this is the shell they hang on.
  */
 export function MeetingScreen() {
-  const t = useT();
+  const { t, locale } = useI18n();
   const say = useErrorText();
   const { meetingId } = useParams({ from: "/meetings/$meetingId" });
   const { library, handshake } = useEngine();
@@ -137,7 +137,7 @@ export function MeetingScreen() {
         <h1 className="text-2xl font-semibold tracking-tight">{summary.title}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px] text-fg-dim">
           <Pill>{summary.day}</Pill>
-          <Pill>{duration(summary.duration)}</Pill>
+          <Pill>{formatDuration(summary.duration, locale)}</Pill>
           {summary.folder && <Pill>{summary.folder}</Pill>}
           {summary.tags.map((tag) => (
             <Pill key={tag}>#{tag}</Pill>

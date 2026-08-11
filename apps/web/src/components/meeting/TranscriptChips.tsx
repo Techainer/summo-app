@@ -1,6 +1,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useMemo, useRef } from "react";
 
+import { useT } from "../../i18n/context";
 import { cn } from "../../lib/cn";
 import { clock } from "./Player";
 
@@ -45,6 +46,7 @@ interface Props {
  * to stay at 60fps.
  */
 export function TranscriptChips({ segments, at, onSeek, reading = false }: Props) {
+  const t = useT();
   const scroller = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -68,7 +70,7 @@ export function TranscriptChips({ segments, at, onSeek, reading = false }: Props
   }, [segments, at]);
 
   if (segments.length === 0) {
-    return <p className="p-6 text-center text-fg-faint">Không có transcript.</p>;
+    return <p className="p-6 text-center text-fg-faint">{t("meeting.no_transcript")}</p>;
   }
 
   return (
@@ -153,12 +155,13 @@ function Chip({
   if (!seekable) {
     return <div className={className}>{body}</div>;
   }
+  const t = useT();
   return (
     <button
       type="button"
       className={className}
       onClick={() => onSeek(segment.t0)}
-      aria-label={`Nghe từ ${clock(segment.t0)}`}
+      aria-label={t("meeting.play_from", { time: clock(segment.t0) })}
     >
       {body}
     </button>

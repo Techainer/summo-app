@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-import { useT } from "../../i18n/context";
+import { useI18n } from "../../i18n/context";
 import { cn } from "../../lib/cn";
 import { isRefinable, readable, selectionWithin, type Draft } from "../../lib/draft";
 import { Button, Card, CardBody, CardHeader } from "../ui";
@@ -27,7 +27,7 @@ interface Props {
  * used for the expensive job.
  */
 export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard }: Props) {
-  const t = useT();
+  const { t, n } = useI18n();
   const [picked, setPicked] = useState<{ heading: string; text: string } | null>(null);
   const [instruction, setInstruction] = useState("");
   const [message, setMessage] = useState("");
@@ -53,14 +53,14 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
     <Card className="border-accent/40">
       <CardHeader
         title={t("draft.heading")}
-        count={draft.revisions > 0 ? `đã sửa ${draft.revisions} lần` : t("draft.pending")}
+        count={draft.revisions > 0 ? n("draft.revised", draft.revisions) : t("draft.pending")}
         actions={
           <>
             <Button size="sm" variant="ghost" onClick={onDiscard} disabled={busy}>
-              Bỏ
+              {t("draft.discard")}
             </Button>
             <Button size="sm" variant="primary" onClick={onConfirm} busy={busy}>
-              Xác nhận
+              {t("draft.confirm")}
             </Button>
           </>
         }
@@ -68,7 +68,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
 
       <CardBody className="space-y-4">
         <p className="text-[12px] text-fg-faint">
-          Bôi đen một đoạn để sửa riêng đoạn đó, hoặc nhắn ở dưới để sửa cả bài.
+          {t("draft.select_hint")}
         </p>
 
         {draft.sections.map((section) => (
@@ -89,7 +89,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
         {picked && (
           <div className="rounded-[var(--radius-card)] border border-accent/40 bg-bg-soft p-2.5">
             <p className="text-[12px] text-fg-dim">
-              Sửa trong <strong>{picked.heading}</strong>:{" "}
+              {t("draft.revising", { heading: picked.heading })}{" "}
               <span className="italic">“{shorten(picked.text)}”</span>
             </p>
             <form
@@ -109,10 +109,10 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
                 className="flex-1 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-sm"
               />
               <Button size="sm" variant="primary" type="submit" busy={busy}>
-                Sửa
+                {t("draft.apply")}
               </Button>
               <Button size="sm" variant="ghost" type="button" onClick={() => setPicked(null)}>
-                Huỷ
+                {t("draft.cancel")}
               </Button>
             </form>
           </div>
@@ -128,7 +128,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
                   turn.role === "you" ? "text-fg" : "text-fg-faint",
                 )}
               >
-                <span className="font-medium">{turn.role === "you" ? "Bạn" : "Agent"}: </span>
+                <span className="font-medium">{turn.role === "you" ? t("draft.you") : t("draft.agent")}: </span>
                 {turn.text}
               </li>
             ))}
@@ -153,7 +153,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
             className="flex-1 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-sm"
           />
           <Button size="sm" type="submit" busy={busy}>
-            Gửi
+            {t("draft.send")}
           </Button>
         </form>
       </CardBody>

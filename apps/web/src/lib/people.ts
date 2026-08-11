@@ -108,52 +108,56 @@ export class PeopleClient {
   }
 }
 
-/** How long a voice spoke, as a person would say it. */
-export function speakingTime(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)} giây`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} phút`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest === 0 ? `${hours} giờ` : `${hours} giờ ${rest} phút`;
-}
-
 /**
- * How sure the match is, in words rather than a number.
+ * How sure the match is, in words rather than a number — as a translation key.
  *
  * A percentage invites the user to reason about a cosine similarity, which is not a thing anybody
  * should have to do to name a colleague. The bands are wide on purpose.
+ *
+ * A key rather than the words, because this module is pure logic and has no locale: choosing the
+ * band is arithmetic, and saying it is the caller's job. It used to return Vietnamese, so the
+ * English interface offered "Bình (rất giống)".
  */
 export function confidenceLabel(similarity: number): string {
-  if (similarity >= 0.75) return "rất giống";
-  if (similarity >= 0.62) return "khá giống";
-  return "hơi giống";
+  if (similarity >= 0.75) return "people.similarity_high";
+  if (similarity >= 0.62) return "people.similarity_mid";
+  return "people.similarity_low";
 }
 
 /**
  * What a correction did, phrased for a person.
  *
- * Returns null when nothing beyond the obvious happened — there is no point announcing that naming
+ * Returns nothing when nothing beyond the obvious happened — there is no point announcing that naming
  * a voice named the voice.
  */
-export function correctionSummary(correction: Correction): string | null {
-  const parts: string[] = [];
+export function correctionSummary(correction: Correction): Phrase[] {
+  const parts: Phrase[] = [];
 
   const elsewhere = correction.relabelled_elsewhere;
   if (elsewhere.length > 0) {
-    const utterances = elsewhere.reduce((total, m) => total + m.utterances, 0);
-    parts.push(
-      `Đã sửa ${utterances} câu trong ${elsewhere.length} buổi họp cũ`,
-    );
+    parts.push({
+      key: "people.relabelled",
+      params: {
+        utterances: String(elsewhere.reduce((total, m) => total + m.utterances, 0)),
+        meetings: String(elsewhere.length),
+      },
+    });
   }
 
   if (correction.corrected_profiles.length > 0) {
-    parts.push(
-      `gỡ nhầm khỏi ${correction.corrected_profiles.length} người khác`,
-    );
+    parts.push({
+      key: "people.unmerged",
+      params: { count: String(correction.corrected_profiles.length) },
+    });
   }
 
-  return parts.length > 0 ? `${parts.join(", ")}.` : null;
+  return parts;
+}
+
+/** Something to say, named rather than spelled — see `correctionSummary`. */
+export interface Phrase {
+  key: string;
+  params: Record<string, string>;
 }
 
 /**

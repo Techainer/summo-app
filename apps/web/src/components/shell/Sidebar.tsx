@@ -145,6 +145,7 @@ function FolderRow({
   onToggle?: () => void;
   onSelect: () => void;
 }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -158,7 +159,7 @@ function FolderRow({
         <button
           type="button"
           onClick={onToggle}
-          aria-label={expanded ? `Thu gọn ${label}` : `Mở rộng ${label}`}
+          aria-label={t(expanded ? "nav.collapse" : "nav.expand", { name: label })}
           aria-expanded={expanded}
           className="flex size-6 shrink-0 items-center justify-center text-fg-faint hover:text-fg"
         >

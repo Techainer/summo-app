@@ -43,25 +43,42 @@ export function CaptureControls() {
       <fieldset disabled={busy} className="disabled:opacity-60">
         <legend className="sr-only">{t("record.audio_source")}</legend>
 
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* A real checkbox, hidden and styled through its own label.
+           *
+           * The browser's default control is a blue square drawn by the operating system; next to a
+           * dark, green-accented interface it reads as something the page did not mean to include.
+           * `appearance-none` on the input itself would leave the focus ring and the hit target to
+           * rebuild by hand, whereas `sr-only` plus `peer-*` keeps every bit of native behaviour —
+           * space to toggle, tab order, the accessibility tree — and changes only the paint. */}
           {(["mic", "system"] as Lane[]).map((lane) => (
-            <label key={lane} className="flex items-center gap-2 text-sm">
+            <label
+              key={lane}
+              className="group flex cursor-pointer items-center gap-2 rounded-full border border-line bg-bg-soft px-3 py-1.5 text-sm text-fg-dim transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:checked]:text-accent has-[:focus-visible]:border-accent"
+            >
               <input
                 type="checkbox"
+                className="peer sr-only"
                 checked={capture.lanes.includes(lane)}
                 onChange={() => toggleLane(lane)}
               />
+              <span
+                aria-hidden="true"
+                className="grid size-4 place-items-center rounded-[5px] border border-line-strong text-[10px] text-accent-fg peer-checked:border-accent peer-checked:bg-accent"
+              >
+                <span className="opacity-0 transition-opacity group-has-[:checked]:opacity-100">✓</span>
+              </span>
               {t(lane === "mic" ? "record.microphone" : "record.system")}
             </label>
           ))}
 
-          <label className="ml-auto flex items-center gap-2 text-sm">
+          <label className="ms-auto flex items-center gap-2 text-sm text-fg-faint">
             {t("record.translate_live")}
             <select
               value={capture.translateTo}
               aria-label={t("record.translate_live")}
               onChange={(e) => update({ ...capture, translateTo: e.target.value })}
-              className="rounded-lg border border-line bg-bg-soft px-2 py-1 text-sm"
+              className="rounded-lg border border-line bg-bg-soft px-2 py-1.5 text-sm text-fg focus:outline-none focus-visible:border-accent"
             >
               {TARGETS.map((target) => (
                 <option key={target.code} value={target.code}>

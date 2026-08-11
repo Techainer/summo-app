@@ -23,9 +23,10 @@
     "agenda": "Calendar",
     "shrink": "Shrink the window",
     "shrink_hint": "Shrink while you are in the meeting",
-    "expand": "Expand the window",
+    "expand": "Expand {name}",
     "expand_hint": "Expand",
-    "agents": "Agents"
+    "agents": "Agents",
+    "collapse": "Collapse {name}"
   },
   "record": {
     "source": "Source",
@@ -89,7 +90,9 @@
     "opening": "Opening…",
     "back": "Library",
     "no_summary_yet": "No summary for this meeting yet.",
-    "summarise_now": "Summarise now"
+    "summarise_now": "Summarise now",
+    "play_from": "Play from {time}",
+    "no_transcript": "Nothing was said yet."
   },
   "draft": {
     "heading": "Summary drafted by the agent",
@@ -103,7 +106,15 @@
     "revise_placeholder": "shorter, drop the client's name, add dates…",
     "edited": "lines edited",
     "edited_by_hand": "edited by hand",
-    "you": "You"
+    "you": "You",
+    "revised_one": "{count} revision",
+    "revised_other": "{count} revisions",
+    "select_hint": "Select a passage to change just that part, or write below to change the whole thing.",
+    "revising": "Changing in {heading}:",
+    "apply": "Apply",
+    "cancel": "Cancel",
+    "send": "Send",
+    "agent": "Agent"
   },
   "tasks": {
     "title": "Tasks",
@@ -129,7 +140,12 @@
     "show_steps_n": "Show {count} steps",
     "agent_empty_head": "The agent has nothing to do. Give it work by writing",
     "agent_empty_tail": "in a meeting note.",
-    "run": "Run"
+    "run": "Run",
+    "blocked": "Waiting",
+    "failed": "Failed",
+    "due_today": "today",
+    "due_overdue": "{date} — overdue",
+    "due_on": "due {date}"
   },
   "chat": {
     "title": "Ask",
@@ -162,7 +178,7 @@
     "loading": "Reading the vault…",
     "no_content": "Nothing here yet.",
     "recorded": "Recorded",
-    "meeting": "Meeting",
+    "meeting": "Meetings",
     "people": "People",
     "last_7": "Last 7 days",
     "empty_cta": "Record your first",
@@ -226,7 +242,9 @@
     "forget_who": "Remove {name}",
     "samples": "{count} voice samples",
     "confirmed_by_you": "{count} confirmed by you",
-    "voice_styles": "{count} voice styles"
+    "voice_styles": "{count} voice styles",
+    "relabelled": "Corrected {utterances} lines across {meetings} earlier meetings",
+    "unmerged": "removed from {count} other people"
   },
   "settings": {
     "title": "Settings",

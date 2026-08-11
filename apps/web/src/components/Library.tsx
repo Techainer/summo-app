@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../lib/cn";
+import { formatDuration } from "../lib/duration";
 import { useI18n, useT } from "../i18n/context";
 import { useIsNarrow } from "../lib/breakpoint";
 import { useErrorText } from "../lib/errors";
 import {
   LibraryClient,
   dayLabel,
-  formatDuration,
   groupLabel,
   localDay,
   timeOfDay,
@@ -346,7 +346,7 @@ function MeetingRow({
   onSelect: () => void;
   onOpen?: () => void;
 }) {
-  const t = useT();
+  const { t, locale } = useI18n();
   return (
     <button
       type="button"
@@ -381,7 +381,7 @@ function MeetingRow({
         <span className="text-[12px] text-fg-faint">
           {meeting.kind === "note"
             ? t("library.a_note")
-            : formatDuration(meeting.duration)}
+            : formatDuration(meeting.duration, locale)}
           {meeting.participants.length > 0 && ` · ${meeting.participants.join(", ")}`}
           {meeting.kind !== "note" && !meeting.has_summary && t("meeting.not_summarised_suffix")}
         </span>
@@ -425,18 +425,18 @@ function SearchResults({
 }
 
 function Dashboard({ stats, onRecord }: { stats?: Stats; onRecord: () => void }) {
-  const t = useT();
+  const { t, locale } = useI18n();
   if (!stats) return <p className="mt-10 text-center text-fg-faint">{t("library.loading")}</p>;
   return (
     <div className="max-w-2xl">
       <h2>{t("library.heading")}</h2>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2.5">
         <Tile label={t("library.meeting")} value={String(stats.meetings)} />
-        <Tile label={t("library.recorded")} value={formatDuration(stats.total_duration)} />
+        <Tile label={t("library.recorded")} value={formatDuration(stats.total_duration, locale, "short")} />
         <Tile
           label={t("library.last_7")}
           value={`${stats.last_seven_days}`}
-          note={formatDuration(stats.last_seven_days_duration)}
+          note={formatDuration(stats.last_seven_days_duration, locale, "short")}
         />
         <Tile label={t("library.people")} value={String(stats.people)} />
         <Tile label={t("meeting.no_summary")} value={String(stats.without_summary)} />
@@ -484,7 +484,7 @@ function MeetingPane({
   onColour: (colour: string | null) => void;
   onTrash: () => void;
 }) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const { summary } = detail;
   const [title, setTitle] = useState(summary.title);
   const [tags, setTags] = useState(summary.tags.join(", "));
@@ -515,7 +515,7 @@ function MeetingPane({
         />
         <p className="text-[13px] text-fg-faint">
           {dayLabel(summary.day, localDay(), words)} · {timeOfDay(summary.date)} ·{" "}
-          {formatDuration(summary.duration)}
+          {formatDuration(summary.duration, locale)}
           {detail.audio.length > 0 && ` · ${t("library.recordings", { count: detail.audio.length })}`}
         </p>
 

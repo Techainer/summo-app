@@ -45,13 +45,15 @@ export interface Board {
  */
 export type ColumnStatus = "todo" | "doing" | "done" | "blocked";
 
-/** Columns a person's task can be dragged between, in the order they are drawn. */
-export const COLUMNS: { status: ColumnStatus; label: string }[] = [
-  { status: "todo", label: "Chưa làm" },
-  { status: "doing", label: "Đang làm" },
-  { status: "blocked", label: "Đang chờ" },
-  { status: "done", label: "Xong" },
-];
+/**
+ * Columns a person's task can be dragged between, in the order they are drawn.
+ *
+ * Statuses only. The heading each one shows is `tasks.<status>` resolved at render — these used to
+ * carry their own Vietnamese labels, so the English interface drew a board headed "CHƯA LÀM / ĐANG
+ * LÀM / ĐANG CHỜ / XONG" under an English title, and a language somebody added by dropping in a
+ * JSON file could never have reached this line at all.
+ */
+export const COLUMNS: ColumnStatus[] = ["todo", "doing", "blocked", "done"];
 
 
 export class TaskClient {
@@ -139,9 +141,15 @@ export function isOverdue(task: Task, today: string): boolean {
   return task.due < today;
 }
 
-/** Due dates as a person reads them. */
-export function dueLabel(due: string, today: string): string {
-  if (due === today) return "hôm nay";
-  if (due < today) return `quá hạn ${due}`;
-  return `hạn ${due}`;
+/**
+ * Due dates as a person reads them, named rather than spelled.
+ *
+ * A key and its parameters, because this module is pure logic with no locale to render in. It used
+ * to return Vietnamese, so an English board said "quá hạn 2026-08-01".
+ */
+export function dueLabel(due: string, today: string): { key: string; params: { date: string } } {
+  const params = { date: due };
+  if (due === today) return { key: "tasks.due_today", params };
+  if (due < today) return { key: "tasks.due_overdue", params };
+  return { key: "tasks.due_on", params };
 }

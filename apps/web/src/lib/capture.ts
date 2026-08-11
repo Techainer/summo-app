@@ -90,10 +90,17 @@ export function hearsOthers(capture: Capture): boolean {
   return capture.lanes.includes("system");
 }
 
-/** Languages worth offering for live translation, by their own names. */
+/**
+ * Languages worth offering for live translation, each in its own name.
+ *
+ * Endonyms, not translations, and the one place in the app where words are written into the source
+ * on purpose: a picker that renders "Vietnamese" to somebody who reads Vietnamese is asking them to
+ * find their language in a language they are trying to leave. `i18n-exempt` says so to the test
+ * that otherwise forbids this.
+ */
 export const TARGETS: { code: string; label: string }[] = [
   { code: "", label: "—" },
-  { code: "vi", label: "Tiếng Việt" },
+  { code: "vi", label: "Tiếng Việt" }, // i18n-exempt: endonym
   { code: "en", label: "English" },
   { code: "ja", label: "日本語" },
   { code: "ko", label: "한국어" },

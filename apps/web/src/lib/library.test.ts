@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   dayLabel,
-  formatDuration,
   groupLabel,
   localDay,
   swatch,
@@ -56,20 +55,6 @@ describe("groupLabel", () => {
   it("names the folder a meeting has not been filed into", () => {
     expect(groupLabel("", "folder", "2026-08-10", VI)).toBe("Chưa phân loại");
     expect(groupLabel("khach-hang/acme", "folder", "2026-08-10", VI)).toBe("khach-hang/acme");
-  });
-});
-
-describe("formatDuration", () => {
-  it("reads as time rather than as a count of seconds", () => {
-    expect(formatDuration(0)).toBe("—");
-    expect(formatDuration(2538)).toBe("42 phút");
-    expect(formatDuration(3600)).toBe("1 giờ");
-    expect(formatDuration(5400)).toBe("1 giờ 30 phút");
-  });
-
-  it("never rounds a real recording down to nothing", () => {
-    // A 20-second note is not a zero-minute meeting.
-    expect(formatDuration(20)).toBe("1 phút");
   });
 });
 

@@ -23,9 +23,10 @@
     "agenda": "Lịch",
     "shrink": "Thu gọn cửa sổ",
     "shrink_hint": "Thu gọn khi đang họp",
-    "expand": "Mở rộng cửa sổ",
+    "expand": "Mở rộng {name}",
     "expand_hint": "Mở rộng",
-    "agents": "Agent"
+    "agents": "Agent",
+    "collapse": "Thu gọn {name}"
   },
   "record": {
     "source": "Nguồn",
@@ -89,7 +90,9 @@
     "opening": "Đang mở…",
     "back": "Thư viện",
     "no_summary_yet": "Chưa có tóm tắt cho buổi họp này.",
-    "summarise_now": "Tóm tắt ngay"
+    "summarise_now": "Tóm tắt ngay",
+    "play_from": "Nghe từ {time}",
+    "no_transcript": "Chưa có ai nói gì."
   },
   "draft": {
     "heading": "Bản tóm tắt agent viết",
@@ -103,7 +106,15 @@
     "revise_placeholder": "ngắn hơn, bỏ tên khách, thêm mốc thời gian…",
     "edited": "câu đã sửa",
     "edited_by_hand": "đã sửa tay",
-    "you": "Bạn"
+    "you": "Bạn",
+    "revised_one": "đã sửa {count} lần",
+    "revised_other": "đã sửa {count} lần",
+    "select_hint": "Bôi đen một đoạn để sửa riêng đoạn đó, hoặc nhắn ở dưới để sửa cả bài.",
+    "revising": "Sửa trong {heading}:",
+    "apply": "Sửa",
+    "cancel": "Huỷ",
+    "send": "Gửi",
+    "agent": "Agent"
   },
   "tasks": {
     "title": "Việc",
@@ -129,7 +140,12 @@
     "show_steps_n": "Xem {count} bước",
     "agent_empty_head": "Agent chưa có việc nào. Giao việc bằng cách viết",
     "agent_empty_tail": "trong ghi chú buổi họp.",
-    "run": "Chạy"
+    "run": "Chạy",
+    "blocked": "Đang chờ",
+    "failed": "Lỗi",
+    "due_today": "hôm nay",
+    "due_overdue": "{date} — quá hạn",
+    "due_on": "hạn {date}"
   },
   "chat": {
     "title": "Hỏi đáp",
@@ -226,7 +242,9 @@
     "forget_who": "Xoá {name}",
     "samples": "{count} mẫu giọng",
     "confirmed_by_you": "{count} do bạn xác nhận",
-    "voice_styles": "{count} kiểu giọng"
+    "voice_styles": "{count} kiểu giọng",
+    "relabelled": "Đã sửa {utterances} câu trong {meetings} buổi họp cũ",
+    "unmerged": "gỡ nhầm khỏi {count} người khác"
   },
   "settings": {
     "title": "Cài đặt",

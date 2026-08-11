@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
 import { useErrorText } from "../lib/errors";
-import { useT } from "../i18n/context";
+import { useI18n } from "../i18n/context";
+import { formatDuration } from "../lib/duration";
 import { useEngine } from "../lib/engine-context";
 import {
   ReportClient,
-  duration,
   share,
   shiftDay,
   today,
@@ -32,7 +32,7 @@ const DAYS: Record<Range, number> = { day: 0, week: 6, month: 29 };
  * rather than inventing activity: an empty range says so.
  */
 export function AnalyticsScreen() {
-  const t = useT();
+  const { t, locale } = useI18n();
   const say = useErrorText();
   const { handshake } = useEngine();
   const client = useMemo(() => new ReportClient(handshake), [handshake]);
@@ -83,7 +83,7 @@ export function AnalyticsScreen() {
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Metric label={t("analytics.meetings")} value={String(report.meetings.length)} />
-            <Metric label={t("analytics.time")} value={duration(report.total_seconds)} />
+            <Metric label={t("analytics.time")} value={formatDuration(report.total_seconds, locale)} />
             <Metric label={t("analytics.open_tasks")} value={String(report.open_actions.length)} />
             <Metric label={t("analytics.unsummarised")} value={String(report.without_summary.length)} />
           </div>
@@ -102,7 +102,7 @@ export function AnalyticsScreen() {
                       />
                     </span>
                     <span className="tabular w-24 shrink-0 text-right text-[13px] text-fg-dim">
-                      {duration(person.seconds)}
+                      {formatDuration(person.seconds, locale)}
                     </span>
                   </div>
                 ))}

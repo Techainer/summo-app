@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { useT } from "../../i18n/context";
 import { cn } from "../../lib/cn";
 import { Spinner } from "./Button";
 
@@ -19,13 +20,19 @@ const STYLES: Record<Status, string> = {
   failed: "bg-rec-soft text-rec border-rec/30",
 };
 
-/** Vietnamese first: this is a Vietnamese product and the interface should not read as translated. */
+/**
+ * Wording is a translation key, resolved at render.
+ *
+ * A module-level table of Vietnamese strings meant every chip in the app said "Chưa làm" whatever
+ * language the interface was in — and this component is used on the task board, the agent runs and
+ * the import queue, so it was most of the words on three screens.
+ */
 const LABELS: Record<Status, string> = {
-  todo: "Chưa làm",
-  running: "Đang chạy",
-  done: "Xong",
-  blocked: "Đang chờ",
-  failed: "Lỗi",
+  todo: "tasks.todo",
+  running: "tasks.running",
+  done: "tasks.done",
+  blocked: "tasks.blocked",
+  failed: "tasks.failed",
 };
 
 const ICONS: Record<Status, ReactNode> = {
@@ -46,6 +53,7 @@ export function StatusChip({
   label?: string;
   className?: string;
 }) {
+  const t = useT();
   return (
     <span
       className={cn(
@@ -56,7 +64,7 @@ export function StatusChip({
       )}
     >
       {ICONS[status]}
-      {label ?? LABELS[status]}
+      {label ?? t(LABELS[status])}
     </span>
   );
 }

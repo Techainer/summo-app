@@ -263,16 +263,6 @@ export function groupLabel(key: string, group: GroupBy, today: string, words: Da
   return key;
 }
 
-/** `2538` reads as `42 phút`, not as a number of seconds nobody converts in their head. */
-export function formatDuration(seconds: number): string {
-  if (seconds <= 0) return "—";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${Math.max(1, minutes)} phút`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest === 0 ? `${hours} giờ` : `${hours} giờ ${rest} phút`;
-}
-
 /** The clock time a meeting started, taken from its own offset rather than converted to ours. */
 export function timeOfDay(date: string): string {
   return date.slice(11, 16) || "";

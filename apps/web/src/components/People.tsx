@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { useT } from "../i18n/context";
+import { useI18n } from "../i18n/context";
+import { formatDuration } from "../lib/duration";
 import { useErrorText } from "../lib/errors";
 import {
   PeopleClient,
   confidenceLabel,
   correctionSummary,
   nameOptions,
-  speakingTime,
   type Person,
   type UnknownVoice,
 } from "../lib/people";
@@ -26,7 +26,7 @@ interface Props {
  * thing on the screen that needs the user to do something.
  */
 export function People({ client, meeting }: Props) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const say = useErrorText();
   const [people, setPeople] = useState<Person[]>([]);
   const [space, setSpace] = useState<string | undefined>();
@@ -60,7 +60,11 @@ export function People({ client, meeting }: Props) {
       try {
         const correction = await client.nameVoice(meeting, label, personName.trim());
         // The daemon may have rewritten past meetings. Saying so is not optional.
-        setNotice(correctionSummary(correction));
+        setNotice(
+          correctionSummary(correction)
+            .map((phrase) => t(phrase.key, phrase.params))
+            .join(", ") || null,
+        );
         setError(null);
         await refresh();
       } catch (e) {
@@ -139,7 +143,7 @@ export function People({ client, meeting }: Props) {
                 <div className="flex items-baseline gap-2.5">
                   <strong className="text-[15px]">{voice.label}</strong>
                   <span className="text-[12px] text-fg-dim">
-                    {speakingTime(voice.seconds)} ·{" "}
+                    {formatDuration(voice.seconds, locale)} ·{" "}
                     {t("people.utterances", { count: voice.utterances })}
                   </span>
                 </div>
@@ -150,7 +154,7 @@ export function People({ client, meeting }: Props) {
                     {voice.suggestions.map((s, i) => (
                       <span key={s.id}>
                         {i > 0 && ", "}
-                        <strong>{s.name}</strong> ({confidenceLabel(s.similarity)})
+                        <strong>{s.name}</strong> ({t(confidenceLabel(s.similarity))})
                       </span>
                     ))}
                   </p>

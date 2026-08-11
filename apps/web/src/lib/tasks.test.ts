@@ -79,14 +79,27 @@ describe("isOverdue", () => {
 
 describe("dueLabel", () => {
   it("says today rather than a date", () => {
-    expect(dueLabel("2026-08-10", "2026-08-10")).toBe("hôm nay");
+    expect(dueLabel("2026-08-10", "2026-08-10").key).toBe("tasks.due_today");
   });
 
   it("marks a date that has passed", () => {
-    expect(dueLabel("2026-08-01", "2026-08-10")).toContain("quá hạn");
+    expect(dueLabel("2026-08-01", "2026-08-10")).toEqual({
+      key: "tasks.due_overdue",
+      params: { date: "2026-08-01" },
+    });
   });
 
   it("states a future deadline plainly", () => {
-    expect(dueLabel("2026-08-20", "2026-08-10")).toBe("hạn 2026-08-20");
+    expect(dueLabel("2026-08-20", "2026-08-10").key).toBe("tasks.due_on");
+  });
+
+  /**
+   * A key rather than the words. This returned Vietnamese, so an English board read
+   * "quá hạn 2026-08-01" — and no catalogue could have fixed it, since the words were never in one.
+   */
+  it("names what to say rather than saying it", () => {
+    for (const due of ["2026-08-01", "2026-08-10", "2026-08-20"]) {
+      expect(dueLabel(due, "2026-08-10").key).toMatch(/^tasks\./);
+    }
   });
 });

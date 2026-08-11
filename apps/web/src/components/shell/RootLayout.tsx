@@ -96,7 +96,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
         />
         <Waveform level={engine.level} active={engine.session.recording} />
         <p className="min-w-0 flex-1 truncate text-[13px] text-fg-dim">
-          {latest?.text ?? "Đang nghe…"}
+          {latest?.text ?? t("record.listening")}
         </p>
         <button
           type="button"

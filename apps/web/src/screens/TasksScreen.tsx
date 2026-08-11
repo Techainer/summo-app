@@ -140,14 +140,14 @@ export function TasksScreen() {
           )}
 
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {COLUMNS.map((column) => {
-              const items = forOwner(board[column.status], owner);
+            {COLUMNS.map((status) => {
+              const items = forOwner(board[status], owner);
               return (
                 <Column
-                  key={column.status}
-                  label={column.label}
+                  key={status}
+                  label={t(`tasks.${status}`)}
                   count={items.length}
-                  onDrop={(id) => void move(id, column.status)}
+                  onDrop={(id) => void move(id, status)}
                 >
                   {items.map((task) => (
                     <PersonCard
@@ -273,6 +273,7 @@ function PersonCard({
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
+  const t = useT();
   const overdue = isOverdue(task, now);
   return (
     <article
@@ -295,7 +296,7 @@ function PersonCard({
         {task.owner && <span className="text-fg-dim">@{task.owner}</span>}
         {task.due && (
           <span className={cn("tabular", overdue ? "text-rec" : "text-fg-faint")}>
-            {dueLabel(task.due, now)}
+            {((d) => t(d.key, d.params))(dueLabel(task.due, now))}
           </span>
         )}
       </div>
