@@ -159,7 +159,7 @@ need may live behind something we operate.
 | Repository | Licence | What it is |
 |---|---|---|
 | **summo** (here) | AGPL-3.0 | The application and everything it needs to run |
-| [summo-registry](https://github.com/summo-app/summo-registry) | MIT | The model catalogue — static JSON, forkable, mirrorable |
+| [summo-registry](https://github.com/Techainer/summo-registry) | MIT | The model catalogue — static JSON, forkable, mirrorable |
 | summo-cloud | proprietary | summo.app, the CDN, billing, sync |
 
 The dependency runs one way. This repository imports nothing from summo-cloud, and CI builds and
@@ -175,6 +175,20 @@ points at whoever published the weights.
 ## Licence
 
 AGPL-3.0-or-later. Models are fetched at runtime and keep their own licences; see `NOTICE`.
+
+## Models
+
+Fetched at runtime from a registry of static JSON manifests, each carrying a licence, a sha256 per
+file and the numbers we measured.
+
+```bash
+summo recommend --lang vi     # what would run here, and why
+summo pull gipformer-65m      # 2.4% WER on Fleurs VI, 70 MB, MIT
+```
+
+Nothing is bundled. Permissive models are mirrored; gated and non-commercial ones are listed
+pointing at their original host, so the user is the one who fetches them and we are never the
+distributor of a licence we cannot redistribute under.
 
 ## Talking to it from another agent
 
