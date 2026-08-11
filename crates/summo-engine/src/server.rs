@@ -163,6 +163,12 @@ impl Server {
             .route("/notes", get(list_notes).post(create_note))
             .route("/notes/{id}", get(read_note).post(update_note))
             .route("/notes/{id}", axum::routing::delete(delete_note))
+            .route("/meetings/{id}/comments", get(list_comments).post(add_comment))
+            .route(
+                "/meetings/{id}/comments/{comment}",
+                axum::routing::delete(delete_comment),
+            )
+            .route("/meetings/{id}/comments/{comment}/react", post(react_comment))
             .route("/agenda", get(agenda))
             .route("/agenda/suggest", get(suggest_meeting))
             .route("/calendars", post(add_calendar))
@@ -1893,6 +1899,147 @@ async fn interface(
     crate::assets::serve(uri.path(), port, state.token.as_str())
 }
 
+
+/// Everything said about one note, and what the agent is still waiting on.
+async fn list_comments(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let result = summo_vault::annotate::load(state.engine.paths(), &id).map(|thread| {
+        serde_json::json!({
+            "annotations": thread.annotations,
+            // Split out rather than left for the client to filter: "what is waiting on me" is the
+            // question the panel opens with, and two clients filtering it two ways would disagree.
+            "pending": thread.pending().len(),
+        })
+    });
+    as_response(result)
+}
+
+#[derive(Debug, Deserialize)]
+struct CommentBody {
+    body: String,
+    /// Display name of whoever is writing. Defaults to the local user.
+    #[serde(default)]
+    author: Option<String>,
+    /// Pin to one utterance. Omit for a comment about the whole note.
+    #[serde(default)]
+    seq: Option<u64>,
+    /// Pin to a `##` section instead.
+    #[serde(default)]
+    heading: Option<String>,
+}
+
+/// Say something about a note.
+async fn add_comment(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<CommentBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    // A segment anchor wins over a section one: it is the more specific of the two, and a client
+    // sending both means the user selected a line inside a section.
+    let anchor = match (body.seq, body.heading.as_deref().map(str::trim)) {
+        (Some(seq), _) => summo_vault::annotate::Anchor::Segment { seq },
+        (None, Some(heading)) if !heading.is_empty() => summo_vault::annotate::Anchor::Section {
+            heading: heading.to_string(),
+        },
+        _ => summo_vault::annotate::Anchor::Note,
+    };
+
+    let author = body
+        .author
+        .as_deref()
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .unwrap_or("Bạn")
+        .to_string();
+
+    let paths = state.engine.paths();
+    let result = summo_vault::annotate::load(paths, &id).and_then(|mut thread| {
+        let added = thread.comment(&author, &body.body, anchor, now_iso())?.clone();
+        summo_vault::annotate::save(paths, &id, &thread)?;
+        Ok(added)
+    });
+    as_response(result)
+}
+
+async fn delete_comment(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((id, comment)): Path<(String, String)>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let paths = state.engine.paths();
+    let result = summo_vault::annotate::load(paths, &id).and_then(|mut thread| {
+        let removed = thread.remove(&comment);
+        if removed {
+            summo_vault::annotate::save(paths, &id, &thread)?;
+        }
+        Ok(serde_json::json!({ "removed": removed }))
+    });
+    as_response(result)
+}
+
+#[derive(Debug, Deserialize)]
+struct ReactBody {
+    emoji: String,
+    #[serde(default)]
+    by: Option<String>,
+}
+
+/// Toggle a reaction. Reactions are on comments; a proposal is answered by accepting it.
+async fn react_comment(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((id, comment)): Path<(String, String)>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<ReactBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let who = body
+        .by
+        .as_deref()
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .unwrap_or("Bạn");
+
+    let paths = state.engine.paths();
+    let result = summo_vault::annotate::load(paths, &id).and_then(|mut thread| {
+        thread.react(&comment, &body.emoji, who)?;
+        summo_vault::annotate::save(paths, &id, &thread)?;
+        Ok(serde_json::json!({ "ok": true }))
+    });
+    as_response(result)
+}
+
+/// Now, in the offset the machine is in.
+///
+/// The offset is kept rather than normalised to UTC: a comment written at 18:00 in Hanoi reads as
+/// 18:00 to the person who wrote it, and a thread that renders their own words in a different hour
+/// than they typed them is a thread they distrust.
+fn now_iso() -> String {
+    use time::OffsetDateTime;
+    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    now.format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_else(|_| now.unix_timestamp().to_string())
+}
+
 /// Meetings from the user's calendars, in time order.
 async fn agenda(
     State(state): State<AppState>,
@@ -3267,6 +3414,91 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), 403);
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn a_comment_can_be_written_reacted_to_and_removed_over_http() {
+        let (_tmp, server) = running().await;
+        let base = format!("http://{}", server.addr());
+        let token = server.token().as_str().to_string();
+
+        let added: serde_json::Value = client()
+            .post(format!("{base}/meetings/01A1/comments"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "body": "Chỗ này sai", "author": "Ngọc", "seq": 12 }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let id = added["id"].as_str().expect("an id").to_string();
+        assert_eq!(added["anchor"]["on"], "segment");
+        assert_eq!(added["anchor"]["seq"], 12);
+
+        let reacted = client()
+            .post(format!("{base}/meetings/01A1/comments/{id}/react"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "emoji": "👍", "by": "Bình" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(reacted.status(), 200);
+
+        let thread: serde_json::Value = client()
+            .get(format!("{base}/meetings/01A1/comments"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(thread["annotations"].as_array().unwrap().len(), 1);
+        assert_eq!(thread["annotations"][0]["reactions"][0]["emoji"], "👍");
+
+        let removed: serde_json::Value = client()
+            .delete(format!("{base}/meetings/01A1/comments/{id}"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(removed["removed"], true);
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn an_empty_comment_is_refused_over_http() {
+        let (_tmp, server) = running().await;
+        let response = client()
+            .post(format!("http://{}/meetings/01A1/comments", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "body": "   " }))
+            .send()
+            .await
+            .unwrap();
+        assert!(response.status().is_client_error() || response.status().is_server_error());
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn a_meeting_with_nothing_said_about_it_has_an_empty_thread() {
+        let (_tmp, server) = running().await;
+        let thread: serde_json::Value = client()
+            .get(format!("http://{}/meetings/01A1/comments", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(thread["annotations"].as_array().unwrap().is_empty());
+        assert_eq!(thread["pending"], 0);
         server.shutdown();
     }
 

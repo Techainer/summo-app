@@ -78,7 +78,13 @@
     "view": "View",
     "right_panel": "Right panel",
     "speaker_you": "You",
-    "speaker_unknown": "Unknown"
+    "speaker_unknown": "Unknown",
+    "no_audio": "This meeting's audio has been pruned. The transcript is complete.",
+    "seek": "Playback position",
+    "opening": "Opening…",
+    "back": "Library",
+    "no_summary_yet": "No summary for this meeting yet.",
+    "summarise_now": "Summarise now"
   },
   "draft": {
     "heading": "Summary drafted by the agent",
@@ -361,5 +367,14 @@
     "attendees": "{count} people",
     "repeats": "repeats",
     "remove_calendar": "Remove calendar {name}"
+  },
+  "comments": {
+    "title": "Comments",
+    "empty": "Nothing said yet. Leave a note, ask a question, or answer the agent.",
+    "placeholder": "Write a comment…",
+    "send": "Send",
+    "me": "You",
+    "remove": "Delete comment",
+    "react": "React {emoji}"
   }
 }

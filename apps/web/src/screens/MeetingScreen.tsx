@@ -1,6 +1,8 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { Comments } from "../components/meeting/Comments";
+import { useT } from "../i18n/context";
 import { DraftPanel } from "../components/meeting/DraftPanel";
 import { Player, type PlayerHandle } from "../components/meeting/Player";
 import { TranscriptChips } from "../components/meeting/TranscriptChips";
@@ -10,11 +12,12 @@ import { DraftClient, readable, type Draft } from "../lib/draft";
 import { url, type MeetingDetail } from "../lib/library";
 import { duration } from "../lib/report";
 
-type Pane = "notes" | "transcript";
+type Pane = "comments" | "transcript";
 
+// Keys, resolved at render — a module-level array is built before any provider exists.
 const PANES = [
-  { value: "notes" as const, label: "Ghi chú" },
-  { value: "transcript" as const, label: "Transcript" },
+  { value: "comments" as const, labelKey: "comments.title" },
+  { value: "transcript" as const, labelKey: "meeting.transcript" },
 ];
 
 /**
@@ -25,11 +28,12 @@ const PANES = [
  * rest of Phase 1; this is the shell they hang on.
  */
 export function MeetingScreen() {
+  const t = useT();
   const { meetingId } = useParams({ from: "/meetings/$meetingId" });
   const { library, handshake } = useEngine();
   const [detail, setDetail] = useState<MeetingDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pane, setPane] = useState<Pane>("notes");
+  const [pane, setPane] = useState<Pane>("comments");
   const [at, setAt] = useState(0);
   const [summarising, setSummarising] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -68,7 +72,7 @@ export function MeetingScreen() {
         const key = file.replace(/\.[^.]+$/, "");
         return {
           key,
-          label: key === "mic" ? "Mic" : "Hệ thống",
+          label: key === "mic" ? t("record.microphone") : t("record.system"),
           url: url(handshake, `/meetings/${encodeURIComponent(meetingId)}/audio/${key}`),
         };
       }),
@@ -112,7 +116,7 @@ export function MeetingScreen() {
   }
 
   if (!detail) {
-    return <p className="mt-24 text-center text-fg-faint">Đang mở…</p>;
+    return <p className="mt-24 text-center text-fg-faint">{t("meeting.opening")}</p>;
   }
 
   const { summary, sections, transcript } = detail;
@@ -124,7 +128,7 @@ export function MeetingScreen() {
         search={{}}
         className="text-[13px] text-fg-dim hover:text-fg"
       >
-        ← Thư viện
+        ← {t("meeting.back")}
       </Link>
 
       <div className="mt-2">
@@ -165,14 +169,14 @@ export function MeetingScreen() {
           {sections.length === 0 ? (
             <Card>
               <CardBody className="pt-4 text-center">
-                <p className="text-fg-faint">Chưa có tóm tắt cho buổi họp này.</p>
+                <p className="text-fg-faint">{t("meeting.no_summary_yet")}</p>
                 <Button
                   className="mt-3"
                   variant="primary"
                   busy={summarising}
                   onClick={() => void summarise()}
                 >
-                  Tóm tắt ngay
+                  {t("meeting.summarise_now")}
                 </Button>
               </CardBody>
             </Card>
@@ -194,8 +198,8 @@ export function MeetingScreen() {
 
         <aside className="space-y-3">
           <SegmentedControl
-            label="Nội dung bên phải"
-            options={PANES}
+            label={t("meeting.right_panel")}
+            options={PANES.map((p) => ({ value: p.value, label: t(p.labelKey) }))}
             value={pane}
             onChange={setPane}
             size="sm"
@@ -209,10 +213,16 @@ export function MeetingScreen() {
                 reading
               />
             ) : (
-              <CardBody className="pt-4">
-                <p className="text-[13px] text-fg-faint">
-                  Ghi chú riêng cho buổi họp sẽ xuất hiện ở đây.
-                </p>
+              <CardBody className="flex h-full min-h-0 flex-col pt-4">
+                <Comments
+                  meeting={meetingId}
+                  // A comment is pinned to an utterance; the player seeks in seconds. The
+                  // transcript is what knows the difference, and it is already here.
+                  onSeek={(seq) => {
+                    const found = transcript.find((segment) => segment.seq === seq);
+                    if (found) player.current?.seek(found.t0);
+                  }}
+                />
               </CardBody>
             )}
           </Card>

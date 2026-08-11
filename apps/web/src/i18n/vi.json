@@ -78,7 +78,13 @@
     "view": "Chế độ xem",
     "right_panel": "Nội dung bên phải",
     "speaker_you": "Bạn",
-    "speaker_unknown": "Chưa rõ"
+    "speaker_unknown": "Chưa rõ",
+    "no_audio": "Buổi họp này không còn bản ghi âm. Transcript vẫn đầy đủ.",
+    "seek": "Vị trí phát",
+    "opening": "Đang mở…",
+    "back": "Thư viện",
+    "no_summary_yet": "Chưa có tóm tắt cho buổi họp này.",
+    "summarise_now": "Tóm tắt ngay"
   },
   "draft": {
     "heading": "Bản tóm tắt agent viết",
@@ -361,5 +367,14 @@
     "attendees": "{count} người",
     "repeats": "lặp lại",
     "remove_calendar": "Xoá lịch {name}"
+  },
+  "comments": {
+    "title": "Bình luận",
+    "empty": "Chưa ai nói gì. Viết ghi chú, hỏi lại, hoặc trả lời đề xuất của agent.",
+    "placeholder": "Viết bình luận…",
+    "send": "Gửi",
+    "me": "Bạn",
+    "remove": "Xoá bình luận",
+    "react": "Thả {emoji}"
   }
 }

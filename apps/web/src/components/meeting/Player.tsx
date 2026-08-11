@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 
+import { useT } from "../../i18n/context";
 import { cn } from "../../lib/cn";
 import { SegmentedControl } from "../ui";
 
@@ -31,6 +32,7 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
  * recording — 2× through a status round, 1× through the part that mattered.
  */
 export function Player({ lanes, marks = [], onTime, ref }: Props) {
+  const t = useT();
   const audio = useRef<HTMLAudioElement>(null);
   const [lane, setLane] = useState(lanes[0]?.key ?? "");
   const [playing, setPlaying] = useState(false);
@@ -75,7 +77,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
   if (!current) {
     return (
       <p className="rounded-[var(--radius-card)] border border-line bg-bg-soft px-4 py-3 text-[13px] text-fg-faint">
-        Buổi họp này không còn bản ghi âm. Transcript vẫn đầy đủ.
+        {t("meeting.no_audio")}
       </p>
     );
   }
@@ -90,7 +92,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
         onTimeUpdate={onTimeUpdate}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onError={() => setError("Không mở được file ghi âm.")}
+        onError={() => setError(t("meeting.cannot_open_audio"))}
       >
         <track kind="captions" />
       </audio>
@@ -99,7 +101,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
         <button
           type="button"
           onClick={toggle}
-          aria-label={playing ? "Tạm dừng" : "Phát"}
+          aria-label={playing ? t("meeting.pause") : t("meeting.play")}
           className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-fg hover:brightness-110"
         >
           <span aria-hidden="true">{playing ? "⏸" : "▶"}</span>
@@ -125,7 +127,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         {lanes.length > 1 && (
           <SegmentedControl
-            label="Nguồn âm thanh"
+            label={t("record.audio_source")}
             size="sm"
             options={lanes.map((l) => ({ value: l.key, label: l.label }))}
             value={lane}
@@ -168,6 +170,7 @@ function Scrubber({
   marks: number[];
   onSeek: (seconds: number) => void;
 }) {
+  const t = useT();
   const percent = duration > 0 ? (time / duration) * 100 : 0;
 
   return (
@@ -181,7 +184,7 @@ function Scrubber({
         step={0.1}
         value={time}
         onChange={(e) => onSeek(Number(e.target.value))}
-        aria-label="Vị trí phát"
+        aria-label={t("meeting.seek")}
         aria-valuetext={clock(time)}
         className="peer relative z-10 h-6 w-full cursor-pointer appearance-none bg-transparent
           [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none

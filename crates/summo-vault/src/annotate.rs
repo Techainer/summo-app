@@ -176,6 +176,41 @@ pub struct Thread {
 }
 
 impl Thread {
+    /// Add a comment from a person.
+    ///
+    /// Written here rather than by the caller so an annotation always has an id and a timestamp:
+    /// an entry with neither cannot be replied to, reacted to or resolved, and one written by hand
+    /// eventually has neither.
+    pub fn comment(&mut self, author: &str, body: &str, anchor: Anchor, at: String) -> Result<&Annotation> {
+        let body = body.trim();
+        if body.is_empty() {
+            return Err(Error::Other("bình luận không có nội dung".into()));
+        }
+
+        self.annotations.push(Annotation {
+            id: summo_core::MeetingId::new().to_string(),
+            kind: Kind::Comment,
+            author: author.trim().to_string(),
+            at,
+            body: body.to_string(),
+            anchor,
+            action: None,
+            resolution: Resolution::Open,
+            reactions: Vec::new(),
+        });
+        Ok(self.annotations.last().expect("just pushed"))
+    }
+
+    /// Remove one. `false` when it was not there.
+    ///
+    /// Deleting rather than tombstoning: this is a Markdown file in the user's own vault, and a
+    /// comment they deleted should not still be in it when they open it in Obsidian.
+    pub fn remove(&mut self, id: &str) -> bool {
+        let before = self.annotations.len();
+        self.annotations.retain(|a| a.id != id);
+        before != self.annotations.len()
+    }
+
     /// Proposals nobody has answered yet, oldest first — the agent's call to action.
     #[must_use]
     pub fn pending(&self) -> Vec<&Annotation> {
@@ -300,6 +335,63 @@ mod tests {
             resolution: Resolution::Open,
             reactions: Vec::new(),
         }
+    }
+
+    /// An entry with no id and no timestamp cannot be replied to, reacted to or resolved — so the
+    /// thread writes both rather than trusting a caller to.
+    #[test]
+    fn a_comment_gets_an_id_and_keeps_what_was_written() {
+        let mut thread = Thread::default();
+        let added = thread
+            .comment("Ngọc", "  Chốt vào thứ sáu  ", Anchor::Note, "2026-08-11T09:00:00+07:00".into())
+            .unwrap()
+            .clone();
+
+        assert!(!added.id.is_empty());
+        assert_eq!(added.body, "Chốt vào thứ sáu", "trimmed, not mangled");
+        assert_eq!(added.kind, Kind::Comment);
+        assert_eq!(added.resolution, Resolution::Open);
+    }
+
+    #[test]
+    fn an_empty_comment_is_refused() {
+        let mut thread = Thread::default();
+        assert!(thread.comment("Ngọc", "   ", Anchor::Note, "t".into()).is_err());
+        assert!(thread.annotations.is_empty());
+    }
+
+    #[test]
+    fn a_comment_can_be_pinned_to_one_utterance() {
+        let mut thread = Thread::default();
+        thread
+            .comment("Ngọc", "sai chỗ này", Anchor::Segment { seq: 12 }, "t".into())
+            .unwrap();
+        assert_eq!(thread.at(&Anchor::Segment { seq: 12 }).len(), 1);
+        assert!(thread.at(&Anchor::Note).is_empty());
+    }
+
+    /// This is a Markdown file in the user's own vault. A comment they deleted must not still be in
+    /// it when they open it in Obsidian.
+    #[test]
+    fn removing_a_comment_takes_it_out_of_the_file() {
+        let mut thread = Thread::default();
+        let id = thread
+            .comment("Ngọc", "xoá tôi", Anchor::Note, "t".into())
+            .unwrap()
+            .id
+            .clone();
+
+        assert!(thread.remove(&id));
+        assert!(thread.annotations.is_empty());
+        assert!(!thread.remove(&id), "removing twice is not an error");
+    }
+
+    #[test]
+    fn two_comments_get_different_ids() {
+        let mut thread = Thread::default();
+        let a = thread.comment("x", "một", Anchor::Note, "t".into()).unwrap().id.clone();
+        let b = thread.comment("x", "hai", Anchor::Note, "t".into()).unwrap().id.clone();
+        assert_ne!(a, b);
     }
 
     fn thread() -> Thread {
