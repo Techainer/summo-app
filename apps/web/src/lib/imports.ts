@@ -1,4 +1,5 @@
 import type { Handshake } from "./engine";
+import { readJson } from "./errors";
 import { url } from "./library";
 
 /**
@@ -34,13 +35,6 @@ export interface Job {
   error?: string;
 }
 
-async function json<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
-  }
-  return (await response.json()) as T;
-}
 
 export interface StartOptions {
   model?: string;
@@ -52,7 +46,7 @@ export class ImportClient {
   constructor(private readonly handshake: Handshake) {}
 
   async start(path: string, options: StartOptions = {}): Promise<Job> {
-    return json<Job>(
+    return readJson<Job>(
       await fetch(url(this.handshake, "/imports"), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -62,15 +56,15 @@ export class ImportClient {
   }
 
   async list(): Promise<Job[]> {
-    return json<Job[]>(await fetch(url(this.handshake, "/imports")));
+    return readJson<Job[]>(await fetch(url(this.handshake, "/imports")));
   }
 
   async get(id: string): Promise<Job> {
-    return json<Job>(await fetch(url(this.handshake, `/imports/${encodeURIComponent(id)}`)));
+    return readJson<Job>(await fetch(url(this.handshake, `/imports/${encodeURIComponent(id)}`)));
   }
 
   async clearFinished(): Promise<number> {
-    const body = await json<{ cleared: number }>(
+    const body = await readJson<{ cleared: number }>(
       await fetch(url(this.handshake, "/imports/clear"), { method: "POST" }),
     );
     return body.cleared;

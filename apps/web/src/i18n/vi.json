@@ -376,5 +376,20 @@
     "me": "Bạn",
     "remove": "Xoá bình luận",
     "react": "Thả {emoji}"
+  },
+  "errors": {
+    "note.no_title": "Ghi chú cần có tiêu đề.",
+    "note.not_found": "Không tìm thấy ghi chú này.",
+    "comment.empty": "Bình luận không có nội dung.",
+    "translation.no_language": "File dịch không ghi ngôn ngữ.",
+    "translation.bad_language": "Mã ngôn ngữ không hợp lệ.",
+    "translate.no_target": "Chọn ngôn ngữ cần dịch sang.",
+    "ask.no_question": "Nhập câu hỏi đã.",
+    "import.not_found": "Không thấy file này.",
+    "import.is_directory": "Đây là thư mục — chọn từng file một.",
+    "import.no_audio": "File này không có âm thanh.",
+    "calendar.no_name": "Lịch cần có tên.",
+    "calendar.no_events": "File này không có sự kiện nào — có chắc là .ics không?",
+    "audio.not_mono": "File âm thanh phải là 1 kênh mono."
   }
 }

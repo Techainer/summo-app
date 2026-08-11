@@ -184,7 +184,7 @@ impl Thread {
     pub fn comment(&mut self, author: &str, body: &str, anchor: Anchor, at: String) -> Result<&Annotation> {
         let body = body.trim();
         if body.is_empty() {
-            return Err(Error::Other("bình luận không có nội dung".into()));
+            return Err(Error::msg("comment.empty", "bình luận không có nội dung"));
         }
 
         self.annotations.push(Annotation {

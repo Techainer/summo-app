@@ -163,17 +163,17 @@ pub fn suggest(paths: &Paths, started_epoch: i64) -> Option<Suggestion> {
 pub fn install(paths: &Paths, source: &std::path::Path, name: &str) -> Result<std::path::PathBuf> {
     let name = safe_name(name);
     if name.is_empty() {
-        return Err(summo_core::Error::Other("lịch cần có tên".into()));
+        return Err(summo_core::Error::msg("calendar.no_name", "lịch cần có tên"));
     }
 
     // Parse before installing: a file that is not a calendar should be refused now, not discovered
     // as an empty agenda later.
     let events = summo_calendar::read(source)?;
     if events.is_empty() {
-        return Err(summo_core::Error::Other(format!(
-            "{} không có sự kiện nào",
-            source.display()
-        )));
+        return Err(summo_core::Error::msg(
+            "calendar.no_events",
+            format!("{} không có sự kiện nào", source.display()),
+        ));
     }
 
     let dir = paths.calendars();

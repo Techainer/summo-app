@@ -2,6 +2,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Comments } from "../components/meeting/Comments";
+import { useErrorText } from "../lib/errors";
 import { useT } from "../i18n/context";
 import { DraftPanel } from "../components/meeting/DraftPanel";
 import { Player, type PlayerHandle } from "../components/meeting/Player";
@@ -29,6 +30,7 @@ const PANES = [
  */
 export function MeetingScreen() {
   const t = useT();
+  const say = useErrorText();
   const { meetingId } = useParams({ from: "/meetings/$meetingId" });
   const { library, handshake } = useEngine();
   const [detail, setDetail] = useState<MeetingDetail | null>(null);
@@ -56,7 +58,7 @@ export function MeetingScreen() {
       try {
         await applyDraft(await work());
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(say(e));
       } finally {
         setSummarising(false);
       }
@@ -93,7 +95,7 @@ export function MeetingScreen() {
       .detail(meetingId)
       .then((d) => !cancelled && setDetail(d))
       .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setError(say(e));
       });
     // A meeting may already have a summary nobody has agreed to.
     drafts

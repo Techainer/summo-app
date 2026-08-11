@@ -9,6 +9,7 @@
  */
 
 import type { Handshake } from "./engine";
+import { readJson } from "./errors";
 import { url } from "./library";
 
 export interface Person {
@@ -56,13 +57,6 @@ export interface Correction {
   corrected_profiles: string[];
 }
 
-async function json<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
-  }
-  return (await response.json()) as T;
-}
 
 export class PeopleClient {
   constructor(private readonly handshake: Handshake) {}
@@ -72,15 +66,15 @@ export class PeopleClient {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
-    }).then(json<T>);
+    }).then(readJson<T>);
   }
 
   async list(): Promise<PeopleView> {
-    return json<PeopleView>(await fetch(url(this.handshake, "/people")));
+    return readJson<PeopleView>(await fetch(url(this.handshake, "/people")));
   }
 
   async unknowns(meeting: string): Promise<UnknownVoice[]> {
-    return json<UnknownVoice[]>(
+    return readJson<UnknownVoice[]>(
       await fetch(url(this.handshake, `/meetings/${encodeURIComponent(meeting)}/voices`)),
     );
   }
@@ -107,7 +101,7 @@ export class PeopleClient {
   }
 
   async forget(id: string): Promise<boolean> {
-    const body = await json<{ removed: boolean }>(
+    const body = await readJson<{ removed: boolean }>(
       await fetch(url(this.handshake, `/people/${encodeURIComponent(id)}`), { method: "DELETE" }),
     );
     return body.removed;

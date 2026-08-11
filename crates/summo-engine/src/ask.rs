@@ -40,7 +40,7 @@ pub struct Answer {
 pub async fn ask(paths: &Paths, client: &LlmClient, question: &str) -> Result<Answer> {
     let question = question.trim();
     if question.is_empty() {
-        return Err(Error::Other("hỏi gì thì phải có câu hỏi".into()));
+        return Err(Error::msg("ask.no_question", "hỏi gì thì phải có câu hỏi"));
     }
 
     let library = summo_vault::library::Library::new(paths.clone());

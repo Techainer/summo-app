@@ -1,4 +1,5 @@
 import type { Handshake } from "./engine";
+import { readJson } from "./errors";
 import { url } from "./library";
 
 /**
@@ -27,13 +28,6 @@ export interface Draft {
   revisions: number;
 }
 
-async function json<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
-  }
-  return (await response.json()) as T;
-}
 
 export class DraftClient {
   constructor(private readonly handshake: Handshake) {}
@@ -43,11 +37,11 @@ export class DraftClient {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body ?? {}),
-    }).then(json<T>);
+    }).then(readJson<T>);
   }
 
   async get(meeting: string): Promise<Draft | null> {
-    return json<Draft | null>(
+    return readJson<Draft | null>(
       await fetch(url(this.handshake, `/meetings/${encodeURIComponent(meeting)}/draft`)),
     );
   }
@@ -70,7 +64,7 @@ export class DraftClient {
   }
 
   async discard(meeting: string): Promise<boolean> {
-    const body = await json<{ removed: boolean }>(
+    const body = await readJson<{ removed: boolean }>(
       await fetch(url(this.handshake, `/meetings/${encodeURIComponent(meeting)}/draft`), {
         method: "DELETE",
       }),

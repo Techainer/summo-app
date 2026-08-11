@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "../i18n/context";
+import { useErrorText } from "../lib/errors";
 import {
   LibraryClient,
   dayLabel,
@@ -43,6 +44,7 @@ interface Props {
  */
 export function Library({ client, onRecord, onOpen }: Props) {
   const t = useT();
+  const say = useErrorText();
   const [view, setView] = useState<LibraryView | null>(null);
   const [group, setGroup] = useState<GroupBy>("day");
   const [folder, setFolder] = useState<string | undefined>();
@@ -61,7 +63,7 @@ export function Library({ client, onRecord, onOpen }: Props) {
       setView(await client.view({ group, folder, tag }));
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   }, [client, group, folder, tag]);
 
@@ -82,7 +84,7 @@ export function Library({ client, onRecord, onOpen }: Props) {
       client
         .search(query)
         .then(setHits)
-        .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+        .catch((e: unknown) => setError(say(e)));
     }, SEARCH_DEBOUNCE_MS);
     return () => {
       if (searchTimer.current !== null) window.clearTimeout(searchTimer.current);
@@ -97,7 +99,7 @@ export function Library({ client, onRecord, onOpen }: Props) {
     client
       .detail(selected)
       .then(setDetail)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => setError(say(e)));
   }, [client, selected]);
 
   const mutate = useCallback(
@@ -109,7 +111,7 @@ export function Library({ client, onRecord, onOpen }: Props) {
         if (selected !== null) setDetail(await client.detail(selected).catch(() => null));
         setError(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(say(e));
       } finally {
         setBusy(false);
       }

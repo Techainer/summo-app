@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
+import { useErrorText } from "../../lib/errors";
 import {
   CommentClient,
   QUICK,
@@ -35,6 +36,7 @@ export function Comments({
   onSeek?: (seq: number) => void;
 }) {
   const { handshake } = useEngine();
+  const say = useErrorText();
   const { t } = useI18n();
   const client = useMemo(() => new CommentClient(handshake, meeting), [handshake, meeting]);
 
@@ -52,7 +54,7 @@ export function Comments({
       const thread = await client.list();
       setAnnotations(thread.annotations);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   }, [client]);
 
@@ -70,7 +72,7 @@ export function Comments({
       setDraft("");
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     } finally {
       setBusy(false);
     }
@@ -81,7 +83,7 @@ export function Comments({
       await client.react(id, emoji, me);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   };
 
@@ -90,7 +92,7 @@ export function Comments({
       await client.remove(id);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   };
 

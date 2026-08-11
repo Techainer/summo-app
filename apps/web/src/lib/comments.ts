@@ -1,4 +1,5 @@
 import type { Handshake } from "./engine";
+import { readJson } from "./errors";
 import { url } from "./library";
 
 /**
@@ -41,13 +42,6 @@ export interface Thread {
   pending: number;
 }
 
-async function json<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
-  }
-  return (await response.json()) as T;
-}
 
 export interface Where {
   seq?: number;
@@ -65,11 +59,11 @@ export class CommentClient {
   }
 
   async list(): Promise<Thread> {
-    return json<Thread>(await fetch(this.at()));
+    return readJson<Thread>(await fetch(this.at()));
   }
 
   async add(body: string, author: string, where: Where = {}): Promise<Annotation> {
-    return json<Annotation>(
+    return readJson<Annotation>(
       await fetch(this.at(), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -79,7 +73,7 @@ export class CommentClient {
   }
 
   async react(id: string, emoji: string, by: string): Promise<void> {
-    await json(
+    await readJson(
       await fetch(this.at(`/${encodeURIComponent(id)}/react`), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -89,7 +83,7 @@ export class CommentClient {
   }
 
   async remove(id: string): Promise<boolean> {
-    const body = await json<{ removed: boolean }>(
+    const body = await readJson<{ removed: boolean }>(
       await fetch(this.at(`/${encodeURIComponent(id)}`), { method: "DELETE" }),
     );
     return body.removed;

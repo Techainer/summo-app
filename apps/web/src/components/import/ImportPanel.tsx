@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useT } from "../../i18n/context";
+import { useErrorText } from "../../lib/errors";
 import { GENTLE, METER, listItem } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
 import {
@@ -31,6 +32,7 @@ import { Button } from "../ui";
  */
 export function ImportPanel() {
   const { handshake } = useEngine();
+  const errorText = useErrorText();
   const client = useMemo(() => new ImportClient(handshake), [handshake]);
   const navigate = useNavigate();
   const t = useT();
@@ -73,7 +75,7 @@ export function ImportPanel() {
       setJobs((current) => [job, ...current]);
       setPath("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setStarting(false);
     }

@@ -150,8 +150,9 @@ impl Translation {
         }
 
         if translation.lang.is_empty() {
-            return Err(Error::Other(
-                "bản dịch không ghi ngôn ngữ; thiếu dòng <!-- summo:translation lang:… -->".into(),
+            return Err(Error::msg(
+                "translation.no_language",
+                "bản dịch không ghi ngôn ngữ; thiếu dòng <!-- summo:translation lang:… -->",
             ));
         }
         Ok(translation)
@@ -189,7 +190,7 @@ pub fn sanitize_lang(lang: &str) -> String {
 pub fn path(paths: &Paths, meeting: &MeetingId, lang: &str) -> Result<PathBuf> {
     let lang = sanitize_lang(lang);
     if lang.is_empty() {
-        return Err(Error::Other(format!("`{lang}` không phải mã ngôn ngữ")));
+        return Err(Error::msg("translation.bad_language", format!("`{lang}` không phải mã ngôn ngữ")));
     }
     Ok(dir(paths).join(format!("{meeting}.{lang}.md")))
 }

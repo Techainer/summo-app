@@ -93,11 +93,10 @@ pub fn read_wav(path: &Path) -> Result<Wav> {
     let spec = reader.spec();
 
     if spec.channels != 1 {
-        return Err(Error::Other(format!(
-            "{} có {} kênh; cần 1 kênh mono",
-            path.display(),
-            spec.channels
-        )));
+        return Err(Error::msg(
+            "audio.not_mono",
+            format!("{} có {} kênh; cần 1 kênh mono", path.display(), spec.channels),
+        ));
     }
     if spec.sample_rate != summo_media::TARGET_RATE {
         return Err(Error::Other(format!(

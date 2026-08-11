@@ -165,13 +165,13 @@ impl Imports {
 /// so a typo'd path never reaches ffmpeg.
 pub fn check(path: &Path) -> Result<()> {
     if !path.exists() {
-        return Err(Error::Other(format!("không thấy {}", path.display())));
+        return Err(Error::msg("import.not_found", format!("không thấy {}", path.display())));
     }
     if path.is_dir() {
-        return Err(Error::Other(format!(
-            "{} là thư mục; nhập từng file một",
-            path.display()
-        )));
+        return Err(Error::msg(
+            "import.is_directory",
+            format!("{} là thư mục; nhập từng file một", path.display()),
+        ));
     }
     Ok(())
 }
@@ -259,10 +259,10 @@ fn execute(
     let tools = summo_media::probe()?;
     let info = tools.info(source)?;
     if !info.has_audio {
-        return Err(Error::Other(format!(
-            "{} không có âm thanh",
-            source.display()
-        )));
+        return Err(Error::msg(
+            "import.no_audio",
+            format!("{} không có âm thanh", source.display()),
+        ));
     }
 
     // The meeting id is minted here, before anything is written, because the extracted audio is

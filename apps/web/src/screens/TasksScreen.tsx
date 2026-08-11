@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button, Card, CardBody, CardHeader, SegmentedControl, StatusChip } from "../components/ui";
+import { useErrorText } from "../lib/errors";
 import { cn } from "../lib/cn";
 import { useT } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
@@ -36,6 +37,7 @@ const VIEWS = [
  */
 export function TasksScreen() {
   const t = useT();
+  const say = useErrorText();
   const { handshake } = useEngine();
   const client = useMemo(() => new TaskClient(handshake), [handshake]);
   const [board, setBoard] = useState<Board | null>(null);
@@ -51,7 +53,7 @@ export function TasksScreen() {
       setBoard(await client.board());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   }, [client]);
 
@@ -67,7 +69,7 @@ export function TasksScreen() {
       try {
         await client.move(id, { status });
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(say(e));
         void load();
       }
     },
@@ -80,7 +82,7 @@ export function TasksScreen() {
       try {
         await client.run(id);
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(say(e));
       } finally {
         setRunningId(null);
         // The run wrote its steps to the vault; re-read rather than guessing what changed.

@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "../components/ui";
+import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
 import {
@@ -32,6 +33,7 @@ import {
  */
 export function NotesScreen() {
   const { handshake } = useEngine();
+  const say = useErrorText();
   const { t } = useI18n();
   const client = useMemo(() => new NoteClient(handshake), [handshake]);
 
@@ -51,7 +53,7 @@ export function NotesScreen() {
     try {
       setNotes(await client.list());
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   }, [client]);
 
@@ -70,7 +72,7 @@ export function NotesScreen() {
         const body = note.body.trim();
         setText(body ? `${note.title}\n\n${body}` : note.title);
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(say(e));
       }
     },
     [client],
@@ -87,7 +89,7 @@ export function NotesScreen() {
     } catch (e) {
       // Left as unsaved on purpose: telling the user it saved when it did not is how a note is
       // lost quietly rather than loudly.
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   }, [client, openId, refresh]);
 
@@ -113,7 +115,7 @@ export function NotesScreen() {
       await refresh();
       await open(id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   };
 
@@ -126,7 +128,7 @@ export function NotesScreen() {
       }
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   };
 

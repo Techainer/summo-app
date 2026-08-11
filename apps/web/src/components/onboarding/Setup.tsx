@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
+import { useErrorText } from "../../lib/errors";
 import { METER } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
 import {
@@ -36,6 +37,7 @@ import { Button } from "../ui";
  */
 export function Setup({ onDone }: { onDone: () => void }) {
   const { handshake } = useEngine();
+  const say = useErrorText();
   const { t, locale } = useI18n();
   const client = useMemo(() => new OnboardingClient(handshake), [handshake]);
 
@@ -51,7 +53,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
       setStatus(next);
       setInstalls(running);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   }, [client]);
 
@@ -93,7 +95,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
       const job = await client.install(chosen);
       setInstalls((current) => [...current.filter((i) => i.model !== job.model), job]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   };
 

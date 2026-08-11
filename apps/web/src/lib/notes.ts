@@ -1,4 +1,5 @@
 import type { Handshake } from "./engine";
+import { readJson } from "./errors";
 import { url } from "./library";
 
 /**
@@ -24,27 +25,20 @@ export interface Note {
   sections: { heading: string; body: string }[];
 }
 
-async function json<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
-  }
-  return (await response.json()) as T;
-}
 
 export class NoteClient {
   constructor(private readonly handshake: Handshake) {}
 
   async list(): Promise<NoteSummary[]> {
-    return json<NoteSummary[]>(await fetch(url(this.handshake, "/notes")));
+    return readJson<NoteSummary[]>(await fetch(url(this.handshake, "/notes")));
   }
 
   async read(id: string): Promise<Note> {
-    return json<Note>(await fetch(url(this.handshake, `/notes/${encodeURIComponent(id)}`)));
+    return readJson<Note>(await fetch(url(this.handshake, `/notes/${encodeURIComponent(id)}`)));
   }
 
   async create(title: string, body = ""): Promise<{ id: string }> {
-    return json<{ id: string }>(
+    return readJson<{ id: string }>(
       await fetch(url(this.handshake, "/notes"), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -60,7 +54,7 @@ export class NoteClient {
    * is what a person reads, and that does follow what they typed.
    */
   async save(id: string, body: string, title?: string): Promise<void> {
-    await json(
+    await readJson(
       await fetch(url(this.handshake, `/notes/${encodeURIComponent(id)}`), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -70,7 +64,7 @@ export class NoteClient {
   }
 
   async remove(id: string): Promise<boolean> {
-    const body = await json<{ removed: boolean }>(
+    const body = await readJson<{ removed: boolean }>(
       await fetch(url(this.handshake, `/notes/${encodeURIComponent(id)}`), { method: "DELETE" }),
     );
     return body.removed;
@@ -94,11 +88,11 @@ export class AgendaClient {
   constructor(private readonly handshake: Handshake) {}
 
   async list(): Promise<AgendaEntry[]> {
-    return json<AgendaEntry[]>(await fetch(url(this.handshake, "/agenda")));
+    return readJson<AgendaEntry[]>(await fetch(url(this.handshake, "/agenda")));
   }
 
   async addCalendar(path: string, name: string): Promise<void> {
-    await json(
+    await readJson(
       await fetch(url(this.handshake, "/calendars"), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -108,7 +102,7 @@ export class AgendaClient {
   }
 
   async removeCalendar(name: string): Promise<boolean> {
-    const body = await json<{ removed: boolean }>(
+    const body = await readJson<{ removed: boolean }>(
       await fetch(url(this.handshake, `/calendars/${encodeURIComponent(name)}`), {
         method: "DELETE",
       }),

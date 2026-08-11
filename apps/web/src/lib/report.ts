@@ -1,4 +1,5 @@
 import type { Handshake } from "./engine";
+import { readJson } from "./errors";
 import { url } from "./library";
 
 /**
@@ -47,20 +48,13 @@ export interface Report {
   quiet_days: string[];
 }
 
-async function json<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
-  }
-  return (await response.json()) as T;
-}
 
 export class ReportClient {
   constructor(private readonly handshake: Handshake) {}
 
   /** Omit both bounds for today; omit `from` for a single day. */
   async between(from?: string, to?: string): Promise<Report> {
-    return json<Report>(await fetch(url(this.handshake, "/report", { from, to })));
+    return readJson<Report>(await fetch(url(this.handshake, "/report", { from, to })));
   }
 }
 

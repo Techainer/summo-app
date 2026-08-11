@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "../components/ui";
+import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
 import { pickFile } from "../lib/imports";
@@ -21,6 +22,7 @@ import { AgendaClient, byDay, clock, length, service, type AgendaEntry } from ".
  */
 export function AgendaScreen() {
   const { handshake } = useEngine();
+  const say = useErrorText();
   const { t } = useI18n();
   const client = useMemo(() => new AgendaClient(handshake), [handshake]);
 
@@ -33,7 +35,7 @@ export function AgendaScreen() {
     try {
       setEntries(await client.list());
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   }, [client]);
 
@@ -53,7 +55,7 @@ export function AgendaScreen() {
       setName("");
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   };
 

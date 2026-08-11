@@ -1,4 +1,5 @@
 import type { Handshake } from "./engine";
+import { readJson } from "./errors";
 import { url } from "./library";
 
 /**
@@ -60,33 +61,26 @@ export interface Install {
   error?: string;
 }
 
-async function json<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
-  }
-  return (await response.json()) as T;
-}
 
 export class OnboardingClient {
   constructor(private readonly handshake: Handshake) {}
 
   async status(): Promise<Status> {
-    return json<Status>(await fetch(url(this.handshake, "/onboarding")));
+    return readJson<Status>(await fetch(url(this.handshake, "/onboarding")));
   }
 
   async complete(): Promise<void> {
-    await json(await fetch(url(this.handshake, "/onboarding/complete"), { method: "POST" }));
+    await readJson(await fetch(url(this.handshake, "/onboarding/complete"), { method: "POST" }));
   }
 
   async recommend(lang: string): Promise<{ models: Recommended[] }> {
-    return json<{ models: Recommended[] }>(
+    return readJson<{ models: Recommended[] }>(
       await fetch(url(this.handshake, "/onboarding/recommend", { lang })),
     );
   }
 
   async install(id: string): Promise<Install> {
-    return json<Install>(
+    return readJson<Install>(
       await fetch(url(this.handshake, "/installs"), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -96,7 +90,7 @@ export class OnboardingClient {
   }
 
   async installs(): Promise<Install[]> {
-    return json<Install[]>(await fetch(url(this.handshake, "/installs")));
+    return readJson<Install[]>(await fetch(url(this.handshake, "/installs")));
   }
 }
 

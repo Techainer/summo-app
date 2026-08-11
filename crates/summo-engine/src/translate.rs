@@ -58,7 +58,7 @@ pub async fn translate(
 ) -> Result<Outcome> {
     let lang = lang.trim();
     if lang.is_empty() {
-        return Err(Error::Other("dịch sang ngôn ngữ nào?".into()));
+        return Err(Error::msg("translate.no_target", "dịch sang ngôn ngữ nào?"));
     }
 
     let mut existing = if force {

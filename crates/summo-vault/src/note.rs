@@ -46,7 +46,7 @@ pub fn is_note(doc: &MeetingDoc) -> bool {
 pub fn create(paths: &Paths, title: &str, day: &str, body: &str) -> Result<(MeetingId, PathBuf)> {
     let title = title.trim();
     if title.is_empty() {
-        return Err(Error::Other("ghi chú cần có tiêu đề".into()));
+        return Err(Error::msg("note.no_title", "ghi chú cần có tiêu đề"));
     }
 
     let id = MeetingId::new();
@@ -89,7 +89,7 @@ pub fn find(paths: &Paths, id: &MeetingId) -> Result<PathBuf> {
         .iter()
         .find(|entry| &entry.id == id)
         .map(|entry| dir.join(&entry.path))
-        .ok_or_else(|| Error::Other(format!("không có ghi chú nào tên {id}")))
+        .ok_or_else(|| Error::msg("note.not_found", format!("không có ghi chú nào tên {id}")))
 }
 
 /// Read a note.

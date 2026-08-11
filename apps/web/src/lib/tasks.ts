@@ -1,4 +1,5 @@
 import type { Handshake } from "./engine";
+import { readJson } from "./errors";
 import { url } from "./library";
 
 /**
@@ -52,19 +53,12 @@ export const COLUMNS: { status: ColumnStatus; label: string }[] = [
   { status: "done", label: "Xong" },
 ];
 
-async function json<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
-  }
-  return (await response.json()) as T;
-}
 
 export class TaskClient {
   constructor(private readonly handshake: Handshake) {}
 
   async board(): Promise<Board> {
-    return json<Board>(await fetch(url(this.handshake, "/tasks")));
+    return readJson<Board>(await fetch(url(this.handshake, "/tasks")));
   }
 
   /**
@@ -75,7 +69,7 @@ export class TaskClient {
     id: string,
     patch: { status?: Status; owner?: string | null; due?: string | null },
   ): Promise<Task> {
-    return json<Task>(
+    return readJson<Task>(
       await fetch(url(this.handshake, `/tasks/${encodeURIComponent(id)}`), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -93,7 +87,7 @@ export class TaskClient {
   run(id: string): Promise<{ task: string; status: Status; outcome: string; steps: Step[] }> {
     return fetch(url(this.handshake, `/tasks/${encodeURIComponent(id)}/run`), {
       method: "POST",
-    }).then(json<{ task: string; status: Status; outcome: string; steps: Step[] }>);
+    }).then(readJson<{ task: string; status: Status; outcome: string; steps: Step[] }>);
   }
 
   async create(
@@ -102,7 +96,7 @@ export class TaskClient {
     owner?: string,
     due?: string,
   ): Promise<Task> {
-    return json<Task>(
+    return readJson<Task>(
       await fetch(url(this.handshake, `/meetings/${encodeURIComponent(meeting)}/tasks`), {
         method: "POST",
         headers: { "content-type": "application/json" },

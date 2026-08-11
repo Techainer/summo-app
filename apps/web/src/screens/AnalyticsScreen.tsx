@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
+import { useErrorText } from "../lib/errors";
 import { useT } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
 import {
@@ -32,6 +33,7 @@ const DAYS: Record<Range, number> = { day: 0, week: 6, month: 29 };
  */
 export function AnalyticsScreen() {
   const t = useT();
+  const say = useErrorText();
   const { handshake } = useEngine();
   const client = useMemo(() => new ReportClient(handshake), [handshake]);
   const [range, setRange] = useState<Range>("week");
@@ -45,7 +47,7 @@ export function AnalyticsScreen() {
       setReport(await client.between(from, to));
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   }, [client, range]);
 

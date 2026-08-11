@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useT } from "../i18n/context";
+import { useErrorText } from "../lib/errors";
 import {
   PeopleClient,
   confidenceLabel,
@@ -26,6 +27,7 @@ interface Props {
  */
 export function People({ client, meeting }: Props) {
   const t = useT();
+  const say = useErrorText();
   const [people, setPeople] = useState<Person[]>([]);
   const [space, setSpace] = useState<string | undefined>();
   const [voices, setVoices] = useState<UnknownVoice[]>([]);
@@ -43,7 +45,7 @@ export function People({ client, meeting }: Props) {
       setVoices(meeting ? await client.unknowns(meeting) : []);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(say(e));
     }
   }, [client, meeting]);
 
@@ -62,7 +64,7 @@ export function People({ client, meeting }: Props) {
         setError(null);
         await refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(say(e));
       } finally {
         setBusy(null);
       }
@@ -82,7 +84,7 @@ export function People({ client, meeting }: Props) {
         setError(null);
         await refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(say(e));
       }
     },
     [client, draft, refresh],
@@ -99,7 +101,7 @@ export function People({ client, meeting }: Props) {
         await client.forget(person.id);
         await refresh();
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(say(e));
       }
     },
     [client, refresh],

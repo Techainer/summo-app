@@ -376,5 +376,20 @@
     "me": "You",
     "remove": "Delete comment",
     "react": "React {emoji}"
+  },
+  "errors": {
+    "note.no_title": "A note needs a title.",
+    "note.not_found": "That note is not here.",
+    "comment.empty": "A comment needs something in it.",
+    "translation.no_language": "That translation file does not say what language it is in.",
+    "translation.bad_language": "That is not a language code.",
+    "translate.no_target": "Pick a language to translate into.",
+    "ask.no_question": "Type a question first.",
+    "import.not_found": "That file is not there.",
+    "import.is_directory": "That is a folder — pick one file at a time.",
+    "import.no_audio": "That file has no audio in it.",
+    "calendar.no_name": "A calendar needs a name.",
+    "calendar.no_events": "That file has no events in it — is it really an .ics?",
+    "audio.not_mono": "The audio has to be single-channel mono."
   }
 }

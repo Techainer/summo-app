@@ -424,7 +424,14 @@ fn as_response(result: Result<impl Serialize>) -> axum::response::Response {
         Ok(value) => Json(value).into_response(),
         Err(e) => {
             let (status, message) = vault_error(&e);
-            (status, Json(serde_json::json!({ "error": message }))).into_response()
+            // `code` when there is one, so the interface can say this in the user's language;
+            // `error` always, so a client that does not know the code still shows something. See
+            // `summo_core::Error::Message`.
+            let mut body = serde_json::json!({ "error": message });
+            if let Some(code) = e.code() {
+                body["code"] = serde_json::Value::String(code.to_string());
+            }
+            (status, Json(body)).into_response()
         }
     }
 }
