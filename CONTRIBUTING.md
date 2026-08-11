@@ -55,6 +55,22 @@ sideways scroll, or on any text below the WCAG AA contrast ratio against the col
 behind it. Run it if you have touched anything visual. It has caught more real bugs than any other
 check in the repository, and every one of them had passed the unit tests.
 
+### The desktop shell
+
+Not a workspace member — a Tauri app has its own lockfile and its own build script — so
+`cargo build --workspace` does not touch it.
+
+```bash
+./scripts/sidecar.sh                     # stages the daemon where Tauri expects it
+cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+pnpm -C apps/desktop dev                 # runs the sidecar script itself
+```
+
+Tauri looks for helper executables under a name ending in the target triple, which is not something
+`cargo build` produces. Nothing produced it, so the shell was unbuildable from a fresh clone and
+had quietly stopped compiling against Tauri v2. `tauri.conf.json` calls the script now, and CI
+compiles the shell so it cannot happen again.
+
 ## Conventions
 
 These are enforced by the commands above, not by taste:

@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../../web/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "pnpm --filter @summo/web dev",
-    "beforeBuildCommand": "pnpm --filter @summo/web build"
+    "beforeDevCommand": "../../scripts/sidecar.sh && pnpm --filter @summo/web dev",
+    "beforeBuildCommand": "pnpm --filter @summo/web build && ../../scripts/sidecar.sh --release"
   },
   "app": {
     "windows": [
