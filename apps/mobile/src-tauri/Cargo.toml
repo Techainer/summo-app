@@ -1,0 +1,34 @@
+[package]
+name = "summo-mobile"
+description = "Summo on iOS and Android"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "AGPL-3.0-or-later"
+
+# Excluded from the workspace for the same reason the desktop shell is: building it needs platform
+# toolchains (Xcode, the Android NDK) that a plain CI runner or a headless server does not have, and
+# requiring them to run `cargo test` on the core crates would make the workspace unbuildable.
+[workspace]
+
+[lib]
+name = "summo_mobile"
+# `staticlib` for iOS, `cdylib` for Android, `rlib` so the desktop-style binary can link it too.
+# Tauri's mobile entry point is a library symbol the platform harness calls; there is no `main` on
+# either OS.
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+# The engine is linked in, not spawned. iOS does not let an app run another executable — see
+# `summo_engine::embedded` for why that decides the whole shape of this build.
+summo-engine = { path = "../../../crates/summo-engine" }
+summo-core = { path = "../../../crates/summo-core" }

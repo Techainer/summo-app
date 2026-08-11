@@ -1,0 +1,14 @@
+{
+  "name": "@summo/mobile",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "android": "tauri android dev",
+    "ios": "tauri ios dev",
+    "android:build": "tauri android build",
+    "ios:build": "tauri ios build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.1"
+  }
+}

@@ -20,6 +20,7 @@ pub mod auth;
 pub mod board;
 pub mod collaborate;
 pub mod draft;
+pub mod embedded;
 pub mod imports;
 pub mod install;
 pub mod live;

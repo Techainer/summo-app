@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "default",
+  "description": "What the webview may ask the shell for. Short on purpose: everything that touches audio, models or the vault goes to the in-process engine over an authenticated socket, so the webview needs almost no native privilege of its own.",
+  "windows": ["main"],
+  "platforms": ["iOS", "android"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "dialog:allow-open"
+  ]
+}

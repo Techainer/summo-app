@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Summo",
+  "version": "0.1.0",
+  "identifier": "app.summo.mobile",
+  "build": {
+    "frontendDist": "../../web/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "pnpm --filter @summo/web dev",
+    "beforeBuildCommand": "pnpm --filter @summo/web build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Summo"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png"],
+    "shortDescription": "Meeting notes that run on your phone",
+    "longDescription": "Speech recognition and speaker attribution run on the device. Audio never leaves it.",
+    "android": {
+      "minSdkVersion": 26
+    },
+    "iOS": {
+      "minimumSystemVersion": "14.0"
+    }
+  }
+}
