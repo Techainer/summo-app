@@ -46,6 +46,13 @@ pub struct SessionSpec {
     /// Attribute speakers within the remote lane.
     #[serde(default)]
     pub diarize: bool,
+    /// Translate finished lines into this language as they land.
+    ///
+    /// This is the "watch a talk in another language" switch. There is no separate feature behind
+    /// it: system-audio capture already hears whatever is playing, so turning this on while
+    /// something plays gives live bilingual subtitles for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub translate_to: Option<String>,
     /// Capture device id, or `None` to pick the best one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_id: Option<String>,
@@ -64,6 +71,7 @@ impl SessionSpec {
             lanes: default_lanes(),
             language: None,
             diarize: false,
+            translate_to: None,
             device_id: None,
         }
     }

@@ -12,6 +12,7 @@ import {
 import { LibraryClient } from "./library";
 import { PeopleClient } from "./people";
 import type { Event } from "./protocol";
+import { load as loadCapture } from "./capture";
 import { Session, handshakeFromLocation, type SessionState } from "./session";
 import { apply, empty, type TranscriptState } from "./transcript";
 
@@ -103,7 +104,17 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     setElapsed(0);
     setTranscript(empty);
     timer.current = window.setInterval(() => setElapsed((e) => e + 1), 1000);
-    await controller.current?.start({ live_model: "gipformer-65m", lanes: ["mic"] });
+    // Read at the moment of starting, not captured at mount: the tray icon and the global shortcut
+    // both reach `toggle` without going through the screen, and they have to honour whatever the
+    // user last chose rather than whatever was set when the window opened.
+    const chosen = loadCapture();
+    await controller.current?.start({
+      live_model: "gipformer-65m",
+      lanes: chosen.lanes,
+      // Diarization needs the system lane; asking for it on the microphone alone is refused.
+      diarize: chosen.lanes.includes("system"),
+      ...(chosen.translateTo ? { translate_to: chosen.translateTo } : {}),
+    });
   }, []);
 
   const stop = useCallback(() => {

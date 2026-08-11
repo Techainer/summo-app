@@ -33,7 +33,10 @@
     "pick_screen": "Chọn màn hình hoặc thư mục",
     "compact_while_recording": "Thu gọn khi đang họp",
     "collapse_window": "Thu gọn cửa sổ",
-    "expand_window": "Mở rộng cửa sổ"
+    "expand_window": "Mở rộng cửa sổ",
+    "translate_live": "Dịch trực tiếp",
+    "translate_hint": "Mỗi câu nói xong sẽ được dịch và hiện ngay dưới câu gốc.",
+    "translate_needs_system": "Đang bật dịch nhưng chỉ nghe micro — bật thêm Hệ thống để dịch thứ đang phát."
   },
   "import": {
     "title": "Nhập bản ghi có sẵn",

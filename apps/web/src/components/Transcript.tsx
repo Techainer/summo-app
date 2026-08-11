@@ -52,6 +52,15 @@ export function Transcript({
                 </span>
               </div>
               <p className="line-text">{segment.text}</p>
+              {/* Under the original, never instead of it: the original is what was actually said,
+                  and anyone checking a subtitle against the speaker needs both. Dimmed and italic
+                  so a glance can tell which line is the machine's. */}
+              {segment.translation && (
+                <p className="line-text" lang={segment.translation.lang}
+                   style={{ opacity: 0.72, fontStyle: "italic" }}>
+                  {segment.translation.text}
+                </p>
+              )}
             </div>
           );
         })}

@@ -22,6 +22,11 @@ export function empty(): TranscriptState {
  * Apply one event. Returns the same object when nothing changed, so React can skip a re-render.
  */
 export function apply(state: TranscriptState, event: Event): TranscriptState {
+  // A translation arrives seconds after the line it belongs to — a model round trip, not a decode.
+  // It attaches to the segment rather than replacing it: the original is what was actually said,
+  // and a viewer checking a subtitle against the speaker needs both.
+  if (event.kind === "translation") return translate(state, event.seq, event.lang, event.text);
+
   if (!isTranscript(event)) return state;
 
   const { kind, ...segment } = event;
@@ -47,6 +52,29 @@ export function apply(state: TranscriptState, event: Event): TranscriptState {
     // A revision without a speaker must not erase one diarization already assigned.
     speaker: incoming.speaker ?? current.speaker,
   };
+  return { segments, index: state.index };
+}
+
+/**
+ * Attach a translation to a segment.
+ *
+ * A translation for a `seq` that has not arrived is dropped rather than held: out-of-order delivery
+ * would mean inventing a segment with no text, no speaker and no timing, which then renders as a
+ * blank line in the transcript.
+ */
+export function translate(
+  state: TranscriptState,
+  seq: number,
+  lang: string,
+  text: string,
+): TranscriptState {
+  const at = state.index.get(seq);
+  if (at === undefined) return state;
+  const current = state.segments[at];
+  if (!current) return state;
+
+  const segments = state.segments.slice();
+  segments[at] = { ...current, translation: { lang, text } };
   return { segments, index: state.index };
 }
 

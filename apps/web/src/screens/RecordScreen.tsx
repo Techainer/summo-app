@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Transcript } from "../components/Transcript";
 import { ImportPanel } from "../components/import/ImportPanel";
+import { CaptureControls } from "../components/record/CaptureControls";
 import { SegmentedControl } from "../components/ui";
 import { useT } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
@@ -42,12 +43,17 @@ export function RecordScreen() {
       <div className="min-h-0 flex-1 overflow-auto">
         {source === "upload" ? (
           <ImportPanel />
-        ) : transcript.segments.length === 0 ? (
-          <p className="mt-24 text-center text-fg-faint">
-            {session.recording ? t("record.listening") : t("record.idle")}
-          </p>
         ) : (
-          <Transcript segments={transcript.segments} />
+          <>
+            <CaptureControls />
+            {transcript.segments.length === 0 ? (
+              <p className="mt-20 text-center text-fg-faint">
+                {session.recording ? t("record.listening") : t("record.idle")}
+              </p>
+            ) : (
+              <Transcript segments={transcript.segments} />
+            )}
+          </>
         )}
       </div>
     </div>

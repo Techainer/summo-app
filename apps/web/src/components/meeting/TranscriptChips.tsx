@@ -20,6 +20,8 @@ export interface Line {
   speaker?: string | null;
   /** Present only while recording; a partial is still being revised. */
   source?: string;
+  /** A live translation of this line, shown underneath the original. */
+  translation?: { lang: string; text: string };
 }
 
 interface Props {
@@ -129,6 +131,14 @@ function Chip({
         )}
       >
         {segment.text}
+        {segment.translation && (
+          <span
+            lang={segment.translation.lang}
+            className="mt-1 block italic text-fg-dim"
+          >
+            {segment.translation.text}
+          </span>
+        )}
       </span>
     </>
   );

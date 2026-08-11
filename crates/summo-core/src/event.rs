@@ -20,6 +20,20 @@ pub enum Event {
     Final(Segment),
     /// A slower refine model replaced the text of an already-final segment.
     Revise(Segment),
+    /// A live translation of an already-final segment.
+    ///
+    /// Arrives seconds after the [`Event::Final`] it belongs to — a model round trip, not a decode —
+    /// so it is a separate event keyed by `seq` rather than a field on the segment. The interface
+    /// renders the original immediately and slots the translation in underneath when it lands,
+    /// which is what makes watching a talk in another language usable: the subtitle is late, but the
+    /// transcript never is.
+    Translation {
+        /// The `seq` of the segment this translates.
+        seq: u64,
+        /// Target language tag.
+        lang: String,
+        text: String,
+    },
     /// Offline diarization corrected a live label; the UI relabels in place.
     SpeakerRename { from: SpeakerId, to: SpeakerId },
     /// Download / load progress for a model.

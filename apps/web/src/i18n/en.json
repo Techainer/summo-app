@@ -33,7 +33,10 @@
     "pick_screen": "Choose a screen or window",
     "compact_while_recording": "Shrink while recording",
     "collapse_window": "Collapse window",
-    "expand_window": "Expand window"
+    "expand_window": "Expand window",
+    "translate_live": "Live translation",
+    "translate_hint": "Each finished line is translated and shown under the original.",
+    "translate_needs_system": "Translation is on but only the microphone is captured — turn on System to translate what is playing."
   },
   "import": {
     "title": "Import a recording",

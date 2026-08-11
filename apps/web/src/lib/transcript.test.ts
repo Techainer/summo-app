@@ -80,3 +80,61 @@ describe("transcript store", () => {
     expect(edit(state, 99, "x")).toBe(state);
   });
 });
+
+describe("live translation", () => {
+  const withLine = () => apply(empty(), seg("final", 1, "xin chào"));
+
+  it("attaches to the line it names without replacing the original", () => {
+    const state = apply(withLine(), {
+      kind: "translation",
+      seq: 1,
+      lang: "en",
+      text: "hello",
+    } as Event);
+
+    expect(state.segments[0]?.text).toBe("xin chào");
+    expect(state.segments[0]?.translation).toEqual({ lang: "en", text: "hello" });
+  });
+
+  // Out-of-order delivery would otherwise invent a segment with no text, no speaker and no timing,
+  // which renders as a blank line in the middle of the transcript.
+  it("drops a translation for a line that has not arrived", () => {
+    const before = empty();
+    const after = apply(before, {
+      kind: "translation",
+      seq: 99,
+      lang: "en",
+      text: "hello",
+    } as Event);
+    expect(after).toBe(before);
+  });
+
+  it("is replaced when a second translation arrives for the same line", () => {
+    let state = apply(withLine(), {
+      kind: "translation",
+      seq: 1,
+      lang: "en",
+      text: "hi",
+    } as Event);
+    state = apply(state, {
+      kind: "translation",
+      seq: 1,
+      lang: "en",
+      text: "hello there",
+    } as Event);
+    expect(state.segments[0]?.translation?.text).toBe("hello there");
+  });
+
+  it("survives a revision of the line underneath it", () => {
+    let state = apply(withLine(), {
+      kind: "translation",
+      seq: 1,
+      lang: "en",
+      text: "hello",
+    } as Event);
+    state = apply(state, seg("revise", 1, "xin chào các bạn"));
+
+    expect(state.segments[0]?.text).toBe("xin chào các bạn");
+    expect(state.segments[0]?.translation?.text).toBe("hello");
+  });
+});

@@ -27,12 +27,20 @@ export interface Segment {
   speaker?: string;
   conf?: number;
   words?: Word[];
+  /**
+   * A live translation of this line, when one was asked for.
+   *
+   * Held beside the text rather than replacing it: the original is the record of what was said, and
+   * anyone checking a subtitle against the speaker needs both on screen.
+   */
+  translation?: { lang: string; text: string };
 }
 
 export type Event =
   | ({ kind: "partial" } & Segment)
   | ({ kind: "final" } & Segment)
   | ({ kind: "revise" } & Segment)
+  | { kind: "translation"; seq: number; lang: string; text: string }
   | { kind: "speaker_rename"; from: string; to: string }
   | { kind: "progress"; id: string; pct: number; stage: string; eta_s?: number }
   | { kind: "stat"; rtf: number; rss_mb: number; queue_ms: number }
@@ -45,6 +53,8 @@ export interface SessionSpec {
   lanes?: Lane[];
   language?: string;
   diarize?: boolean;
+  /** Translate finished lines into this language as they land. */
+  translate_to?: string;
   device_id?: string;
 }
 

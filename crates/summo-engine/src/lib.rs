@@ -22,6 +22,7 @@ pub mod collaborate;
 pub mod draft;
 pub mod imports;
 pub mod install;
+pub mod live;
 pub mod locales;
 pub mod nudge;
 pub mod onboarding;

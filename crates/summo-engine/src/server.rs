@@ -1087,7 +1087,16 @@ async fn run_task(
 
 /// Build an LLM client from settings, or say why not.
 fn llm_client(state: &AppState) -> Result<summo_llm::LlmClient> {
-    let settings = summo_core::settings::Settings::load(&state.engine.paths().settings())?;
+    llm_for_engine(&state.engine)
+}
+
+/// The configured language model, built from settings plus the key in the environment.
+///
+/// Split from [`llm_client`] because the WebSocket session has an `EngineState` and no `AppState`,
+/// and a second copy of provider resolution is how the socket and the HTTP routes end up talking to
+/// different models.
+fn llm_for_engine(engine: &EngineState) -> Result<summo_llm::LlmClient> {
+    let settings = summo_core::settings::Settings::load(&engine.paths().settings())?;
     let provider = summo_llm::Provider::resolve(
         &settings.llm.provider,
         settings.llm.model.as_deref(),
@@ -2325,6 +2334,8 @@ struct ActiveSession {
     recorder: crate::recorder::Recorder,
     archive: crate::archive::AudioArchive,
     started: std::time::Instant,
+    /// Set when the session asked for live translation.
+    live: Option<crate::live::LiveTranslator>,
 }
 
 /// Command handling when recognition is compiled in: owns creating and tearing down the pipeline.
@@ -2460,10 +2471,30 @@ fn start_session(
 
     let recorder = crate::recorder::Recorder::start(engine.paths(), id, &title, &date, models)?;
 
+    // A translation the user asked for but cannot have — no provider configured — is reported when
+    // the session starts rather than silently producing no subtitles for an hour.
+    let live = match spec.translate_to.as_deref().map(str::trim) {
+        Some(lang) if !lang.is_empty() => match llm_for_engine(engine) {
+            Ok(client) => Some(crate::live::LiveTranslator::new(
+                client,
+                crate::live::LiveConfig {
+                    lang: lang.to_string(),
+                    glossary: summo_llm::prompt::Glossary::default(),
+                },
+            )),
+            Err(e) => {
+                tracing::warn!(error = %e, "live translation asked for but no model is configured");
+                None
+            }
+        },
+        _ => None,
+    };
+
     Ok(ActiveSession {
         runner,
         recorder,
         archive,
+        live,
         started: std::time::Instant::now(),
     })
 }
@@ -2510,6 +2541,14 @@ fn handle_audio_with_models(
             // Flushes on its own interval, so a crash costs seconds rather than the meeting.
             if let Err(e) = active.recorder.maybe_save() {
                 tracing::error!(error = %e, "autosave failed");
+            }
+
+            // Live translation rides the same connection. It never blocks: `offer` queues the
+            // finals, may spawn a request, and returns whatever earlier requests have already sent
+            // back — so a slow model delays subtitles, never audio.
+            let mut events = events;
+            if let Some(live) = active.live.as_mut() {
+                events.extend(live.offer(&events));
             }
             events
         }
