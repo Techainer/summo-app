@@ -4873,9 +4873,8 @@ name = "summo-tts"
 version = "0.1.0"
 dependencies = [
  "hound",
- "ndarray",
- "ort",
  "serde",
+ "sherpa-rs",
  "summo-core",
  "tempfile",
  "tracing",

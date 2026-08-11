@@ -14,8 +14,12 @@
 //!
 //! Vietnamese TTS is a licensing minefield: viXTTS and XTTS-v2 are Coqui CPML and Coqui is defunct,
 //! so no licence can be bought; F5-TTS-Vietnamese and valtec are CC-BY-NC; VietTTS has Apache code
-//! and CC-BY-NC *weights*. **VieNeu-TTS is Apache-2.0**, which is why it is the default — and it is
-//! the best of them anyway.
+//! and CC-BY-NC *weights*. **VieNeu-TTS is Apache-2.0** and is the best of them.
+//!
+//! What ships today is [`vits`], through the sherpa-onnx runtime the recogniser already links —
+//! one ONNX graph, permissively-licensed voices, working now. VieNeu-TTS is a two-stage
+//! LM-plus-codec system with no runtime in this dependency tree; it slots in behind the same trait
+//! when somebody builds that, and nothing in the planning or mixing halves changes when they do.
 //!
 //! But a user is allowed to point Summo at a non-commercial model they installed themselves: the
 //! distinction that matters is who distributes the weights, not who runs them. A trait is what
@@ -24,8 +28,7 @@
 pub mod dub;
 pub mod plan;
 
-#[cfg(feature = "vieneu")]
-pub mod vieneu;
+pub mod vits;
 
 pub use plan::{Fit, Line, Plan, Slot, plan};
 

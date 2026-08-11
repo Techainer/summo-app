@@ -9,17 +9,18 @@ repository.workspace = true
 
 [features]
 default = []
-# The VieNeu-TTS backend. Off by default so the planning and mixing half builds anywhere, the same
-# way `summo-vad` keeps Silero optional.
-vieneu = ["dep:ort", "dep:ndarray"]
+# A real synthesiser, through sherpa-onnx's VITS runtime — the same native library the recogniser
+# already links, so this adds a feature rather than a dependency. Off by default so the planning and
+# mixing half builds anywhere, the same way `summo-vad` keeps Silero optional.
+sherpa = ["dep:sherpa-rs"]
 
 [dependencies]
 summo-core.workspace = true
 hound.workspace = true
 serde.workspace = true
 tracing.workspace = true
-ort = { workspace = true, optional = true }
-ndarray = { workspace = true, optional = true }
+sherpa-rs = { workspace = true, optional = true, features = ["tts"] }
+
 
 [dev-dependencies]
 tempfile.workspace = true
