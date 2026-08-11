@@ -115,6 +115,13 @@ pub struct FileEntry {
     /// means the file is portable and always fetched.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platform: Option<String>,
+
+    /// Which build of the model this file belongs to, e.g. `int8` or `coreml`.
+    ///
+    /// `None` means it belongs to every build — a tokeniser or a config is the same file whichever
+    /// export you fetched. See [`crate::variant`] for how one is chosen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
 }
 
 /// This build's platform tag, matching [`FileEntry::platform`].
@@ -170,6 +177,24 @@ pub struct Manifest {
     #[serde(default)]
     pub profile: Profile,
     pub files: Vec<FileEntry>,
+
+    /// Which build was installed on this machine.
+    ///
+    /// Written when the model is installed and never published in a registry manifest — it is a
+    /// property of *this installation*, not of the model. Recording it is what lets `resolve` and
+    /// `is_installed` know which files to expect without re-deciding, and re-deciding would be
+    /// wrong: a machine that has since freed memory would start reporting an installed model as
+    /// missing because it now prefers a build it never fetched.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_variant: Option<String>,
+
+    /// Builds this model ships, when it ships more than one.
+    ///
+    /// Empty is the common case and means "there is one build". A model with an int8 and an fp32
+    /// export, or a CoreML package alongside an ONNX one, declares them here so the store can pick
+    /// the one that fits the machine rather than fetching all of them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variants: Vec<crate::variant::Variant>,
     /// Runtime-specific knobs passed through to the engine.
     #[serde(default)]
     pub params: BTreeMap<String, serde_json::Value>,
@@ -291,12 +316,35 @@ impl Manifest {
         Ok(())
     }
 
-    /// Files needed on this machine: portable ones plus those tagged for the current platform.
+    /// Files needed on this machine: the right platform, and the installed build.
+    ///
+    /// A file with no `variant` belongs to every build. Before a variant has been chosen — a
+    /// manifest straight from the registry — every variant's files match, which is what
+    /// `total_bytes` on an uninstalled model should report only after `crate::variant::choose` has
+    /// narrowed it. Callers that care use [`Manifest::with_variant`] first.
     pub fn platform_files(&self) -> impl Iterator<Item = &FileEntry> {
         let here = current_platform();
-        self.files
-            .iter()
-            .filter(move |f| f.platform.as_ref().is_none_or(|p| *p == here))
+        let installed = self.installed_variant.clone();
+        self.files.iter().filter(move |f| {
+            if f.platform.as_ref().is_some_and(|p| *p != here) {
+                return false;
+            }
+            match (&f.variant, &installed) {
+                // Untagged files belong to every build.
+                (None, _) => true,
+                (Some(tag), Some(chosen)) => tag == chosen,
+                // Nothing chosen yet: a tagged file is a candidate, not a commitment.
+                (Some(_), None) => true,
+            }
+        })
+    }
+
+    /// The same manifest, pinned to one build.
+    #[must_use]
+    pub fn with_variant(&self, variant: Option<String>) -> Self {
+        let mut out = self.clone();
+        out.installed_variant = variant;
+        out
     }
 
     /// Total bytes to fetch on this machine.

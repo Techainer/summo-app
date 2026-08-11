@@ -333,6 +333,7 @@ mod tests {
             url,
             mirror: Vec::new(),
             platform: None,
+            variant: None,
         }
     }
 

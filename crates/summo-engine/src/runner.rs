@@ -348,6 +348,7 @@ mod tests {
             size_bytes: 0,
             profile: summo_models::Profile::default(),
             files: vec![],
+            variants: Vec::new(),
             params: Default::default(),
             description: None,
         };

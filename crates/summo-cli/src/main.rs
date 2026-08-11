@@ -363,12 +363,27 @@ async fn pull(paths: &Paths, id: &str, registry: Option<&str>) -> Result<()> {
         );
     }
 
+    // Which build fits this machine — accelerator, precision, free memory. Printed rather than
+    // applied silently: a user who expected the fp32 export and got int8 should be able to see
+    // that, and why, without reading the source.
+    let choice = summo_models::variant::choose(&manifest, &hw);
+    if let Some(name) = &choice.variant {
+        println!("build     {name} ({})", choice.reason);
+    }
+    if !choice.alternatives.is_empty() {
+        println!("  also ok {}", choice.alternatives.join(", "));
+    }
+    for rejected in &choice.rejected {
+        println!("  skipped {} — {}", rejected.variant, rejected.why);
+    }
+    let manifest = manifest.with_variant(choice.variant.clone());
+
     let downloader = Downloader::new(paths.downloads())?;
     let total = manifest.total_bytes();
     let mut last_pct = u8::MAX;
 
     let installed = store
-        .install(&manifest, &downloader, |p| {
+        .install_variant(&manifest, &downloader, choice.variant, |p| {
             if p.pct() != last_pct {
                 last_pct = p.pct();
                 tracing::info!(

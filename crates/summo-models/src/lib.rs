@@ -10,6 +10,7 @@
 //! ```
 
 pub mod page;
+pub mod variant;
 pub mod credentials;
 pub mod download;
 pub mod hw;

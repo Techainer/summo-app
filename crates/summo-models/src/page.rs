@@ -250,7 +250,10 @@ mod tests {
                 url: "https://example.invalid/model.onnx".into(),
                 mirror: vec![],
                 platform: None,
+                variant: None,
             }],
+            variants: Vec::new(),
+            installed_variant: None,
             params: Default::default(),
         }
     }

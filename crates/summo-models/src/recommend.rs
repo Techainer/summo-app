@@ -285,7 +285,10 @@ mod tests {
                 url: "https://x/y".into(),
                 mirror: vec![],
                 platform: None,
+                variant: None,
             }],
+            variants: Vec::new(),
+            installed_variant: None,
             params: Default::default(),
             description: None,
         }

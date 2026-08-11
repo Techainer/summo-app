@@ -93,12 +93,34 @@ impl ModelStore {
         &self,
         manifest: &Manifest,
         downloader: &Downloader,
+        on_progress: F,
+    ) -> Result<InstalledModel>
+    where
+        F: FnMut(DownloadProgress) + Send,
+    {
+        // No hardware profile: fetch whatever the manifest declares. Kept so existing callers and
+        // tests read unchanged, and so a manifest with one build needs no ceremony.
+        self.install_variant(manifest, downloader, None, on_progress)
+            .await
+    }
+
+    /// Install one build of a model.
+    ///
+    /// `variant` comes from [`crate::variant::choose`], which decides against this machine. It is
+    /// recorded in the stored manifest so everything afterwards — `resolve`, `is_installed`, the
+    /// garbage collector — agrees about which files this installation consists of.
+    pub async fn install_variant<F>(
+        &self,
+        manifest: &Manifest,
+        downloader: &Downloader,
+        variant: Option<String>,
         mut on_progress: F,
     ) -> Result<InstalledModel>
     where
         F: FnMut(DownloadProgress) + Send,
     {
         manifest.validate()?;
+        let manifest = &manifest.with_variant(variant);
         let total = manifest.total_bytes();
         let mut completed = 0_u64;
 
@@ -247,6 +269,89 @@ impl ModelStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The point of recording the variant: everything after the install has to agree about which
+    /// files this installation consists of.
+    #[tokio::test]
+    async fn installing_one_build_leaves_the_others_alone() {
+        use crate::variant::{Precision, Variant};
+
+        let fixture = fixture();
+        let mut manifest = fixture.manifest(
+            "two-builds",
+            vec![
+                fixture.file("tokens.txt", b"shared"),
+                fixture.file("model.int8.onnx", b"small"),
+                fixture.file("model.fp32.onnx", b"large"),
+            ],
+        );
+        manifest.files[1].variant = Some("int8".into());
+        manifest.files[2].variant = Some("fp32".into());
+        manifest.variants = vec![
+            Variant {
+                name: Some("int8".into()),
+                accel: None,
+                precision: Some(Precision::Int8),
+            },
+            Variant {
+                name: Some("fp32".into()),
+                accel: None,
+                precision: Some(Precision::Fp32),
+            },
+        ];
+
+        let installed = fixture
+            .store
+            .install_variant(&manifest, &fixture.downloader(), Some("int8".into()), |_| {})
+            .await
+            .unwrap();
+
+        let mut names: Vec<&str> = installed.files.keys().map(String::as_str).collect();
+        names.sort_unstable();
+        assert_eq!(names, ["model.int8.onnx", "tokens.txt"], "no fp32 blob fetched");
+
+        // And it still knows that after a restart, from the manifest it wrote.
+        let reread = fixture.store.list();
+        let stored = reread.iter().find(|m| m.id.as_str() == "two-builds").unwrap();
+        assert_eq!(stored.installed_variant.as_deref(), Some("int8"));
+        assert!(fixture.store.is_installed(stored), "the other build's absence is not a gap");
+    }
+
+    /// Re-deciding on every call would report an installed model as missing the moment the machine
+    /// freed enough memory to prefer a build it never fetched.
+    #[tokio::test]
+    async fn an_installed_model_does_not_change_its_mind_later() {
+        use crate::variant::{Precision, Variant};
+
+        let fixture = fixture();
+        let mut manifest = fixture.manifest(
+            "pinned",
+            vec![fixture.file("model.int8.onnx", b"small")],
+        );
+        manifest.files[0].variant = Some("int8".into());
+        manifest.variants = vec![
+            Variant {
+                name: Some("int8".into()),
+                accel: None,
+                precision: Some(Precision::Int8),
+            },
+            Variant {
+                name: Some("fp32".into()),
+                accel: None,
+                precision: Some(Precision::Fp32),
+            },
+        ];
+
+        fixture
+            .store
+            .install_variant(&manifest, &fixture.downloader(), Some("int8".into()), |_| {})
+            .await
+            .unwrap();
+
+        let stored = fixture.store.list();
+        let stored = stored.iter().find(|m| m.id.as_str() == "pinned").unwrap();
+        assert!(fixture.store.resolve(stored).is_ok());
+    }
     use sha2::{Digest, Sha256};
 
     struct Fixture {
@@ -281,6 +386,7 @@ mod tests {
                 url: format!("file://{}", path.display()),
                 mirror: Vec::new(),
                 platform: None,
+                variant: None,
             }
         }
 
@@ -300,6 +406,8 @@ mod tests {
             gated: false,
                 size_bytes: files.iter().map(|f| f.size).sum(),
                 profile: crate::manifest::Profile::default(),
+                variants: Vec::new(),
+                installed_variant: None,
                 params: [("encoder".to_string(), serde_json::json!("encoder.onnx"))]
                     .into_iter()
                     .collect(),
