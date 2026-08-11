@@ -24,7 +24,8 @@
     "shrink": "Thu gọn cửa sổ",
     "shrink_hint": "Thu gọn khi đang họp",
     "expand": "Mở rộng cửa sổ",
-    "expand_hint": "Mở rộng"
+    "expand_hint": "Mở rộng",
+    "agents": "Agent"
   },
   "record": {
     "source": "Nguồn",
@@ -306,7 +307,8 @@
     "delete": "Xoá",
     "close": "Đóng",
     "retry": "Thử lại",
-    "loading": "Đang tải…"
+    "loading": "Đang tải…",
+    "saving": "Đang lưu…"
   },
   "setup": {
     "title": "Chào mừng tới Summo",
@@ -404,5 +406,26 @@
     "calendar.no_name": "Lịch cần có tên.",
     "calendar.no_events": "File này không có sự kiện nào — có chắc là .ics không?",
     "audio.not_mono": "File âm thanh phải là 1 kênh mono."
+  },
+  "agents": {
+    "title": "Agent",
+    "subtitle": "Mỗi agent là một thư mục Markdown trong kho của bạn.",
+    "pick": "Chọn một agent để xem nó được giao việc gì.",
+    "coordinates": "điều phối",
+    "definition": "Định nghĩa agent",
+    "file_hint": "Đây là chính file đó. Phần YAML ở đầu là cài đặt; phần dưới là việc agent được giao.",
+    "saved": "Đã lưu",
+    "tools": "Công cụ",
+    "tools_hint": "Thứ nó thật sự gọi được, sau khi áp luật chung.",
+    "memory": "Ghi nhớ",
+    "memory_empty": "Chưa học được gì.",
+    "tool_count_one": "{count} công cụ",
+    "tool_count_other": "{count} công cụ",
+    "memory_count_one": "{count} điều nhớ",
+    "memory_count_other": "{count} điều nhớ",
+    "task_count_one": "{count} việc treo",
+    "task_count_other": "{count} việc treo",
+    "dangling": "{from} có thể giao việc cho “{to}”, nhưng không có agent nào tên đó.",
+    "unreadable": "Không đọc được {path}: {reason}"
   }
 }

@@ -9,6 +9,7 @@ import {
 import { RootLayout } from "./components/shell/RootLayout";
 import { AgendaScreen } from "./screens/AgendaScreen";
 import { AnalyticsScreen } from "./screens/AnalyticsScreen";
+import { AgentsScreen } from "./screens/AgentsScreen";
 import { ChatScreen } from "./screens/ChatScreen";
 import { LibraryScreen } from "./screens/LibraryScreen";
 import { MeetingScreen } from "./screens/MeetingScreen";
@@ -86,6 +87,12 @@ const chatRoute = createRoute({
   component: ChatScreen,
 });
 
+const agentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/agents",
+  component: AgentsScreen,
+});
+
 const tasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks",
@@ -116,6 +123,7 @@ const routeTree = rootRoute.addChildren([
   meetingRoute,
   notesRoute,
   agendaRoute,
+  agentsRoute,
   tasksRoute,
   chatRoute,
   peopleRoute,

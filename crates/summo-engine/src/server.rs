@@ -144,6 +144,8 @@ impl Server {
             .route("/settings/llm/providers", get(llm_providers))
             .route("/settings/llm/test", post(test_llm))
             .route("/report", get(report))
+            .route("/agents", get(agents))
+            .route("/agents/{slug}", get(agent).post(set_agent))
             .route("/tasks", get(tasks))
             .route("/nudges", get(nudges))
             .route("/ask", post(ask))
@@ -2290,6 +2292,162 @@ fn api_key() -> Option<String> {
     std::env::var("SUMMO_API_KEY")
         .ok()
         .filter(|k| !k.trim().is_empty())
+}
+
+/// The roster: every agent, as the files describe them.
+///
+/// Read on every request rather than cached. An agent is a file the user can edit in Obsidian
+/// while the app is open, and a cache would mean the screen showing something the vault no longer
+/// says — which for a feature whose whole promise is "it is just files" would be the one bug that
+/// undermines it.
+async fn agents(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let paths = state.engine.paths().clone();
+    as_response(
+        summo_agent::Roster::load_or_seed(&paths.agents()).map(|roster| {
+            let base_tools = roster.base_tools().to_vec();
+            let list: Vec<serde_json::Value> = roster
+                .all()
+                .map(|agent| {
+                    let memory = summo_agent::memory::load(&agent.memory_path());
+                    let tasks = summo_agent::memory::tasks(
+                        &agent.tasks_path(),
+                        &format!("agents/{}/TASKS.md", agent.slug),
+                    );
+                    serde_json::json!({
+                        "slug": agent.slug,
+                        "name": agent.head.name,
+                        "description": agent.head.description,
+                        "brief": agent.brief,
+                        "provider": agent.head.provider,
+                        "model": agent.head.model,
+                        "spawns": agent.head.spawns,
+                        // Resolved, not as written: an agent that lists nothing inherits the base's
+                        // grant, and the screen should show what it can actually call.
+                        "tools": if agent.head.tools.is_empty() {
+                            base_tools.clone()
+                        } else {
+                            agent.head.tools.clone()
+                        },
+                        "memory": memory.iter().map(|f| serde_json::json!({
+                            "learned": f.learned,
+                            "text": f.text,
+                        })).collect::<Vec<_>>(),
+                        "tasks": tasks,
+                        "open_tasks": tasks.iter().filter(|t| !t.status.is_finished()).count(),
+                    })
+                })
+                .collect();
+
+            serde_json::json!({
+                "agents": list,
+                "base": roster.base(),
+                "base_tools": base_tools,
+                // A `spawns` entry naming nothing is invisible until a run tries to delegate, at
+                // which point the failure looks like the model's fault.
+                "dangling": roster.dangling_spawns(),
+                "skipped": roster.skipped().iter().map(|(path, reason)| serde_json::json!({
+                    "path": path.display().to_string(),
+                    "reason": reason,
+                })).collect::<Vec<_>>(),
+            })
+        }),
+    )
+}
+
+/// One agent's definition, as the text of its own file.
+///
+/// The raw Markdown, not a parsed shape. Editing an agent is editing a document — the frontmatter
+/// carries settings a form could render, but the brief below it is prose, and a form that could
+/// only express what the form knows about would make the file format the lesser thing.
+async fn agent(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(slug): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let paths = state.engine.paths().clone();
+    as_response(agent_file(&paths, &slug).and_then(|path| {
+        std::fs::read_to_string(&path)
+            .map(|text| serde_json::json!({ "slug": slug, "definition": text }))
+            .map_err(|e| summo_core::Error::io(&path, e))
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct AgentBody {
+    definition: String,
+}
+
+/// Replace an agent's definition.
+///
+/// Creates the directory when it is not there, so "add an agent" and "edit an agent" are the same
+/// request — which is what it means for an agent to be a folder rather than a record.
+async fn set_agent(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(slug): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<AgentBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let paths = state.engine.paths().clone();
+    as_response((|| {
+        let dir = agent_dir(&paths, &slug)?;
+        std::fs::create_dir_all(&dir).map_err(|e| summo_core::Error::io(&dir, e))?;
+        let path = dir.join("AGENT.md");
+        std::fs::write(&path, body.definition.as_bytes())
+            .map_err(|e| summo_core::Error::io(&path, e))?;
+
+        // Read it back through the parser rather than reporting success on a write. A definition
+        // that will not parse is one the roster silently skips, and the moment to say so is now.
+        let roster = summo_agent::Roster::load(&paths.agents())?;
+        match roster.get(&slug) {
+            Some(agent) => Ok(serde_json::json!({ "slug": slug, "name": agent.head.name })),
+            None => Err(summo_core::Error::msg(
+                "agent.unreadable",
+                "đã lưu, nhưng file không đọc được — kiểm tra phần YAML ở đầu".to_string(),
+            )),
+        }
+    })())
+}
+
+/// An agent's directory, refusing anything that is not a plain name.
+///
+/// A slug comes from a URL. Without this, `../../..` in a path segment is a write anywhere the
+/// daemon can reach.
+fn agent_dir(paths: &summo_core::paths::Paths, slug: &str) -> summo_core::Result<std::path::PathBuf> {
+    let clean = slug.trim();
+    let ok = !clean.is_empty()
+        && clean.len() <= 64
+        && clean
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if !ok {
+        return Err(summo_core::Error::msg(
+            "agent.bad_slug",
+            format!("`{slug}` không phải tên agent hợp lệ"),
+        ));
+    }
+    Ok(paths.agents().join(clean))
+}
+
+fn agent_file(
+    paths: &summo_core::paths::Paths,
+    slug: &str,
+) -> summo_core::Result<std::path::PathBuf> {
+    Ok(agent_dir(paths, slug)?.join("AGENT.md"))
 }
 
 /// Every endpoint Summo knows, and whether this machine can already reach it.

@@ -23,6 +23,7 @@ const NAV: { key: string; labelKey: string; icon: string }[] = [
   { key: "/notes", labelKey: "nav.notes", icon: "✎" },
   { key: "/agenda", labelKey: "nav.agenda", icon: "◫" },
   { key: "/tasks", labelKey: "nav.tasks", icon: "☑" },
+  { key: "/agents", labelKey: "nav.agents", icon: "◈" },
   { key: "/chat", labelKey: "nav.chat", icon: "◇" },
   { key: "/people", labelKey: "nav.people", icon: "◍" },
   { key: "/analytics", labelKey: "nav.analytics", icon: "◔" },

@@ -31,6 +31,7 @@ const SCREENS = [
   ['meeting', null], // reached by clicking, since the id is generated
   ['notes', '/notes'],
   ['tasks', '/tasks'],
+  ['agents', '/agents'],
   ['agenda', '/agenda'],
   ['chat', '/chat'],
   ['analytics', '/analytics'],

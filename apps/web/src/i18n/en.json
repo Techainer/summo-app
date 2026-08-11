@@ -24,7 +24,8 @@
     "shrink": "Shrink the window",
     "shrink_hint": "Shrink while you are in the meeting",
     "expand": "Expand the window",
-    "expand_hint": "Expand"
+    "expand_hint": "Expand",
+    "agents": "Agents"
   },
   "record": {
     "source": "Source",
@@ -306,7 +307,8 @@
     "delete": "Delete",
     "close": "Close",
     "retry": "Retry",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "saving": "Saving…"
   },
   "setup": {
     "title": "Welcome to Summo",
@@ -404,5 +406,26 @@
     "calendar.no_name": "A calendar needs a name.",
     "calendar.no_events": "That file has no events in it — is it really an .ics?",
     "audio.not_mono": "The audio has to be single-channel mono."
+  },
+  "agents": {
+    "title": "Agents",
+    "subtitle": "Each one is a folder of Markdown in your vault.",
+    "pick": "Choose an agent to see what it was told.",
+    "coordinates": "coordinates",
+    "definition": "Agent definition",
+    "file_hint": "This is the file itself. The YAML at the top is settings; everything under it is what the agent is told it is for.",
+    "saved": "Saved",
+    "tools": "Tools",
+    "tools_hint": "What it can actually call, after the shared rules are applied.",
+    "memory": "Memory",
+    "memory_empty": "Nothing learned yet.",
+    "tool_count_one": "{count} tool",
+    "tool_count_other": "{count} tools",
+    "memory_count_one": "{count} fact",
+    "memory_count_other": "{count} facts",
+    "task_count_one": "{count} open task",
+    "task_count_other": "{count} open tasks",
+    "dangling": "{from} can hand work to “{to}”, but no agent by that name exists.",
+    "unreadable": "Could not read {path}: {reason}"
   }
 }
