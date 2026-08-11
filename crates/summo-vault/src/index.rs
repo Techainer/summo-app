@@ -68,7 +68,10 @@ impl MeetingEntry {
     /// A meeting whose `date` could not be parsed sorts last rather than first — an unreadable
     /// date is not evidence of recency, and putting it at the top of the library would be wrong
     /// every time.
-    fn ordering_key(&self) -> (i64, &Path) {
+    /// Newest first when reversed. Exported because notes sort the same way meetings do, and two
+    /// orderings that disagree would list the same file differently on two screens.
+    #[must_use]
+    pub fn ordering_key(&self) -> (i64, &Path) {
         (
             self.started_at.map_or(i64::MAX, |t| -t),
             self.path.as_path(),

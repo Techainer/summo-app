@@ -125,6 +125,9 @@ impl Server {
             .route("/meetings/{id}/tasks", post(create_task))
             .route("/templates", get(templates))
             .route("/locales", get(locales))
+            .route("/notes", get(list_notes).post(create_note))
+            .route("/notes/{id}", get(read_note).post(update_note))
+            .route("/notes/{id}", axum::routing::delete(delete_note))
             .route("/agenda", get(agenda))
             .route("/agenda/suggest", get(suggest_meeting))
             .route("/calendars", post(add_calendar))
@@ -1924,6 +1927,155 @@ async fn get_install(
 }
 
 
+
+#[derive(Debug, Deserialize)]
+struct NoteBody {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    body: String,
+    /// `YYYY-MM-DD`. Defaults to today, in the user's own timezone.
+    #[serde(default)]
+    day: Option<String>,
+}
+
+fn today() -> String {
+    use time::OffsetDateTime;
+    // Local rather than UTC: a note belongs to the day it was written where the writer was.
+    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    format!(
+        "{:04}-{:02}-{:02}",
+        now.year(),
+        u8::from(now.month()),
+        now.day()
+    )
+}
+
+/// Notes the user typed, newest first.
+async fn list_notes(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let result = summo_vault::note::list(state.engine.paths()).map(|entries| {
+        entries
+            .into_iter()
+            .map(|e| {
+                serde_json::json!({
+                    "id": e.id.to_string(),
+                    "title": e.title,
+                    "day": e.day,
+                    "file": e.path.display().to_string(),
+                })
+            })
+            .collect::<Vec<_>>()
+    });
+    as_response(result)
+}
+
+async fn create_note(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<NoteBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let day = body.day.unwrap_or_else(today);
+    let result = summo_vault::note::create(state.engine.paths(), &body.title, &day, &body.body)
+        .map(|(id, path)| {
+            serde_json::json!({ "id": id.to_string(), "file": path.display().to_string() })
+        });
+    as_response(result)
+}
+
+async fn read_note(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let result = summo_vault::note::read(state.engine.paths(), &summo_core::MeetingId::from(id))
+        .map(|doc| {
+            serde_json::json!({
+                "title": doc.title,
+                "body": doc.body,
+                "frontmatter": doc.frontmatter,
+                "sections": doc.sections.iter().map(|s| serde_json::json!({
+                    "heading": s.heading,
+                    "body": s.body,
+                })).collect::<Vec<_>>(),
+            })
+        });
+    as_response(result)
+}
+
+async fn update_note(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<NoteBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    let result = summo_vault::note::set_body(
+        state.engine.paths(),
+        &summo_core::MeetingId::from(id),
+        &body.body,
+    )
+    .map(|path| serde_json::json!({ "file": path.display().to_string() }));
+    as_response(result)
+}
+
+async fn delete_note(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = authorize(
+        &headers,
+        q.token.as_deref(),
+        &state.token,
+        state.allow_loopback_origins,
+    ) {
+        return rejection.into_response();
+    }
+    as_response(
+        summo_vault::note::remove(state.engine.paths(), &summo_core::MeetingId::from(id))
+            .map(|removed| serde_json::json!({ "removed": removed })),
+    )
+}
+
 /// Meetings from the user's calendars, in time order.
 async fn agenda(
     State(state): State<AppState>,
@@ -3335,6 +3487,88 @@ mod tests {
             .unwrap();
         assert!(resp.status().is_client_error() || resp.status().is_server_error());
         assert!(resp.text().await.unwrap().contains("wat"));
+        server.shutdown();
+    }
+
+    /// A note is the same document as a meeting, so everything already built for meetings works on
+    /// it. The round trip through HTTP is what proves it end to end.
+    #[tokio::test]
+    async fn a_note_can_be_written_read_edited_and_deleted_over_http() {
+        let (_tmp, server) = running().await;
+        let base = format!("http://{}", server.addr());
+        let token = server.token().as_str().to_string();
+
+        let created: serde_json::Value = client()
+            .post(format!("{base}/notes"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "title": "Ý tưởng", "body": "Ghi nhanh." }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let id = created["id"].as_str().expect("an id").to_string();
+
+        let listed: Vec<serde_json::Value> = client()
+            .get(format!("{base}/notes"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0]["title"], "Ý tưởng");
+
+        let updated = client()
+            .post(format!("{base}/notes/{id}"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "body": "Đã sửa." }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(updated.status(), 200);
+
+        let read: serde_json::Value = client()
+            .get(format!("{base}/notes/{id}"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(read["body"], "Đã sửa.");
+        // The title survives an edit to the body — it names the file, and renaming on every save
+        // would break the user's links.
+        assert_eq!(read["title"], "Ý tưởng");
+
+        let deleted: serde_json::Value = client()
+            .delete(format!("{base}/notes/{id}"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(deleted["removed"], true);
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn a_note_without_a_title_is_refused_over_http() {
+        let (_tmp, server) = running().await;
+        let response = client()
+            .post(format!("http://{}/notes", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "title": "  ", "body": "x" }))
+            .send()
+            .await
+            .unwrap();
+        assert!(response.status().is_client_error() || response.status().is_server_error());
         server.shutdown();
     }
 

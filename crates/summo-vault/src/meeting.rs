@@ -81,6 +81,13 @@ impl Frontmatter {
 pub struct MeetingDoc {
     pub frontmatter: Frontmatter,
     pub title: String,
+    /// Free text between the title and the first `##`.
+    ///
+    /// This is where somebody typing in Obsidian puts a line before they think about structure, and
+    /// it is where a note that never had structure lives entirely. Before this field existed the
+    /// parser dropped it and the next autosave wrote the file back without it — data loss that only
+    /// showed up for people who edited their own notes, which is everybody eventually.
+    pub body: String,
     /// Sections other than the transcript, in document order. Includes anything a user added.
     pub sections: Vec<Section>,
     pub transcript: Vec<Segment>,
@@ -99,6 +106,7 @@ impl MeetingDoc {
         Self {
             frontmatter,
             title: title.into(),
+            body: String::new(),
             sections: Vec::new(),
             transcript: Vec::new(),
         }
@@ -159,6 +167,10 @@ impl MeetingDoc {
         out.push_str("---\n\n");
         out.push_str(&format!("# {}\n", self.title));
 
+        if !self.body.trim().is_empty() {
+            out.push_str(&format!("\n{}\n", self.body.trim_end()));
+        }
+
         for section in &self.sections {
             out.push_str(&format!(
                 "\n## {}\n{}\n",
@@ -191,6 +203,7 @@ impl MeetingDoc {
         }
 
         let mut title = String::new();
+        let mut preamble = String::new();
         let mut sections: Vec<Section> = Vec::new();
         let mut transcript = Vec::new();
         let mut current: Option<Section> = None;
@@ -226,6 +239,10 @@ impl MeetingDoc {
             } else if let Some(section) = current.as_mut() {
                 section.body.push_str(line);
                 section.body.push('\n');
+            } else {
+                // Before any `##`: the user's own preamble, kept rather than dropped.
+                preamble.push_str(line);
+                preamble.push('\n');
             }
         }
         if let Some(section) = current.take() {
@@ -235,6 +252,7 @@ impl MeetingDoc {
         Ok(Self {
             frontmatter,
             title,
+            body: preamble.trim().to_string(),
             sections,
             transcript,
         })
@@ -377,6 +395,37 @@ pub fn extract_links(text: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The bug this field exists for: a line typed under the title, before any `##`, used to be
+    /// dropped by the parser — and the next autosave wrote the file back without it. Data loss that
+    /// only bit people who edited their own notes, which is everybody eventually.
+    #[test]
+    fn text_before_the_first_heading_survives_a_rewrite() {
+        let markdown = "---\nid: 01J\ndate: 2026-08-10\n---\n\n# Họp\n\nGhi nhanh trước khi quên.\n\n## Tóm tắt\nXong.\n";
+        let doc = MeetingDoc::parse(markdown).unwrap();
+        assert_eq!(doc.body, "Ghi nhanh trước khi quên.");
+
+        let again = MeetingDoc::parse(&doc.to_markdown().unwrap()).unwrap();
+        assert_eq!(again.body, "Ghi nhanh trước khi quên.");
+        assert_eq!(again.section("Tóm tắt"), Some("Xong."));
+    }
+
+    #[test]
+    fn a_document_with_no_preamble_gains_no_blank_line() {
+        let mut doc = MeetingDoc::new(Frontmatter::new(MeetingId::new(), "2026-08-10"), "Họp");
+        doc.set_section("Tóm tắt", "Xong.");
+        let markdown = doc.to_markdown().unwrap();
+        assert!(markdown.contains("# Họp\n\n## Tóm tắt"), "{markdown}");
+    }
+
+    #[test]
+    fn a_document_that_is_only_a_preamble_round_trips() {
+        let mut doc = MeetingDoc::new(Frontmatter::new(MeetingId::new(), "2026-08-10"), "Ý tưởng");
+        doc.body = "Một dòng thôi.".into();
+        let again = MeetingDoc::parse(&doc.to_markdown().unwrap()).unwrap();
+        assert_eq!(again.body, "Một dòng thôi.");
+        assert!(again.sections.is_empty());
+    }
 
     /// The bug this exists to prevent: `seq` used to be the line's position, so anything keyed on
     /// it — a translation, a dubbed take — reattached to the wrong sentence the moment somebody
