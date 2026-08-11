@@ -124,19 +124,19 @@ impl Processor for OnlyLanes {
 /// For the things that have to happen alongside the stream rather than in it: archiving audio to
 /// disk, updating a progress counter, writing the transcript file. A tap that modified frames would
 /// be a processor; this one is for effects.
-pub struct Tap<F: FnMut(&Frame) + Send> {
+pub struct Tap<F: FnMut(&Frame) + Send + 'static> {
     label: &'static str,
     on: F,
 }
 
-impl<F: FnMut(&Frame) + Send> Tap<F> {
+impl<F: FnMut(&Frame) + Send + 'static> Tap<F> {
     #[must_use]
     pub fn new(label: &'static str, on: F) -> Self {
         Self { label, on }
     }
 }
 
-impl<F: FnMut(&Frame) + Send> Processor for Tap<F> {
+impl<F: FnMut(&Frame) + Send + 'static> Processor for Tap<F> {
     fn name(&self) -> &'static str {
         self.label
     }

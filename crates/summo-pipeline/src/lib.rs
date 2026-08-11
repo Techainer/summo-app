@@ -46,7 +46,7 @@ use summo_core::Result;
 /// `push` returns what this stage produced from that frame: usually zero or one frame, sometimes
 /// several — a framer fed a large block emits many. Returning a `Vec` rather than taking a sink
 /// closure keeps every processor testable in isolation, which is most of why the pipeline exists.
-pub trait Processor: Send {
+pub trait Processor: Send + std::any::Any {
     /// A short name, for tracing and for [`Pipeline::describe`].
     fn name(&self) -> &'static str;
 
@@ -134,6 +134,19 @@ impl Pipeline {
             out.extend(self.push(frame)?);
         }
         Ok(out)
+    }
+
+    /// Borrow a stage back by type.
+    ///
+    /// For the counters a stage accumulates — decodes, suppressions — which a caller needs after
+    /// the run and cannot reach once the stage has been moved into the chain. Returns the first
+    /// match, which is unambiguous for the stages that have counters: there is one recogniser per
+    /// pipeline, because there is one decoder.
+    #[must_use]
+    pub fn stage<T: Processor + 'static>(&self) -> Option<&T> {
+        self.stages
+            .iter()
+            .find_map(|s| (s.as_ref() as &dyn std::any::Any).downcast_ref::<T>())
     }
 
     /// Ready every stage for a new stream.

@@ -169,7 +169,8 @@
     "recordings": "{count} recordings",
     "trash_confirm": "Move to trash?",
     "trash_yes": "Move",
-    "transcript_lines": "Transcript ({count} lines)"
+    "transcript_lines": "Transcript ({count} lines)",
+    "a_note": "Note"
   },
   "analytics": {
     "title": "Analytics",

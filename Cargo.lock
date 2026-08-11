@@ -4706,6 +4706,7 @@ dependencies = [
  "summo-mcp",
  "summo-media",
  "summo-models",
+ "summo-pipeline",
  "summo-vad",
  "summo-vault",
  "tempfile",

@@ -10,6 +10,13 @@
 import type { Handshake } from "./engine";
 
 export interface MeetingSummary {
+  /**
+   * Whether this was recorded or typed.
+   *
+   * The library lists both — searching for a word should find the note somebody wrote about it as
+   * readily as the meeting where it was said — so a reader needs to be told which is which.
+   */
+  kind: "meeting" | "note";
   id: string;
   title: string;
   folder: string;

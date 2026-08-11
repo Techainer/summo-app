@@ -189,6 +189,9 @@ enum Command {
         /// Print partial text as it is produced.
         #[arg(long)]
         partials: bool,
+        /// Run the same models through a pipeline chain instead of the hand-written loop.
+        #[arg(long)]
+        pipeline: bool,
     },
 }
 
@@ -315,6 +318,7 @@ async fn main() -> Result<()> {
             threads,
             partial_step_ms,
             partials,
+            pipeline,
         } => transcribe::run(&transcribe::Options {
             audio,
             model_dir,
@@ -324,6 +328,7 @@ async fn main() -> Result<()> {
             threads,
             partial_step_ms,
             show_partials: partials,
+            pipeline,
         }),
     }
 }

@@ -18,7 +18,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use summo_core::{Error, MeetingId, Result};
 use time::{Date, OffsetDateTime, format_description::well_known::Rfc3339};
 
@@ -44,6 +44,13 @@ const SUMMARY_HEADINGS: [&str; 2] = ["Tóm tắt", "Summary"];
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MeetingEntry {
     pub id: MeetingId,
+    /// Whether anything was said out loud.
+    ///
+    /// A meeting and a typed note are the same document — see `crate::note`. This is the one thing
+    /// that distinguishes them, and it is derived from the transcript rather than from the folder,
+    /// so moving a file does not change what it is.
+    #[serde(default)]
+    pub kind: Kind,
     pub path: PathBuf,
     /// Folder under `meetings/`, empty for the root. This is how a user files their own work.
     pub folder: String,
@@ -60,6 +67,24 @@ pub struct MeetingEntry {
     /// Whether a summary section exists, so the library can show what still needs one.
     pub has_summary: bool,
     pub size_bytes: u64,
+}
+
+/// What a document is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    /// Recorded: it has a transcript.
+    #[default]
+    Meeting,
+    /// Typed: it does not.
+    Note,
+}
+
+impl Kind {
+    #[must_use]
+    pub fn is_note(self) -> bool {
+        matches!(self, Kind::Note)
+    }
 }
 
 impl MeetingEntry {
@@ -154,10 +179,36 @@ impl MeetingIndex {
     /// A missing directory is an empty vault, not an error: a fresh install has not recorded
     /// anything yet, and the library should say "no meetings" rather than fail to open.
     pub fn scan(dir: impl AsRef<Path>) -> Result<Self> {
-        let root = dir.as_ref();
+        Self::scan_all([dir.as_ref()])
+    }
+
+    /// Read several trees into one index.
+    ///
+    /// The vault keeps recordings and typed notes in separate folders, because the library is
+    /// organised by when a meeting happened and a note typed on a Tuesday has no such day. They are
+    /// still the same documents, and every question a user asks — search, tasks, "what did we
+    /// decide" — is a question about both. One index over both is what makes that true without a
+    /// second scanner that would eventually disagree with the first.
+    ///
+    /// A folder that is not there is skipped, not an error: a vault with no notes yet is normal.
+    pub fn scan_all<'a>(dirs: impl IntoIterator<Item = &'a Path>) -> Result<Self> {
         let mut entries = Vec::new();
         let mut skipped = Vec::new();
 
+        for root in dirs {
+            Self::scan_into(root, &mut entries, &mut skipped)?;
+        }
+
+        entries.sort_by(|a, b| a.ordering_key().cmp(&b.ordering_key()));
+        skipped.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(Self { entries, skipped })
+    }
+
+    fn scan_into(
+        root: &Path,
+        entries: &mut Vec<MeetingEntry>,
+        skipped: &mut Vec<Skipped>,
+    ) -> Result<()> {
         for path in markdown_files(root)? {
             match read_entry(&path, root) {
                 Ok(entry) => entries.push(entry),
@@ -167,10 +218,17 @@ impl MeetingIndex {
                 }),
             }
         }
+        Ok(())
+    }
 
-        entries.sort_by(|a, b| a.ordering_key().cmp(&b.ordering_key()));
-        skipped.sort_by(|a, b| a.path.cmp(&b.path));
-        Ok(Self { entries, skipped })
+    /// Only the recordings.
+    pub fn meetings(&self) -> impl Iterator<Item = &MeetingEntry> {
+        self.entries.iter().filter(|e| !e.kind.is_note())
+    }
+
+    /// Only what somebody typed.
+    pub fn notes(&self) -> impl Iterator<Item = &MeetingEntry> {
+        self.entries.iter().filter(|e| e.kind.is_note())
     }
 
     #[must_use]
@@ -439,6 +497,7 @@ fn read_entry(path: &Path, root: &Path) -> Result<MeetingEntry> {
 
     Ok(MeetingEntry {
         id: frontmatter.id,
+        kind: kind_of(&head, frontmatter.duration),
         path: path.to_path_buf(),
         folder,
         title,
@@ -493,6 +552,31 @@ fn parse_title(head: &str) -> Option<String> {
         .find_map(|l| l.strip_prefix("# "))
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty())
+}
+
+/// Whether a document is a recording or something somebody typed.
+///
+/// Listing reads only the head of a file, so this cannot count transcript segments the way
+/// `crate::note::is_note` does. Two signals instead, and either is enough:
+///
+/// * A `## Transcript` heading in the head. Present in every recording, and impossible in a note —
+///   a note has no transcript to head.
+/// * A non-zero `duration`. This is the safety net for the one case the first signal misses: a
+///   meeting whose summary is long enough to push its transcript heading past the head window.
+///   Anything recorded has a duration; nothing typed does.
+///
+/// Derived from the document rather than from the folder on purpose. Filing by path would mean a
+/// user dragging a file between folders silently changed what it is.
+fn kind_of(head: &str, duration: u64) -> Kind {
+    let has_transcript = head
+        .lines()
+        .any(|line| line.strip_prefix("## ").is_some_and(|h| h.trim() == "Transcript"));
+
+    if has_transcript || duration > 0 {
+        Kind::Meeting
+    } else {
+        Kind::Note
+    }
 }
 
 fn has_summary(head: &str) -> bool {
@@ -628,6 +712,33 @@ pub fn load(entry: &MeetingEntry) -> Result<MeetingDoc> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A note and a meeting are the same document; the transcript is what tells them apart, and
+    /// listing has to work that out from the head of the file alone.
+    #[test]
+    fn a_document_with_a_transcript_is_a_meeting() {
+        assert_eq!(kind_of("# Họp\n\n## Transcript\n**[00:00:00] ?** — hi", 0), Kind::Meeting);
+    }
+
+    #[test]
+    fn a_document_with_neither_is_a_note() {
+        assert_eq!(kind_of("# Ý tưởng\n\nvài dòng", 0), Kind::Note);
+        assert!(kind_of("# Ý tưởng", 0).is_note());
+    }
+
+    /// The case the first signal misses: a summary long enough to push the transcript heading past
+    /// the head window. Anything recorded has a duration; nothing typed does.
+    #[test]
+    fn a_long_meeting_whose_transcript_heading_is_beyond_the_head_is_still_a_meeting() {
+        assert_eq!(kind_of("# Họp\n\n## Tóm tắt\nrất dài…", 1800), Kind::Meeting);
+    }
+
+    /// Filing by path would mean dragging a file between folders silently changed what it is.
+    #[test]
+    fn the_kind_does_not_depend_on_where_the_file_lives() {
+        let typed = "# Ghi chú\n\nnội dung";
+        assert_eq!(kind_of(typed, 0), Kind::Note, "wherever it is filed");
+    }
     use std::fs;
     use tempfile::TempDir;
 

@@ -279,13 +279,19 @@ function MeetingRow({
       }}
       aria-current={selected}
     >
-      <span className="row-time">{timeOfDay(meeting.date)}</span>
+      {/* A note has no time of day worth showing — it was typed, not scheduled — so the column
+          carries a mark instead. Same width either way, so the titles still line up. */}
+      <span className="row-time">
+        {meeting.kind === "note" ? "✎" : timeOfDay(meeting.date)}
+      </span>
       <span className="row-body">
         <span className="row-title">{meeting.title}</span>
         <span className="row-meta">
-          {formatDuration(meeting.duration)}
+          {meeting.kind === "note"
+            ? t("library.a_note")
+            : formatDuration(meeting.duration)}
           {meeting.participants.length > 0 && ` · ${meeting.participants.join(", ")}`}
-          {!meeting.has_summary && t("meeting.not_summarised_suffix")}
+          {meeting.kind !== "note" && !meeting.has_summary && t("meeting.not_summarised_suffix")}
         </span>
       </span>
     </button>

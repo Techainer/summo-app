@@ -101,9 +101,19 @@ pub struct Recognise {
 impl Recognise {
     #[must_use]
     pub fn new(lane: Lane, decoder: Box<dyn Decoder>, config: SessionConfig) -> Self {
+        Self::from_session(lane, PseudoSession::new(decoder, config))
+    }
+
+    /// Wrap a session somebody already built.
+    ///
+    /// The comparison path needs this: to prove the chain and the hand-written loop agree, both
+    /// have to run the *same* session with the same configuration, not two sessions that happen to
+    /// be configured alike.
+    #[must_use]
+    pub fn from_session(lane: Lane, session: PseudoSession<Box<dyn Decoder>>) -> Self {
         Self {
             lane,
-            session: PseudoSession::new(decoder, config),
+            session,
             pending: None,
         }
     }

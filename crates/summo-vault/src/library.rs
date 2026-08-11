@@ -66,6 +66,8 @@ impl LibraryQuery {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MeetingSummary {
     pub id: MeetingId,
+    /// `meeting` or `note`. The library lists both; a reader still wants to know which is which.
+    pub kind: crate::index::Kind,
     pub title: String,
     pub folder: String,
     pub date: String,
@@ -82,6 +84,7 @@ impl MeetingSummary {
     fn new(entry: &MeetingEntry, meetings_root: &Path) -> Self {
         Self {
             id: entry.id.clone(),
+            kind: entry.kind,
             title: entry.title.clone(),
             folder: entry.folder.clone(),
             date: entry.date.clone(),
@@ -179,9 +182,15 @@ impl Library {
         self.paths.meetings()
     }
 
-    /// Scan the vault. Callers that need several views of one scan should call this once.
+    /// Scan the vault — recordings *and* typed notes.
+    ///
+    /// Both, because every question the library answers is a question about both: searching for
+    /// "ngân sách" should find the note somebody typed about it as readily as the meeting where it
+    /// was said. They are the same documents; only the filing differs.
+    ///
+    /// Callers that need several views of one scan should call this once.
     pub fn scan(&self) -> Result<MeetingIndex> {
-        MeetingIndex::scan(self.root())
+        MeetingIndex::scan_all([self.root().as_path(), self.paths.notes().as_path()])
     }
 
     /// The library screen.
@@ -467,6 +476,61 @@ fn unlink(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The claim "Summo is a note app" is only true if searching finds notes. Before the index
+    /// scanned both trees, a note somebody typed was invisible to every question they could ask.
+    #[test]
+    fn searching_finds_a_typed_note_as_readily_as_a_recording() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+
+        std::fs::create_dir_all(paths.meetings()).unwrap();
+        std::fs::write(
+            paths.meetings().join("hop.md"),
+            "---\nid: 01A\ndate: 2026-08-10\nduration: 600\n---\n\n# Họp\n\n## Transcript\n**[00:00:00] Ngọc** — chốt ngân sách quý bốn <!-- seq:0 end:2.00 -->\n",
+        )
+        .unwrap();
+
+        crate::note::create(&paths, "Ý tưởng", "2026-08-11", "ngân sách năm sau thì sao").unwrap();
+
+        let library = Library::new(paths);
+        let hits = library.search("ngân sách", 10).unwrap();
+
+        let titles: Vec<&str> = hits.iter().map(|h| h.meeting.title.as_str()).collect();
+        assert!(titles.contains(&"Họp"), "{titles:?}");
+        assert!(titles.contains(&"Ý tưởng"), "the note is findable too: {titles:?}");
+    }
+
+    /// Same document, different kind — and the kind comes from the transcript, so a screen that
+    /// wants only recordings can still have them.
+    #[test]
+    fn the_index_can_tell_a_note_from_a_recording() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+
+        std::fs::create_dir_all(paths.meetings()).unwrap();
+        std::fs::write(
+            paths.meetings().join("hop.md"),
+            "---\nid: 01A\ndate: 2026-08-10\nduration: 600\n---\n\n# Họp\n\n## Transcript\n",
+        )
+        .unwrap();
+        crate::note::create(&paths, "Ghi chú", "2026-08-11", "x").unwrap();
+
+        let index = Library::new(paths).scan().unwrap();
+        assert_eq!(index.meetings().count(), 1);
+        assert_eq!(index.notes().count(), 1);
+        assert_eq!(index.entries().len(), 2);
+    }
+
+    /// A vault with no notes yet is the normal state of a fresh install.
+    #[test]
+    fn a_missing_notes_folder_is_not_an_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        std::fs::create_dir_all(paths.meetings()).unwrap();
+
+        assert!(Library::new(paths).scan().unwrap().entries().is_empty());
+    }
     use std::fs;
     use tempfile::TempDir;
 

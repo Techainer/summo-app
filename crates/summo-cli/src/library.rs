@@ -459,6 +459,7 @@ mod tests {
     #[test]
     fn columns_line_up_when_a_title_is_not_ascii() {
         let make = |title: &str| MeetingSummary {
+            kind: summo_vault::index::Kind::Meeting,
             id: MeetingId::from("01A".to_string()),
             title: title.to_string(),
             folder: String::new(),

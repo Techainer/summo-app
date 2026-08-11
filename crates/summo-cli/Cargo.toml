@@ -11,7 +11,7 @@ repository.workspace = true
 default = ["mcp"]
 # Real transcription: Silero VAD plus a Zipformer transducer. Both link native code, so the
 # default build stays a pure registry client.
-transcribe = ["dep:summo-asr", "dep:summo-vad", "dep:hound", "summo-asr/sherpa", "summo-vad/silero"]
+transcribe = ["dep:summo-asr", "dep:summo-vad", "dep:hound", "summo-asr/sherpa", "summo-vad/silero", "dep:summo-engine", "dep:summo-pipeline", "summo-engine/models"]
 # `summo serve`: the daemon and the interface in this binary, the way `ollama serve` is one
 # executable. `bundled` additionally bakes the built interface in.
 serve = ["dep:summo-engine"]
@@ -34,6 +34,7 @@ summo-llm.workspace = true
 summo-vault.workspace = true
 summo-engine = { workspace = true, optional = true }
 summo-mcp = { workspace = true, optional = true }
+summo-pipeline = { workspace = true, optional = true }
 time.workspace = true
 summo-asr = { workspace = true, optional = true }
 summo-vad = { workspace = true, optional = true }

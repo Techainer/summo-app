@@ -169,7 +169,8 @@
     "recordings": "{count} bản ghi âm",
     "trash_confirm": "Chuyển vào thùng rác?",
     "trash_yes": "Chuyển",
-    "transcript_lines": "Bản ghi ({count} dòng)"
+    "transcript_lines": "Bản ghi ({count} dòng)",
+    "a_note": "Ghi chú"
   },
   "analytics": {
     "title": "Thống kê",
