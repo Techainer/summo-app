@@ -7,7 +7,11 @@
 import { rmSync } from "node:fs";
 import { chromium } from "playwright";
 
-const [, , appUrl, port, token, statePath] = process.argv;
+import { daemon } from "./daemon.mjs";
+
+const engine = await daemon(process.argv, { name: "nudges" });
+const { url: appUrl, port, token, home } = engine;
+const statePath = process.argv[5] ?? (home ? `${home}/nudges.json` : undefined);
 
 // Asking for a nudge is what consumes it, so a second run would have nothing to show. Clearing the
 // daemon's record is the test's way of saying "pretend today just started".
@@ -45,6 +49,7 @@ if ((await dismiss.count()) > 0) {
 }
 console.log("after dismiss:", await p.getByRole("button", { name: "Xem" }).count());
 await b.close();
+engine.stop();
 if (problems.length) {
   console.error(problems.join("\n"));
   process.exit(1);

@@ -31,10 +31,22 @@ cargo test --workspace
 pnpm -C apps/web check          # tsc, eslint, prettier, vitest — all four
 ```
 
-There is also a screenshot pass that is **not** in CI, because it needs a browser and a vault:
+There are also two browser passes that are **not** in CI, because they need a browser and a built
+daemon. Both start their own daemon on a vault of their own, so there is nothing to set up:
 
 ```bash
 pnpm -C apps/web exec playwright install chromium
+cargo build --bin summo-engine --features bundled   # the interface has to be inside the binary
+pnpm -C apps/web e2e
+```
+
+`cargo test --workspace` rebuilds that same binary *without* the bundled interface, so run the build
+again after a test run. The harness checks and says so rather than letting every assertion fail on a
+missing header.
+
+The screenshot pass wants a daemon you have already started:
+
+```bash
 node apps/web/e2e/shots.mjs http://127.0.0.1:7788 "$(jq -r .token ~/.summo/engine.json)" vi-VN
 ```
 

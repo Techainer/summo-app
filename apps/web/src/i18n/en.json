@@ -195,7 +195,8 @@
     "today": "Today",
     "yesterday": "Yesterday",
     "week": "Week {n}, {year}",
-    "unfiled_group": "Unfiled"
+    "unfiled_group": "Unfiled",
+    "filter_colour": "Filter by colour"
   },
   "analytics": {
     "title": "Analytics",
@@ -449,9 +450,6 @@
   "finder": {
     "title": "Find",
     "clear": "Clear",
-    "folders": "Folders",
-    "tags": "Tags",
-    "colours": "Colours",
     "colour": "Colour",
     "no_colour": "No colour"
   },

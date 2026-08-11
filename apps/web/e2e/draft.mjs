@@ -8,7 +8,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 
-const [, , appUrl, port, token, meetingId = "01A1", notePath] = process.argv;
+import { daemon } from "./daemon.mjs";
+
+const engine = await daemon(process.argv, { name: "draft" });
+const { url: appUrl, port, token, home } = engine;
+const meetingId = process.argv[5] ?? "01E2E0";
+const notePath =
+  process.argv[6] ?? (home ? `${home}/vault/meetings/2026-08-10-hop-dau-tuan.md` : undefined);
 
 // This test confirms the draft, which is what removes the marker — so it seeds its own. Without
 // that it passes once and then reports an empty screen forever.
@@ -67,7 +73,9 @@ await page.evaluate(() => {
   if (!p?.firstChild) return;
   const range = document.createRange();
   range.setStart(p.firstChild, 0);
-  range.setEnd(p.firstChild, 30);
+  // Clamped: the passage only has to be long enough to select part of, and hard-coding 30 threw
+  // `IndexSizeError` the moment the seeded summary was shorter than that.
+  range.setEnd(p.firstChild, Math.min(30, p.firstChild.textContent?.length ?? 0));
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
@@ -89,6 +97,7 @@ if (after.includes("Bản tóm tắt agent viết")) problems.push("the panel st
 await page.screenshot({ path: "/tmp/shots/draft-confirmed.png" });
 
 await browser.close();
+engine.stop();
 
 if (problems.length > 0) {
   console.error(`\n${problems.length} problem(s):`);

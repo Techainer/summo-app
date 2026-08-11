@@ -7,7 +7,10 @@
  */
 import { chromium } from "playwright";
 
-const [, , appUrl, port, token] = process.argv;
+import { daemon } from "./daemon.mjs";
+
+const engine = await daemon(process.argv, { name: "shell" });
+const { url: appUrl, port, token } = engine;
 
 const browser = await chromium.launch();
 const problems = [];
@@ -43,7 +46,9 @@ async function open(scheme, viewport) {
     .getByRole("button")
     .allInnerTexts();
   console.log(`folders: ${folders.filter(Boolean).join(" | ")}`);
-  if (!folders.some((f) => f.includes("Sản phẩm"))) {
+  // `khach-hang` is what `daemon.mjs` seeds. The assertion used to name a folder from whatever
+  // vault this was first run against, which is why it only passed on one machine.
+  if (!folders.some((f) => f.includes("khach-hang"))) {
     problems.push(`folder tree missing the seeded folder: ${JSON.stringify(folders)}`);
   }
 
@@ -168,6 +173,7 @@ async function open(scheme, viewport) {
 }
 
 await browser.close();
+engine.stop();
 
 if (problems.length > 0) {
   console.error(`\n${problems.length} problem(s):`);

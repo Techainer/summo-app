@@ -7,7 +7,10 @@
  */
 import { chromium } from "playwright";
 
-const [, , appUrl, port, token] = process.argv;
+import { daemon } from "./daemon.mjs";
+
+const engine = await daemon(process.argv, { name: "tasks" });
+const { url: appUrl, port, token } = engine;
 
 const browser = await chromium.launch();
 // The suites assert Vietnamese wording, so the browser has to ask for Vietnamese. Without
@@ -72,6 +75,7 @@ else {
 await page.screenshot({ path: "/tmp/shots/tasks-agent.png" });
 
 await browser.close();
+engine.stop();
 
 if (problems.length > 0) {
   console.error(`\n${problems.length} problem(s):`);

@@ -7,7 +7,12 @@
  */
 import { chromium } from "playwright";
 
-const [, , appUrl, port, token, meetingId = "01A1"] = process.argv;
+import { daemon } from "./daemon.mjs";
+
+const engine = await daemon(process.argv, { name: "meeting" });
+const { url: appUrl, port, token } = engine;
+// The meeting `daemon.mjs` seeds, unless one is named on the command line.
+const meetingId = process.argv[5] ?? "01E2E0";
 
 const browser = await chromium.launch();
 // The suites assert Vietnamese wording, so the browser has to ask for Vietnamese. Without
@@ -63,6 +68,7 @@ await page.waitForTimeout(300);
 
 await page.screenshot({ path: "/tmp/shots/meeting.png" });
 await browser.close();
+engine.stop();
 
 if (problems.length > 0) {
   console.error(`\n${problems.length} problem(s):`);

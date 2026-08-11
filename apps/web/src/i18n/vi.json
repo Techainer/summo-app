@@ -195,7 +195,8 @@
     "today": "Hôm nay",
     "yesterday": "Hôm qua",
     "week": "Tuần {n}, {year}",
-    "unfiled_group": "Chưa phân loại"
+    "unfiled_group": "Chưa phân loại",
+    "filter_colour": "Lọc theo màu"
   },
   "analytics": {
     "title": "Thống kê",
@@ -449,9 +450,6 @@
   "finder": {
     "title": "Tìm",
     "clear": "Bỏ lọc",
-    "folders": "Thư mục",
-    "tags": "Thẻ",
-    "colours": "Màu",
     "colour": "Màu",
     "no_colour": "Không màu"
   },

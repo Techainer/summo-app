@@ -36,6 +36,7 @@ summo-models.workspace = true
 summo-audio.workspace = true
 summo-llm.workspace = true
 summo-vault.workspace = true
+summo-mcp.workspace = true
 summo-vad = { workspace = true, optional = true }
 summo-asr = { workspace = true, optional = true }
 summo-diar.workspace = true

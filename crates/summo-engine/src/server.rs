@@ -205,6 +205,7 @@ impl Server {
             .route("/meetings/{id}/colour", post(set_colour))
             .route("/meetings/{id}/title", post(set_title))
             .route("/meetings/{id}/trash", post(trash))
+            .route("/mcp", post(mcp))
             .route("/ws", get(websocket))
             // Last: a fallback claims every path no route above matched, which is how a
             // single-page app's own routes reach it. Registering it earlier would shadow the API.
@@ -601,6 +602,35 @@ async fn trash(
             .trash(&id)
             .map(|_| serde_json::json!({ "trashed": true })),
     )
+}
+
+/// MCP over HTTP, on the daemon the app is already talking to.
+///
+/// `summo mcp` serves the same thing over stdio, which is what an editor spawns. This is for the
+/// other case: an agent that is not in a position to spawn a process — a container, another
+/// machine on the same host, a client that only speaks HTTP. Both call `summo_mcp::handle`, so
+/// there is one implementation and two ways to reach it rather than two that drift.
+///
+/// It is behind the same token as every other route. That is the whole authorisation story: the
+/// daemon is on loopback, the token is in a file readable by the user who started it, and an MCP
+/// client is not more trusted than the app.
+///
+/// A notification — a request with no `id` — is answered with `202 Accepted` and no body, because
+/// JSON-RPC says a notification gets no reply and a client that receives one may report it as a
+/// protocol error.
+async fn mcp(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(request): Json<summo_mcp::Request>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    match summo_mcp::handle(state.engine.paths(), &request) {
+        Some(response) => Json(response).into_response(),
+        None => StatusCode::ACCEPTED.into_response(),
+    }
 }
 
 async fn storage(
@@ -4296,6 +4326,73 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
         let resp = colour(serde_json::json!({ "colour": null })).await;
         assert_eq!(resp.status(), 200);
         assert!(resp.json::<serde_json::Value>().await.unwrap()["colour"].is_null());
+        server.shutdown();
+    }
+
+    /// The same server the editor plugin spawns, reachable over HTTP for an agent that cannot
+    /// spawn a process — a container, a client that only speaks HTTP.
+    #[tokio::test]
+    async fn mcp_answers_over_http_behind_the_same_token() {
+        let (tmp, server) = running().await;
+        seed(&tmp, "01A", "2026-08-09T10:00:00+07:00", "Weekly Sync");
+        let base = format!("http://{}/mcp", server.addr());
+        let token = server.token().as_str().to_string();
+
+        // No token, no answer. An MCP client is not more trusted than the app.
+        let resp = client()
+            .post(&base)
+            .json(&serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "ping" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 401);
+
+        let handshake: serde_json::Value = client()
+            .post(&base)
+            .bearer_auth(&token)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": { "protocolVersion": "2024-11-05" }
+            }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(handshake["result"]["protocolVersion"], "2024-11-05");
+        assert_eq!(handshake["result"]["serverInfo"]["name"], "summo");
+
+        // The vault the daemon is serving is the vault MCP reads — one machine, one set of files.
+        let listed: serde_json::Value = client()
+            .post(&base)
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "jsonrpc": "2.0", "id": 2, "method": "resources/list" }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let resources = listed["result"]["resources"].as_array().unwrap();
+        assert!(
+            resources.iter().any(|r| r["name"] == "Weekly Sync"),
+            "the seeded meeting must be listed: {resources:?}"
+        );
+
+        // A notification expects nothing back; answering one is a protocol error.
+        let resp = client()
+            .post(&base)
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 202);
+        assert!(resp.bytes().await.unwrap().is_empty());
+
         server.shutdown();
     }
 

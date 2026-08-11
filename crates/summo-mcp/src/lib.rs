@@ -28,11 +28,29 @@ use serde_json::{Value, json};
 use summo_core::paths::Paths;
 
 /// The MCP revision this speaks.
+pub const PROTOCOL_VERSION: &str = "2025-06-18";
+
+/// Revisions this server can also speak, oldest last.
 ///
-/// Sent back verbatim in `initialize`. A client asking for a newer one still works — every method
-/// used here has been stable across revisions — but echoing what we actually implement is more
-/// honest than echoing whatever was asked for.
-pub const PROTOCOL_VERSION: &str = "2024-11-05";
+/// The handshake is a negotiation, not an announcement: the spec says a server that supports the
+/// version a client asked for must answer with *that* version, and only fall back to naming its own
+/// when it cannot. Answering with a newer revision than the client asked for is how a client that
+/// pins an older one ends up disconnecting — which is what echoing a constant did.
+///
+/// Every method here has been stable across all three, so supporting them costs nothing but the
+/// honesty of saying which one is in use.
+pub const SUPPORTED_VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
+
+/// The revision to answer a handshake with.
+///
+/// The client's, when we speak it. Ours when we do not, which lets the client decide whether to
+/// continue or disconnect rather than guessing on its behalf.
+#[must_use]
+pub fn negotiate(requested: Option<&str>) -> &'static str {
+    requested
+        .and_then(|asked| SUPPORTED_VERSIONS.into_iter().find(|known| *known == asked))
+        .unwrap_or(PROTOCOL_VERSION)
+}
 
 /// A JSON-RPC request, as MCP frames it.
 #[derive(Debug, Clone, Deserialize)]
@@ -165,13 +183,25 @@ pub fn handle(paths: &Paths, request: &Request) -> Option<Response> {
         "initialize" => Some(Response::ok(
             id,
             json!({
-                "protocolVersion": PROTOCOL_VERSION,
-                "capabilities": { "tools": {} },
+                "protocolVersion": negotiate(
+                    request.params.get("protocolVersion").and_then(Value::as_str)
+                ),
+                // `resources` as well as `tools`, because a vault is a set of documents and that is
+                // what resources are for. A client that can list and read them can show the user
+                // *which* meeting an answer came from, rather than only quoting it.
+                "capabilities": { "tools": {}, "resources": {}, "prompts": {} },
                 "serverInfo": { "name": "summo", "version": env!("CARGO_PKG_VERSION") }
             }),
         )),
         "tools/list" => Some(Response::ok(id, json!({ "tools": tools() }))),
         "tools/call" => Some(call(paths, id, &request.params)),
+        "resources/list" => Some(match resources(paths) {
+            Ok(list) => Response::ok(id, json!({ "resources": list })),
+            Err(why) => Response::err(id, -32_603, why),
+        }),
+        "resources/read" => Some(read_resource(paths, id, &request.params)),
+        "prompts/list" => Some(Response::ok(id, json!({ "prompts": prompts() }))),
+        "prompts/get" => Some(get_prompt(id, &request.params)),
         "ping" => Some(Response::ok(id, json!({}))),
         other => Some(Response::err(
             id,
@@ -257,6 +287,137 @@ fn search(paths: &Paths, args: &Value) -> Result<String, String> {
         out.push('\n');
     }
     Ok(out)
+}
+
+/// The scheme a Summo document is addressed by.
+///
+/// `summo://meeting/<id>` rather than a `file://` path. The id is stable across a move — a user who
+/// drags a note into a folder in Finder has not changed which meeting it is — whereas a path is a
+/// fact about today's filing. It also keeps the vault's location off the wire, so a transcript of
+/// an agent session does not leak somebody's home directory.
+pub const URI_SCHEME: &str = "summo://meeting/";
+
+/// Every document in the vault, as a resource a client can list.
+///
+/// Both recordings and typed notes: they are the same documents, and a client that showed only one
+/// would be hiding half the vault for a distinction the user does not make.
+pub fn resources(paths: &Paths) -> Result<Value, String> {
+    let library = summo_vault::library::Library::new(paths.clone());
+    let index = library.scan().map_err(|e| e.to_string())?;
+
+    let listed: Vec<Value> = index
+        .entries()
+        .iter()
+        .map(|entry| {
+            json!({
+                "uri": format!("{URI_SCHEME}{}", entry.id.as_str()),
+                "name": entry.title,
+                // The date and the folder, because a list of forty meetings all called "Weekly" is
+                // a list a model cannot choose from.
+                "description": describe(entry),
+                "mimeType": "text/markdown",
+            })
+        })
+        .collect();
+    Ok(Value::Array(listed))
+}
+
+/// Enough to tell two meetings with the same title apart.
+fn describe(entry: &summo_vault::index::MeetingEntry) -> String {
+    let kind = if entry.kind.is_note() {
+        "Note"
+    } else {
+        "Meeting"
+    };
+    let mut out = format!("{kind}, {}", entry.day);
+    if !entry.folder.is_empty() {
+        out.push_str(&format!(", in {}", entry.folder));
+    }
+    if !entry.participants.is_empty() {
+        // Without the brackets. `[[Ngọc]]` is how a name is stored so that Obsidian links it; it is
+        // not how a person is called, and putting the syntax in front of a model invites it to
+        // repeat the syntax back.
+        let people: Vec<&str> = entry
+            .participants
+            .iter()
+            .map(|p| p.trim().trim_start_matches("[[").trim_end_matches("]]"))
+            .collect();
+        out.push_str(&format!(", with {}", people.join(", ")));
+    }
+    out
+}
+
+/// Read one document by URI.
+fn read_resource(paths: &Paths, id: Value, params: &Value) -> Response {
+    let uri = params.get("uri").and_then(Value::as_str).unwrap_or("");
+    let Some(meeting) = uri.strip_prefix(URI_SCHEME) else {
+        return Response::err(
+            id,
+            -32_602,
+            format!("uri must start with `{URI_SCHEME}`, got `{uri}`"),
+        );
+    };
+
+    // The same rendering `get_meeting` produces, so a client that reads a resource and a model that
+    // calls the tool are looking at the same document rather than at two renderings that differ.
+    match get_meeting(paths, &json!({ "id": meeting })) {
+        Ok(text) => Response::ok(
+            id,
+            json!({
+                "contents": [{ "uri": uri, "mimeType": "text/markdown", "text": text }]
+            }),
+        ),
+        Err(why) => Response::err(id, -32_602, why),
+    }
+}
+
+/// Ready-made questions, so a client can offer them rather than expecting the user to phrase one.
+///
+/// Deliberately few. A prompt list is a menu, and a menu of twenty is a menu nobody reads.
+#[must_use]
+pub fn prompts() -> Value {
+    json!([
+        {
+            "name": "decisions",
+            "description": "What was decided about a topic, with the meetings it was decided in.",
+            "arguments": [
+                { "name": "topic", "description": "What to look for.", "required": true }
+            ]
+        },
+        {
+            "name": "catch_up",
+            "description": "What has happened recently, and what is still open.",
+            "arguments": []
+        }
+    ])
+}
+
+fn get_prompt(id: Value, params: &Value) -> Response {
+    let name = params.get("name").and_then(Value::as_str).unwrap_or("");
+    let topic = params
+        .get("arguments")
+        .and_then(|a| a.get("topic"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+
+    let text = match name {
+        "decisions" => format!(
+            "Search the Summo vault for what was decided about \"{topic}\". Use search_meetings \
+             first. Quote the decision and name the meeting and timestamp it came from, so I can \
+             check it against the recording. If nothing was decided, say so rather than inferring."
+        ),
+        "catch_up" => "List my recent meetings and my open tasks. Summarise what changed and what \
+             is waiting on me. Cite the meeting each point came from."
+            .to_string(),
+        other => return Response::err(id, -32_602, format!("unknown prompt `{other}`")),
+    };
+
+    Response::ok(
+        id,
+        json!({
+            "messages": [{ "role": "user", "content": { "type": "text", "text": text } }]
+        }),
+    )
 }
 
 fn get_meeting(paths: &Paths, args: &Value) -> Result<String, String> {
@@ -393,6 +554,160 @@ mod tests {
         let paths = Paths::at(tmp.path());
         std::fs::create_dir_all(paths.meetings()).unwrap();
         (tmp, paths)
+    }
+
+    /// A meeting and a typed note, because a client that listed only one would be hiding half the
+    /// vault for a distinction the user does not make.
+    fn vault() -> (tempfile::TempDir, Paths) {
+        let (tmp, paths) = empty_vault();
+        std::fs::create_dir_all(paths.notes()).unwrap();
+        std::fs::write(
+            paths.meetings().join("2026-08-10-hop.md"),
+            "---\nid: 01A\ndate: 2026-08-10T10:00:00+07:00\nduration: 600\n\
+             participants: [\"[[Ngọc]]\"]\n---\n# Họp đầu tuần\n\n\
+             ## Tóm tắt\nChốt ngân sách quý bốn.\n\n\
+             ## Transcript\n**[00:01:00] Ngọc** — Chốt ngân sách nhé <!-- seq:0 end:65.0 -->\n",
+        )
+        .unwrap();
+        std::fs::write(
+            paths.notes().join("y-tuong.md"),
+            "---\ntags: [sản-phẩm]\n---\n# Ý tưởng giá\n\nBán 3–4 đô một tháng.\n",
+        )
+        .unwrap();
+        (tmp, paths)
+    }
+
+    /// The handshake is a negotiation. A client that pins an older revision must be answered with
+    /// *that* revision, or it is entitled to disconnect — which is what echoing a constant caused.
+    #[test]
+    fn the_handshake_answers_with_the_version_the_client_asked_for() {
+        assert_eq!(negotiate(Some("2024-11-05")), "2024-11-05");
+        assert_eq!(negotiate(Some("2025-03-26")), "2025-03-26");
+        assert_eq!(negotiate(Some("2025-06-18")), "2025-06-18");
+    }
+
+    /// And names its own when it cannot, so the client decides whether to continue.
+    #[test]
+    fn an_unknown_version_gets_ours_rather_than_an_echo() {
+        assert_eq!(negotiate(Some("1999-01-01")), PROTOCOL_VERSION);
+        assert_eq!(negotiate(None), PROTOCOL_VERSION);
+    }
+
+    #[test]
+    fn the_handshake_negotiates_through_the_request() {
+        let (_tmp, paths) = vault();
+        let request = request("initialize", json!({ "protocolVersion": "2024-11-05" }));
+        let result = handle(&paths, &request).unwrap().result.unwrap();
+        assert_eq!(result["protocolVersion"], "2024-11-05");
+        assert!(result["capabilities"]["resources"].is_object());
+        assert!(result["capabilities"]["prompts"].is_object());
+    }
+
+    /// A vault is a set of documents, and a client that can list them can show *which* meeting an
+    /// answer came from rather than only quoting it.
+    #[test]
+    fn every_document_is_listed_as_a_resource() {
+        let (_tmp, paths) = vault();
+        let result = handle(&paths, &request("resources/list", json!({})))
+            .unwrap()
+            .result
+            .unwrap();
+        let listed = result["resources"].as_array().unwrap();
+        assert!(!listed.is_empty(), "the seeded vault must list");
+        for entry in listed {
+            let uri = entry["uri"].as_str().unwrap();
+            assert!(uri.starts_with(URI_SCHEME), "{uri}");
+            assert_eq!(entry["mimeType"], "text/markdown");
+            assert!(!entry["description"].as_str().unwrap().is_empty());
+        }
+    }
+
+    /// The id, not the path. A user who drags a note into a folder has not changed which meeting it
+    /// is — and a path on the wire would put their home directory in an agent's transcript.
+    #[test]
+    fn a_resource_uri_carries_no_filesystem_path() {
+        let (_tmp, paths) = vault();
+        let result = handle(&paths, &request("resources/list", json!({})))
+            .unwrap()
+            .result
+            .unwrap();
+        let text = result.to_string();
+        assert!(
+            !text.contains("/tmp/"),
+            "a path leaked into the listing: {text}"
+        );
+        assert!(
+            !text.contains(".md"),
+            "a filename leaked into the listing: {text}"
+        );
+    }
+
+    #[test]
+    fn reading_a_resource_returns_the_same_document_the_tool_does() {
+        let (_tmp, paths) = vault();
+        let listed = handle(&paths, &request("resources/list", json!({})))
+            .unwrap()
+            .result
+            .unwrap();
+        let uri = listed["resources"][0]["uri"].as_str().unwrap().to_string();
+        let id = uri.strip_prefix(URI_SCHEME).unwrap().to_string();
+
+        let read = handle(
+            &paths,
+            &request("resources/read", json!({ "uri": uri.clone() })),
+        )
+        .unwrap()
+        .result
+        .unwrap();
+        let via_resource = read["contents"][0]["text"].as_str().unwrap().to_string();
+        let via_tool = get_meeting(&paths, &json!({ "id": id })).unwrap();
+        assert_eq!(
+            via_resource, via_tool,
+            "two renderings of one document would drift"
+        );
+    }
+
+    #[test]
+    fn a_uri_in_another_scheme_is_refused_rather_than_read() {
+        let (_tmp, paths) = vault();
+        for uri in ["file:///etc/passwd", "../../etc/passwd", "summo://note/01A"] {
+            let response =
+                handle(&paths, &request("resources/read", json!({ "uri": uri }))).unwrap();
+            assert!(response.error.is_some(), "{uri} should have been refused");
+        }
+    }
+
+    #[test]
+    fn prompts_are_listed_and_can_be_fetched() {
+        let (_tmp, paths) = vault();
+        let listed = handle(&paths, &request("prompts/list", json!({})))
+            .unwrap()
+            .result
+            .unwrap();
+        assert_eq!(listed["prompts"].as_array().unwrap().len(), 2);
+
+        let got = handle(
+            &paths,
+            &request(
+                "prompts/get",
+                json!({ "name": "decisions", "arguments": { "topic": "ngân sách" } }),
+            ),
+        )
+        .unwrap()
+        .result
+        .unwrap();
+        let text = got["messages"][0]["content"]["text"].as_str().unwrap();
+        assert!(
+            text.contains("ngân sách"),
+            "the argument must reach the prompt: {text}"
+        );
+    }
+
+    #[test]
+    fn an_unknown_prompt_is_an_error_not_an_empty_message() {
+        let (_tmp, paths) = vault();
+        let response = handle(&paths, &request("prompts/get", json!({ "name": "nope" }))).unwrap();
+        assert!(response.error.is_some());
     }
 
     #[test]

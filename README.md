@@ -54,7 +54,7 @@ disagree with it. Nothing is recorded until you press record.
 summo serve --port 8710      # a fixed port, when something else wants to find it
 summo serve --no-open        # a server, when there is no browser to open
 summo import ~/Downloads/zoom-recording.mp4
-summo mcp                    # the vault as tools, for Claude Code or Cursor
+summo mcp                    # the vault over MCP, for Claude Code or Cursor
 ```
 
 ## Why it is built this way
@@ -91,7 +91,7 @@ crates/
   summo-media     ffmpeg as a sidecar: probe, extract, convert
   summo-calendar  iCalendar: .ics, subscriptions, matching a recording to an event
   summo-tts       dubbing: fitting a translated line back into the slot it came from
-  summo-mcp       the vault as tools an assistant can call, over stdio
+  summo-mcp       the vault over MCP — tools, resources and prompts, on stdio or HTTP
   summo-sync      CRDT + end-to-end-encrypted multi-device sync                [next]
 apps/
   web/            the application interface — React, compiled into the binary
@@ -175,6 +175,40 @@ points at whoever published the weights.
 ## Licence
 
 AGPL-3.0-or-later. Models are fetched at runtime and keep their own licences; see `NOTICE`.
+
+## Talking to it from another agent
+
+Summo speaks [MCP](https://modelcontextprotocol.io), so an assistant that already has your editor
+open can answer from your own transcripts rather than guessing.
+
+```jsonc
+// Claude Code, Cursor: spawn it over stdio
+{ "mcpServers": { "summo": { "command": "summo", "args": ["mcp"] } } }
+```
+
+For an agent that cannot spawn a process — a container, another tool on the same machine — the
+daemon serves the same thing over HTTP, behind the same token as every other route:
+
+```bash
+curl -s http://127.0.0.1:$(jq -r .port ~/.summo/engine.json)/mcp \
+  -H "Authorization: Bearer $(jq -r .token ~/.summo/engine.json)" \
+  -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"resources/list"}'
+```
+
+One implementation behind both, so they cannot drift.
+
+| | |
+|---|---|
+| **Tools** | `search_meetings`, `get_meeting`, `list_meetings`, `list_tasks` |
+| **Resources** | every meeting and note as `summo://meeting/<id>`, rendered as Markdown |
+| **Prompts** | `decisions` (what was agreed about a topic), `catch_up` |
+| **Protocol** | negotiated — `2025-06-18`, `2025-03-26` and `2024-11-05` |
+
+**It reads; it does not write.** No tool creates a task, edits a note or starts a recording. An MCP
+client is a model with a tool list, and a model that misreads an instruction should not be able to
+rewrite somebody's meeting notes. The URIs carry ids rather than paths, so an agent's transcript
+does not end up with your home directory in it.
 
 ## Contributing
 

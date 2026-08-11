@@ -253,7 +253,7 @@ export function Library({
           ) : (
             (view?.groups ?? []).map((g) => (
               <section key={g.key} className="mb-3.5">
-                <h3>{groupLabel(g.key, group, today, words)}</h3>
+                <h3 data-testid="group-heading">{groupLabel(g.key, group, today, words)}</h3>
                 {g.meetings.map((m) => (
                   <MeetingRow
                     key={m.id}
@@ -358,6 +358,7 @@ function MeetingRow({
         "flex w-full items-baseline gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors",
         selected ? "bg-bg-soft shadow-[inset_2px_0_0_var(--color-accent)]" : "hover:bg-bg-soft",
       )}
+      data-testid="meeting-row"
       onClick={onSelect}
       // A single click previews beside the list; a double click commits to the full screen, the
       // way a file manager works. Enter does the same for the keyboard.
@@ -380,7 +381,9 @@ function MeetingRow({
           {/* Beside the title rather than as a stripe down the row: a colour is one signal among
               several here, and a full-height bar reads as a status the way the selected row's does. */}
           {meeting.color && <Dot colour={meeting.color} />}
-          <span className="truncate">{meeting.title}</span>
+          <span className="truncate" data-testid="meeting-title">
+            {meeting.title}
+          </span>
         </span>
         <span className="text-fg-faint text-[12px]">
           {meeting.kind === "note" ? t("library.a_note") : formatDuration(meeting.duration, locale)}
@@ -414,6 +417,7 @@ function SearchResults({
           {hit.excerpts.map((excerpt, i) => (
             <p
               key={i}
+              data-testid="excerpt"
               className="text-fg-dim [&_b]:text-fg my-0.5 ml-[42px] text-[13px] leading-normal [&_b]:font-medium"
             >
               {excerpt.t0 !== null && (
@@ -474,7 +478,9 @@ type Stats = NonNullable<LibraryView["stats"]>;
 function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="rounded-card border-line bg-bg-soft flex flex-col gap-0.5 border p-3.5">
-      <span className="tabular text-2xl font-semibold tracking-tight">{value}</span>
+      <span className="tabular text-2xl font-semibold tracking-tight" data-testid="tile-value">
+        {value}
+      </span>
       <span className="text-fg-dim text-[12px]">{label}</span>
       {note && <span className="text-fg-faint text-[11px]">{note}</span>}
     </div>
@@ -620,7 +626,7 @@ function MeetingPane({
         )}
         <ol className="m-0 list-none p-0">
           {detail.transcript.map((segment) => (
-            <li key={segment.seq}>
+            <li key={segment.seq} data-testid="transcript-line">
               <span className="tabular text-fg-faint mr-1.5 text-[11px]">
                 {timestamp(segment.t0)}
               </span>

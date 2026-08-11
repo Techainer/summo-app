@@ -4889,6 +4889,7 @@ dependencies = [
  "summo-core",
  "summo-diar",
  "summo-llm",
+ "summo-mcp",
  "summo-media",
  "summo-models",
  "summo-pipeline",

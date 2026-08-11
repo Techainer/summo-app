@@ -62,7 +62,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
       </div>
 
       {tree.length > 1 && (
-        <nav aria-label={t("finder.folders")} className="flex flex-col">
+        <nav aria-label={t("library.filter_folder")} className="flex flex-col">
           {tree.map((node) => (
             <button
               key={node.path}
@@ -91,7 +91,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
       )}
 
       {view.tags.length > 0 && (
-        <nav aria-label={t("finder.tags")} className="flex flex-wrap gap-1.5">
+        <nav aria-label={t("library.filter_tag")} className="flex flex-wrap gap-1.5">
           {view.tags.map((each) => {
             const on = tags.includes(each.name);
             return (
@@ -118,7 +118,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
       )}
 
       {view.colours.length > 0 && (
-        <nav aria-label={t("finder.colours")} className="flex flex-wrap gap-1.5">
+        <nav aria-label={t("library.filter_colour")} className="flex flex-wrap gap-1.5">
           {view.colours.map((each) => {
             const on = colour === each.name;
             return (
