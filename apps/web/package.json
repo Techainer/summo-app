@@ -16,7 +16,8 @@
     "e2e:tasks": "node e2e/tasks.mjs",
     "e2e:draft": "node e2e/draft.mjs",
     "e2e:nudges": "node e2e/nudges.mjs",
-    "e2e:chat": "node e2e/chat.mjs"
+    "e2e:chat": "node e2e/chat.mjs",
+    "e2e:first-run": "node e2e/first-run.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",
