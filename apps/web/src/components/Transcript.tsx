@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { useT } from "../i18n/context";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { formatTime, type Segment } from "../lib/protocol";
 import type { Event } from "../lib/protocol";
@@ -16,6 +17,7 @@ export function Transcript({
   segments: Segment[];
   onEvent?: (event: Event) => void;
 }) {
+  const t = useT();
   const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -48,7 +50,7 @@ export function Transcript({
               <div className="line-meta">
                 <span className="time">{formatTime(segment.t0)}</span>
                 <span className={`speaker lane-${segment.lane}`}>
-                  {segment.speaker ?? (segment.lane === "mic" ? "Bạn" : "…")}
+                  {segment.speaker ?? (segment.lane === "mic" ? t("meeting.speaker_you") : "…")}
                 </span>
               </div>
               <p className="line-text">{segment.text}</p>
