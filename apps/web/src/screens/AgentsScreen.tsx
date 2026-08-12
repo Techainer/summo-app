@@ -285,7 +285,12 @@ export function AgentsScreen() {
         )}
       </AnimatePresence>
 
-      {roster && !agent && <p className="text-fg-faint mt-10 text-center">{t("agents.pick")}</p>}
+      {/* Under the roster, not floating in the middle of the pane: it is an instruction about the
+          cards above it, and centring it in the empty half below made it look like the page had
+          two unrelated halves. */}
+      {roster && !agent && (
+        <p className="text-fg-faint mt-5 text-center text-[13px]">{t("agents.pick")}</p>
+      )}
     </div>
   );
 }

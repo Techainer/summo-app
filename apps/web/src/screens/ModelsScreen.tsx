@@ -1,4 +1,5 @@
 import { CloudOff, HardDriveDownload, Package, Trash2 } from "lucide-react";
+import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button, Empty } from "../components/ui";
@@ -15,6 +16,7 @@ import {
 } from "../lib/catalogue";
 import { useEngine } from "../lib/engine-context";
 import { useErrorText } from "../lib/errors";
+import { listItem, stagger } from "../lib/motion";
 import { OnboardingClient, POLL_MS, isFinished, percent, type Install } from "../lib/onboarding";
 
 /**
@@ -162,7 +164,16 @@ export function ModelsScreen() {
             <h2 className="text-fg-faint text-[11px] font-semibold tracking-wider uppercase">
               {t(`models.task_${group.task.replace("-", "_")}`)}
             </h2>
-            <div className="mt-2.5 grid gap-2.5 lg:grid-cols-2">
+            {/* Cards arrive rather than appear. A grid of eight that pops in at once reads as a
+                page repainting; a short stagger reads as a list being laid out, and it gives the
+                eye an order to follow. `stagger` shortens the step as the count grows, so a long
+                section does not take a second to finish. */}
+            <motion.div
+              initial="hidden"
+              animate="shown"
+              transition={stagger(group.models.length)}
+              className="mt-2.5 grid gap-2.5 lg:grid-cols-2"
+            >
               {group.models.map((model) => (
                 <Card
                   key={model.id}
@@ -174,7 +185,7 @@ export function ModelsScreen() {
                   inUse={chosen[roleFor(model.task) ?? ""] === model.id}
                 />
               ))}
-            </div>
+            </motion.div>
           </section>
         ))
       )}
@@ -205,7 +216,19 @@ function Card({
   const done = percent(job ?? ({} as Install));
 
   return (
-    <article className="border-line bg-bg-soft/40 rounded-[var(--radius-card)] border p-3.5">
+    <motion.article
+      variants={listItem}
+      className={cn(
+        // A real card on the page surface, not a translucent tint of it. Elevation is what tells
+        // the eye these are eight separate things to choose between.
+        "border-line bg-bg-raised rounded-[var(--radius-card)] border p-4 shadow-[var(--shadow-sm)]",
+        // Lifts under the pointer. The whole card is a decision — read it, install it, remove it —
+        // so the whole card should acknowledge the cursor rather than only the button on it.
+        "transition-[transform,box-shadow,border-color,background-color] duration-150",
+        "hover:bg-bg-elevated hover:border-line-strong hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]",
+        inUse && "border-accent/40",
+      )}
+    >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-[15px] leading-snug font-medium">{model.name}</h3>
@@ -314,6 +337,6 @@ function Card({
       {job?.state === "failed" && (
         <p className="text-rec mt-2 text-[12px]">{job.error ?? t("models.failed")}</p>
       )}
-    </article>
+    </motion.article>
   );
 }

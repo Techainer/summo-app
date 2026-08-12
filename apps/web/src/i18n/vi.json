@@ -248,7 +248,8 @@
     "confirmed_by_you": "{count} do bạn xác nhận",
     "voice_styles": "{count} kiểu giọng",
     "relabelled": "Đã sửa {utterances} câu trong {meetings} buổi họp cũ",
-    "unmerged": "gỡ nhầm khỏi {count} người khác"
+    "unmerged": "gỡ nhầm khỏi {count} người khác",
+    "empty_title": "Chưa có giọng nào"
   },
   "settings": {
     "title": "Cài đặt",

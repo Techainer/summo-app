@@ -1,7 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
+import { MessageCircleQuestion } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 
-import { Button, Card, CardBody } from "../components/ui";
+import { Button, Card, CardBody, Empty } from "../components/ui";
 import { cn } from "../lib/cn";
 import { useT } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
@@ -78,11 +79,12 @@ export function ChatScreen() {
 
       <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto">
         {history.length === 0 && (
-          <p className="text-fg-faint mt-16 text-center">
-            {t("chat.intro")}
-            <br />
-            {t("chat.intro_2")}
-          </p>
+          <Empty
+            full
+            icon={MessageCircleQuestion}
+            title={t("chat.intro")}
+            hint={t("chat.intro_2")}
+          />
         )}
 
         {history.map((exchange, i) => (

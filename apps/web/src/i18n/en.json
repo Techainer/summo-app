@@ -248,7 +248,8 @@
     "confirmed_by_you": "{count} confirmed by you",
     "voice_styles": "{count} voice styles",
     "relabelled": "Corrected {utterances} lines across {meetings} earlier meetings",
-    "unmerged": "removed from {count} other people"
+    "unmerged": "removed from {count} other people",
+    "empty_title": "No voices yet"
   },
   "settings": {
     "title": "Settings",

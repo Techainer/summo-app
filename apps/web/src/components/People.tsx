@@ -1,5 +1,7 @@
+import { AudioLines } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { Empty } from "./ui";
 import { useI18n } from "../i18n/context";
 import { formatDuration } from "../lib/duration";
 import { useErrorText } from "../lib/errors";
@@ -112,7 +114,11 @@ export function People({ client, meeting }: Props) {
   );
 
   return (
-    <section className="mx-auto max-w-3xl space-y-4 p-6">
+    // `h-full` and a column, so the empty state can take the pane and sit in the middle of it.
+    // Without a height to fill, `Empty full` centres itself inside its own content box, which is
+    // two lines tall — and the result is an empty state pinned to the top of five hundred pixels
+    // of nothing, which is what it looked like before.
+    <section className="mx-auto flex h-full max-w-3xl flex-col space-y-4 p-6">
       {error && (
         <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
           {error}
@@ -211,7 +217,7 @@ export function People({ client, meeting }: Props) {
       )}
 
       {people.length === 0 ? (
-        <p className="text-fg-faint mt-16 text-center">{t("people.empty")}</p>
+        <Empty full icon={AudioLines} title={t("people.empty_title")} hint={t("people.empty")} />
       ) : (
         <ul className="divide-line divide-y">
           {people.map((person) => (

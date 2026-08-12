@@ -248,7 +248,8 @@
     "confirmed_by_you": "其中{count}段由你确认",
     "voice_styles": "{count}种声音状态",
     "relabelled": "已在过去{meetings}场会议中更正{utterances}行",
-    "unmerged": "已从另外{count}个人那里移除"
+    "unmerged": "已从另外{count}个人那里移除",
+    "empty_title": "还没有声音"
   },
   "settings": {
     "title": "设置",

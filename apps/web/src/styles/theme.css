@@ -4,35 +4,58 @@
  * second monitor during a call, and a bright panel next to a video window is the thing people turn
  * off first.
  *
- * The palette is Summo's own. The reference designs that shaped the *layout* are lavender-on-white
- * SaaS dashboards; copying their colour would make a local-first tool look like a cloud one.
+ * The palette is Summo's own. The reference designs that shaped it are lavender-on-white SaaS
+ * dashboards; what is borrowed from them is *structure* — four surface steps instead of three, real
+ * elevation, generous radii, one accent reserved for the assistant — and not their colour, because
+ * a local-first tool that looks like a cloud one is lying about itself.
  */
 
 @import "tailwindcss";
 @import "./fonts.css";
 
 @theme {
-  /* Surfaces, from furthest back to nearest front. */
-  --color-bg: #0b0c0e;
-  --color-bg-soft: #111317;
-  --color-bg-raised: #171a1f;
-  --color-line: #23272f;
-  --color-line-strong: #2f353f;
+  /* Surfaces, from furthest back to nearest front.
+   *
+   * Four steps, not three. A card sits on a panel sits on the page, and with three the card and the
+   * panel had to be the same colour — which is why every card needed a border to exist at all, and
+   * why the interface read as a wireframe. With four, elevation does the work and the border is a
+   * hairline that supports it.
+   *
+   * Very slightly warm. A neutral-cold near-black is what a terminal looks like; a hint of red in
+   * the darks is what the reference shots do and it is most of the difference between "developer
+   * tool" and "product". */
+  --color-bg: #0c0b0f;
+  --color-bg-soft: #141319;
+  --color-bg-raised: #1b1a22;
+  --color-bg-elevated: #23222c;
+  --color-line: #292731;
+  --color-line-strong: #38353f;
 
   /* Text, from most to least important.
    *
    * `fg-faint` is the quietest thing that is still *prose* — empty-state sentences, the note under
    * a setting, the group labels in the sidebar. It is not decoration, so it holds 4.5:1 against the
-   * raised surface, not merely against the page. The earlier value cleared the page and failed on a
-   * card, which is where most of that text actually sits. */
-  --color-fg: #e9ecf1;
-  --color-fg-dim: #9aa3b2;
-  --color-fg-faint: #7b8494;
+   * *lightest* surface it can land on, which is now `bg-elevated` rather than `bg-raised`. Adding a
+   * fourth surface raised that bar, and the old value fell under it. */
+  --color-fg: #eceef3;
+  --color-fg-dim: #a3aab8;
+  --color-fg-faint: #878e9c;
 
   /* One accent, used for what is live and what is chosen. */
   --color-accent: #64e3a1;
   --color-accent-soft: #64e3a11a;
   --color-accent-fg: #06110c;
+
+  /* The assistant, and only the assistant.
+   *
+   * Green already means *live or chosen* and red means *recording*; neither may also mean *written
+   * by a model*. A third hue is what lets a drafted summary, an agent's step log and the answer
+   * panel be recognisable as machine output at a glance, which matters more here than in most
+   * products — the whole design brief is that a user can tell what the model claimed from what a
+   * person said. */
+  --color-ai: #b49bff;
+  --color-ai-soft: #b49bff1f;
+  --color-ai-fg: #120a26;
 
   /* Recording is the one state that must never be mistaken for anything else. */
   --color-rec: #f2585b;
@@ -52,11 +75,36 @@
   /* Tabular figures, so a timestamp column does not jitter as the seconds change. */
   --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Consolas, monospace;
 
-  --radius-card: 14px;
-  --radius-panel: 18px;
+  /* A named scale, so density is decided once rather than per component.
+   *
+   * The interface had thirty-odd distinct sizes written as `text-[13px]`, `text-[0.76rem]`,
+   * `text-[11px]`, and two screens meaning the same thing said it in different numbers. Five steps
+   * cover everything here: a screen title, a card title, prose, a label beside prose, and a
+   * timestamp. */
+  --text-display: 1.75rem;
+  --text-display--line-height: 2.125rem;
+  --text-display--letter-spacing: -0.02em;
+  --text-title: 1.0625rem;
+  --text-title--line-height: 1.4rem;
+  --text-title--letter-spacing: -0.01em;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5rem;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.25rem;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
 
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px -12px rgb(0 0 0 / 0.5);
-  --shadow-pop: 0 4px 12px rgb(0 0 0 / 0.28), 0 16px 48px -16px rgb(0 0 0 / 0.6);
+  /* Rounder than before, which is most of what reads as current. A pill is its own token because
+   * "fully round" written as a number is a number somebody eventually changes. */
+  --radius-card: 18px;
+  --radius-panel: 24px;
+  --radius-pill: 999px;
+
+  /* Three steps to match the four surfaces: a resting card, a card under the pointer, and a thing
+   * floating over the page. */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.24);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.2), 0 8px 24px -12px rgb(0 0 0 / 0.55);
+  --shadow-pop: 0 4px 12px rgb(0 0 0 / 0.3), 0 16px 48px -16px rgb(0 0 0 / 0.65);
 
   /* Fast enough to feel like a response, slow enough to be followed. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -65,7 +113,7 @@
 /* The eight colours a note can be filed under.
  *
  * Named rather than free hex, and resolved here rather than stored per note, because a colour
- * picked on white is not a colour on `#0b0c0e`. The vault records `color: teal`; what teal *is* is
+ * picked on white is not a colour on `#0c0b0f`. The vault records `color: teal`; what teal *is* is
  * a theme decision, like every other colour in this file. `crates/summo-vault/src/colour.rs` owns
  * the list of names; this owns what each one looks like, once per scheme.
  *
@@ -91,14 +139,17 @@
 
 @media (prefers-color-scheme: light) {
   :root {
-    --color-bg: #fbfbfc;
-    --color-bg-soft: #f3f4f6;
+    /* Warm off-white rather than the cold grey this replaced, which is the single change that most
+     * separates the reference palettes from a default Tailwind page. */
+    --color-bg: #f7f6f4;
+    --color-bg-soft: #f1efec;
     --color-bg-raised: #ffffff;
-    --color-line: #e4e7ec;
-    --color-line-strong: #d3d8e0;
-    --color-fg: #14171c;
-    --color-fg-dim: #525c6b;
-    --color-fg-faint: #616a78;
+    --color-bg-elevated: #ffffff;
+    --color-line: #e6e3de;
+    --color-line-strong: #d5d1ca;
+    --color-fg: #17161a;
+    --color-fg-dim: #56545e;
+    --color-fg-faint: #64626c;
     /* Every accent here is also used as *text* — on a chip, in a link, as a sidebar item — and each
      * is checked against its own `-soft` tint rather than against the page, because that tint is a
      * near-white wash that raises the background it has to stand out from. The lighter versions
@@ -106,6 +157,9 @@
     --color-accent: #0f7350;
     --color-accent-soft: #0f735014;
     --color-accent-fg: #ffffff;
+    --color-ai: #5b34d6;
+    --color-ai-soft: #5b34d614;
+    --color-ai-fg: #ffffff;
     --color-rec: #c62f32;
     --color-rec-soft: #c62f3214;
     --color-done: #0f7350;
@@ -114,7 +168,7 @@
     --color-blocked: #8a5610;
     --color-blocked-soft: #8a561014;
     /* Darker than their dark-mode counterparts: a dot has to be seen *against* the surface, and on
-     * `#fbfbfc` the pastels above disappear. Same eight names, same eight distinguishable hues. */
+     * a near-white page the pastels above disappear. Same eight names, same eight hues. */
     --color-swatch-red: #c62f32;
     --color-swatch-amber: #b8730d;
     --color-swatch-green: #0f7350;
@@ -123,8 +177,9 @@
     --color-swatch-purple: #6b46c1;
     --color-swatch-pink: #b83280;
     --color-swatch-grey: #616a78;
-    --shadow-card: 0 1px 2px rgb(16 24 40 / 0.06), 0 8px 24px -12px rgb(16 24 40 / 0.14);
-    --shadow-pop: 0 4px 12px rgb(16 24 40 / 0.1), 0 16px 48px -16px rgb(16 24 40 / 0.22);
+    --shadow-sm: 0 1px 2px rgb(28 25 23 / 0.05);
+    --shadow-card: 0 1px 2px rgb(28 25 23 / 0.06), 0 8px 24px -12px rgb(28 25 23 / 0.14);
+    --shadow-pop: 0 4px 12px rgb(28 25 23 / 0.1), 0 16px 48px -16px rgb(28 25 23 / 0.22);
   }
 }
 
@@ -134,17 +189,21 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-bg: #0b0c0e;
-  --color-bg-soft: #111317;
-  --color-bg-raised: #171a1f;
-  --color-line: #23272f;
-  --color-line-strong: #2f353f;
-  --color-fg: #e9ecf1;
-  --color-fg-dim: #9aa3b2;
-  --color-fg-faint: #7b8494;
+  --color-bg: #0c0b0f;
+  --color-bg-soft: #141319;
+  --color-bg-raised: #1b1a22;
+  --color-bg-elevated: #23222c;
+  --color-line: #292731;
+  --color-line-strong: #38353f;
+  --color-fg: #eceef3;
+  --color-fg-dim: #a3aab8;
+  --color-fg-faint: #878e9c;
   --color-accent: #64e3a1;
   --color-accent-soft: #64e3a11a;
   --color-accent-fg: #06110c;
+  --color-ai: #b49bff;
+  --color-ai-soft: #b49bff1f;
+  --color-ai-fg: #120a26;
 }
 
 * {

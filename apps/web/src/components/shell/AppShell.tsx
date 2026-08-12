@@ -76,7 +76,10 @@ export function AppShell({
         {!narrow && navOpen && (
           <motion.aside
             key="sidebar"
-            className="border-line bg-bg-soft/40 shrink-0 overflow-hidden border-r"
+            // A surface of its own, not a translucent wash of the page. The window used to be one
+            // flat colour from edge to edge, so the sidebar existed only because of a one-pixel
+            // border — which is what made the whole app read as a wireframe rather than a product.
+            className="border-line bg-bg-soft shrink-0 overflow-hidden border-r"
             initial={{ width: 0 }}
             animate={{ width: 270 }}
             exit={{ width: 0 }}
@@ -101,7 +104,7 @@ export function AppShell({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {header}
-        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        <main className="bg-bg min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );

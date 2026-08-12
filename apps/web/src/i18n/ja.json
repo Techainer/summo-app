@@ -248,7 +248,8 @@
     "confirmed_by_you": "{count}件は本人確認済み",
     "voice_styles": "{count}通りの声色",
     "relabelled": "過去{meetings}件の会議で{utterances}行を修正しました",
-    "unmerged": "他{count}人から外しました"
+    "unmerged": "他{count}人から外しました",
+    "empty_title": "まだ声がありません"
   },
   "settings": {
     "title": "設定",

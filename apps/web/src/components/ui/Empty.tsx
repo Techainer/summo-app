@@ -1,7 +1,9 @@
 import type { LucideIcon } from "lucide-react";
+import { motion } from "motion/react";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
+import { GENTLE } from "../../lib/motion";
 
 /**
  * A screen with nothing on it yet.
@@ -29,28 +31,44 @@ export function Empty({
   hint,
   action,
   className,
+  /**
+   * Take the whole pane and sit in the middle of it.
+   *
+   * For a screen whose *only* content is this. Top-aligned in a tall empty pane, an empty state
+   * reads as a screen that failed to load the rest — five hundred pixels of nothing under two
+   * lines of grey text is what "broken" looks like. Centred, the emptiness is the composition.
+   */
+  full = false,
 }: {
   icon: LucideIcon;
   title: string;
   hint?: string;
   action?: ReactNode;
   className?: string;
+  full?: boolean;
 }) {
   return (
-    <div
+    <motion.div
       role="status"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={GENTLE}
       className={cn(
-        "flex flex-col items-center justify-center gap-3 px-6 py-14 text-center",
+        "flex flex-col items-center justify-center gap-3 px-6 text-center",
+        full ? "h-full py-10" : "py-14",
         className,
       )}
     >
-      <span className="bg-bg-soft ring-line grid size-12 place-items-center rounded-full ring-1">
-        <Icon aria-hidden="true" className="text-fg-faint size-5 stroke-[1.5]" />
+      {/* A soft disc rather than a bare glyph: at 20px an outline icon on a flat background is a
+          smudge, and the ring is what gives the eye something to land on in a space with no other
+          landmark. */}
+      <span className="bg-bg-soft ring-line grid size-14 place-items-center rounded-full ring-1">
+        <Icon aria-hidden="true" className="text-fg-faint size-6 stroke-[1.5]" />
       </span>
       <p className="text-fg text-[15px] font-medium">{title}</p>
-      {hint && <p className="text-fg-faint max-w-xs text-[13px] leading-relaxed">{hint}</p>}
+      {hint && <p className="text-fg-faint max-w-sm text-[13px] leading-relaxed">{hint}</p>}
       {action}
-    </div>
+    </motion.div>
   );
 }
 
