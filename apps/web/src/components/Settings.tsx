@@ -275,7 +275,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
             // install a model server" is not a setting anybody finishes, and the whole claim of
             // this feature is that translation costs nothing — which stops being true the moment
             // it depends on a second program.
-            translator: on ? { provider: LOCAL, model: "milmmt-46-1b" } : null,
+            translator: on ? { provider: LOCAL, model: "small100" } : null,
           })
         }
       >
@@ -295,7 +295,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
                   ...llm,
                   translator:
                     e.target.value === LOCAL
-                      ? { provider: LOCAL, model: "milmmt-46-1b" }
+                      ? { provider: LOCAL, model: "small100" }
                       : { provider: "llama-cpp", model: "milmmt-46-1b" },
                 })
               }
@@ -330,7 +330,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
               className={CONTROL}
               value={llm.translator.model ?? ""}
               aria-label={t("settings.mt_model")}
-              placeholder="milmmt-46-1b"
+              placeholder="small100"
               onChange={(e) =>
                 setLlm({
                   ...llm,

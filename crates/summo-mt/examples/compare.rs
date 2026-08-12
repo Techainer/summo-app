@@ -4,9 +4,11 @@
 //! so those claims can be re-checked rather than believed — a model recommendation that nobody can
 //! reproduce is a preference.
 //!
+//! A `.gguf` file is opened with llama.cpp; a directory is opened as an ONNX seq2seq export.
+//!
 //! ```bash
-//! cargo run -p summo-mt --features local --example compare -- \
-//!   /path/to/milmmt-46-1b.gguf /path/to/milmmt-46-4b.gguf
+//! cargo run -p summo-mt --features local,onnx --example compare -- \
+//!   /path/to/milmmt-46-1b.gguf /path/to/small100-int8/
 //! ```
 //!
 //! The lines are Vietnamese meeting speech, not textbook sentences: dropped pronouns, English
@@ -15,7 +17,47 @@
 
 use std::time::Instant;
 
-use summo_mt::Local;
+use summo_mt::{Local, Seq2Seq};
+
+/// Either runtime, behind one call. The point of the example is to compare models, and a model's
+/// runtime is a fact about the model rather than something the reader should have to select.
+enum Model {
+    Gguf(Box<Local>),
+    Onnx(Box<Seq2Seq>),
+}
+
+impl Model {
+    fn open(path: &str) -> summo_core::Result<Self> {
+        let path = std::path::Path::new(path);
+        if path.is_dir() {
+            let name = path
+                .file_name()
+                .map_or_else(|| "onnx".to_string(), |n| n.to_string_lossy().into_owned());
+            Ok(Self::Onnx(Box::new(
+                Seq2Seq::load(&summo_mt::seq2seq::discover(path), Some(8))?.named(name),
+            )))
+        } else {
+            Ok(Self::Gguf(Box::new(Local::load(path, Some(8))?)))
+        }
+    }
+
+    fn name(&self) -> &str {
+        match self {
+            Self::Gguf(m) => m.name(),
+            Self::Onnx(m) => m.name(),
+        }
+    }
+
+    fn translate(&self, line: &str, source: &str, target: &str) -> summo_core::Result<String> {
+        match self {
+            Self::Gguf(m) => {
+                let prompt = summo_llm::prompt::mt_text(line, Some(source), target);
+                Ok(summo_llm::prompt::parse_mt(&m.complete(&prompt)?).unwrap_or_default())
+            }
+            Self::Onnx(m) => m.translate(line, target),
+        }
+    }
+}
 
 /// Source, target, and the line. Chosen for what each one breaks:
 ///
@@ -66,7 +108,7 @@ fn main() {
     }
 
     for path in &paths {
-        let model = match Local::load(path, Some(8)) {
+        let model = match Model::open(path) {
             Ok(model) => model,
             Err(e) => {
                 eprintln!("{path}: {e}");
@@ -77,9 +119,10 @@ fn main() {
 
         let mut total = 0.0_f64;
         for (source, target, line) in CASES {
-            let prompt = summo_llm::prompt::mt_text(line, Some(source), target);
             let started = Instant::now();
-            let out = model.complete(&prompt).unwrap_or_else(|e| format!("<{e}>"));
+            let out = model
+                .translate(line, source, target)
+                .unwrap_or_else(|e| format!("<{e}>"));
             let elapsed = started.elapsed().as_secs_f64();
             total += elapsed;
 

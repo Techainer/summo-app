@@ -158,8 +158,7 @@ Translating a meeting is a separate question with its own model, and it runs **i
 Ollama, no second process:
 
 ```bash
-summo pull milmmt-46-1b     # 806 MB — the default
-summo pull small100         # 449 MB quantized — smaller, MIT, less accurate
+summo pull small100         # 583 MB — the default
 cargo build -p summo-cli --release --features serve,transcribe,local-mt
 ```
 

@@ -10,7 +10,7 @@ what translation costs, how good it is, and whether any text leaves the machine.
 |---|---|---|
 | Setting | `llm.provider` | `llm.translator` |
 | Wants | a model that can read a messy transcript and reason about it | a model that has seen a lot of parallel text |
-| Good answer | Qwen3 8B, GPT-5, Claude | MiLMMT-46-1B |
+| Good answer | Qwen3 8B, GPT-5, Claude | SMALL100, or MiLMMT-46-1B for accuracy |
 | Where it runs | wherever the user points it | **inside Summo, by default** |
 | Prompt | instructions and numbered batches | one line, in the template it was trained on |
 
@@ -60,13 +60,20 @@ cargo run -p summo-mt --features local --example compare -- model-a.gguf model-b
 
 | Model | Disk | ms/line | Runtime | Verdict |
 |---|---|---|---|---|
-| **milmmt-46-1b** `Q4_K_M` | 806 MB | ~1150 | llama.cpp | The default |
-| milmmt-46-1b `Q3_K_M` | 689 MB | ~620 | llama.cpp | As good, faster, smaller. Worth switching to |
-| milmmt-46-1b `Q2_K` | 658 MB | ~707 | llama.cpp | The floor for this model, and slightly worse |
-| **small100** int8 | **449 MB** | **~377** | ONNX | The small option. MIT. Lexical errors — see below |
-| milmmt-46-4b `Q4_K_M` | 2.5 GB | ~2059 | llama.cpp | Best. Point it at Ollama rather than loading it in-process |
+| **small100** int8, split | **583 MB** | **~244** | ONNX | **The default.** Smallest and fastest. MIT |
+| small100 int8, single graph | 449 MB | ~481 | ONNX | Smaller on disk, half the speed — the encoder re-runs per token |
+| milmmt-46-1b `Q3_K_M` | 689 MB | ~620 | llama.cpp | The accuracy option, and the best of the MiLMMT quantizations |
+| milmmt-46-1b `Q4_K_M` | 806 MB | ~1150 | llama.cpp | What `summo pull milmmt-46-1b` fetches |
+| milmmt-46-1b `Q2_K` | 658 MB | ~707 | llama.cpp | The floor for this model, and worse than `Q3_K_M` |
+| milmmt-46-4b `Q4_K_M` | 2.5 GB | ~2059 | llama.cpp | Best output. Point it at Ollama rather than loading it in the daemon |
+| opus-mt-mul-en/en-mul int8 | 220 MB | ~2495 | ONNX | Returned **empty** for Vietnamese, Japanese and Chinese |
 | Qwen3-0.6B `Q4_K_M` | 379 MB | ~1042 | llama.cpp | Collapses |
 | Gemma3-270m `Q8_0` | 279 MB | ~172 | llama.cpp | Collapses |
+
+**Export shape is worth as much as quantization.** The same SMALL100 weights are 481 ms/line as one
+graph and **244 ms/line** as a separate encoder and decoder, because a single graph re-runs the
+twelve-layer encoder for every generated token over a sentence that has not changed. The split pair
+is 134 MB larger and twice as fast; `seq2seq::discover` prefers it.
 
 **MiLMMT cannot get much under 650 MB.** It is built on Gemma 3, and a 262 000-token embedding
 table dominates the file — `Q2_K` is 658 MB against `Q4_K_M`'s 769 MB, and translates worse. Below
@@ -75,6 +82,11 @@ that needs a different architecture, which is what SMALL100 is.
 **Small general models are not an option.** Qwen3-0.6B repeated `お疲れ様です` forty times on one
 line and returned nothing at all for English→Vietnamese; Gemma3-270m returned empty strings for
 three of seven. A model trained for translation beats a general model several times its size.
+
+**Nor is pivoting through English.** opus-mt is the smallest thing that could work — 110 MB a
+direction, so 220 MB covers any pair via English — but `opus-mt-mul-en` returned an empty string for
+every Vietnamese, Japanese and Chinese input tried, and the one direction that did answer rendered
+"tribal chieftain" as *Tổng thống phái* (president of the faction).
 
 The 4B fixed every error the 1B made on the sample:
 

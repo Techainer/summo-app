@@ -292,7 +292,7 @@
     "mt_run": "用 `llama-server -m milmmt-46-1b.gguf --port 8080` 启动，或者走 Ollama。占磁盘约 800 MB。",
     "mt_where": "运行位置",
     "mt_in_app": "在 Summo 里",
-    "mt_pull": "用 `summo pull milmmt-46-1b` 装一次就行，约 800 MB，不用再跑别的东西。`milmmt-46-4b` 翻得更好，速度大约慢一倍。"
+    "mt_pull": "用 `summo pull small100` 装一次就行，611 MB，不用再跑别的东西。`milmmt-46-1b` 更准，806 MB。"
   },
   "status": {
     "top_bar": "顶栏",

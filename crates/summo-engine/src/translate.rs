@@ -439,7 +439,7 @@ fn local_translator(
     use std::sync::{Arc, OnceLock};
     static LOADED: OnceLock<std::result::Result<Arc<LocalModel>, String>> = OnceLock::new();
 
-    let id = mt.model.as_deref().unwrap_or("milmmt-46-1b").to_string();
+    let id = mt.model.as_deref().unwrap_or("small100").to_string();
     let store = summo_models::ModelStore::new(paths.clone());
     let threads = settings.models.threads;
 
@@ -510,6 +510,9 @@ fn load_local(
     if manifest.runtime.contains("onnx") {
         let paths = summo_mt::Seq2SeqPaths {
             model: file("model")?,
+            // Optional: a model published as one graph has no separate decoder, and one published
+            // as a pair runs its encoder once a line instead of once a token.
+            decoder: installed.param_path("decoder").cloned(),
             spm: file("spm")?,
             vocab: file("vocab")?,
         };
@@ -531,21 +534,11 @@ fn load_local(
 /// directory of one's own at all.
 #[cfg(feature = "local-mt")]
 fn load_seq2seq_dir(dir: &std::path::Path, threads: Option<usize>) -> Result<LocalModel> {
-    let quantized = dir.join("model.int8.onnx");
-    let paths = summo_mt::Seq2SeqPaths {
-        model: if quantized.is_file() {
-            quantized
-        } else {
-            dir.join("model.onnx")
-        },
-        spm: dir.join("sentencepiece.bpe.model"),
-        vocab: dir.join("vocab.json"),
-    };
     let name = dir
         .file_name()
         .map_or_else(|| "local".to_string(), |n| n.to_string_lossy().into_owned());
     Ok(LocalModel::Onnx(Box::new(
-        summo_mt::Seq2Seq::load(&paths, threads)?.named(name),
+        summo_mt::Seq2Seq::load(&summo_mt::seq2seq::discover(dir), threads)?.named(name),
     )))
 }
 

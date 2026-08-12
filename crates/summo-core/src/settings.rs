@@ -139,7 +139,10 @@ impl Default for Translator {
             // In this process, which is the whole point: translation is the one text feature that
             // can cost nothing, and it only actually does if there is nothing to install first.
             provider: LOCAL.into(),
-            model: Some("milmmt-46-1b".into()),
+            // The small one. A default that is the best model rather than the one that fits is a
+            // default nobody can use — 611 MB installs on a laptop, and somebody who wants the
+            // more accurate 806 MB model can say so.
+            model: Some("small100".into()),
         }
     }
 }

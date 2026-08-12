@@ -41,4 +41,4 @@ summo-llm.workspace = true
 # --all-targets` on a plain checkout would fail on it rather than skipping it.
 [[example]]
 name = "compare"
-required-features = ["local"]
+required-features = ["local", "onnx"]

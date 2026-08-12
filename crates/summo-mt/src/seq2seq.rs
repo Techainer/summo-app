@@ -69,6 +69,17 @@ const CODES: [&str; 100] = [
 /// End of sequence, and also what the decoder starts with. Fixed by the checkpoint's config.
 const EOS: i64 = 2;
 
+/// Padding, which this model emits instead of end-of-sequence more often than it should.
+///
+/// Found by running it: asked for Japanese, the decoder finished a clause and then produced 116
+/// consecutive `<pad>` tokens, all of which reached the vault as the literal text `<pad><pad>…`.
+/// Treated as a stop rather than filtered, so the remaining tokens are not generated at all.
+const PAD: i64 = 1;
+
+/// `<s>`, `<pad>`, `</s>`, `<unk>`. None of them is speech, and all four are in `vocab.json`, so
+/// nothing downstream would have refused them.
+const CONTROL: [i64; 4] = [0, PAD, EOS, 3];
+
 /// Ceiling on generated tokens. A translation is about as long as its input; this is the backstop
 /// for a model that has decided not to stop.
 const MAX_TOKENS: usize = 128;
@@ -94,10 +105,21 @@ type Segmenter = TokenizerImpl<
     tokenizers::decoders::sequence::Sequence,
 >;
 
+/// The exported graphs, in whichever of the two shapes the model was published in.
+///
+/// Both exist in the wild and the difference is worth a lot. A **single** graph takes the source
+/// and the partial translation together, so every generated token re-runs the twelve-layer encoder
+/// over a sentence that has not changed. A **split** pair runs the encoder once and then only the
+/// three-layer decoder per token — the same arithmetic, minus the part that was already done.
+enum Graphs {
+    Single(Session),
+    Split { encoder: Session, decoder: Session },
+}
+
 /// A loaded SMALL100.
 pub struct Seq2Seq {
     /// Held across a whole translation: `ort` sessions are not re-entrant.
-    session: Mutex<Session>,
+    session: Mutex<Graphs>,
     segmenter: Segmenter,
     /// Piece → id. Not the SentencePiece id; see [`Segmenter`].
     vocab: HashMap<String, i64>,
@@ -124,8 +146,11 @@ impl std::fmt::Debug for Seq2Seq {
 /// sorts first.
 #[derive(Debug, Clone)]
 pub struct Seq2SeqPaths {
-    /// The exported graph, taking `input_ids` and `decoder_input_ids`.
+    /// The encoder, or — when [`Self::decoder`] is `None` — a single graph taking `input_ids` and
+    /// `decoder_input_ids` together.
     pub model: std::path::PathBuf,
+    /// The decoder, when the model was exported as a pair. Strongly preferred: see [`Graphs`].
+    pub decoder: Option<std::path::PathBuf>,
     /// `sentencepiece.bpe.model`.
     pub spm: std::path::PathBuf,
     /// `vocab.json`.
@@ -152,8 +177,27 @@ impl Seq2Seq {
             .unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get() / 2))
             .clamp(1, 8);
 
-        let session = build_session(&paths.model, threads)
-            .map_err(|e| Error::Other(format!("cannot load {}: {e}", paths.model.display())))?;
+        let session = match &paths.decoder {
+            Some(decoder) => {
+                if !decoder.is_file() {
+                    return Err(Error::Other(format!(
+                        "no decoder file at {}",
+                        decoder.display()
+                    )));
+                }
+                Graphs::Split {
+                    encoder: build_session(&paths.model, threads).map_err(|e| {
+                        Error::Other(format!("cannot load {}: {e}", paths.model.display()))
+                    })?,
+                    decoder: build_session(decoder, threads).map_err(|e| {
+                        Error::Other(format!("cannot load {}: {e}", decoder.display()))
+                    })?,
+                }
+            }
+            None => Graphs::Single(build_session(&paths.model, threads).map_err(|e| {
+                Error::Other(format!("cannot load {}: {e}", paths.model.display()))
+            })?),
+        };
 
         let spm_bytes = std::fs::read(&paths.spm).map_err(|e| Error::io(paths.spm.as_path(), e))?;
         let model = spm::parse(&spm_bytes)?;
@@ -263,21 +307,61 @@ impl Seq2Seq {
         }
         let input = self.encode(line, target)?;
 
-        let mut session = self.session.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut graphs = self.session.lock().unwrap_or_else(PoisonError::into_inner);
+
+        // The encoder's output, computed once when the export allows it.
+        let context = match &mut *graphs {
+            Graphs::Single(_) => None,
+            Graphs::Split { encoder, .. } => {
+                let ids = Tensor::from_array(([1_usize, input.len()], input.clone()))
+                    .map_err(|e| Error::Other(e.to_string()))?;
+                let outputs = encoder
+                    .run(ort::inputs! { "input_ids" => ids })
+                    .map_err(|e| Error::Other(format!("the encoder failed: {e}")))?;
+                let (shape, values) = outputs["last_hidden_state"]
+                    .try_extract_tensor::<f32>()
+                    .map_err(|e| Error::Other(e.to_string()))?;
+                let shape: Vec<usize> = shape.iter().map(|d| *d as usize).collect();
+                Some((shape, values.to_vec()))
+            }
+        };
 
         let mut decoded: Vec<i64> = vec![EOS];
         for _ in 0..MAX_TOKENS {
-            let encoder = Tensor::from_array(([1_usize, input.len()], input.clone()))
-                .map_err(|e| Error::Other(e.to_string()))?;
-            let decoder = Tensor::from_array(([1_usize, decoded.len()], decoded.clone()))
+            let decoder_ids = Tensor::from_array(([1_usize, decoded.len()], decoded.clone()))
                 .map_err(|e| Error::Other(e.to_string()))?;
 
-            let outputs = session
-                .run(ort::inputs! {
-                    "input_ids" => encoder,
-                    "decoder_input_ids" => decoder,
-                })
-                .map_err(|e| Error::Other(format!("the model failed: {e}")))?;
+            let outputs = match (&mut *graphs, &context) {
+                (Graphs::Single(session), _) => {
+                    let encoder_ids = Tensor::from_array(([1_usize, input.len()], input.clone()))
+                        .map_err(|e| Error::Other(e.to_string()))?;
+                    session
+                        .run(ort::inputs! {
+                            "input_ids" => encoder_ids,
+                            "decoder_input_ids" => decoder_ids,
+                        })
+                        .map_err(|e| Error::Other(format!("the model failed: {e}")))?
+                }
+                (Graphs::Split { decoder, .. }, Some((shape, values))) => {
+                    let hidden = Tensor::from_array((shape.clone(), values.clone()))
+                        .map_err(|e| Error::Other(e.to_string()))?;
+                    // All ones: an utterance is one sequence with nothing padded, so there is
+                    // nothing for the mask to hide. It is required all the same.
+                    let mask =
+                        Tensor::from_array(([1_usize, input.len()], vec![1_i64; input.len()]))
+                            .map_err(|e| Error::Other(e.to_string()))?;
+                    decoder
+                        .run(ort::inputs! {
+                            "input_ids" => decoder_ids,
+                            "encoder_hidden_states" => hidden,
+                            "encoder_attention_mask" => mask,
+                        })
+                        .map_err(|e| Error::Other(format!("the decoder failed: {e}")))?
+                }
+                (Graphs::Split { .. }, None) => {
+                    return Err(Error::Other("the encoder produced nothing".into()));
+                }
+            };
 
             let (shape, logits) = outputs["logits"]
                 .try_extract_tensor::<f32>()
@@ -287,8 +371,8 @@ impl Seq2Seq {
                 return Err(Error::Other("the model returned no logits".into()));
             }
 
-            // The export has no KV cache, so the whole sequence is re-scored each step and the row
-            // that matters is the last one.
+            // The decoder scores the whole partial translation each step; the row that matters is
+            // the last one.
             let row = &logits[logits.len() - vocab_size..];
             let next = row
                 .iter()
@@ -296,7 +380,7 @@ impl Seq2Seq {
                 .max_by(|a, b| a.1.total_cmp(b.1))
                 .map_or(EOS, |(i, _)| i64::try_from(i).unwrap_or(EOS));
 
-            if next == EOS {
+            if next == EOS || next == PAD {
                 break;
             }
             decoded.push(next);
@@ -354,12 +438,56 @@ impl Seq2Seq {
         let mut out = String::new();
         for id in ids {
             // An id outside the vocabulary is a language token or one of the eight made-up words
-            // at the end of it. Neither is speech, so both are dropped.
+            // at the end of it; a control token is punctuation for the model, not for the reader.
+            // Neither is speech, so both are dropped.
+            if CONTROL.contains(id) {
+                continue;
+            }
             if let Some(piece) = self.pieces.get(id) {
                 out.push_str(&piece.replace('▁', " "));
             }
         }
         out.trim().to_string()
+    }
+}
+
+/// Work out which files a directory holds.
+///
+/// Published exports of the same model come in three shapes, and a user who downloaded one should
+/// not have to know which: a split `encoder_int8`/`decoder_int8` pair, the same pair under the
+/// `*_model_quantized` names `optimum` produces, or a single `model.onnx`. Quantized names are
+/// tried first, because someone holding both wanted the small one.
+#[must_use]
+pub fn discover(dir: &Path) -> Seq2SeqPaths {
+    const PAIRS: [(&str, &str); 4] = [
+        ("encoder_int8.onnx", "decoder_int8.onnx"),
+        (
+            "encoder_model_quantized.onnx",
+            "decoder_model_quantized.onnx",
+        ),
+        ("encoder_model_int8.onnx", "decoder_model_int8.onnx"),
+        ("encoder_model.onnx", "decoder_model.onnx"),
+    ];
+    for (encoder, decoder) in PAIRS {
+        if dir.join(encoder).is_file() && dir.join(decoder).is_file() {
+            return Seq2SeqPaths {
+                model: dir.join(encoder),
+                decoder: Some(dir.join(decoder)),
+                spm: dir.join("sentencepiece.bpe.model"),
+                vocab: dir.join("vocab.json"),
+            };
+        }
+    }
+    let quantized = dir.join("model.int8.onnx");
+    Seq2SeqPaths {
+        model: if quantized.is_file() {
+            quantized
+        } else {
+            dir.join("model.onnx")
+        },
+        decoder: None,
+        spm: dir.join("sentencepiece.bpe.model"),
+        vocab: dir.join("vocab.json"),
     }
 }
 
@@ -385,16 +513,7 @@ mod tests {
     }
 
     fn paths(dir: &Path) -> Seq2SeqPaths {
-        let quantized = dir.join("model.int8.onnx");
-        Seq2SeqPaths {
-            model: if quantized.is_file() {
-                quantized
-            } else {
-                dir.join("model.onnx")
-            },
-            spm: dir.join("sentencepiece.bpe.model"),
-            vocab: dir.join("vocab.json"),
-        }
+        discover(dir)
     }
 
     #[test]
@@ -402,6 +521,7 @@ mod tests {
         let err = Seq2Seq::load(
             &Seq2SeqPaths {
                 model: "/nonexistent/model.onnx".into(),
+                decoder: None,
                 spm: "/nonexistent/spm".into(),
                 vocab: "/nonexistent/vocab.json".into(),
             },
@@ -531,6 +651,30 @@ mod tests {
         let out = mt.translate("开放时间早上9点至下午5点。", "en").unwrap();
         assert!(out.contains(' '), "no word boundaries in `{out}`");
         assert!(!out.contains('▁'), "raw sentencepiece markers in `{out}`");
+    }
+
+    /// Found in a translation file, not in a test: the decoder finished a clause and then emitted
+    /// 116 consecutive `<pad>` tokens, every one of which was written to the vault as literal
+    /// `<pad>` text. `<pad>` is in `vocab.json`, so it detokenized perfectly happily.
+    #[test]
+    fn control_tokens_never_reach_the_text() {
+        let Some(dir) = model_dir() else {
+            eprintln!("skipping: set SUMMO_TEST_SEQ2SEQ");
+            return;
+        };
+        let mt = Seq2Seq::load(&paths(&dir), Some(8)).unwrap();
+        for (line, lang) in [
+            (
+                "Bên mình cần thêm hai ngày để test tải, không thì lúc go-live sẽ vỡ.",
+                "ja",
+            ),
+            ("Chiều nay mình chốt lại spec API.", "en"),
+        ] {
+            let out = mt.translate(line, lang).unwrap();
+            for marker in ["<pad>", "</s>", "<s>", "<unk>"] {
+                assert!(!out.contains(marker), "`{marker}` in `{out}`");
+            }
+        }
     }
 
     #[test]

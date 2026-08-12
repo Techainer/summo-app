@@ -292,7 +292,7 @@
     "mt_run": "Serve it with `llama-server -m milmmt-46-1b.gguf --port 8080`, or from Ollama. About 800 MB on disk.",
     "mt_where": "Runs",
     "mt_in_app": "In Summo",
-    "mt_pull": "Install it once with `summo pull milmmt-46-1b`. About 800 MB, and nothing else to run. `milmmt-46-4b` is better and about twice as slow."
+    "mt_pull": "Install it once with `summo pull small100` — 611 MB, and nothing else to run. `milmmt-46-1b` is more accurate at 806 MB."
   },
   "status": {
     "top_bar": "Top bar",

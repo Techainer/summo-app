@@ -292,7 +292,7 @@
     "mt_run": "Chạy bằng `llama-server -m milmmt-46-1b.gguf --port 8080`, hoặc qua Ollama. Khoảng 800 MB trên đĩa.",
     "mt_where": "Chạy ở",
     "mt_in_app": "Trong Summo",
-    "mt_pull": "Cài một lần bằng `summo pull milmmt-46-1b`. Khoảng 800 MB, không cần chạy thêm gì. `milmmt-46-4b` dịch tốt hơn và chậm khoảng gấp đôi."
+    "mt_pull": "Cài một lần bằng `summo pull small100` — 611 MB, không cần chạy thêm gì. `milmmt-46-1b` dịch chuẩn hơn, 806 MB."
   },
   "status": {
     "top_bar": "Thanh trên cùng",
