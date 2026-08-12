@@ -163,13 +163,13 @@ export function Setup({ onDone }: { onDone: () => void }) {
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-3">
                           <span className="font-medium">{m.name}</span>
-                          <span className="text-fg-faint text-[13px]">
+                          <span className="text-fg-faint text-meta">
                             {m.installed ? t("setup.installed") : size(m.size_bytes)}
                           </span>
                         </span>
-                        <span className="text-fg-dim mt-0.5 block text-[13px]">{m.reason}</span>
+                        <span className="text-fg-dim text-meta mt-0.5 block">{m.reason}</span>
                         {m.license && (
-                          <span className="text-fg-faint mt-0.5 block text-[12px]">
+                          <span className="text-fg-faint text-micro mt-0.5 block">
                             {m.license}
                             {needsConsent(m) ? ` · ${t("setup.upstream")}` : ""}
                           </span>
@@ -195,7 +195,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
                           </span>
                         )}
                         {job?.error && (
-                          <span className="text-danger mt-1 block text-[12px]">{job.error}</span>
+                          <span className="text-danger text-micro mt-1 block">{job.error}</span>
                         )}
                       </span>
                     </label>
@@ -206,7 +206,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
           )}
 
           {selected && needsConsent(selected) && (
-            <p className="border-blocked/30 bg-blocked-soft text-blocked mt-3 rounded-xl border p-3 text-[13px]">
+            <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-3 rounded-xl border p-3">
               {t("setup.upstream_note")}
             </p>
           )}

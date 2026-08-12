@@ -82,7 +82,7 @@ export function CaptureControls() {
       </fieldset>
 
       {translating(capture) && (
-        <p className="text-fg-dim mt-2 text-[13px]">
+        <p className="text-fg-dim text-meta mt-2">
           {/* The mistake this catches: translation on, system audio off, so the app dutifully
               translates the user's own voice back at them and looks broken. */}
           {hearsOthers(capture) ? t("record.translate_hint") : t("record.translate_needs_system")}

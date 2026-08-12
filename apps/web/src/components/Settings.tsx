@@ -34,12 +34,12 @@ interface ProviderInfo {
 }
 
 /** One row of the form: a fixed-width label beside its control. */
-const FIELD = "mt-3.5 flex items-center gap-3 text-[13px] text-fg-dim";
+const FIELD = "mt-3.5 flex items-center gap-3 text-meta text-fg-dim";
 const LABEL = "w-[150px] shrink-0";
 const CONTROL =
   "flex-1 rounded-lg border border-line bg-bg-soft px-2.5 py-1.5 text-sm text-fg focus:outline-none focus-visible:border-accent";
 /** The note under a field. Indented to line up with the control it explains. */
-const HINT = "mt-1.5 ml-[162px] text-[12px] leading-normal text-fg-faint";
+const HINT = "mt-1.5 ml-[162px] text-micro leading-normal text-fg-faint";
 
 /** The pseudo-entry for "some other OpenAI-compatible server". Not a preset; there is no list of them. */
 const CUSTOM = "custom";
@@ -146,7 +146,11 @@ export function Settings({ handshake }: { handshake: Handshake }) {
   }, [llm, post]);
 
   if (!llm)
-    return <p className="text-fg-faint mt-16 text-center">{status ?? t("settings.loading")}</p>;
+    return (
+      <p className="text-fg-faint grid h-full place-items-center px-6 text-center">
+        {status ?? t("settings.loading")}
+      </p>
+    );
 
   // The stored provider is either a known id or a URL; the picker shows t("settings.other_endpoint") for a URL.
   const selected = providers.some((p) => p.id === llm.provider) ? llm.provider : CUSTOM;
@@ -163,7 +167,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       <LanguagePicker />
 
       <h2 className="text-xl font-semibold tracking-tight">{t("settings.llm_heading")}</h2>
-      <p className="text-fg-faint my-4 text-[13px] leading-normal">
+      <p className="text-fg-faint text-meta my-4 leading-normal">
         {t("settings.llm_hint_head")}
         <b>{t("settings.always_local")}</b>
         {t("settings.llm_hint_tail")}
@@ -263,7 +267,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
           nothing — which is what lets someone with no API key at all still translate every
           meeting they record. */}
       <h2 className="mt-8 text-xl font-semibold tracking-tight">{t("settings.mt_heading")}</h2>
-      <p className="text-fg-faint my-4 text-[13px] leading-normal">{t("settings.mt_hint")}</p>
+      <p className="text-fg-faint text-meta my-4 leading-normal">{t("settings.mt_hint")}</p>
 
       <Checkbox
         className="mt-3.5"
@@ -366,13 +370,13 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         >
           {testing ? t("settings.testing") : t("settings.test")}
         </button>
-        {status && <span className="text-fg-faint text-[12px]">{status}</span>}
+        {status && <span className="text-fg-faint text-micro">{status}</span>}
       </div>
 
       {result && (
         <p
           data-testid="test-result"
-          className={`mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-[13px] ${
+          className={`text-meta mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 ${
             result.ok ? "border-accent/30 bg-accent-soft" : "border-rec/30 bg-rec-soft text-rec"
           }`}
         >
@@ -380,7 +384,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
           <br />
           {result.local ? t("settings.local_only_comma") : t("settings.sent_here")}
           <br />
-          <span className="text-fg-faint text-[12px]">{result.detail}</span>
+          <span className="text-fg-faint text-micro">{result.detail}</span>
         </p>
       )}
       <About />
@@ -417,7 +421,7 @@ function LanguagePicker() {
           ))}
         </select>
       </label>
-      <p className="text-fg-faint my-4 text-[13px] leading-normal">{t("settings.language_hint")}</p>
+      <p className="text-fg-faint text-meta my-4 leading-normal">{t("settings.language_hint")}</p>
     </>
   );
 }

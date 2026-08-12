@@ -60,7 +60,7 @@ export function SegmentedControl<T extends string>({
             value={option.value}
             className={cn(
               "relative rounded-full font-medium transition-colors",
-              size === "sm" ? "h-7 px-3 text-[13px]" : "h-8 px-4 text-sm",
+              size === "sm" ? "text-meta h-7 px-3" : "h-8 px-4 text-sm",
               selected ? "text-accent-fg" : "text-fg-dim hover:text-fg",
             )}
           >

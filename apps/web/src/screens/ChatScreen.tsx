@@ -98,7 +98,7 @@ export function ChatScreen() {
             </p>
 
             {exchange.error && (
-              <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
+              <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
                 {exchange.error}
               </p>
             )}
@@ -128,7 +128,7 @@ export function ChatScreen() {
                             )
                           }
                           className={cn(
-                            "border-line rounded-full border px-2.5 py-1 text-[12px]",
+                            "border-line text-micro rounded-full border px-2.5 py-1",
                             "text-fg-dim hover:border-accent/40 hover:text-accent",
                           )}
                         >
@@ -142,7 +142,7 @@ export function ChatScreen() {
             )}
 
             {!exchange.answer && !exchange.error && (
-              <p className="text-fg-faint text-[13px]">{t("chat.searching")}</p>
+              <p className="text-fg-faint text-meta">{t("chat.searching")}</p>
             )}
           </div>
         ))}

@@ -117,7 +117,7 @@ export function Sidebar({
       <div className="border-line mt-4 border-t" />
 
       <nav aria-label={t("nav.folders")} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <p className="text-fg-faint px-2 pb-1.5 text-[11px] font-semibold tracking-wider uppercase">
+        <p className="text-fg-faint text-micro px-2 pb-1.5 font-semibold tracking-wider uppercase">
           {t("nav.folders")}
         </p>
         <ul className="space-y-0.5">
@@ -143,7 +143,7 @@ export function Sidebar({
             </li>
           ))}
           {rows.length === 0 && (
-            <li className="text-fg-faint px-2 py-1 text-[13px]">{t("nav.no_folders")}</li>
+            <li className="text-fg-faint text-meta px-2 py-1">{t("nav.no_folders")}</li>
           )}
         </ul>
       </nav>

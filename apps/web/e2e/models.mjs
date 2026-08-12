@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { boot } from "./daemon.mjs";
+import { mirror } from "./mirror.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REGISTRY = join(HERE, "../../../../summo-registry");
@@ -21,7 +22,10 @@ const REGISTRY = join(HERE, "../../../../summo-registry");
 const problems = [];
 const fail = (message) => problems.push(message);
 
-const engine = await boot({ name: "models" });
+// The two models this suite installs are served from this machine. Reaching github.com twice per
+// run made a screen test fail whenever the network or the host felt like it.
+const local = await mirror(["silero-vad-v5", "sense-voice-small"], { name: "models" });
+const engine = await boot({ name: "models", registry: local.registry });
 const browser = await chromium.launch();
 const context = await browser.newContext({
   locale: "vi-VN",
@@ -76,7 +80,11 @@ try {
   const vad = page.locator("article", { hasText: "silero-vad-v5" });
   await vad.getByRole("button", { name: "Cài", exact: true }).click();
   await page.waitForTimeout(400);
-  await vad.getByText("Đã cài").waitFor({ timeout: 60000 });
+  // Two minutes, matching the sense-voice wait below. This is a download over a real HTTP client,
+  // and how long it takes is a fact about the machine — this suite failed at 60 s only when it ran
+  // last in a queue of eleven browsers. A timeout that measures load rather than behaviour is a
+  // test that fails for the wrong reason.
+  await vad.getByText("Đã cài").waitFor({ timeout: 120000 });
 
   // Two clicks, not a dialog: re-downloading a gigabyte is a real cost, and a modal is one more
   // thing to dismiss while tidying up several models.
@@ -145,6 +153,7 @@ try {
 } finally {
   await browser.close();
   engine.stop();
+  await local.stop();
 }
 
 if (problems.length) {

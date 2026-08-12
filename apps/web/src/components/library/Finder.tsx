@@ -42,7 +42,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
   return (
     <div className="flex flex-col gap-3" data-testid="finder">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-fg-faint text-[11px] font-semibold tracking-wide uppercase">
+        <h2 className="text-fg-faint text-micro font-semibold tracking-wide uppercase">
           {t("finder.title")}
         </h2>
         {/* One control that undoes every filter at once. Clearing them one at a time is three
@@ -50,7 +50,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
         {active && (
           <button
             type="button"
-            className="text-fg-dim hover:bg-bg-soft hover:text-fg rounded-md px-1.5 py-0.5 text-[12px]"
+            className="text-fg-dim hover:bg-bg-soft hover:text-fg text-micro rounded-md px-1.5 py-0.5"
             onClick={() => {
               onFolder(undefined);
               onTags([]);
@@ -74,7 +74,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
               aria-pressed={folder === node.path}
               style={{ paddingInlineStart: `${8 + node.depth * 14}px` }}
               className={cn(
-                "flex items-center gap-1.5 rounded-md py-1 pe-2 text-left text-[13px] transition-colors",
+                "text-meta flex items-center gap-1.5 rounded-md py-1 pe-2 text-left transition-colors",
                 folder === node.path
                   ? "bg-bg-soft text-fg font-medium"
                   : "text-fg-dim hover:bg-bg-soft hover:text-fg",
@@ -114,7 +114,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
                   onTags(on ? tags.filter((x) => x !== each.name) : [...tags, each.name])
                 }
                 className={cn(
-                  "rounded-full border px-2.5 py-0.5 text-[12px] transition-colors",
+                  "text-micro rounded-full border px-2.5 py-0.5 transition-colors",
                   on
                     ? "border-accent bg-accent-soft text-accent"
                     : "border-line text-fg-dim hover:border-line-strong hover:text-fg",
@@ -139,7 +139,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
                 aria-pressed={on}
                 onClick={() => onColour(on ? undefined : each.name)}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12px] transition-colors",
+                  "text-micro flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 transition-colors",
                   on
                     ? "border-fg-faint bg-bg-soft text-fg"
                     : "border-line text-fg-dim hover:border-line-strong hover:text-fg",
@@ -218,7 +218,7 @@ export function ColourPicker({
         disabled={disabled}
         onClick={() => onChoose(null)}
         className={cn(
-          "text-fg-faint grid size-6 place-items-center rounded-full border text-[11px] transition-colors disabled:opacity-50",
+          "text-fg-faint text-micro grid size-6 place-items-center rounded-full border transition-colors disabled:opacity-50",
           chosen === null ? "border-fg-faint bg-bg-soft" : "border-line hover:border-line-strong",
         )}
       >

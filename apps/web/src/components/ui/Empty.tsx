@@ -65,8 +65,8 @@ export function Empty({
       <span className="bg-bg-soft ring-line grid size-14 place-items-center rounded-full ring-1">
         <Icon aria-hidden="true" className="text-fg-faint size-6 stroke-[1.5]" />
       </span>
-      <p className="text-fg text-[15px] font-medium">{title}</p>
-      {hint && <p className="text-fg-faint max-w-sm text-[13px] leading-relaxed">{hint}</p>}
+      <p className="text-fg text-body font-medium">{title}</p>
+      {hint && <p className="text-fg-faint text-meta max-w-sm leading-relaxed">{hint}</p>}
       {action}
     </motion.div>
   );
@@ -81,6 +81,6 @@ export function Empty({
  */
 export function EmptyColumn({ children }: { children: ReactNode }) {
   return (
-    <p className="text-fg-faint px-2 py-6 text-center text-[12px] leading-relaxed">{children}</p>
+    <p className="text-fg-faint text-micro px-2 py-6 text-center leading-relaxed">{children}</p>
   );
 }

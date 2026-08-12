@@ -1,6 +1,7 @@
 import { PencilLine } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Avatar } from "./ui";
 import { cn } from "../lib/cn";
 import { formatDuration } from "../lib/duration";
 import { useI18n, useT } from "../i18n/context";
@@ -345,7 +346,7 @@ export function Library({
         {view?.skipped.map((s) => (
           <p
             key={s.path}
-            className="border-blocked/30 bg-blocked-soft rounded-lg border px-2.5 py-1.5 text-[12px]"
+            className="border-blocked/30 bg-blocked-soft text-micro rounded-lg border px-2.5 py-1.5"
           >
             {t("library.unreadable", { path: s.path, reason: s.reason })}
           </p>
@@ -357,7 +358,7 @@ export function Library({
         className="min-h-0 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
       >
         {error && (
-          <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
+          <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
             {error}
           </p>
         )}
@@ -368,7 +369,7 @@ export function Library({
           <button
             type="button"
             onClick={() => setSelected(null)}
-            className="text-fg-dim hover:bg-bg-soft hover:text-fg -ms-1 mb-3 rounded-lg px-2 py-1 text-[13px]"
+            className="text-fg-dim hover:bg-bg-soft hover:text-fg text-meta -ms-1 mb-3 rounded-lg px-2 py-1"
           >
             <span aria-hidden="true">←</span> {t("library.title")}
           </button>
@@ -435,7 +436,7 @@ function MeetingRow({
     >
       {/* A note has no time of day worth showing — it was typed, not scheduled — so the column
           carries a mark instead. Same width either way, so the titles still line up. */}
-      <span className="tabular text-fg-faint shrink-0 text-[12px]">
+      <span className="tabular text-fg-faint text-micro shrink-0">
         {meeting.kind === "note" ? (
           <PencilLine aria-hidden="true" className="mx-auto size-3.5 stroke-[1.75]" />
         ) : (
@@ -451,10 +452,23 @@ function MeetingRow({
             {meeting.title}
           </span>
         </span>
-        <span className="text-fg-faint text-[12px]">
-          {meeting.kind === "note" ? t("library.a_note") : formatDuration(meeting.duration, locale)}
-          {meeting.participants.length > 0 && ` · ${meeting.participants.join(", ")}`}
-          {meeting.kind !== "note" && !meeting.has_summary && t("meeting.not_summarised_suffix")}
+        <span className="text-fg-faint text-micro flex items-center gap-1.5">
+          {/* The discs carry who, the text carries how long. Names stay in the line beside them:
+              four initials are a way to recognise a row already read, not a way to read it. */}
+          {meeting.participants.length > 0 && (
+            <span className="flex shrink-0 -space-x-1">
+              {meeting.participants.slice(0, 3).map((who) => (
+                <Avatar key={who} name={who} size="sm" className="ring-bg ring-2" />
+              ))}
+            </span>
+          )}
+          <span className="truncate">
+            {meeting.kind === "note"
+              ? t("library.a_note")
+              : formatDuration(meeting.duration, locale)}
+            {meeting.participants.length > 0 && ` · ${meeting.participants.join(", ")}`}
+            {meeting.kind !== "note" && !meeting.has_summary && t("meeting.not_summarised_suffix")}
+          </span>
         </span>
       </span>
     </motion.button>
@@ -484,10 +498,10 @@ function SearchResults({
             <p
               key={i}
               data-testid="excerpt"
-              className="text-fg-dim [&_b]:text-fg my-0.5 ml-[42px] text-[13px] leading-normal [&_b]:font-medium"
+              className="text-fg-dim [&_b]:text-fg text-meta my-0.5 ml-[42px] leading-normal [&_b]:font-medium"
             >
               {excerpt.t0 !== null && (
-                <span className="tabular text-fg-faint mr-1.5 text-[11px]">
+                <span className="tabular text-fg-faint text-micro mr-1.5">
                   {timestamp(excerpt.t0)}
                 </span>
               )}
@@ -495,7 +509,7 @@ function SearchResults({
             </p>
           ))}
           {hit.matches > hit.excerpts.length && (
-            <p className="text-fg-faint my-0.5 ml-[42px] text-[12px]">
+            <p className="text-fg-faint text-micro my-0.5 ml-[42px]">
               {t("library.more_lines", {
                 count: hit.matches - hit.excerpts.length,
               })}
@@ -527,7 +541,7 @@ function Dashboard({ stats, onRecord }: { stats?: Stats; onRecord: () => void })
         <Tile label={t("library.people")} value={String(stats.people)} />
         <Tile label={t("meeting.no_summary")} value={String(stats.without_summary)} />
       </div>
-      <p className="text-fg-faint my-4 text-[13px]">{t("library.vault_hint")}</p>
+      <p className="text-fg-faint text-meta my-4">{t("library.vault_hint")}</p>
       <button
         type="button"
         className="bg-accent text-accent-fg rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
@@ -555,8 +569,8 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
       >
         {value}
       </span>
-      <span className="text-fg-dim text-[12px]">{label}</span>
-      {note && <span className="text-fg-faint text-[11px]">{note}</span>}
+      <span className="text-fg-dim text-micro">{label}</span>
+      {note && <span className="text-fg-faint text-micro">{note}</span>}
     </div>
   );
 }
@@ -614,7 +628,7 @@ function MeetingPane({
           onChange={(e) => setTitle(e.target.value)}
           onBlur={() => title.trim() && title !== summary.title && onRename(title.trim())}
         />
-        <p className="text-fg-faint text-[13px]">
+        <p className="text-fg-faint text-meta">
           {dayLabel(summary.day, localDay(), words)} · {timeOfDay(summary.date)} ·{" "}
           {formatDuration(summary.duration, locale)}
           {detail.audio.length > 0 &&
@@ -622,10 +636,10 @@ function MeetingPane({
         </p>
 
         <div className="border-line mt-2 flex flex-wrap items-center gap-x-4 gap-y-2.5 border-b pb-4">
-          <label className="text-fg-faint flex items-center gap-1.5 text-[13px]">
+          <label className="text-fg-faint text-meta flex items-center gap-1.5">
             {t("library.by_folder")}
             <select
-              className="border-line bg-bg-soft text-fg focus-visible:border-accent rounded-lg border px-2 py-1 text-[13px] focus:outline-none"
+              className="border-line bg-bg-soft text-fg focus-visible:border-accent text-meta rounded-lg border px-2 py-1 focus:outline-none"
               value={summary.folder}
               disabled={busy}
               onChange={(e) => onMove(e.target.value)}
@@ -638,10 +652,10 @@ function MeetingPane({
               ))}
             </select>
           </label>
-          <label className="text-fg-faint flex min-w-0 grow basis-56 items-center gap-1.5 text-[13px]">
+          <label className="text-fg-faint text-meta flex min-w-0 grow basis-56 items-center gap-1.5">
             {t("library.by_tag")}
             <input
-              className="border-line bg-bg-soft text-fg focus-visible:border-accent min-w-32 flex-1 rounded-lg border px-2 py-1 text-[13px] focus:outline-none"
+              className="border-line bg-bg-soft text-fg focus-visible:border-accent text-meta min-w-32 flex-1 rounded-lg border px-2 py-1 focus:outline-none"
               value={tags}
               disabled={busy}
               aria-label={t("library.by_tag")}
@@ -664,13 +678,13 @@ function MeetingPane({
             onChoose={onColour}
           />
           {confirming ? (
-            <span className="text-fg-dim flex items-center gap-1.5 text-[13px]">
+            <span className="text-fg-dim text-meta flex items-center gap-1.5">
               {t("library.trash_confirm")}
               <button
                 type="button"
                 onClick={onTrash}
                 disabled={busy}
-                className="border-rec text-rec hover:bg-rec-soft rounded-md border px-2.5 py-1 text-[13px] disabled:opacity-50"
+                className="border-rec text-rec hover:bg-rec-soft text-meta rounded-md border px-2.5 py-1 disabled:opacity-50"
               >
                 {t("library.trash_yes")}
               </button>
@@ -701,7 +715,7 @@ function MeetingPane({
         <ol className="m-0 list-none p-0">
           {detail.transcript.map((segment) => (
             <li key={segment.seq} data-testid="transcript-line">
-              <span className="tabular text-fg-faint mr-1.5 text-[11px]">
+              <span className="tabular text-fg-faint text-micro mr-1.5">
                 {timestamp(segment.t0)}
               </span>
               <b>{segment.speaker ?? "?"}</b>

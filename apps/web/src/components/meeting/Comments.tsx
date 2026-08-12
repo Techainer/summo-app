@@ -100,12 +100,12 @@ export function Comments({
 
   return (
     <section className="flex min-h-0 flex-col">
-      <h2 className="text-fg-faint px-1 pb-2 text-[11px] font-semibold tracking-wider uppercase">
+      <h2 className="text-fg-faint text-micro px-1 pb-2 font-semibold tracking-wider uppercase">
         {t("comments.title")}
       </h2>
 
       {error && (
-        <p role="alert" className="text-danger mb-2 text-[13px]">
+        <p role="alert" className="text-danger text-meta mb-2">
           {error}
         </p>
       )}
@@ -129,7 +129,7 @@ export function Comments({
                   fromAgent ? "border-accent/30 bg-accent-soft" : "border-line bg-bg-soft"
                 }`}
               >
-                <div className="flex items-baseline gap-2 text-[12px]">
+                <div className="text-micro flex items-baseline gap-2">
                   <b className="font-medium">{annotation.author}</b>
                   <span className="text-fg-faint">{writtenAt(annotation.at)}</span>
                   {label !== null && (
@@ -137,7 +137,7 @@ export function Comments({
                       type="button"
                       disabled={seq === null || !onSeek}
                       onClick={() => seq !== null && onSeek?.(seq)}
-                      className="tabular bg-bg text-fg-dim enabled:hover:text-accent rounded-full px-1.5 text-[11px] disabled:cursor-default"
+                      className="tabular bg-bg text-fg-dim enabled:hover:text-accent text-micro rounded-full px-1.5 disabled:cursor-default"
                     >
                       {label}
                     </button>
@@ -155,7 +155,7 @@ export function Comments({
                   </button>
                 </div>
 
-                <p className="mt-1 text-[13px] leading-relaxed whitespace-pre-wrap">
+                <p className="text-meta mt-1 leading-relaxed whitespace-pre-wrap">
                   {annotation.body}
                 </p>
 
@@ -165,7 +165,7 @@ export function Comments({
                       key={reaction.emoji}
                       type="button"
                       onClick={() => void react(annotation.id, reaction.emoji)}
-                      className={`rounded-full border px-1.5 py-0.5 text-[12px] ${
+                      className={`text-micro rounded-full border px-1.5 py-0.5 ${
                         reaction.by.includes(me)
                           ? "border-accent bg-accent-soft text-accent"
                           : "border-line"
@@ -181,7 +181,7 @@ export function Comments({
                       type="button"
                       aria-label={t("comments.react", { emoji })}
                       onClick={() => void react(annotation.id, emoji)}
-                      className="rounded-full px-1 text-[12px] opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 focus:opacity-100"
+                      className="text-micro rounded-full px-1 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 focus:opacity-100"
                     >
                       {emoji}
                     </button>
@@ -193,7 +193,7 @@ export function Comments({
         </AnimatePresence>
 
         {ordered.length === 0 && (
-          <li className="text-fg-faint px-1 py-4 text-[13px]">{t("comments.empty")}</li>
+          <li className="text-fg-faint text-meta px-1 py-4">{t("comments.empty")}</li>
         )}
       </ul>
 
@@ -209,7 +209,7 @@ export function Comments({
           }}
           placeholder={t("comments.placeholder")}
           aria-label={t("comments.title")}
-          className="border-line bg-bg-soft focus:border-accent min-w-0 flex-1 rounded-xl border px-3 py-1.5 text-[13px] outline-none"
+          className="border-line bg-bg-soft focus:border-accent text-meta min-w-0 flex-1 rounded-xl border px-3 py-1.5 outline-none"
         />
         <Button size="sm" onClick={() => void send()} disabled={!draft.trim() || busy}>
           {t("comments.send")}

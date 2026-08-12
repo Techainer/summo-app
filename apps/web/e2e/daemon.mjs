@@ -121,7 +121,7 @@ Họ muốn bản dùng thử.
  * `port: 0` asks the operating system for a free one, so two suites running at once cannot collide
  * — which is what a fixed port did the first time this was tried in parallel.
  */
-export async function boot({ name = "e2e", seed = true } = {}) {
+export async function boot({ name = "e2e", seed = true, registry = REGISTRY } = {}) {
   const home = join("/tmp", `summo-${name}-${process.pid}`);
   rmSync(home, { recursive: true, force: true });
   mkdirSync(home, { recursive: true });
@@ -132,8 +132,9 @@ export async function boot({ name = "e2e", seed = true } = {}) {
     stdio: "pipe",
     // The registry the catalogue reads from. Pointed at the checkout beside this one so the suite
     // tests a real registry without depending on a deployed CDN — and so it keeps passing when the
-    // network is not there.
-    env: { ...process.env, SUMMO_REGISTRY: REGISTRY },
+    // network is not there. A caller can substitute one: `models.mjs` builds a registry whose file
+    // URLs point at a local server, so installing does not reach the public internet either.
+    env: { ...process.env, SUMMO_REGISTRY: registry },
   });
   // Detached from Node's own exit accounting. A suite that forgets `stop()` should end with a
   // failed assertion, not hang until whatever is running it gives up — which is how a passing

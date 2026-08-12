@@ -128,7 +128,11 @@ export function ModelsScreen() {
   );
 
   if (!models) {
-    return <p className="text-fg-faint mt-24 text-center">{error ?? t("common.loading")}</p>;
+    return (
+      <p className="text-fg-faint grid h-full place-items-center text-center">
+        {error ?? t("common.loading")}
+      </p>
+    );
   }
 
   const groups = byTask(models);
@@ -136,22 +140,22 @@ export function ModelsScreen() {
   return (
     <div className="p-5" data-testid="models">
       <h1 className="text-xl font-semibold tracking-tight">{t("models.title")}</h1>
-      <p className="text-fg-faint mt-2 max-w-2xl text-[13px] leading-relaxed">{t("models.hint")}</p>
+      <p className="text-fg-faint text-meta mt-2 max-w-2xl leading-relaxed">{t("models.hint")}</p>
       {/* What they cost, which is why somebody opens this screen a second time. */}
       {installedBytes(models) > 0 && (
-        <p className="text-fg-dim tabular mt-1.5 text-[12px]">
+        <p className="text-fg-dim tabular text-micro mt-1.5">
           {t("models.on_disk", { size: size(installedBytes(models)) })}
         </p>
       )}
 
       {!reachable && (
-        <p className="border-blocked/30 bg-blocked-soft text-blocked mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-[13px]">
+        <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-4 flex items-center gap-2 rounded-lg border px-3 py-2">
           <CloudOff aria-hidden="true" className="size-4 shrink-0" />
           {t("models.offline")}
         </p>
       )}
       {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec mt-4 rounded-lg border px-3 py-2 text-[13px]">
+        <p className="border-rec/30 bg-rec-soft text-rec text-meta mt-4 rounded-lg border px-3 py-2">
           {error}
         </p>
       )}
@@ -161,7 +165,7 @@ export function ModelsScreen() {
       ) : (
         groups.map((group) => (
           <section key={group.task} className="mt-7">
-            <h2 className="text-fg-faint text-[11px] font-semibold tracking-wider uppercase">
+            <h2 className="text-fg-faint text-micro font-semibold tracking-wider uppercase">
               {t(`models.task_${group.task.replace("-", "_")}`)}
             </h2>
             {/* Cards arrive rather than appear. A grid of eight that pops in at once reads as a
@@ -231,8 +235,8 @@ function Card({
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-[15px] leading-snug font-medium">{model.name}</h3>
-          <p className="text-fg-faint tabular mt-0.5 text-[12px]">
+          <h3 className="text-body leading-snug font-medium">{model.name}</h3>
+          <p className="text-fg-faint tabular text-micro mt-0.5">
             {model.id}
             {model.size_bytes > 0 && ` · ${size(model.size_bytes)}`}
           </p>
@@ -243,7 +247,7 @@ function Card({
                 catalogue decorative: a user could install a Japanese model and record in
                 Vietnamese with no indication of why. */}
             {inUse ? (
-              <span className="text-accent text-[12px] font-medium">{t("models.in_use")}</span>
+              <span className="text-accent text-micro font-medium">{t("models.in_use")}</span>
             ) : (
               roleFor(model.task) !== null && (
                 <Button size="sm" variant="secondary" onClick={onUse}>
@@ -252,7 +256,7 @@ function Card({
               )
             )}
             {!inUse && (
-              <span className="text-done text-[12px] font-medium">{t("models.installed")}</span>
+              <span className="text-done text-micro font-medium">{t("models.installed")}</span>
             )}
             <Button
               size="sm"
@@ -290,7 +294,7 @@ function Card({
           those is unreadable before a word of it is read. Three lines is enough to decide whether
           to keep reading. */}
       {model.description && (
-        <p className="text-fg-dim mt-2 line-clamp-3 text-[13px] leading-relaxed">
+        <p className="text-fg-dim text-meta mt-2 line-clamp-3 leading-relaxed">
           {model.description}
         </p>
       )}
@@ -300,7 +304,7 @@ function Card({
           <span
             key={tag.label}
             className={cn(
-              "rounded-full border px-2 py-0.5 text-[11px]",
+              "text-micro rounded-full border px-2 py-0.5",
               tag.kind === "warn" && "border-blocked/40 text-blocked",
               tag.kind === "good" && "border-accent/40 text-accent",
               tag.kind === "plain" && "border-line text-fg-faint",
@@ -313,12 +317,12 @@ function Card({
 
       {/* The two facts that cost an afternoon if they turn up at the download instead of here. */}
       {!model.fits && (
-        <p className="text-blocked mt-2 text-[12px]">
+        <p className="text-blocked text-micro mt-2">
           {t("models.needs_ram", { mb: model.min_ram_mb })}
         </p>
       )}
       {!model.redistributable && !model.installed && (
-        <p className="text-fg-faint mt-2 text-[12px]">{t("models.upstream")}</p>
+        <p className="text-fg-faint text-micro mt-2">{t("models.upstream")}</p>
       )}
 
       {running && (
@@ -329,13 +333,13 @@ function Card({
               style={{ width: `${done ?? 0}%` }}
             />
           </div>
-          <p className="text-fg-faint tabular mt-1 text-[11px]">
+          <p className="text-fg-faint tabular text-micro mt-1">
             {done === null ? t("models.starting") : `${done}%`}
           </p>
         </div>
       )}
       {job?.state === "failed" && (
-        <p className="text-rec mt-2 text-[12px]">{job.error ?? t("models.failed")}</p>
+        <p className="text-rec text-micro mt-2">{job.error ?? t("models.failed")}</p>
       )}
     </motion.article>
   );

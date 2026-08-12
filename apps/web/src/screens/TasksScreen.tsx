@@ -2,6 +2,7 @@ import { CheckCircle2, Circle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  Avatar,
   Button,
   Card,
   CardBody,
@@ -104,16 +105,24 @@ export function TasksScreen() {
   if (error && !board) {
     return (
       <div className="p-5">
-        <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
+        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
           {error}
         </p>
       </div>
     );
   }
-  if (!board) return <p className="text-fg-faint mt-24 text-center">{t("tasks.opening")}</p>;
+  if (!board)
+    return (
+      <p className="text-fg-faint grid h-full place-items-center text-center">
+        {t("tasks.opening")}
+      </p>
+    );
 
   return (
-    <div className="p-5">
+    // A column that fills the pane, so the board below the header can be told to take what is left.
+    // Four kanban lanes 180px tall with 300px of background under them read as a screen that failed
+    // to load; a lane is a place you drop things into and it should look like one.
+    <div className="flex h-full min-h-0 flex-col p-5">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold tracking-tight">{t("tasks.heading")}</h1>
         <SegmentedControl
@@ -127,13 +136,13 @@ export function TasksScreen() {
       </div>
 
       {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec mt-3 rounded-lg border px-3 py-2 text-[13px]">
+        <p className="border-rec/30 bg-rec-soft text-rec text-meta mt-3 rounded-lg border px-3 py-2">
           {error}
         </p>
       )}
 
       {view === "people" ? (
-        <>
+        <div className="flex min-h-0 flex-1 flex-col">
           {board.owners.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               <FilterChip
@@ -152,7 +161,7 @@ export function TasksScreen() {
             </div>
           )}
 
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid min-h-0 flex-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             {COLUMNS.map((status) => {
               const items = forOwner(board[status], owner);
               return (
@@ -176,13 +185,13 @@ export function TasksScreen() {
               );
             })}
           </div>
-        </>
+        </div>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto">
           {board.agent.length === 0 ? (
-            <p className="text-fg-faint mt-16 text-center">
+            <p className="text-fg-faint grid h-full place-items-center px-6 text-center">
               {t("tasks.agent_empty_head")}{" "}
-              <code className="tabular text-[13px]">- [ ] @agent …</code>{" "}
+              <code className="tabular text-meta">- [ ] @agent …</code>{" "}
               {t("tasks.agent_empty_tail")}
             </p>
           ) : (
@@ -223,7 +232,7 @@ function FilterChip({ label, on, onClick }: { label: string; on: boolean; onClic
       onClick={onClick}
       aria-pressed={on}
       className={cn(
-        "rounded-full border px-2.5 py-1 text-[13px] transition-colors",
+        "text-meta rounded-full border px-2.5 py-1 transition-colors",
         on
           ? "border-accent/40 bg-accent-soft text-accent"
           : "border-line text-fg-dim hover:text-fg",
@@ -262,18 +271,18 @@ function Column({
       }}
       aria-label={label}
       className={cn(
-        "rounded-[var(--radius-card)] border p-2 transition-colors",
+        "flex min-h-0 flex-col rounded-[var(--radius-card)] border p-2 transition-colors",
         over ? "border-accent/50 bg-accent-soft" : "border-line bg-bg-soft/40",
       )}
     >
-      <h2 className="text-fg-faint px-1 pb-2 text-[12px] font-semibold tracking-wider uppercase">
+      <h2 className="text-fg-faint text-micro px-1 pb-2 font-semibold tracking-wider uppercase">
         {label}
         <span className="tabular ml-1.5 font-normal">{count}</span>
       </h2>
       {/* An empty column says so rather than being a bordered rectangle of nothing. Four of those
           side by side is what made a board with no work on it look like a board that failed to
           load. */}
-      <div className="space-y-2">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
         {count === 0 ? <EmptyColumn>{t("empty.column")}</EmptyColumn> : children}
       </div>
     </section>
@@ -320,8 +329,14 @@ function PersonCard({
       >
         {task.text}
       </p>
-      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px]">
-        {task.owner && <span className="text-fg-dim">@{task.owner}</span>}
+      <div className="text-micro mt-1.5 flex flex-wrap items-center gap-2">
+        {/* The disc first, so a column of cards can be scanned for one person's work without
+            reading a single name. */}
+        {task.owner && (
+          <span className="text-fg-dim flex items-center gap-1.5">
+            <Avatar name={task.owner} size="sm" />@{task.owner}
+          </span>
+        )}
         {task.due && (
           <span className={cn("tabular", overdue ? "text-rec" : "text-fg-faint")}>
             {((d) => t(d.key, d.params))(dueLabel(task.due, now))}
@@ -362,9 +377,7 @@ function AgentCard({ task, running, onRun }: { task: Task; running: boolean; onR
         }
       />
       <CardBody>
-        {step && task.status === "doing" && (
-          <p className="text-running text-[13px]">◐ {step.text}</p>
-        )}
+        {step && task.status === "doing" && <p className="text-running text-meta">◐ {step.text}</p>}
 
         {(task.steps?.length ?? 0) > 0 && (
           <>
@@ -372,7 +385,7 @@ function AgentCard({ task, running, onRun }: { task: Task; running: boolean; onR
               type="button"
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
-              className="text-fg-dim hover:text-fg mt-2 text-[13px] font-medium underline-offset-2 hover:underline"
+              className="text-fg-dim hover:text-fg text-meta mt-2 font-medium underline-offset-2 hover:underline"
             >
               {open
                 ? t("tasks.hide_steps")
@@ -384,7 +397,7 @@ function AgentCard({ task, running, onRun }: { task: Task; running: boolean; onR
                   <li
                     key={`${s.text}-${i}`}
                     className={cn(
-                      "flex items-baseline gap-2 text-[13px]",
+                      "text-meta flex items-baseline gap-2",
                       s.done ? "text-fg-faint" : "text-fg",
                     )}
                   >
@@ -402,7 +415,7 @@ function AgentCard({ task, running, onRun }: { task: Task; running: boolean; onR
         )}
 
         {(task.steps?.length ?? 0) === 0 && (
-          <p className="text-fg-faint text-[13px]">{t("tasks.no_plan")}</p>
+          <p className="text-fg-faint text-meta">{t("tasks.no_plan")}</p>
         )}
       </CardBody>
     </Card>

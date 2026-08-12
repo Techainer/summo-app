@@ -1,7 +1,9 @@
 import { ChartNoAxesColumn, Square } from "lucide-react";
+import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Card, CardBody, CardHeader, Empty, SegmentedControl } from "../components/ui";
+import { Avatar, Card, CardBody, CardHeader, Empty, SegmentedControl } from "../components/ui";
+import { GENTLE } from "../lib/motion";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { formatDuration } from "../lib/duration";
@@ -68,7 +70,7 @@ export function AnalyticsScreen() {
       </div>
 
       {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
+        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
           {error}
         </p>
       )}
@@ -102,17 +104,23 @@ export function AnalyticsScreen() {
               />
               <CardBody className="space-y-2">
                 {report.people.slice(0, 8).map((person) => (
-                  <div key={person.name} className="flex items-center gap-3">
-                    <span className="w-32 shrink-0 truncate text-sm">{person.name}</span>
+                  <div key={person.name} className="flex items-center gap-2.5">
+                    <Avatar name={person.name} size="sm" />
+                    <span className="w-28 shrink-0 truncate text-sm">{person.name}</span>
                     <span className="bg-bg-soft h-2 flex-1 overflow-hidden rounded-full">
-                      <span
-                        className="bg-accent block h-full rounded-full"
+                      {/* Grown from the left rather than drawn at length. A bar chart that
+                          animates in reads as measured; one that appears reads as decoration. */}
+                      <motion.span
+                        initial={{ scaleX: 0 }}
+                        animate={{ scaleX: 1 }}
+                        transition={GENTLE}
+                        className="bg-accent block h-full origin-left rounded-full"
                         style={{
                           width: `${share(person.seconds, report.total_seconds)}%`,
                         }}
                       />
                     </span>
-                    <span className="tabular text-fg-dim w-28 shrink-0 text-right text-[13px] text-balance">
+                    <span className="tabular text-fg-dim text-meta w-28 shrink-0 text-right text-balance">
                       {formatDuration(person.seconds, locale, "short")}
                     </span>
                   </div>
@@ -137,7 +145,7 @@ export function AnalyticsScreen() {
                       className="text-fg-faint mt-0.5 size-3.5 shrink-0 stroke-[1.75]"
                     />
                     <span className="flex-1">{action.text}</span>
-                    <span className="text-fg-faint shrink-0 text-[12px]">
+                    <span className="text-fg-faint text-micro shrink-0">
                       {action.meeting_title}
                     </span>
                   </div>
@@ -147,7 +155,7 @@ export function AnalyticsScreen() {
           )}
 
           {report.quiet_days.length > 0 && (
-            <p className="text-fg-faint text-[13px]">
+            <p className="text-fg-faint text-meta">
               {t("analytics.quiet_days", {
                 days: report.quiet_days.join(", "),
               })}
@@ -162,7 +170,7 @@ export function AnalyticsScreen() {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <Card className="p-3">
-      <p className="text-fg-faint text-[12px]">{label}</p>
+      <p className="text-fg-faint text-micro">{label}</p>
       {/* `text-balance` because these are small boxes holding a phrase, not a number.
           "1 giờ 27 phút" broke as "1 giờ 27" / "phút", which reads as two facts. Vietnamese has no
           abbreviation for `giờ` or `phút`, so `Intl`'s short form does nothing here and the fix has

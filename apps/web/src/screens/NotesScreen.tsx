@@ -1,7 +1,8 @@
+import { NotebookPen } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Button } from "../components/ui";
+import { Button, Empty } from "../components/ui";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { Dot } from "../components/library/Finder";
@@ -145,11 +146,11 @@ export function NotesScreen() {
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {notes.length === 0 && (
-            <p className="text-fg-faint px-2 py-6 text-[13px]">{t("notes.empty")}</p>
+            <p className="text-fg-faint text-meta px-2 py-6">{t("notes.empty")}</p>
           )}
           {grouped.map(([day, entries]) => (
             <section key={day} className="mb-3">
-              <p className="text-fg-faint px-2 pb-1 text-[11px] font-semibold tracking-wider uppercase">
+              <p className="text-fg-faint text-micro px-2 pb-1 font-semibold tracking-wider uppercase">
                 {day}
               </p>
               <ul className="space-y-0.5">
@@ -182,14 +183,17 @@ export function NotesScreen() {
         {error && (
           <p
             role="alert"
-            className="border-danger/30 bg-danger-soft text-danger border-b px-4 py-2 text-[13px]"
+            className="border-danger/30 bg-danger-soft text-danger text-meta border-b px-4 py-2"
           >
             {error}
           </p>
         )}
 
         {openId === null ? (
-          <p className="text-fg-faint mt-24 text-center">{t("notes.pick")}</p>
+          // Centred in the pane rather than pinned a fixed distance from the top: `mt-24` puts a
+          // grey sentence in the upper third of a tall empty column, which is what the whole
+          // interface used to look like.
+          <Empty full icon={NotebookPen} title={t("notes.pick")} />
         ) : (
           <>
             <div className="border-line flex items-center gap-3 border-b px-4 py-2">
@@ -199,7 +203,7 @@ export function NotesScreen() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="text-fg-faint text-[12px]"
+                  className="text-fg-faint text-micro"
                 >
                   {saved ? t("notes.saved") : t("notes.saving")}
                 </motion.span>
@@ -219,7 +223,7 @@ export function NotesScreen() {
               placeholder={t("notes.placeholder")}
               // `font-reading` and a measure: a note is prose, and prose at full window width is
               // prose nobody re-reads.
-              className="font-reading min-h-0 flex-1 resize-none bg-transparent px-6 py-5 text-[15px] leading-relaxed outline-none"
+              className="font-reading text-body min-h-0 flex-1 resize-none bg-transparent px-6 py-5 leading-relaxed outline-none"
             />
           </>
         )}

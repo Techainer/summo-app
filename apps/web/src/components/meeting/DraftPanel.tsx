@@ -70,11 +70,11 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
       />
 
       <CardBody className="space-y-4">
-        <p className="text-fg-faint text-[12px]">{t("draft.select_hint")}</p>
+        <p className="text-fg-faint text-micro">{t("draft.select_hint")}</p>
 
         {draft.sections.map((section) => (
           <section key={section.heading}>
-            <h3 className="text-fg-dim text-[13px] font-semibold">{section.heading}</h3>
+            <h3 className="text-fg-dim text-meta font-semibold">{section.heading}</h3>
             <p
               // The tint is the whole signal: this text is in the note but nobody has agreed to it.
               className="bg-accent-soft selection:bg-accent selection:text-accent-fg mt-1 rounded-md px-2 py-1.5 leading-relaxed whitespace-pre-wrap"
@@ -88,7 +88,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
 
         {picked && (
           <div className="border-accent/40 bg-bg-soft rounded-[var(--radius-card)] border p-2.5">
-            <p className="text-fg-dim text-[12px]">
+            <p className="text-fg-dim text-micro">
               {t("draft.revising", { heading: picked.heading })}{" "}
               <span className="italic">“{shorten(picked.text)}”</span>
             </p>
@@ -123,7 +123,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
             {draft.turns.map((turn, i) => (
               <li
                 key={`${turn.role}-${i}`}
-                className={cn("text-[13px]", turn.role === "you" ? "text-fg" : "text-fg-faint")}
+                className={cn("text-meta", turn.role === "you" ? "text-fg" : "text-fg-faint")}
               >
                 <span className="font-medium">
                   {turn.role === "you" ? t("draft.you") : t("draft.agent")}:{" "}

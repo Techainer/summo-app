@@ -77,7 +77,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
 
   if (!current) {
     return (
-      <p className="border-line bg-bg-soft text-fg-faint rounded-[var(--radius-card)] border px-4 py-3 text-[13px]">
+      <p className="border-line bg-bg-soft text-fg-faint text-meta rounded-[var(--radius-card)] border px-4 py-3">
         {t("meeting.no_audio")}
       </p>
     );
@@ -127,7 +127,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
           }}
         />
 
-        <span className="tabular text-fg-dim shrink-0 text-[12px]">
+        <span className="tabular text-fg-dim text-micro shrink-0">
           {clock(time)} / {clock(duration)}
         </span>
       </div>
@@ -150,7 +150,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
               onClick={() => setSpeed(option)}
               aria-pressed={speed === option}
               className={cn(
-                "tabular rounded-full px-2 py-1 text-[12px] transition-colors",
+                "tabular text-micro rounded-full px-2 py-1 transition-colors",
                 speed === option
                   ? "bg-accent-soft text-accent font-medium"
                   : "text-fg-faint hover:text-fg",
@@ -162,7 +162,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
         </div>
       </div>
 
-      {error && <p className="text-rec mt-2 text-[12px]">{error}</p>}
+      {error && <p className="text-rec text-micro mt-2">{error}</p>}
     </div>
   );
 }

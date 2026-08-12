@@ -2,7 +2,7 @@ import { CalendarDays } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button, Empty } from "../components/ui";
+import { Avatar, Button, Empty } from "../components/ui";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
@@ -73,7 +73,7 @@ export function AgendaScreen() {
   const grouped = byDay(entries).reverse();
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-8">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col px-6 py-8">
       <h1 className="text-lg font-semibold">{t("agenda.title")}</h1>
       <p className="text-fg-dim mt-1 text-sm">{t("agenda.hint")}</p>
 
@@ -114,7 +114,7 @@ export function AgendaScreen() {
           {calendars.map((calendar) => (
             <li
               key={calendar}
-              className="border-line bg-bg-soft flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px]"
+              className="border-line bg-bg-soft text-meta flex items-center gap-1.5 rounded-full border px-2.5 py-1"
             >
               {calendar}
               <button
@@ -131,12 +131,14 @@ export function AgendaScreen() {
       )}
 
       {entries.length === 0 ? (
-        <Empty icon={CalendarDays} title={t("empty.agenda")} hint={t("empty.agenda_hint")} />
+        // `full`, so an empty calendar centres itself in what is left of the pane instead of
+        // hanging in the upper third with a screen-height of background under it.
+        <Empty full icon={CalendarDays} title={t("empty.agenda")} hint={t("empty.agenda_hint")} />
       ) : (
-        <div className="mt-8 space-y-6">
+        <div className="mt-8 min-h-0 flex-1 space-y-6 overflow-y-auto">
           {grouped.map(([day, items]) => (
             <section key={day}>
-              <h2 className="text-fg-faint text-[11px] font-semibold tracking-wider uppercase">
+              <h2 className="text-fg-faint text-micro font-semibold tracking-wider uppercase">
                 {day}
               </h2>
               <ul className="mt-2 space-y-1.5">
@@ -147,7 +149,7 @@ export function AgendaScreen() {
                     initial="hidden"
                     animate="shown"
                     transition={GENTLE}
-                    className="border-line bg-bg-soft flex items-baseline gap-3 rounded-xl border px-3 py-2"
+                    className="border-line bg-bg-soft flex items-center gap-3 rounded-[var(--radius-card)] border px-3 py-2.5 shadow-[var(--shadow-sm)]"
                   >
                     <span className="tabular text-fg-dim w-24 shrink-0 text-sm">
                       {clock(entry.start_epoch)}
@@ -158,7 +160,7 @@ export function AgendaScreen() {
 
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{entry.summary}</span>
-                      <span className="text-fg-faint block truncate text-[12px]">
+                      <span className="text-fg-faint text-micro block truncate">
                         {[
                           entry.location,
                           entry.attendees.length > 0
@@ -174,12 +176,27 @@ export function AgendaScreen() {
                       </span>
                     </span>
 
+                    {/* Who is coming, as a stack of discs. An attendee count answers "how many"
+                        and nothing else; the names are already in the invitation. */}
+                    {entry.attendees.length > 0 && (
+                      <span className="flex shrink-0 -space-x-1.5">
+                        {entry.attendees.slice(0, 4).map((who) => (
+                          <Avatar
+                            key={who}
+                            name={person(who)}
+                            size="sm"
+                            className="ring-bg-soft ring-2"
+                          />
+                        ))}
+                      </span>
+                    )}
+
                     {entry.conference && (
                       <a
                         href={entry.conference}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="bg-accent text-accent-fg shrink-0 rounded-full px-3 py-1 text-[13px] font-medium hover:brightness-110"
+                        className="bg-accent text-accent-fg text-meta shrink-0 rounded-full px-3 py-1 font-medium hover:brightness-110"
                       >
                         {service(entry.conference)}
                       </a>
@@ -193,4 +210,16 @@ export function AgendaScreen() {
       )}
     </div>
   );
+}
+
+/**
+ * An attendee as a person's name.
+ *
+ * Calendar invitations carry addresses as often as names — `ngoc.tran@acme.vn` — and initialling
+ * that raw gives every colleague at the same company the same letter. The local part, with its
+ * separators opened out, is the closest thing to a name the invitation actually contains.
+ */
+function person(attendee: string): string {
+  const local = attendee.split("@")[0] ?? attendee;
+  return local.replace(/[._-]+/g, " ").trim() || attendee;
 }

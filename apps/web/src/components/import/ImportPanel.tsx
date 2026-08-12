@@ -109,17 +109,17 @@ export function ImportPanel() {
         </span>
         <div>
           <p className="font-medium">{t("import.title")}</p>
-          <p className="text-fg-dim mx-auto mt-1 max-w-sm text-[13px] leading-relaxed">
+          <p className="text-fg-dim text-meta mx-auto mt-1 max-w-sm leading-relaxed">
             {t("import.hint")}
           </p>
         </div>
         <Button onClick={() => void browse()}>{t("import.browse")}</Button>
         {/* The formats, said once and plainly. Finding out by being refused is the worst way. */}
-        <p className="text-fg-faint font-mono text-[11px]">{t("import.formats")}</p>
+        <p className="text-fg-faint text-micro font-mono">{t("import.formats")}</p>
       </div>
 
       <div className="mt-3 flex items-center gap-2">
-        <span className="text-fg-faint shrink-0 text-[12px]">{t("import.or_path")}</span>
+        <span className="text-fg-faint text-micro shrink-0">{t("import.or_path")}</span>
         <input
           value={path}
           onChange={(e) => setPath(e.target.value)}
@@ -128,7 +128,7 @@ export function ImportPanel() {
           }}
           placeholder={t("import.path_placeholder")}
           aria-label={t("import.path_label")}
-          className="border-line bg-bg-soft focus:border-accent min-w-0 flex-1 rounded-lg border px-3 py-1.5 text-[13px] outline-none"
+          className="border-line bg-bg-soft focus:border-accent text-meta min-w-0 flex-1 rounded-lg border px-3 py-1.5 outline-none"
         />
         <Button size="sm" onClick={() => void submit(path)} disabled={!path.trim() || starting}>
           {t("import.submit")}
@@ -164,7 +164,7 @@ export function ImportPanel() {
                   </span>
                   <span
                     className={
-                      job.state === "failed" ? "text-danger text-[13px]" : "text-fg-dim text-[13px]"
+                      job.state === "failed" ? "text-danger text-meta" : "text-fg-dim text-meta"
                     }
                   >
                     {say(describe(job))}
@@ -204,7 +204,7 @@ export function ImportPanel() {
                         params: { meetingId: job.meeting as string },
                       })
                     }
-                    className="text-accent mt-2 text-[13px] font-medium hover:underline"
+                    className="text-accent text-meta mt-2 font-medium hover:underline"
                   >
                     {t("import.open_meeting")}
                   </button>

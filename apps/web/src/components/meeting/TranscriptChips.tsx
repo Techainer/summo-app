@@ -98,7 +98,7 @@ export function TranscriptChips({ segments, at, onSeek, reading = false }: Props
               style={{ transform: `translateY(${row.start}px)` }}
             >
               {line.pause !== null && (
-                <p className="text-fg-faint px-3 pt-1 pb-2 text-[11px]" data-testid="pause">
+                <p className="text-fg-faint text-micro px-3 pt-1 pb-2" data-testid="pause">
                   {t("transcript.pause", { seconds: Math.round(line.pause) })}
                 </p>
               )}
@@ -137,20 +137,20 @@ function Chip({
             repeating the name on each of them is what turns a paragraph into a list — the exact
             thing this component's chips exist to make visible. */}
         {segment.speaker && showSpeaker && (
-          <span className="text-fg-dim text-[12px] font-semibold">{segment.speaker}</span>
+          <span className="text-fg-dim text-micro font-semibold">{segment.speaker}</span>
         )}
-        <span className="tabular text-fg-faint text-[11px]">{clock(segment.t0)}</span>
+        <span className="tabular text-fg-faint text-micro">{clock(segment.t0)}</span>
         {/* Two people talking at once. Without this the two chips read as a question and an
             answer, and nothing on screen would tell a reader otherwise. */}
         {overlapping && (
-          <span className="text-accent text-[11px]">{t("transcript.at_the_same_time")}</span>
+          <span className="text-accent text-micro">{t("transcript.at_the_same_time")}</span>
         )}
       </span>
       <span
         className={cn(
           "mt-0.5 block",
           reading
-            ? "text-[15px] leading-[1.75] font-[var(--font-reading)]"
+            ? "text-body leading-[1.75] font-[var(--font-reading)]"
             : "text-sm leading-relaxed",
           // A partial is still being revised; showing it as settled text makes the app look like
           // it changes its mind.

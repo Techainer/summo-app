@@ -5,6 +5,7 @@ import { useT } from "../../i18n/context";
 import { useIsNarrow } from "../../lib/breakpoint";
 import { SPRING } from "../../lib/motion";
 import { Sheet } from "../ui";
+import { BottomBar } from "./BottomBar";
 import { Sidebar, type NavItem } from "./Sidebar";
 
 interface Props {
@@ -20,6 +21,10 @@ interface Props {
   header: ReactNode;
   sidebarFooter?: ReactNode;
   children: ReactNode;
+  /** Whether a recording is running, for the button in the bottom bar. */
+  recording: boolean;
+  onRecord: () => void;
+  recordLabel: string;
 }
 
 /**
@@ -41,6 +46,9 @@ export function AppShell({
   header,
   sidebarFooter,
   children,
+  recording,
+  onRecord,
+  recordLabel,
 }: Props) {
   const t = useT();
   const narrow = useIsNarrow();
@@ -105,6 +113,24 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         {header}
         <main className="bg-bg min-h-0 flex-1 overflow-y-auto">{children}</main>
+        {/* Below the breakpoint the only way to change screen was the hamburger — in the top-left,
+            the hardest corner for a right thumb, behind a full-screen sheet. The four destinations
+            that get used move to the bottom where the hand already is; the sheet keeps the rest,
+            which is the right place for settings and model management. */}
+        {narrow && (
+          <BottomBar
+            // `/record` is left out on purpose: the raised button in the middle of the bar *is*
+            // recording, and a tab beside it going to the same place is two controls for one job.
+            items={items.filter(
+              (item) => (item.group ?? "work") === "work" && item.key !== "/record",
+            )}
+            active={active}
+            onNavigate={navigate}
+            recording={recording}
+            onRecord={onRecord}
+            recordLabel={recordLabel}
+          />
+        )}
       </div>
     </div>
   );

@@ -135,6 +135,16 @@
   --color-swatch-purple: #b494f5;
   --color-swatch-pink: #f07ac0;
   --color-swatch-grey: #8b94a5;
+
+  /* Speaker discs. A hue per name, computed in `lib/avatar.ts`; the lightness and chroma live here
+   * because they are the only part that has to change with the scheme. On a dark page the letters
+   * are light on a translucent wash of their own hue; on a light one they have to be dark, and the
+   * first version of this shipped the dark-mode pair to both and read at 1.24:1 on white. */
+  --avatar-fill-l: 0.72;
+  --avatar-fill-c: 0.11;
+  --avatar-fill-a: 0.22;
+  --avatar-text-l: 0.86;
+  --avatar-text-c: 0.09;
 }
 
 @media (prefers-color-scheme: light) {
@@ -177,6 +187,11 @@
     --color-swatch-purple: #6b46c1;
     --color-swatch-pink: #b83280;
     --color-swatch-grey: #616a78;
+    --avatar-fill-l: 0.78;
+    --avatar-fill-c: 0.1;
+    --avatar-fill-a: 0.3;
+    --avatar-text-l: 0.4;
+    --avatar-text-c: 0.11;
     --shadow-sm: 0 1px 2px rgb(28 25 23 / 0.05);
     --shadow-card: 0 1px 2px rgb(28 25 23 / 0.06), 0 8px 24px -12px rgb(28 25 23 / 0.14);
     --shadow-pop: 0 4px 12px rgb(28 25 23 / 0.1), 0 16px 48px -16px rgb(28 25 23 / 0.22);
@@ -204,6 +219,11 @@
   --color-ai: #b49bff;
   --color-ai-soft: #b49bff1f;
   --color-ai-fg: #120a26;
+  --avatar-fill-l: 0.72;
+  --avatar-fill-c: 0.11;
+  --avatar-fill-a: 0.22;
+  --avatar-text-l: 0.86;
+  --avatar-text-c: 0.09;
 }
 
 * {

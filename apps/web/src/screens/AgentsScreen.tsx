@@ -1,12 +1,12 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Button, Card, CardBody, CardHeader, StatusChip } from "../components/ui";
+import { Avatar, Button, Card, CardBody, CardHeader, StatusChip } from "../components/ui";
 import { cn } from "../lib/cn";
 import { useEngine } from "../lib/engine-context";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
-import { GENTLE, screen as screenVariants } from "../lib/motion";
+import { GENTLE, listItem, screen as screenVariants, stagger } from "../lib/motion";
 import { url } from "../lib/library";
 
 /**
@@ -59,30 +59,12 @@ export function AgentsScreen() {
   const [roster, setRoster] = useState<Roster | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
+  /** Whether the first agent has been opened for us. Saving reloads the roster, and reopening the
+      first agent then would throw away whichever one the user was editing. */
+  const picked = useRef(false);
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const response = await fetch(url(handshake, "/agents"));
-      const body = (await response.json()) as Roster & { error?: string };
-      if (!response.ok) throw new Error(body.error ?? response.statusText);
-      setRoster(body);
-      setError(null);
-    } catch (e) {
-      setError(say(e));
-    }
-  }, [handshake, say]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const agent = useMemo(
-    () => roster?.agents.find((a) => a.slug === chosen) ?? null,
-    [roster, chosen],
-  );
 
   const open = useCallback(
     async (slug: string) => {
@@ -102,6 +84,37 @@ export function AgentsScreen() {
       }
     },
     [handshake, say],
+  );
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch(url(handshake, "/agents"));
+      const body = (await response.json()) as Roster & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? response.statusText);
+      setRoster(body);
+      setError(null);
+      // Open the first agent as it arrives, rather than showing three cards and a sentence asking
+      // the user to pick one over half a window of nothing. Picking is not a decision worth making
+      // somebody perform when the coordinator is the answer nine times out of ten, and the
+      // definition file is what the screen is for. Done here rather than in an effect watching the
+      // roster: an effect that sets state from state is a render cascade waiting to happen.
+      const first = body.agents?.[0];
+      if (first && !picked.current) {
+        picked.current = true;
+        void open(first.slug);
+      }
+    } catch (e) {
+      setError(say(e));
+    }
+  }, [handshake, open, say]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const agent = useMemo(
+    () => roster?.agents.find((a) => a.slug === chosen) ?? null,
+    [roster, chosen],
   );
 
   const save = useCallback(async () => {
@@ -131,11 +144,11 @@ export function AgentsScreen() {
     <div className="mx-auto max-w-4xl space-y-4 p-5">
       <div className="flex items-baseline gap-3">
         <h1 className="text-xl font-semibold tracking-tight">{t("agents.title")}</h1>
-        <p className="text-fg-faint text-[13px]">{t("agents.subtitle")}</p>
+        <p className="text-fg-faint text-meta">{t("agents.subtitle")}</p>
       </div>
 
       {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
+        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
           {error}
         </p>
       )}
@@ -145,7 +158,7 @@ export function AgentsScreen() {
       {roster?.dangling.map(([from, to]) => (
         <p
           key={`${from}-${to}`}
-          className="border-blocked/30 bg-blocked-soft text-blocked rounded-lg border px-3 py-2 text-[13px]"
+          className="border-blocked/30 bg-blocked-soft text-blocked text-meta rounded-lg border px-3 py-2"
         >
           {t("agents.dangling", { from, to })}
         </p>
@@ -154,16 +167,22 @@ export function AgentsScreen() {
       {roster?.skipped.map((broken) => (
         <p
           key={broken.path}
-          className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]"
+          className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2"
         >
           {t("agents.unreadable", { path: broken.path, reason: broken.reason })}
         </p>
       ))}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <motion.div
+        initial="hidden"
+        animate="shown"
+        transition={stagger(roster?.agents.length ?? 0)}
+        className="grid gap-3 sm:grid-cols-2"
+      >
         {roster?.agents.map((each) => (
-          <button
+          <motion.button
             key={each.slug}
+            variants={listItem}
             type="button"
             onClick={() => void open(each.slug)}
             className={cn(
@@ -174,21 +193,22 @@ export function AgentsScreen() {
                 : "border-line hover:border-fg-faint",
             )}
           >
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-center gap-2">
+              <Avatar name={each.name} size="sm" />
               <span className="font-semibold">{each.name}</span>
               {/* Being able to start other agents is the one capability worth seeing from the
                   list: it is the difference between a worker and something that fans out. */}
               {each.spawns.length > 0 && (
                 <StatusChip status="running" label={t("agents.coordinates")} />
               )}
-              <span className="tabular text-fg-faint ml-auto text-[12px]">{each.slug}</span>
+              <span className="tabular text-fg-faint text-micro ml-auto">{each.slug}</span>
             </div>
 
-            <p className="text-fg-dim mt-1.5 line-clamp-2 text-[13px] leading-normal">
+            <p className="text-fg-dim text-meta mt-1.5 line-clamp-2 leading-normal">
               {each.description || each.brief}
             </p>
 
-            <p className="text-fg-faint mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+            <p className="text-fg-faint text-micro mt-2.5 flex flex-wrap items-center gap-1.5">
               <span className="tabular">{n("agents.tool_count", each.tools.length)}</span>
               {each.memory.length > 0 && (
                 <span className="tabular">· {n("agents.memory_count", each.memory.length)}</span>
@@ -198,9 +218,9 @@ export function AgentsScreen() {
               )}
               {each.model && <span className="tabular">· {each.model}</span>}
             </p>
-          </button>
+          </motion.button>
         ))}
-      </div>
+      </motion.div>
 
       <AnimatePresence mode="wait">
         {agent && draft !== null && (
@@ -216,7 +236,7 @@ export function AgentsScreen() {
             <Card>
               <CardHeader title={agent.name} count={`vault/agents/${agent.slug}/AGENT.md`} />
               <CardBody className="space-y-3">
-                <p className="text-fg-faint text-[13px]">{t("agents.file_hint")}</p>
+                <p className="text-fg-faint text-meta">{t("agents.file_hint")}</p>
 
                 {/* A textarea, for the reason at the top of this file. Monospaced because the
                     frontmatter is YAML and indentation is load-bearing. */}
@@ -228,14 +248,14 @@ export function AgentsScreen() {
                   }}
                   spellCheck={false}
                   aria-label={t("agents.definition")}
-                  className="border-line bg-bg text-fg focus-visible:border-accent h-72 w-full resize-y rounded-lg border px-3 py-2 font-mono text-[13px] leading-relaxed focus:outline-none"
+                  className="border-line bg-bg text-fg focus-visible:border-accent text-meta h-72 w-full resize-y rounded-lg border px-3 py-2 font-mono leading-relaxed focus:outline-none"
                 />
 
                 <div className="flex flex-wrap items-center gap-3">
                   <Button onClick={() => void save()} disabled={saving}>
                     {saving ? t("common.saving") : t("common.save")}
                   </Button>
-                  {saved && <span className="text-accent text-[13px]">{saved}</span>}
+                  {saved && <span className="text-accent text-meta">{saved}</span>}
                 </div>
               </CardBody>
             </Card>
@@ -244,12 +264,12 @@ export function AgentsScreen() {
               <Card>
                 <CardHeader title={t("agents.tools")} />
                 <CardBody>
-                  <p className="text-fg-faint text-[13px]">{t("agents.tools_hint")}</p>
+                  <p className="text-fg-faint text-meta">{t("agents.tools_hint")}</p>
                   <ul className="mt-2 flex flex-wrap gap-1.5">
                     {agent.tools.map((tool) => (
                       <li
                         key={tool}
-                        className="border-line bg-bg text-fg-dim rounded-full border px-2.5 py-0.5 font-mono text-[12px]"
+                        className="border-line bg-bg text-fg-dim text-micro rounded-full border px-2.5 py-0.5 font-mono"
                       >
                         {tool}
                       </li>
@@ -265,12 +285,12 @@ export function AgentsScreen() {
                 />
                 <CardBody>
                   {agent.memory.length === 0 ? (
-                    <p className="text-fg-faint text-[13px]">{t("agents.memory_empty")}</p>
+                    <p className="text-fg-faint text-meta">{t("agents.memory_empty")}</p>
                   ) : (
-                    <ul className="space-y-1.5 text-[13px]">
+                    <ul className="text-meta space-y-1.5">
                       {agent.memory.map((fact) => (
                         <li key={fact.text} className="flex gap-2">
-                          <span className="tabular text-fg-faint shrink-0 text-[12px]">
+                          <span className="tabular text-fg-faint text-micro shrink-0">
                             {fact.learned || "—"}
                           </span>
                           <span className="text-fg-dim">{fact.text}</span>
@@ -289,7 +309,7 @@ export function AgentsScreen() {
           cards above it, and centring it in the empty half below made it look like the page had
           two unrelated halves. */}
       {roster && !agent && (
-        <p className="text-fg-faint mt-5 text-center text-[13px]">{t("agents.pick")}</p>
+        <p className="text-fg-faint text-meta mt-5 text-center">{t("agents.pick")}</p>
       )}
     </div>
   );

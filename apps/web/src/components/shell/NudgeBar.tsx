@@ -70,7 +70,7 @@ export function NudgeBar() {
             <span aria-hidden="true" className="text-accent">
               {iconFor(nudge.reason)}
             </span>
-            <p className="min-w-0 flex-1 text-[13px]">
+            <p className="text-meta min-w-0 flex-1">
               <strong className="font-medium">{nudge.title}</strong>
               <span className="text-fg-dim"> — {nudge.body}</span>
             </p>
@@ -80,7 +80,7 @@ export function NudgeBar() {
                 go(nudge.route);
                 dismiss(nudge.key);
               }}
-              className="text-accent hover:bg-accent/10 rounded-full px-2.5 py-1 text-[13px] font-medium"
+              className="text-accent hover:bg-accent/10 text-meta rounded-full px-2.5 py-1 font-medium"
             >
               {t("nudge.view")}
             </button>

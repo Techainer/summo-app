@@ -1,6 +1,7 @@
 import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { Avatar } from "./ui";
 import { cn } from "../lib/cn";
 import { useT } from "../i18n/context";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -105,19 +106,20 @@ export function Transcript({
                 {/* Silence is information. Ten seconds between two lines means something happened
                     in the room; running them together loses it. */}
                 {pause !== null && (
-                  <p className="text-fg-faint mb-1.5 text-[11px]" data-testid="pause">
+                  <p className="text-fg-faint text-micro mb-1.5" data-testid="pause">
                     {t("transcript.pause", { seconds: Math.round(pause) })}
                   </p>
                 )}
 
                 {showSpeaker && (
-                  <div className="flex items-baseline gap-2.5">
-                    <span className="tabular text-fg-faint text-[0.76rem]">
+                  <div className="flex items-center gap-2.5">
+                    <span className="tabular text-fg-faint text-meta">
                       {formatTime(segment.t0)}
                     </span>
+                    <Avatar name={speaker} size="sm" />
                     <span
                       className={cn(
-                        "text-[0.8rem] font-semibold",
+                        "text-meta font-semibold",
                         segment.lane === "mic" ? "text-accent" : "text-fg-dim",
                       )}
                     >
@@ -138,7 +140,7 @@ export function Transcript({
                   data-overlapping={overlapping || undefined}
                 >
                   {overlapping && (
-                    <p className="text-fg-faint mb-0.5 text-[11px]">
+                    <p className="text-fg-faint text-micro mb-0.5">
                       {t("transcript.at_the_same_time")}
                     </p>
                   )}
@@ -178,7 +180,7 @@ export function Transcript({
         <button
           type="button"
           onClick={() => setFollowing(true)}
-          className="border-line bg-bg-raised text-fg-dim hover:text-fg absolute inset-x-0 bottom-3 mx-auto flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] shadow-[var(--shadow-pop)]"
+          className="border-line bg-bg-raised text-fg-dim hover:text-fg text-micro absolute inset-x-0 bottom-3 mx-auto flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 shadow-[var(--shadow-pop)]"
         >
           <ArrowDown aria-hidden="true" className="size-3.5" />
           {t("transcript.follow")}

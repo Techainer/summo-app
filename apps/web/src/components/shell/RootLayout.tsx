@@ -144,7 +144,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           onToggle={engine.toggle}
         />
         <Waveform level={engine.level} active={engine.session.recording} />
-        <p className="text-fg-dim min-w-0 flex-1 truncate text-[13px]">
+        <p className="text-fg-dim text-meta min-w-0 flex-1 truncate">
           {latest?.text ?? t("record.listening")}
         </p>
         <button
@@ -240,12 +240,12 @@ export function RootLayout({ children }: { children: ReactNode }) {
       <NudgeBar />
 
       {engine.session.error && (
-        <p className="border-rec/30 bg-rec-soft text-rec border-b px-4 py-2 text-[13px]">
+        <p className="border-rec/30 bg-rec-soft text-rec text-meta border-b px-4 py-2">
           {engine.session.error}
         </p>
       )}
       {warning && (
-        <p className="border-blocked/30 bg-blocked-soft text-blocked border-b px-4 py-2 text-[13px]">
+        <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta border-b px-4 py-2">
           {warning}
         </p>
       )}
@@ -265,6 +265,9 @@ export function RootLayout({ children }: { children: ReactNode }) {
           navOpen={navOpen}
           onNavOpenChange={setNavOpen}
           header={header}
+          recording={engine.session.recording}
+          onRecord={engine.toggle}
+          recordLabel={engine.session.recording ? t("record.stop") : t("record.start")}
         >
           <FirstRun>
             {/* Keyed on the path, so a route change is a change of element and the new screen

@@ -110,7 +110,7 @@ export function MeetingScreen() {
   if (error) {
     return (
       <div className="p-5">
-        <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
+        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
           {error}
         </p>
       </div>
@@ -118,20 +118,24 @@ export function MeetingScreen() {
   }
 
   if (!detail) {
-    return <p className="text-fg-faint mt-24 text-center">{t("meeting.opening")}</p>;
+    return (
+      <p className="text-fg-faint grid h-full place-items-center text-center">
+        {t("meeting.opening")}
+      </p>
+    );
   }
 
   const { summary, sections, transcript } = detail;
 
   return (
     <div className="p-5">
-      <Link to="/library" search={{}} className="text-fg-dim hover:text-fg text-[13px]">
+      <Link to="/library" search={{}} className="text-fg-dim hover:text-fg text-meta">
         ← {t("meeting.back")}
       </Link>
 
       <div className="mt-2">
         <h1 className="text-2xl font-semibold tracking-tight">{summary.title}</h1>
-        <div className="text-fg-dim mt-2 flex flex-wrap items-center gap-2 text-[13px]">
+        <div className="text-fg-dim text-meta mt-2 flex flex-wrap items-center gap-2">
           <Pill>{summary.day}</Pill>
           <Pill>{formatDuration(summary.duration, locale)}</Pill>
           {summary.folder && <Pill>{summary.folder}</Pill>}

@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useT } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { OnboardingClient, blocker, type Status } from "../../lib/onboarding";
-import { Tour, seen } from "./Tour";
+import { Tour } from "./Tour";
+import { seen } from "../../lib/tour";
 import { Setup } from "./Setup";
 
 /**
@@ -62,10 +63,14 @@ export function FirstRun({ children }: { children: ReactNode }) {
   // the one thing that does not work says so instead of hiding everything that does.
   const stuck = status ? blocker(status) : null;
 
+  // A column rather than a fragment. The banner and the screen are siblings inside the scrolling
+  // pane, and the screens size themselves to the full height of it — so a fragment made every screen
+  // in the app exactly one banner taller than its container, which is a scrollbar on every screen
+  // that has nothing to scroll to. The banner takes its own height, the screen takes the rest.
   return (
-    <>
+    <div className="flex h-full min-h-0 flex-col">
       {stuck && (
-        <p className="border-blocked/30 bg-blocked-soft text-blocked border-b px-4 py-2 text-[13px]">
+        <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta shrink-0 border-b px-4 py-2">
           <b className="font-medium">{t(`setup.step_${stuck.step}`)}</b> —{" "}
           {t(`setup.why_${stuck.step}`)}{" "}
           <button
@@ -80,8 +85,8 @@ export function FirstRun({ children }: { children: ReactNode }) {
           </button>
         </p>
       )}
-      {children}
+      <div className="min-h-0 flex-1">{children}</div>
       {tour && <Tour onClose={() => setTour(false)} />}
-    </>
+    </div>
   );
 }

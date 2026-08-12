@@ -1,5 +1,6 @@
 export { Empty, EmptyColumn } from "./Empty";
 export { Checkbox } from "./Checkbox";
+export { Avatar } from "./Avatar";
 export { Button, Spinner, type ButtonProps } from "./Button";
 export { Card, CardBody, CardHeader } from "./Card";
 export { SegmentedControl, type Segment } from "./SegmentedControl";

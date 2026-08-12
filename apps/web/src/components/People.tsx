@@ -1,7 +1,9 @@
 import { AudioLines } from "lucide-react";
+import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 
-import { Empty } from "./ui";
+import { Avatar, Empty } from "./ui";
+import { listItem, stagger } from "../lib/motion";
 import { useI18n } from "../i18n/context";
 import { formatDuration } from "../lib/duration";
 import { useErrorText } from "../lib/errors";
@@ -120,12 +122,12 @@ export function People({ client, meeting }: Props) {
     // of nothing, which is what it looked like before.
     <section className="mx-auto flex h-full max-w-3xl flex-col space-y-4 p-6">
       {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec rounded-lg border px-3 py-2 text-[13px]">
+        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
           {error}
         </p>
       )}
       {notice && (
-        <p className="border-accent/30 bg-accent-soft flex items-center gap-2 rounded-lg border px-3 py-2 text-[13px]">
+        <p className="border-accent/30 bg-accent-soft text-meta flex items-center gap-2 rounded-lg border px-3 py-2">
           {notice}
           <button
             type="button"
@@ -144,15 +146,15 @@ export function People({ client, meeting }: Props) {
             {voices.map((voice) => (
               <li key={voice.label} className="rounded-card border-line bg-bg-soft border p-3.5">
                 <div className="flex items-baseline gap-2.5">
-                  <strong className="text-[15px]">{voice.label}</strong>
-                  <span className="text-fg-dim text-[12px]">
+                  <strong className="text-body">{voice.label}</strong>
+                  <span className="text-fg-dim text-micro">
                     {formatDuration(voice.seconds, locale)} ·{" "}
                     {t("people.utterances", { count: voice.utterances })}
                   </span>
                 </div>
 
                 {voice.suggestions.length > 0 && (
-                  <p className="text-fg-dim mt-1.5 text-[12px] leading-normal">
+                  <p className="text-fg-dim text-micro mt-1.5 leading-normal">
                     {t("people.maybe")}{" "}
                     {voice.suggestions.map((s, i) => (
                       <span key={s.id}>
@@ -172,7 +174,7 @@ export function People({ client, meeting }: Props) {
                       type="button"
                       disabled={busy === voice.label}
                       onClick={() => void name(voice.label, person.name)}
-                      className="border-line bg-bg hover:border-accent hover:text-accent rounded-full border px-2.5 py-1 text-[13px] transition-colors disabled:cursor-default disabled:opacity-50"
+                      className="border-line bg-bg hover:border-accent hover:text-accent text-meta rounded-full border px-2.5 py-1 transition-colors disabled:cursor-default disabled:opacity-50"
                     >
                       {person.name}
                     </button>
@@ -194,12 +196,12 @@ export function People({ client, meeting }: Props) {
                       placeholder={t("people.new_name")}
                       aria-label={t("people.name_this", { label: voice.label })}
                       disabled={busy === voice.label}
-                      className="border-line bg-bg focus-visible:border-accent w-36 rounded-full border px-2.5 py-1 text-[13px] focus:outline-none"
+                      className="border-line bg-bg focus-visible:border-accent text-meta w-36 rounded-full border px-2.5 py-1 focus:outline-none"
                     />
                     <button
                       type="submit"
                       disabled={busy === voice.label}
-                      className="border-line bg-bg hover:border-accent hover:text-accent rounded-full border px-2.5 py-1 text-[13px] disabled:opacity-50"
+                      className="border-line bg-bg hover:border-accent hover:text-accent text-meta rounded-full border px-2.5 py-1 disabled:opacity-50"
                     >
                       {t("common.save")}
                     </button>
@@ -213,21 +215,27 @@ export function People({ client, meeting }: Props) {
 
       <h2 className="pt-2 text-xl font-semibold tracking-tight">{t("people.known")}</h2>
       {space && (
-        <p className="text-fg-dim -mt-2 text-[12px]">{t("people.identified_by", { space })}</p>
+        <p className="text-fg-dim text-micro -mt-2">{t("people.identified_by", { space })}</p>
       )}
 
       {people.length === 0 ? (
         <Empty full icon={AudioLines} title={t("people.empty_title")} hint={t("people.empty")} />
       ) : (
-        <ul className="divide-line divide-y">
+        // A card each rather than rows separated by a hairline. The voice book is the one screen
+        // where the unit of interest is a *person*, and a person is worth a surface.
+        <motion.ul
+          initial="hidden"
+          animate="shown"
+          transition={stagger(people.length)}
+          className="grid gap-2 sm:grid-cols-2"
+        >
           {people.map((person) => (
-            <li key={person.id} className="flex items-center gap-3 py-2.5">
-              <span
-                aria-hidden="true"
-                className="border-line bg-bg-soft text-fg-dim grid h-9 w-9 shrink-0 place-items-center rounded-full border text-[15px] font-medium"
-              >
-                {person.name.slice(0, 1)}
-              </span>
+            <motion.li
+              key={person.id}
+              variants={listItem}
+              className="border-line bg-bg-soft flex items-center gap-3 rounded-[var(--radius-card)] border p-3 shadow-[var(--shadow-sm)]"
+            >
+              <Avatar name={person.name} />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 {renaming === person.id ? (
                   <form
@@ -258,7 +266,7 @@ export function People({ client, meeting }: Props) {
                     {person.name}
                   </button>
                 )}
-                <span className="text-fg-dim text-[12px]">
+                <span className="text-fg-dim text-micro">
                   {t("people.samples", { count: person.samples })}
                   {person.confirmed > 0 &&
                     ` · ${t("people.confirmed_by_you", { count: person.confirmed })}`}
@@ -275,9 +283,9 @@ export function People({ client, meeting }: Props) {
               >
                 ✕
               </button>
-            </li>
+            </motion.li>
           ))}
-        </ul>
+        </motion.ul>
       )}
     </section>
   );

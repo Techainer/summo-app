@@ -59,10 +59,10 @@ function Idle() {
         <>
           <p className="tabular text-2xl font-semibold">{formatTime(elapsed)}</p>
           <Waveform level={level} active />
-          <p className="text-fg-faint text-[13px]">{t("record.listening")}</p>
+          <p className="text-fg-faint text-meta">{t("record.listening")}</p>
         </>
       ) : (
-        <p className="text-fg-faint max-w-sm text-[13px] leading-relaxed">{t("record.idle")}</p>
+        <p className="text-fg-faint text-meta max-w-sm leading-relaxed">{t("record.idle")}</p>
       )}
     </div>
   );

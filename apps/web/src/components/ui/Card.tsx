@@ -34,7 +34,7 @@ export function CardHeader({
 }) {
   return (
     <div className={cn("flex items-center gap-3 px-4 py-3", className)}>
-      <h2 className="text-[15px] font-semibold tracking-tight">
+      <h2 className="text-body font-semibold tracking-tight">
         {title}
         {count !== undefined && <span className="text-fg-faint ml-2 font-normal">· {count}</span>}
       </h2>

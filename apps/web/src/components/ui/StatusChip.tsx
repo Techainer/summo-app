@@ -58,7 +58,7 @@ export function StatusChip({
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1",
-        "text-[11px] font-semibold tracking-wide uppercase",
+        "text-micro font-semibold tracking-wide uppercase",
         STYLES[status],
         className,
       )}

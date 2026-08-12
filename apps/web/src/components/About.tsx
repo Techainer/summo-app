@@ -79,7 +79,7 @@ export function About() {
         </p>
       </div>
 
-      <p className="text-fg-faint mt-4 text-[13px]">
+      <p className="text-fg-faint text-meta mt-4">
         {version ? `${t("about.version", { version })} · ` : ""}
         {t("about.source")}
       </p>
