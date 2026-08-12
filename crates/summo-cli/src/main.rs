@@ -535,6 +535,7 @@ fn check_registry(dir: &std::path::Path) -> Result<()> {
 
     let mut checked = 0;
     let mut failures = Vec::new();
+    let mut published = Vec::new();
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -546,6 +547,7 @@ fn check_registry(dir: &std::path::Path) -> Result<()> {
 
         match Manifest::parse(&body) {
             Ok(m) => {
+                published.push(m.id.to_string());
                 // The file name is what a client requests, so it has to match the declared id.
                 let stem = path.file_stem().unwrap_or_default().to_string_lossy();
                 if stem != m.id.as_str() {
@@ -574,8 +576,9 @@ fn check_registry(dir: &std::path::Path) -> Result<()> {
     let index = dir.join("index.json");
     if index.is_file() {
         let body = std::fs::read_to_string(&index)?;
-        if let Err(e) = serde_json::from_str::<serde_json::Value>(&body) {
-            failures.push(format!("{}: {e}", index.display()));
+        match serde_json::from_str::<summo_models::registry::Index>(&body) {
+            Ok(parsed) => failures.extend(index_disagreements(&parsed, &published)),
+            Err(e) => failures.push(format!("{}: {e}", index.display())),
         }
     } else {
         failures.push(format!("{} is missing", index.display()));
@@ -589,6 +592,38 @@ fn check_registry(dir: &std::path::Path) -> Result<()> {
     }
     println!("\n{checked} manifest(s) valid");
     Ok(())
+}
+
+/// Ways `index.json` and `models/` can disagree, in the words of what it costs.
+///
+/// The index is what every client reads first: `summo ls`, the setup screen and the model picker
+/// all render from it and never open a manifest until something is chosen. So a model published to
+/// `models/` and forgotten in the index is not a cosmetic inconsistency — it is a model nobody can
+/// install, and the only symptom is that it is not there, which is indistinguishable from it never
+/// having been added. This check used to be `serde_json::from_str::<Value>`, which confirmed the
+/// file was JSON and nothing else.
+///
+/// The reverse — an index row with no manifest behind it — is worse, because it is visible: the
+/// model appears in the picker, the user chooses it, and the download 404s.
+fn index_disagreements(index: &summo_models::registry::Index, published: &[String]) -> Vec<String> {
+    let listed: Vec<String> = index.models.iter().map(|m| m.id.to_string()).collect();
+    let mut out = Vec::new();
+
+    for id in published {
+        if !listed.contains(id) {
+            out.push(format!(
+                "index.json does not list `{id}`, so nothing can install it"
+            ));
+        }
+    }
+    for id in &listed {
+        if !published.contains(id) {
+            out.push(format!(
+                "index.json lists `{id}` but there is no models/{id}.json behind it"
+            ));
+        }
+    }
+    out
 }
 
 async fn list_registry(spec: Option<&str>) -> Result<()> {

@@ -27,7 +27,9 @@
  */
 
 import en from "./en.json";
+import ja from "./ja.json";
 import vi from "./vi.json";
+import zh from "./zh.json";
 
 /** A flat key-to-string map. Nested JSON is flattened on load, so `t("meeting.stop")` works. */
 export type Catalog = Record<string, string>;
@@ -60,11 +62,18 @@ export interface Language {
 export const BUILT_IN: Record<string, Catalog> = {
   vi: flatten(vi),
   en: flatten(en),
+  ja: flatten(ja),
+  zh: flatten(zh),
 };
 
+/// `zh` is Simplified Chinese, and is deliberately the bare tag rather than `zh-Hans`: a browser
+/// asking for `zh-CN` or `zh-SG` finds it by primary subtag, and a Traditional catalogue can be
+/// added later as `zh-Hant` without renaming this one out from under anyone's saved choice.
 export const BUILT_IN_LANGUAGES: Language[] = [
   { code: "vi", label: "Tiếng Việt" },
   { code: "en", label: "English" },
+  { code: "ja", label: "日本語" },
+  { code: "zh", label: "简体中文" },
 ];
 
 /**

@@ -39,6 +39,7 @@ console.log("reports the failure:", reported);
 if (!reported) problems.push("a failing request produced no visible message");
 await p.screenshot({ path: "/tmp/shots/chat.png" });
 await b.close();
+engine.stop();
 if (problems.length) {
   console.error(problems.join("\n"));
   process.exit(1);

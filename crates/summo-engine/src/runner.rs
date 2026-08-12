@@ -333,6 +333,14 @@ fn load_decoder(
         Ok(Box::new(summo_asr::sherpa::WhisperDecoder::load(
             &paths, language, threads, id,
         )?))
+    } else if manifest.runtime.contains("sense-voice") {
+        let paths = summo_asr::sherpa::SenseVoicePaths {
+            model: param_path(&installed, "model")?.display().to_string(),
+            tokens: param_path(&installed, "tokens")?.display().to_string(),
+        };
+        Ok(Box::new(summo_asr::sherpa::SenseVoiceDecoder::load(
+            &paths, language, threads, id,
+        )?))
     } else if manifest.runtime.contains("transducer") {
         let paths = summo_asr::sherpa::TransducerPaths {
             encoder: param_path(&installed, "encoder")?.display().to_string(),

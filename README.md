@@ -143,7 +143,18 @@ cargo run --release -p summo-cli --features transcribe -- transcribe recording.w
 cargo run --release -p summo-cli --features transcribe -- transcribe recording.wav \
   --model-dir /path/to/sherpa-onnx-whisper-tiny --vad /tmp/silero_vad.onnx \
   --engine whisper --lang en
+
+# Chinese, Japanese, Korean and Cantonese. Non-autoregressive, so it drives live text and does
+# not invent an ending for a half-spoken sentence the way Whisper does.
+cargo run --release -p summo-cli --features transcribe -- transcribe recording.wav \
+  --model-dir /path/to/sherpa-onnx-sense-voice --vad /tmp/silero_vad.onnx \
+  --engine sense-voice --lang ja
 ```
+
+The interface ships in **Tiếng Việt, English, 日本語 and 简体中文**; any other language is a JSON file
+dropped into `~/.summo/locales/`. Translating a meeting is a separate question with its own model —
+see [`docs/translation.md`](docs/translation.md), which is also how translation ends up costing
+nothing.
 
 To check whether a search index would be worth it on your own corpus size:
 

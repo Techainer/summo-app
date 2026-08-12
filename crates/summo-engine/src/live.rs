@@ -29,7 +29,9 @@
 use std::collections::VecDeque;
 
 use summo_core::{Event, Result};
-use summo_llm::{LlmClient, prompt};
+use summo_llm::prompt;
+
+use crate::translate::Translator;
 
 /// Lines per request.
 ///
@@ -140,7 +142,7 @@ impl Batcher {
 /// interface leaves the original text in place, which is a worse subtitle than a translation and a
 /// much better one than a blank.
 pub async fn translate_batch(
-    client: &LlmClient,
+    translator: &Translator,
     batch: &[Pending],
     lang: &str,
     glossary: &prompt::Glossary,
@@ -150,14 +152,12 @@ pub async fn translate_batch(
     }
 
     let lines: Vec<&str> = batch.iter().map(|p| p.text.as_str()).collect();
-    let messages = prompt::translate(&lines, lang, glossary);
-    let response = client.complete(&messages).await?;
+    // Which prompt this becomes is the translator's decision, not this function's. Live subtitles
+    // and a whole-meeting translation must not be able to disagree about it: a dedicated
+    // translation model handed the numbered-batch prompt does not translate at all.
+    let (parsed, _requests) = translator.run(&lines, lang, glossary).await?;
 
-    Ok(pair(
-        batch,
-        &prompt::parse_translation(&response, lines.len()),
-        lang,
-    ))
+    Ok(pair(batch, &parsed, lang))
 }
 
 /// Match a parsed response back to the sequence numbers it belongs to.
@@ -205,7 +205,7 @@ pub struct LiveTranslator {
     batcher: Batcher,
     /// When the oldest queued line arrived, for the deadline.
     since: Option<std::time::Instant>,
-    client: std::sync::Arc<LlmClient>,
+    translator: std::sync::Arc<Translator>,
     config: LiveConfig,
     tx: tokio::sync::mpsc::UnboundedSender<Vec<Event>>,
     rx: tokio::sync::mpsc::UnboundedReceiver<Vec<Event>>,
@@ -221,12 +221,12 @@ pub const MAX_IN_FLIGHT: usize = 2;
 
 impl LiveTranslator {
     #[must_use]
-    pub fn new(client: LlmClient, config: LiveConfig) -> Self {
+    pub fn new(translator: Translator, config: LiveConfig) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         Self {
             batcher: Batcher::new(),
             since: None,
-            client: std::sync::Arc::new(client),
+            translator: std::sync::Arc::new(translator),
             config,
             tx,
             rx,
@@ -289,7 +289,7 @@ impl LiveTranslator {
         if batch.is_empty() {
             return;
         }
-        let client = self.client.clone();
+        let translator = self.translator.clone();
         let lang = self.config.lang.clone();
         let glossary = self.config.glossary.clone();
         let tx = self.tx.clone();
@@ -297,7 +297,7 @@ impl LiveTranslator {
 
         in_flight.fetch_add(1, Ordering::Relaxed);
         tokio::spawn(async move {
-            let result = translate_batch(&client, &batch, &lang, &glossary).await;
+            let result = translate_batch(&translator, &batch, &lang, &glossary).await;
             in_flight.fetch_sub(1, Ordering::Relaxed);
 
             let events = match result {
@@ -334,16 +334,15 @@ impl LiveTranslator {
 mod tests {
     use super::*;
 
-    fn unreachable_client() -> summo_llm::LlmClient {
+    fn unreachable_provider() -> summo_llm::Provider {
         // Nothing listens on port 1; a dispatched request fails fast and comes back as an error
         // event, which is exactly the signal these tests need.
-        summo_llm::LlmClient::new(summo_llm::Provider::custom("x", "http://127.0.0.1:1", "m"))
-            .unwrap()
+        summo_llm::Provider::custom("x", "http://127.0.0.1:1", "m")
     }
 
     fn translator(lang: &str) -> LiveTranslator {
         LiveTranslator::new(
-            unreachable_client(),
+            Translator::chat(unreachable_provider()).unwrap(),
             LiveConfig {
                 lang: lang.into(),
                 glossary: prompt::Glossary::default(),
@@ -576,12 +575,14 @@ mod tests {
     #[tokio::test]
     async fn an_empty_batch_costs_no_request() {
         // Unreachable on purpose: reaching the model would fail the test.
-        let client =
-            summo_llm::LlmClient::new(summo_llm::Provider::custom("x", "https://127.0.0.1:1", "m"))
-                .unwrap();
-        let events = translate_batch(&client, &[], "en", &prompt::Glossary::default())
-            .await
-            .expect("no request needed");
+        let events = translate_batch(
+            &Translator::chat(unreachable_provider()).unwrap(),
+            &[],
+            "en",
+            &prompt::Glossary::default(),
+        )
+        .await
+        .expect("no request needed");
         assert!(events.is_empty());
     }
 }

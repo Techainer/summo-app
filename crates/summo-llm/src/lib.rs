@@ -9,6 +9,7 @@
 //! pure function returning messages, so what gets sent can be inspected and tested without a
 //! network.
 
+pub mod lang;
 pub mod prompt;
 pub mod provider;
 

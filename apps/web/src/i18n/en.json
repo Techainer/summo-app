@@ -283,7 +283,13 @@
     "group_local": "On this machine",
     "group_hosted": "Hosted",
     "key_ready": "key set",
-    "key_found": "{name} is set. Transcript text will be sent to this provider."
+    "key_found": "{name} is set. Transcript text will be sent to this provider.",
+    "mt_heading": "Translation model",
+    "mt_hint": "Translation can use a small model of its own. A 1B translation model is better at translating than a general 8B one, runs on your CPU, and costs nothing per line — so translation keeps working even with no API key at all.",
+    "mt_enable": "Use a separate model for translation",
+    "mt_endpoint": "Translation endpoint",
+    "mt_model": "Translation model",
+    "mt_run": "Serve it with `llama-server -m milmmt-46-1b.gguf --port 8080`, or from Ollama. About 800 MB on disk."
   },
   "status": {
     "top_bar": "Top bar",

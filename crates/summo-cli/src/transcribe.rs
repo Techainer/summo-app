@@ -10,7 +10,7 @@ use std::{path::Path, time::Instant};
 use anyhow::{Context, Result, bail};
 use summo_asr::{
     Decoder, PseudoSession, SessionConfig,
-    sherpa::{WhisperDecoder, ZipformerDecoder},
+    sherpa::{SenseVoiceDecoder, WhisperDecoder, ZipformerDecoder},
 };
 use summo_core::{
     Event,
@@ -60,6 +60,9 @@ pub enum Engine {
     Transducer,
     /// Whisper. 99 languages and code-switching, at the cost of hallucinating over silence.
     Whisper,
+    /// SenseVoice. Chinese, Japanese, Korean, Cantonese and English, non-autoregressive — so it is
+    /// fast and, unlike Whisper, does not invent an ending for a half-spoken sentence.
+    SenseVoice,
 }
 
 pub struct Options {
@@ -90,6 +93,11 @@ pub fn run(opts: &Options) -> Result<()> {
     let decoder: Box<dyn Decoder> = match opts.engine {
         Engine::Transducer => Box::new(ZipformerDecoder::from_dir(&opts.model_dir, opts.threads)?),
         Engine::Whisper => Box::new(WhisperDecoder::from_dir(
+            &opts.model_dir,
+            opts.language.as_deref(),
+            opts.threads,
+        )?),
+        Engine::SenseVoice => Box::new(SenseVoiceDecoder::from_dir(
             &opts.model_dir,
             opts.language.as_deref(),
             opts.threads,

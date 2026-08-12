@@ -133,6 +133,12 @@ export async function boot({ name = "e2e", seed = true } = {}) {
   const log = [];
   child.stdout.on("data", (d) => log.push(String(d)));
   child.stderr.on("data", (d) => log.push(String(d)));
+  // `unref` on the child is not enough: a pipe with a `data` handler is itself a live handle, so a
+  // suite that forgot `stop()` ran to completion, printed its result, and then hung forever. It was
+  // the last suite in `pnpm e2e` that did it, so the whole chain never returned — and the symptom
+  // is a run that looks like it is still working rather than one that failed.
+  child.stdout.unref();
+  child.stderr.unref();
 
   const handshakeFile = join(home, "engine.json");
   const deadline = Date.now() + 20_000;

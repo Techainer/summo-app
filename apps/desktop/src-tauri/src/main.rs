@@ -71,8 +71,13 @@ fn main() {
 /// purpose, since building it needs platform webview libraries — to translate three strings. A
 /// language the table has never heard of falls back to English rather than to nothing.
 fn tray_words(language: &str) -> [&'static str; 3] {
-    match language {
+    // Matched on the primary subtag, so `zh-CN` and `zh-Hans` land on Chinese rather than silently
+    // on English. The tray is often the only Summo a user sees for hours; it should not be the one
+    // surface still speaking a language they did not pick.
+    match language.split(['-', '_']).next().unwrap_or(language) {
         "vi" => ["Ghi ngay", "Mở Summo", "Thoát"],
+        "ja" => ["すぐ録音", "Summo を開く", "終了"],
+        "zh" => ["立即录音", "打开 Summo", "退出"],
         _ => ["Record now", "Open Summo", "Quit"],
     }
 }

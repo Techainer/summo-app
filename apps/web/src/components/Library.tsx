@@ -496,8 +496,13 @@ type Stats = NonNullable<LibraryView["stats"]>;
 function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="rounded-card border-line bg-bg-soft flex flex-col gap-0.5 border p-3.5">
+      {/* `break-keep`: Japanese and Chinese have no spaces, so a browser is free to break a line
+          anywhere at all — and `text-balance` then took it up on that, splitting 時間 down the
+          middle and justifying the halves across two lines. It read as a rendering fault rather
+          than as a number. `word-break: keep-all` keeps a word whole; the wrap still happens, at
+          the space between the hours and the minutes, where a reader expects it. */}
       <span
-        className="tabular text-2xl font-semibold tracking-tight text-balance"
+        className="tabular text-2xl font-semibold tracking-tight break-keep text-balance"
         data-testid="tile-value"
       >
         {value}

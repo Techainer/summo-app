@@ -49,6 +49,13 @@ interface Llm {
   model: string | null;
   language: string;
   summarize_on_stop: boolean;
+  /** A second, smaller model that does translation only. `null` sends translation to the one above. */
+  translator?: Translator | null;
+}
+
+interface Translator {
+  provider: string;
+  model: string | null;
 }
 
 interface TestResult {
@@ -242,6 +249,69 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       >
         {t("settings.summarise_on_stop")}
       </Checkbox>
+
+      {/* Translation gets its own model because it is a different job. A 1B translation model
+          beats a general 8B one at it, runs on the CPU in under a second a line, and costs
+          nothing — which is what lets someone with no API key at all still translate every
+          meeting they record. */}
+      <h2 className="mt-8 text-xl font-semibold tracking-tight">{t("settings.mt_heading")}</h2>
+      <p className="text-fg-faint my-4 text-[13px] leading-normal">{t("settings.mt_hint")}</p>
+
+      <Checkbox
+        className="mt-3.5"
+        checked={llm.translator != null}
+        onChange={(on) =>
+          void save({
+            ...llm,
+            // Turning it on proposes the endpoint `llama-server` listens on by default, because
+            // "enable this, now go and find out what to type" is not a setting anyone completes.
+            translator: on ? { provider: "llama-cpp", model: "milmmt-46-1b" } : null,
+          })
+        }
+      >
+        {t("settings.mt_enable")}
+      </Checkbox>
+
+      {llm.translator != null && (
+        <>
+          <label className={FIELD}>
+            <span className={LABEL}>{t("settings.endpoint")}</span>
+            <input
+              className={CONTROL}
+              value={llm.translator.provider}
+              aria-label={t("settings.mt_endpoint")}
+              placeholder="llama-cpp"
+              onChange={(e) =>
+                setLlm({
+                  ...llm,
+                  translator: { model: llm.translator?.model ?? null, provider: e.target.value },
+                })
+              }
+              onBlur={() => void save(llm)}
+            />
+          </label>
+          <label className={FIELD}>
+            <span className={LABEL}>{t("settings.model")}</span>
+            <input
+              className={CONTROL}
+              value={llm.translator.model ?? ""}
+              aria-label={t("settings.mt_model")}
+              placeholder="milmmt-46-1b"
+              onChange={(e) =>
+                setLlm({
+                  ...llm,
+                  translator: {
+                    provider: llm.translator?.provider ?? "llama-cpp",
+                    model: e.target.value,
+                  },
+                })
+              }
+              onBlur={() => void save(llm)}
+            />
+          </label>
+          <p className={HINT}>{t("settings.mt_run")}</p>
+        </>
+      )}
 
       {needsKey && (
         <p className={`${HINT} ${keyPresent ? "" : "text-blocked"}`}>

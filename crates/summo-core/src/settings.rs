@@ -83,8 +83,46 @@ pub struct Llm {
     pub language: String,
     /// Summarise automatically when a recording stops.
     pub summarize_on_stop: bool,
+    /// A second, smaller model that does translation only. `None` means translation goes to the
+    /// same model as everything else.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub translator: Option<Translator>,
     // No API key. Keys live in the OS keychain; one in a settings file would end up in backups,
     // sync and support bundles.
+}
+
+/// A dedicated machine-translation model.
+///
+/// Separate from [`Llm`] because summarising and translating want different models, and pretending
+/// otherwise costs either money or quality. A summary needs a model that can read a messy
+/// transcript and reason about it. A translation needs a model that has seen a great deal of
+/// parallel text — and a *1B* model that has is better at translating than a general 8B one, runs
+/// on a CPU in under a second a line, and costs nothing per line forever.
+///
+/// That is the whole argument for the field existing: it is what lets the expensive model be
+/// optional. A user with no LLM key at all can still translate every meeting they record.
+///
+/// Points at an OpenAI-compatible endpoint like everything else — llama.cpp, Ollama, LM Studio —
+/// so this adds a setting, not a runtime. What it changes is the *prompt*: see
+/// [`summo_llm::prompt::mt`], which is the string these models were trained to continue and which
+/// is not interchangeable with the instruction-following one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Translator {
+    /// Preset id or base URL, exactly as [`Llm::provider`].
+    pub provider: String,
+    pub model: Option<String>,
+}
+
+impl Default for Translator {
+    fn default() -> Self {
+        Self {
+            // The endpoint you get by running `llama-server -m milmmt-46-1b.gguf`, which is the
+            // documented way to get a translation model onto a machine that has none.
+            provider: "llama-cpp".into(),
+            model: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,6 +182,10 @@ impl Default for Llm {
             model: None,
             language: "Vietnamese".into(),
             summarize_on_stop: true,
+            // Nothing by default: a setting that names an endpoint nobody is running turns every
+            // translation into a connection error, which is worse than translating with the model
+            // the user did configure.
+            translator: None,
         }
     }
 }

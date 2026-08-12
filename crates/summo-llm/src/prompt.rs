@@ -145,6 +145,88 @@ pub fn translate(lines: &[&str], target_language: &str, glossary: &Glossary) -> 
     vec![Message::system(system), Message::user(numbered)]
 }
 
+/// Build the request for a **dedicated translation model**, one line at a time.
+///
+/// A different shape from [`translate`] because it talks to a different kind of model, and the
+/// difference is not stylistic. [`translate`] asks a general instruction-following model to obey a
+/// paragraph of rules about numbered lines. A translation model — MiLMMT, and the NLLB and M2M
+/// families before it — was trained on exactly one string:
+///
+/// ```text
+/// Translate this from Vietnamese to Japanese:
+/// Vietnamese: Chiều nay mình chốt lại spec API.
+/// Japanese:
+/// ```
+///
+/// Given Summo's numbered-batch prompt instead, a 1B translation model does not translate: measured
+/// against MiLMMT-46-1B, it invented a fourth line in the *source* language and translated none of
+/// the three it was given. So this is the price of admission for using a small local model at all,
+/// and the trade it buys is a good one — 800 MB on the CPU, no key, no per-token cost, no text
+/// leaving the machine.
+///
+/// `source` is optional. Naming it helps a little and getting it wrong costs almost nothing —
+/// measured on the same model, mislabelling Vietnamese as Thai still produced a correct English
+/// translation — so an unknown source language is a reason to omit the clause, not to guess.
+///
+/// A glossary is *not* accepted here on purpose. These models take no instructions; terminology
+/// appended to the prompt would be translated as if it were part of the sentence.
+#[must_use]
+pub fn mt(line: &str, source: Option<&str>, target_language: &str) -> Vec<Message> {
+    let target = crate::lang::name(target_language);
+    let line = line.trim();
+
+    let prompt = match source.map(crate::lang::name).filter(|s| !s.is_empty()) {
+        Some(source) => {
+            format!("Translate this from {source} to {target}:\n{source}: {line}\n{target}:")
+        }
+        None => format!("Translate this to {target}:\n{line}\n{target}:"),
+    };
+
+    // One user turn, no system message. A system prompt is a chat-model convention, and prepending
+    // one moves the model off the exact string it was trained to continue.
+    vec![Message::user(prompt)]
+}
+
+/// Clean up a dedicated translation model's reply.
+///
+/// Small models continue past the sentence they were asked for: another `English:` turn, a line of
+/// commentary, the source sentence repeated. Only the first line is the translation, and taking
+/// more of it than that puts a model's inner monologue into a subtitle file.
+///
+/// Returns `None` for an empty result, so the caller leaves the original line in place — the same
+/// contract as [`parse_translation`], for the same reason. A subtitle with a hole in it is not a
+/// subtitle.
+#[must_use]
+pub fn parse_mt(response: &str) -> Option<String> {
+    let first = response
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())?;
+
+    // `English: hello` — the model echoing the label it was asked to continue after.
+    let text = match first.split_once(':') {
+        Some((label, rest)) if is_label(label) => rest.trim(),
+        _ => first,
+    };
+
+    (!text.is_empty()).then(|| text.to_string())
+}
+
+/// Whether a prefix looks like the label the prompt ended with, rather than part of the sentence.
+///
+/// Deliberately narrow. "Deadline: Friday" is a sentence somebody said in a meeting and must
+/// survive; "English" and "Chinese (Simplified)" are labels. Letters, spaces and brackets only, and
+/// short.
+fn is_label(prefix: &str) -> bool {
+    let prefix = prefix.trim();
+    !prefix.is_empty()
+        && prefix.len() <= 24
+        && prefix
+            .chars()
+            .all(|c| c.is_alphabetic() || c == ' ' || c == '(' || c == ')')
+        && crate::lang::known(prefix)
+}
+
 /// Split a translated response back into one entry per input line.
 ///
 /// Models drop or merge numbered lines often enough that this cannot assume success: the result is
@@ -247,6 +329,103 @@ pub fn render_transcript(segments: &[Segment]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[cfg(test)]
+mod mt_tests {
+    use super::*;
+
+    #[test]
+    fn the_prompt_is_the_exact_string_the_model_was_trained_on() {
+        let messages = mt("Chiều nay chốt spec.", Some("vi"), "ja");
+        assert_eq!(
+            messages.len(),
+            1,
+            "no system turn: it moves the model off the template"
+        );
+        assert_eq!(
+            messages[0].content,
+            "Translate this from Vietnamese to Japanese:\nVietnamese: Chiều nay chốt spec.\nJapanese:"
+        );
+    }
+
+    /// Tags reach this from the settings file and the translation file on disk; names reach it from
+    /// a user who typed one. A model handed `vi` translates into whatever it guesses.
+    #[test]
+    fn tags_and_names_both_become_names() {
+        assert_eq!(
+            mt("x", Some("Vietnamese"), "English")[0].content,
+            mt("x", Some("vi"), "en")[0].content
+        );
+    }
+
+    /// Summo does not always know what language was spoken — the ASR model may have been left on
+    /// auto. Guessing would be worse than saying nothing: the model translates fine without it.
+    #[test]
+    fn an_unknown_source_drops_the_clause_rather_than_guessing() {
+        assert_eq!(
+            mt("xin chào", None, "en")[0].content,
+            "Translate this to English:\nxin chào\nEnglish:"
+        );
+        assert_eq!(
+            mt("xin chào", Some("  "), "en")[0].content,
+            mt("xin chào", None, "en")[0].content
+        );
+    }
+
+    #[test]
+    fn the_first_line_is_the_translation() {
+        assert_eq!(
+            parse_mt("Settle the API spec.").as_deref(),
+            Some("Settle the API spec.")
+        );
+        assert_eq!(parse_mt("\n\n  hello  \n").as_deref(), Some("hello"));
+    }
+
+    /// What a 1B model does when it does not stop: it keeps going, and everything after the first
+    /// line is its own continuation rather than the sentence asked for.
+    #[test]
+    fn a_model_that_kept_talking_is_cut_at_the_first_line() {
+        let reply = "Settle the API spec.\nVietnamese: Chiều nay chốt spec.\nEnglish: Settle it.";
+        assert_eq!(parse_mt(reply).as_deref(), Some("Settle the API spec."));
+    }
+
+    #[test]
+    fn an_echoed_label_is_not_part_of_the_sentence() {
+        assert_eq!(
+            parse_mt("English: Settle the spec.").as_deref(),
+            Some("Settle the spec.")
+        );
+        assert_eq!(
+            parse_mt("Chinese (Simplified): 敲定规格。").as_deref(),
+            Some("敲定规格。")
+        );
+    }
+
+    /// The reason [`is_label`] checks against the language table rather than "anything before a
+    /// colon": people say these sentences in meetings, and eating the first half of one is a silent
+    /// data loss that only shows up when somebody reads the transcript back.
+    #[test]
+    fn a_sentence_that_merely_contains_a_colon_survives_whole() {
+        assert_eq!(
+            parse_mt("Deadline: Friday").as_deref(),
+            Some("Deadline: Friday")
+        );
+        assert_eq!(
+            parse_mt("Ngoc: I will send it").as_deref(),
+            Some("Ngoc: I will send it")
+        );
+        assert_eq!(parse_mt("9:00 tomorrow").as_deref(), Some("9:00 tomorrow"));
+    }
+
+    /// The same contract as `parse_translation`: nothing back means the original stays, rather than
+    /// a subtitle file with a hole in it.
+    #[test]
+    fn an_empty_reply_is_none_so_the_original_survives() {
+        assert!(parse_mt("").is_none());
+        assert!(parse_mt("   \n  \n").is_none());
+        assert!(parse_mt("English:").is_none());
+    }
 }
 
 #[cfg(test)]

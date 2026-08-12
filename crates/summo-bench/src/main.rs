@@ -289,10 +289,11 @@ fn run_asr(
 
     let mut reports = Vec::new();
     for spec in models {
-        // `whisper:/path` picks the Whisper runtime; a bare path is a transducer. Cheaper than a
-        // second repeated flag that would have to be kept in step with this one.
+        // `whisper:/path` or `sensevoice:/path` picks that runtime; a bare path is a transducer.
+        // Cheaper than a second repeated flag that would have to be kept in step with this one.
         let (runtime, dir) = match spec.split_once(':') {
             Some(("whisper", path)) => ("whisper", std::path::Path::new(path)),
+            Some(("sensevoice", path)) => ("sensevoice", std::path::Path::new(path)),
             _ => ("transducer", std::path::Path::new(spec.as_str())),
         };
         let name = dir.file_name().map_or_else(
@@ -301,12 +302,14 @@ fn run_asr(
         );
         tracing::info!(model = %name, runtime, threads, "evaluating");
 
-        let mut decoder: Box<dyn summo_asr::Decoder> = if runtime == "whisper" {
-            Box::new(summo_asr::sherpa::WhisperDecoder::from_dir(
+        let mut decoder: Box<dyn summo_asr::Decoder> = match runtime {
+            "whisper" => Box::new(summo_asr::sherpa::WhisperDecoder::from_dir(
                 dir, language, threads,
-            )?)
-        } else {
-            Box::new(summo_asr::sherpa::ZipformerDecoder::from_dir(dir, threads)?)
+            )?),
+            "sensevoice" => Box::new(summo_asr::sherpa::SenseVoiceDecoder::from_dir(
+                dir, language, threads,
+            )?),
+            _ => Box::new(summo_asr::sherpa::ZipformerDecoder::from_dir(dir, threads)?),
         };
         let metrics = evaluate(decoder.as_mut(), dataset, &items)?;
         tracing::info!(

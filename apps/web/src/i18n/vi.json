@@ -283,7 +283,13 @@
     "group_local": "Trên máy này",
     "group_hosted": "Dịch vụ ngoài",
     "key_ready": "đã có khoá",
-    "key_found": "{name} đã được đặt. Văn bản bản ghi sẽ được gửi tới nhà cung cấp này."
+    "key_found": "{name} đã được đặt. Văn bản bản ghi sẽ được gửi tới nhà cung cấp này.",
+    "mt_heading": "Mô hình dịch",
+    "mt_hint": "Dịch có thể dùng một mô hình nhỏ riêng. Mô hình dịch 1B dịch tốt hơn mô hình đa dụng 8B, chạy trên CPU của bạn, và không tốn tiền theo từng dòng — nên vẫn dịch được kể cả khi không có API key nào.",
+    "mt_enable": "Dùng mô hình riêng để dịch",
+    "mt_endpoint": "Địa chỉ mô hình dịch",
+    "mt_model": "Mô hình dịch",
+    "mt_run": "Chạy bằng `llama-server -m milmmt-46-1b.gguf --port 8080`, hoặc qua Ollama. Khoảng 800 MB trên đĩa."
   },
   "status": {
     "top_bar": "Thanh trên cùng",

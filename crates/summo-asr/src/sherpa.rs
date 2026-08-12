@@ -9,6 +9,7 @@
 use std::path::Path;
 
 use sherpa_rs::{
+    sense_voice::{SenseVoiceConfig, SenseVoiceRecognizer},
     transducer::{TransducerConfig, TransducerRecognizer},
     whisper::{WhisperConfig, WhisperRecognizer},
 };
@@ -459,5 +460,290 @@ mod whisper_tests {
         };
         let d = WhisperDecoder::from_dir(dir, None, 1).unwrap();
         assert_eq!(d.language(), "auto");
+    }
+}
+
+// ------------------------------------------------------------------------------------ sensevoice
+
+/// Files a SenseVoice export needs.
+///
+/// One `.onnx` and one `tokens.txt`, which is the whole model — SenseVoice is a single
+/// non-autoregressive encoder rather than the encoder/decoder pair every other runtime here needs.
+#[derive(Debug, Clone)]
+pub struct SenseVoicePaths {
+    pub model: String,
+    pub tokens: String,
+}
+
+impl SenseVoicePaths {
+    /// Resolve the two files from a directory, preferring the quantized export.
+    pub fn from_dir(dir: impl AsRef<Path>) -> Result<Self> {
+        let dir = dir.as_ref();
+        let entries = std::fs::read_dir(dir).map_err(|e| Error::io(dir, e))?;
+
+        let (mut model, mut tokens) = (None, None);
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            let slot = if name.ends_with(".onnx") {
+                &mut model
+            } else if name.contains("tokens") && name.ends_with(".txt") {
+                &mut tokens
+            } else {
+                continue;
+            };
+            let is_int8 = name.contains("int8");
+            if slot.is_none() || is_int8 {
+                *slot = Some(path.display().to_string());
+            }
+        }
+
+        let missing = |what: &str| Error::Asr(format!("{}: no {what} file found", dir.display()));
+        Ok(Self {
+            model: model.ok_or_else(|| missing("model .onnx"))?,
+            tokens: tokens.ok_or_else(|| missing("tokens"))?,
+        })
+    }
+}
+
+/// SenseVoice, for Chinese, Japanese, Korean, Cantonese and English.
+///
+/// The reason this runtime exists alongside Whisper, which nominally covers the same languages:
+///
+/// * **It does not invent text.** SenseVoice is non-autoregressive — one encoder pass, CTC-style
+///   output — so there is no decoder to run away into a plausible ending nobody said. That is what
+///   makes [`Decoder::supports_partials`] `true` here and `false` for Whisper, and it is the
+///   difference between text appearing while somebody is still talking and text appearing after
+///   they stop.
+/// * **It is much faster.** No autoregression means the cost is one pass over the audio rather than
+///   one pass per generated token, which is what [`crate::PseudoSession`]'s re-decode loop spends
+///   its headroom on.
+///
+/// It cannot do Vietnamese, which is not a gap: the Vietnamese transducer beats every multilingual
+/// model on that language by a wide margin, and picking a model per language is the point of having
+/// more than one runtime.
+pub struct SenseVoiceDecoder {
+    inner: SenseVoiceRecognizer,
+    name: String,
+    language: String,
+}
+
+impl SenseVoiceDecoder {
+    /// `language` is `zh`, `en`, `ja`, `ko` or `yue`; `None` lets the model detect it.
+    ///
+    /// Unlike Whisper's, SenseVoice's detection is a classifier head rather than generated tokens,
+    /// so `auto` is cheap and reliable enough to be a reasonable default for a meeting that
+    /// switches between languages.
+    pub fn load(
+        paths: &SenseVoicePaths,
+        language: Option<&str>,
+        num_threads: usize,
+        name: impl Into<String>,
+    ) -> Result<Self> {
+        for (label, path) in [("model", &paths.model), ("tokens", &paths.tokens)] {
+            if !Path::new(path).is_file() {
+                return Err(Error::Asr(format!("{label} file not found: {path}")));
+            }
+        }
+
+        // `auto` rather than an empty string: SenseVoice's config takes the word, and an empty one
+        // selects no language head at all.
+        let language = language
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .unwrap_or("auto")
+            .to_string();
+
+        let config = SenseVoiceConfig {
+            model: paths.model.clone(),
+            tokens: paths.tokens.clone(),
+            language: language.clone(),
+            // Inverse text normalisation: "二零二六年" becomes "2026年". Meeting notes are read for
+            // the numbers in them, and a date spelled out in characters is one a reader has to
+            // decode.
+            use_itn: true,
+            num_threads: Some(i32::try_from(num_threads.clamp(1, 16)).unwrap_or(1)),
+            ..SenseVoiceConfig::default()
+        };
+
+        let inner = SenseVoiceRecognizer::new(config)
+            .map_err(|e| Error::Asr(format!("cannot load sensevoice: {e}")))?;
+
+        Ok(Self {
+            inner,
+            name: name.into(),
+            language,
+        })
+    }
+
+    pub fn from_dir(
+        dir: impl AsRef<Path>,
+        language: Option<&str>,
+        num_threads: usize,
+    ) -> Result<Self> {
+        let dir = dir.as_ref();
+        let name = dir.file_name().map_or_else(
+            || "sensevoice".to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        Self::load(
+            &SenseVoicePaths::from_dir(dir)?,
+            language,
+            num_threads,
+            name,
+        )
+    }
+
+    /// The configured language, or `"auto"` when detection is in use.
+    #[must_use]
+    pub fn language(&self) -> &str {
+        &self.language
+    }
+}
+
+/// Strip SenseVoice's rich-transcription markers.
+///
+/// The model emits language, emotion and audio-event labels inline —
+/// `<|ja|><|NEUTRAL|><|Speech|><|withitn|>こんにちは` — and which of them survive into the text
+/// depends on the sherpa-onnx build. They are not speech: left in, they land in the Markdown file,
+/// the summary the model is asked to write, and the subtitle burnt into a video.
+///
+/// Written as a scan rather than a regex because an unterminated `<|` must leave the rest of the
+/// line alone rather than eat it.
+#[must_use]
+pub fn strip_tags(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut rest = raw;
+    while let Some(start) = rest.find("<|") {
+        let (before, after) = rest.split_at(start);
+        out.push_str(before);
+        match after.find("|>") {
+            Some(end) => rest = &after[end + 2..],
+            // No closing marker: this is ordinary text that happens to contain `<|`.
+            None => {
+                out.push_str(after);
+                return out.trim().to_string();
+            }
+        }
+    }
+    out.push_str(rest);
+    out.trim().to_string()
+}
+
+impl Decoder for SenseVoiceDecoder {
+    fn decode(&mut self, pcm: &[f32]) -> Result<Transcript> {
+        // Below about a syllable there is nothing to recognise, and the fixed per-decode cost is
+        // paid on every pass of the re-decode loop.
+        if pcm.len() < SAMPLE_RATE as usize / 20 {
+            return Ok(Transcript::default());
+        }
+        let result = self.inner.transcribe(SAMPLE_RATE, pcm);
+        Ok(Transcript {
+            text: strip_tags(&result.text),
+            // Non-autoregressive: there is no no-speech probability, and no hallucinated ending for
+            // one to guard against.
+            ..Transcript::default()
+        })
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+#[cfg(test)]
+mod sensevoice_tests {
+    use super::*;
+
+    fn model_dir() -> Option<std::path::PathBuf> {
+        std::env::var_os("SUMMO_TEST_SENSEVOICE").map(std::path::PathBuf::from)
+    }
+
+    #[test]
+    fn missing_files_are_reported_before_loading() {
+        let paths = SenseVoicePaths {
+            model: "/nonexistent/model.onnx".into(),
+            tokens: "/nonexistent/tokens.txt".into(),
+        };
+        let Err(err) = SenseVoiceDecoder::load(&paths, Some("ja"), 1, "test") else {
+            panic!("loading nonexistent files should fail")
+        };
+        assert!(err.to_string().contains("model"), "got: {err}");
+    }
+
+    #[test]
+    fn quantized_exports_win() {
+        let tmp = tempfile::tempdir().unwrap();
+        for name in ["model.onnx", "model.int8.onnx", "tokens.txt"] {
+            std::fs::write(tmp.path().join(name), b"x").unwrap();
+        }
+        let paths = SenseVoicePaths::from_dir(tmp.path()).unwrap();
+        assert!(paths.model.contains("int8"), "got {}", paths.model);
+    }
+
+    #[test]
+    fn an_empty_directory_reports_what_is_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = SenseVoicePaths::from_dir(tmp.path()).unwrap_err();
+        assert!(err.to_string().contains("model"), "got: {err}");
+    }
+
+    /// The failure this prevents is silent and permanent: the tags are written to the vault, so a
+    /// meeting recorded before anyone noticed keeps them forever.
+    #[test]
+    fn rich_transcription_markers_are_not_speech() {
+        assert_eq!(
+            strip_tags("<|ja|><|NEUTRAL|><|Speech|><|withitn|>こんにちは"),
+            "こんにちは"
+        );
+        assert_eq!(strip_tags("<|zh|>今天开会"), "今天开会");
+        assert_eq!(strip_tags("  plain text  "), "plain text");
+    }
+
+    /// A transcript is arbitrary human speech and may contain the characters the marker is made of.
+    /// Eating the rest of the line on an unterminated `<|` would lose real words.
+    #[test]
+    fn an_unterminated_marker_leaves_the_text_alone() {
+        assert_eq!(
+            strip_tags("the operator <| means pipe"),
+            "the operator <| means pipe"
+        );
+    }
+
+    #[test]
+    fn markers_between_words_are_removed_without_joining_them() {
+        assert_eq!(strip_tags("hello <|EMO|> world"), "hello  world");
+    }
+
+    /// The reason this runtime exists next to Whisper: it can drive live text, and Whisper cannot.
+    #[test]
+    fn sensevoice_can_drive_partials() {
+        let Some(dir) = model_dir() else {
+            eprintln!("skipping: set SUMMO_TEST_SENSEVOICE to a model directory");
+            return;
+        };
+        let d = SenseVoiceDecoder::from_dir(dir, Some("ja"), 2).unwrap();
+        assert!(d.supports_partials());
+    }
+
+    #[test]
+    fn language_reports_auto_when_unset() {
+        let Some(dir) = model_dir() else {
+            eprintln!("skipping: set SUMMO_TEST_SENSEVOICE");
+            return;
+        };
+        let d = SenseVoiceDecoder::from_dir(dir, None, 1).unwrap();
+        assert_eq!(d.language(), "auto");
+    }
+
+    #[test]
+    fn silence_decodes_to_nothing() {
+        let Some(dir) = model_dir() else {
+            eprintln!("skipping: set SUMMO_TEST_SENSEVOICE");
+            return;
+        };
+        let mut d = SenseVoiceDecoder::from_dir(dir, Some("zh"), 2).unwrap();
+        let out = d.decode(&vec![0.0; SAMPLE_RATE as usize]).unwrap();
+        assert!(out.is_empty(), "expected silence, got `{}`", out.text);
     }
 }

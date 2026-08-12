@@ -122,8 +122,12 @@ await page.screenshot({ path: "/tmp/shots/library-edited.png" });
 // Settings is only the language model, and it has to say plainly where words go.
 await page.getByRole("button", { name: "Cài đặt" }).click();
 await page.locator('[data-testid="settings"]').waitFor({ timeout: 5000 });
-await page.getByLabel("Mô hình").fill("qwen3:8b");
-await page.getByLabel("Mô hình").blur();
+// Exact: the settings screen has a second model field for the translation model, and a
+// substring match picks up its checkbox too — which fails as an ambiguity rather than as a
+// wrong field, so it is at least loud.
+const model = page.getByLabel("Mô hình", { exact: true });
+await model.fill("qwen3:8b");
+await model.blur();
 await page.waitForTimeout(400);
 await page.getByRole("button", { name: /Thử kết nối/ }).click();
 await page.locator('[data-testid="test-result"]').waitFor({ timeout: 15000 });

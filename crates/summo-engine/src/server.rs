@@ -1384,8 +1384,13 @@ async fn translate_meeting(
     if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
-    let client = match llm_client(&state) {
-        Ok(client) => client,
+    // Not `llm_client`: translation may be pointed at a model of its own, and which model it is
+    // decides the prompt as well as the endpoint. See `translate::Translator`.
+    let translator = match summo_core::settings::Settings::load(&state.engine.paths().settings())
+        .and_then(|settings| {
+            crate::translate::Translator::from_settings(state.engine.paths(), &settings)
+        }) {
+        Ok(translator) => translator,
         Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
     };
 
@@ -1402,7 +1407,7 @@ async fn translate_meeting(
 
     let result = crate::translate::translate(
         state.engine.paths(),
-        &client,
+        &translator,
         &meeting,
         &doc,
         &body.lang,
@@ -2340,6 +2345,13 @@ struct LlmBody {
     model: Option<String>,
     language: Option<String>,
     summarize_on_stop: Option<bool>,
+    /// The dedicated translation model, or `Some(None)` to go back to using the general one.
+    ///
+    /// Doubly optional on purpose. Absent means "leave it alone", which is what every existing
+    /// caller sends; present-and-null means "turn it off". Collapsing the two would make every
+    /// save from an older client silently delete the user's translator.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    translator: Option<Option<summo_core::settings::Translator>>,
 }
 
 /// The API key, from the environment.
@@ -2574,6 +2586,15 @@ async fn set_llm(
         }
         if let Some(on_stop) = body.summarize_on_stop {
             settings.llm.summarize_on_stop = on_stop;
+        }
+        if let Some(translator) = body.translator {
+            settings.llm.translator =
+                translator
+                    .filter(|t| !t.provider.trim().is_empty())
+                    .map(|t| summo_core::settings::Translator {
+                        provider: t.provider.trim().to_string(),
+                        model: t.model.filter(|m| !m.trim().is_empty()),
+                    });
         }
         settings.save(&path)?;
         Ok(settings)
@@ -2891,19 +2912,23 @@ fn start_session(
     // A translation the user asked for but cannot have — no provider configured — is reported when
     // the session starts rather than silently producing no subtitles for an hour.
     let live = match spec.translate_to.as_deref().map(str::trim) {
-        Some(lang) if !lang.is_empty() => match llm_for_engine(engine) {
-            Ok(client) => Some(crate::live::LiveTranslator::new(
-                client,
-                crate::live::LiveConfig {
-                    lang: lang.to_string(),
-                    glossary: summo_llm::prompt::Glossary::default(),
-                },
-            )),
-            Err(e) => {
-                tracing::warn!(error = %e, "live translation asked for but no model is configured");
-                None
+        Some(lang) if !lang.is_empty() => {
+            match summo_core::settings::Settings::load(&engine.paths().settings()).and_then(
+                |settings| crate::translate::Translator::from_settings(engine.paths(), &settings),
+            ) {
+                Ok(translator) => Some(crate::live::LiveTranslator::new(
+                    translator,
+                    crate::live::LiveConfig {
+                        lang: lang.to_string(),
+                        glossary: summo_llm::prompt::Glossary::default(),
+                    },
+                )),
+                Err(e) => {
+                    tracing::warn!(error = %e, "live translation asked for but no model is configured");
+                    None
+                }
             }
-        },
+        }
         _ => None,
     };
 
