@@ -12,6 +12,8 @@ interface Source {
   meeting: string;
   title: string;
   day: string;
+  /** `meeting` or `note`. A citation that does not say which sends the reader to the wrong route. */
+  kind?: "meeting" | "note";
 }
 
 interface Answer {
@@ -112,10 +114,18 @@ export function ChatScreen() {
                           key={source.meeting}
                           type="button"
                           onClick={() =>
-                            void navigate({
-                              to: "/meetings/$meetingId",
-                              params: { meetingId: source.meeting },
-                            })
+                            // A note is not a meeting and does not have a meeting's page. Every
+                            // citation used to go to `/meetings/<id>`, so citing a note opened a
+                            // screen that did not exist — for the one control whose whole job is
+                            // letting a reader check what the model claimed.
+                            void navigate(
+                              source.kind === "note"
+                                ? { to: "/notes" }
+                                : {
+                                    to: "/meetings/$meetingId",
+                                    params: { meetingId: source.meeting },
+                                  },
+                            )
                           }
                           className={cn(
                             "border-line rounded-full border px-2.5 py-1 text-[12px]",

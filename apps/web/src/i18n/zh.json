@@ -533,5 +533,10 @@
     "see_all": "查看全部",
     "ask": "提问",
     "assistant_hint": "录过的、写过的都能问，答案会注明出处。"
+  },
+  "palette": {
+    "title": "搜索全部",
+    "placeholder": "搜索或跳转…",
+    "nothing": "没有匹配项。"
   }
 }

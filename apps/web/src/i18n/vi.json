@@ -533,5 +533,10 @@
     "see_all": "Xem tất cả",
     "ask": "Hỏi",
     "assistant_hint": "Hỏi bất cứ điều gì bạn đã ghi hoặc đã viết — câu trả lời luôn nói rõ lấy từ đâu."
+  },
+  "palette": {
+    "title": "Tìm mọi thứ",
+    "placeholder": "Tìm hoặc nhảy tới…",
+    "nothing": "Không có gì khớp."
   }
 }

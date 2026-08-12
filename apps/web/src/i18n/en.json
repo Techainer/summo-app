@@ -533,5 +533,10 @@
     "see_all": "See all",
     "ask": "Ask",
     "assistant_hint": "Ask anything you have recorded or written, and the answer names where it came from."
+  },
+  "palette": {
+    "title": "Search everything",
+    "placeholder": "Search or jump to…",
+    "nothing": "Nothing matches."
   }
 }

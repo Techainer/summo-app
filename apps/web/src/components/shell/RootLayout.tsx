@@ -13,6 +13,7 @@ import {
   House,
   Mic,
   Package,
+  Search,
   Minimize2,
   NotebookPen,
   Settings,
@@ -29,6 +30,7 @@ import { Waveform } from "../Waveform";
 import { motion } from "motion/react";
 
 import { SNAPPY, screen as screenVariants } from "../../lib/motion";
+import { Palette, usePaletteShortcut } from "../search/Palette";
 import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
 import { NudgeBar } from "./NudgeBar";
@@ -87,6 +89,8 @@ export function RootLayout({ children }: { children: ReactNode }) {
   // Initialised from the breakpoint rather than defaulting open and correcting in an effect: on a
   // phone that would paint the sidebar over the whole app for one frame before closing it.
   const [navOpen, setNavOpen] = useState(() => !narrow);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  usePaletteShortcut(useCallback(() => setPaletteOpen(true), []));
   const [compact, setCompact] = useState(false);
   const [folders, setFolders] = useState<string[]>([]);
 
@@ -174,6 +178,19 @@ export function RootLayout({ children }: { children: ReactNode }) {
           </span>
           Summo
         </div>
+
+        {/* Search where a search bar goes, and the shortcut written on it. Eleven destinations and
+            a vault is more than a sidebar can make feel small; this is what does. */}
+        <button
+          type="button"
+          onClick={() => setPaletteOpen(true)}
+          aria-label={t("palette.title")}
+          className="border-line bg-bg-soft text-fg-faint hover:border-line-strong hover:text-fg-dim text-meta ms-1 hidden items-center gap-2 rounded-[var(--radius-pill)] border px-3 py-1.5 transition-colors sm:flex"
+        >
+          <Search aria-hidden="true" className="size-3.5" />
+          {t("palette.placeholder")}
+          <kbd className="text-micro border-line ms-4 rounded border px-1.5 py-0.5">⌘K</kbd>
+        </button>
         <div className="ml-auto flex min-w-0 items-center gap-2.5">
           {/* The meter is the first thing to go when there is no room: the record button says the
               same thing, and a two-pixel-wide waveform says nothing. */}
@@ -259,6 +276,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           </FirstRun>
         </AppShell>
       </div>
+      <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <StatusBar
         stat={engine.stat}
         speakers={speakersOf(engine.transcript.segments)}

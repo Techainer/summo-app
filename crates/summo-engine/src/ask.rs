@@ -26,6 +26,14 @@ pub struct Source {
     pub meeting: String,
     pub title: String,
     pub day: String,
+    /// `meeting` or `note`.
+    ///
+    /// The search has always covered both — `Library::scan` reads recordings and typed notes into
+    /// one index — but the citation did not say which, so the interface sent every one of them to
+    /// `/meetings/<id>`. A note cited as the source of an answer opened a page that did not exist,
+    /// which is the worst possible outcome for the one control whose entire job is letting a user
+    /// check the model's claim.
+    pub kind: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,7 +57,9 @@ pub async fn ask(paths: &Paths, client: &LlmClient, question: &str) -> Result<An
     if hits.is_empty() {
         return Ok(Answer {
             question: question.to_string(),
-            text: "Không tìm thấy buổi họp nào nhắc tới chuyện này.".into(),
+            // Not "buổi họp": the search covers everything in the vault, and saying otherwise
+            // tells a user their notes were not looked at when they were.
+            text: "Không tìm thấy gì trong kho nhắc tới chuyện này.".into(),
             sources: Vec::new(),
         });
     }
@@ -78,6 +88,11 @@ pub async fn ask(paths: &Paths, client: &LlmClient, question: &str) -> Result<An
             meeting: hit.meeting.id.to_string(),
             title: hit.meeting.title.clone(),
             day: hit.meeting.day.clone(),
+            kind: if hit.meeting.kind.is_note() {
+                "note".into()
+            } else {
+                "meeting".into()
+            },
         });
     }
 
@@ -121,6 +136,28 @@ mod tests {
     #[test]
     fn a_negative_timestamp_does_not_wrap_around() {
         assert_eq!(clock(-5.0), "00:00");
+    }
+
+    /// A citation has one job: letting a reader check what the model claimed. Sending every one of
+    /// them to `/meetings/<id>` meant citing a note opened a page that does not exist.
+    #[tokio::test]
+    async fn a_cited_note_is_labelled_as_a_note() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = summo_core::paths::Paths::at(dir.path());
+        paths.ensure().unwrap();
+        std::fs::write(
+            paths.notes().join("y-tuong.md"),
+            "---\nid: 01NOTE\ndate: 2026-08-12\n---\n# Ý tưởng\n\nkhinhkhicau màu cam\n",
+        )
+        .unwrap();
+
+        let library = summo_vault::library::Library::new(paths.clone());
+        let hits = library.search("khinhkhicau", 6).unwrap();
+        assert_eq!(hits.len(), 1, "the search has always covered notes");
+        assert!(
+            hits[0].meeting.kind.is_note(),
+            "and it says which kind it found"
+        );
     }
 
     #[tokio::test]
