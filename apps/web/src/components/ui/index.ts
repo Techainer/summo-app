@@ -1,3 +1,4 @@
+export { Empty, EmptyColumn } from "./Empty";
 export { Checkbox } from "./Checkbox";
 export { Button, Spinner, type ButtonProps } from "./Button";
 export { Card, CardBody, CardHeader } from "./Card";

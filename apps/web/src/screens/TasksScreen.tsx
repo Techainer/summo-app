@@ -1,6 +1,15 @@
+import { CheckCircle2, Circle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button, Card, CardBody, CardHeader, SegmentedControl, StatusChip } from "../components/ui";
+import {
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyColumn,
+  SegmentedControl,
+  StatusChip,
+} from "../components/ui";
 import { useErrorText } from "../lib/errors";
 import { cn } from "../lib/cn";
 import { useT } from "../i18n/context";
@@ -236,6 +245,7 @@ function Column({
   onDrop: (id: string) => void;
   children: React.ReactNode;
 }) {
+  const t = useT();
   const [over, setOver] = useState(false);
   return (
     <section
@@ -260,7 +270,12 @@ function Column({
         {label}
         <span className="tabular ml-1.5 font-normal">{count}</span>
       </h2>
-      <div className="space-y-2">{children}</div>
+      {/* An empty column says so rather than being a bordered rectangle of nothing. Four of those
+          side by side is what made a board with no work on it look like a board that failed to
+          load. */}
+      <div className="space-y-2">
+        {count === 0 ? <EmptyColumn>{t("empty.column")}</EmptyColumn> : children}
+      </div>
     </section>
   );
 }
@@ -373,7 +388,11 @@ function AgentCard({ task, running, onRun }: { task: Task; running: boolean; onR
                       s.done ? "text-fg-faint" : "text-fg",
                     )}
                   >
-                    <span aria-hidden="true">{s.done ? "✓" : "○"}</span>
+                    {s.done ? (
+                      <CheckCircle2 aria-hidden="true" className="text-done size-3.5 shrink-0" />
+                    ) : (
+                      <Circle aria-hidden="true" className="text-fg-faint size-3.5 shrink-0" />
+                    )}
                     {s.text}
                   </li>
                 ))}

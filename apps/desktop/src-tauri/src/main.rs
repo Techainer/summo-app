@@ -61,15 +61,78 @@ fn main() {
         .expect("failed to start Summo");
 }
 
+/// The three words the tray menu needs, in the language the user chose.
+///
+/// These were hardcoded Vietnamese, which made the shell the one place in the product that ignored
+/// the language setting — the interface it wraps had just been taught not to do that.
+///
+/// A three-entry table rather than a catalogue. The shell is deliberately thin: it owns a window, a
+/// tray and a shortcut, and it is not worth a dependency on the workspace — which is excluded on
+/// purpose, since building it needs platform webview libraries — to translate three strings. A
+/// language the table has never heard of falls back to English rather than to nothing.
+fn tray_words(language: &str) -> [&'static str; 3] {
+    match language {
+        "vi" => ["Ghi ngay", "Mở Summo", "Thoát"],
+        _ => ["Record now", "Open Summo", "Quit"],
+    }
+}
+
+/// `interface.language` from the settings file the daemon and the app already share.
+///
+/// Read directly rather than through `summo-core`, for the same reason as above. Every failure —
+/// no file, unreadable, not JSON, no such field — is the same answer: the default. The app has to
+/// start on a machine that has never run it.
+fn chosen_language(app: &tauri::AppHandle) -> String {
+    let settings = app
+        .path()
+        .home_dir()
+        .map(|home| home.join(".summo").join("settings.json"));
+    let Ok(path) = settings else {
+        return "vi".into();
+    };
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|json| {
+            json.get("interface")?
+                .get("language")?
+                .as_str()
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| "vi".into())
+}
+
 fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
-    let record = MenuItem::with_id(app, "record", "Ghi ngay", true, Some("CmdOrCtrl+Shift+R"))?;
-    let open = MenuItem::with_id(app, "open", "Mở Summo", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Thoát", true, None::<&str>)?;
+    let [record_label, open_label, quit_label] = tray_words(&chosen_language(app));
+    let record = MenuItem::with_id(app, "record", record_label, true, Some("CmdOrCtrl+Shift+R"))?;
+    let open = MenuItem::with_id(app, "open", open_label, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&record, &open, &quit])?;
 
     TrayIconBuilder::with_id("summo")
         .menu(&menu)
+        // Without this the tray entry is a blank space. The app hides here rather than quitting, so
+        // a tray with nothing in it means a running app the user cannot find and cannot stop.
+        .icon(app.default_window_icon().cloned().ok_or_else(|| {
+            tauri::Error::AssetNotFound("no window icon to use in the tray".into())
+        })?)
+        .icon_as_template(true)
         .tooltip("Summo")
+        // A left click shows the window. Every tray app behaves this way, and requiring the menu
+        // for the one thing people want from a tray icon is a small daily annoyance.
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let tauri::tray::TrayIconEvent::Click {
+                button: tauri::tray::MouseButton::Left,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = event
+                && let Some(window) = tray.app_handle().get_webview_window("main")
+            {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        })
         .on_menu_event(|app, event| match event.id().as_ref() {
             "record" => {
                 let _ = app.emit("summo://toggle-record", ());

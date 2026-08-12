@@ -462,5 +462,14 @@
     "purple": "Purple",
     "pink": "Pink",
     "grey": "Grey"
+  },
+  "empty": {
+    "tasks": "No tasks yet",
+    "tasks_hint": "Tasks come from the checkboxes in your meeting notes. Write “- [ ] @ngoc settle the spec” in one and it appears here.",
+    "column": "Nothing here",
+    "chat": "Ask about your meetings",
+    "chat_hint": "Answers come from your own transcripts, with the meeting and timestamp they came from.",
+    "agenda": "No calendars yet",
+    "agenda_hint": "Export an .ics from Google Calendar or Fastmail and add it above. Summo never records on its own — it only uses this to name a meeting."
   }
 }

@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+import { ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useT } from "../../i18n/context";
@@ -7,7 +9,16 @@ import { ancestorsOf, buildTree, visibleRows } from "../../lib/folders";
 export interface NavItem {
   key: string;
   label: string;
-  icon: string;
+  /**
+   * A drawn icon, not a character.
+   *
+   * These were typographic glyphs — `●`, `▤`, `◫`, `◔` — picked because they were free. They also
+   * render in whatever face the system falls back to, at whatever weight and baseline that face
+   * decided, so the column of them was ragged and each one looked like a different piece of
+   * punctuation rather than a set. A stroked icon at a fixed size is one weight, one grid, one
+   * optical centre.
+   */
+  icon: LucideIcon;
   /** Unread or outstanding count, e.g. overdue tasks. Zero renders nothing. */
   badge?: number;
 }
@@ -74,9 +85,10 @@ export function Sidebar({
                     : "text-fg-dim hover:bg-bg-soft hover:text-fg",
                 )}
               >
-                <span aria-hidden="true" className="w-4 text-center">
-                  {item.icon}
-                </span>
+                {/* `size-4` and `stroke-[1.75]`: the same optical weight as the 13px label beside
+                    it. A 2px stroke at this size reads heavier than the text and pulls the eye to
+                    the icon rather than to the word, which is the wrong way round in a nav. */}
+                <item.icon aria-hidden="true" className="size-4 shrink-0 stroke-[1.75]" />
                 {item.label}
                 {item.badge ? (
                   <span className="tabular bg-rec ml-auto rounded-full px-1.5 py-0.5 text-[11px] font-semibold text-white">
@@ -128,6 +140,12 @@ export function Sidebar({
   );
 }
 
+/** `Folder` or `FolderOpen`, so the row says which one the list is showing. */
+function FolderIcon({ open, ...rest }: { open: boolean; className?: string }) {
+  const Glyph = open ? FolderOpen : Folder;
+  return <Glyph {...rest} />;
+}
+
 function FolderRow({
   label,
   depth,
@@ -165,16 +183,24 @@ function FolderRow({
           aria-expanded={expanded}
           className="text-fg-faint hover:text-fg flex size-6 shrink-0 items-center justify-center"
         >
-          <span
+          <ChevronRight
             aria-hidden="true"
-            className={cn("transition-transform duration-150", expanded && "rotate-90")}
-          >
-            ›
-          </span>
+            className={cn("size-3.5 transition-transform duration-150", expanded && "rotate-90")}
+          />
         </button>
       ) : (
         <span className="size-6 shrink-0" aria-hidden="true" />
       )}
+      {/* Open when it is the folder being browsed. The chevron says whether the *tree* is open;
+          this says which folder the list is showing, and they are different facts. */}
+      <FolderIcon
+        aria-hidden="true"
+        className={cn(
+          "mr-1.5 size-4 shrink-0 stroke-[1.75]",
+          selected ? "text-accent" : "text-fg-faint",
+        )}
+        open={selected}
+      />
       <button
         type="button"
         onClick={onSelect}

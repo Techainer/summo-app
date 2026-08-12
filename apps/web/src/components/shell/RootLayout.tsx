@@ -1,4 +1,20 @@
 import { useMatchRoute, useNavigate, useRouterState } from "@tanstack/react-router";
+import type { LucideIcon } from "lucide-react";
+import {
+  AudioLines,
+  Bot,
+  CalendarDays,
+  ChartNoAxesColumn,
+  Library,
+  ListChecks,
+  Maximize2,
+  Menu,
+  MessageCircleQuestion,
+  Mic,
+  Minimize2,
+  NotebookPen,
+  Settings,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { useT } from "../../i18n/context";
@@ -17,17 +33,22 @@ import { NudgeBar } from "./NudgeBar";
 
 /// Labels are translation keys, resolved at render — a module-level array is built once, before a
 /// provider exists, so baking the text in here would freeze the first language forever.
-const NAV: { key: string; labelKey: string; icon: string }[] = [
-  { key: "/", labelKey: "nav.record", icon: "●" },
-  { key: "/library", labelKey: "nav.library", icon: "▤" },
-  { key: "/notes", labelKey: "nav.notes", icon: "✎" },
-  { key: "/agenda", labelKey: "nav.agenda", icon: "◫" },
-  { key: "/tasks", labelKey: "nav.tasks", icon: "☑" },
-  { key: "/agents", labelKey: "nav.agents", icon: "◈" },
-  { key: "/chat", labelKey: "nav.chat", icon: "◇" },
-  { key: "/people", labelKey: "nav.people", icon: "◍" },
-  { key: "/analytics", labelKey: "nav.analytics", icon: "◔" },
-  { key: "/settings", labelKey: "nav.settings", icon: "⚙" },
+///
+/// The icons were typographic characters: `●`, `▤`, `◫`, `◔`. They were free, and they cost the
+/// interface more than they saved — each rendered in whatever face the system fell back to, at that
+/// face's weight and baseline, so a column of ten looked like ten pieces of punctuation from
+/// different books rather than one set.
+const NAV: { key: string; labelKey: string; icon: LucideIcon }[] = [
+  { key: "/", labelKey: "nav.record", icon: Mic },
+  { key: "/library", labelKey: "nav.library", icon: Library },
+  { key: "/notes", labelKey: "nav.notes", icon: NotebookPen },
+  { key: "/agenda", labelKey: "nav.agenda", icon: CalendarDays },
+  { key: "/tasks", labelKey: "nav.tasks", icon: ListChecks },
+  { key: "/agents", labelKey: "nav.agents", icon: Bot },
+  { key: "/chat", labelKey: "nav.chat", icon: MessageCircleQuestion },
+  { key: "/people", labelKey: "nav.people", icon: AudioLines },
+  { key: "/analytics", labelKey: "nav.analytics", icon: ChartNoAxesColumn },
+  { key: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 
 /**
@@ -112,7 +133,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           title={t("nav.expand_hint")}
           className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1"
         >
-          ⤢
+          <Maximize2 aria-hidden="true" className="size-4 stroke-[1.75]" />
         </button>
       </div>
     );
@@ -131,7 +152,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           aria-expanded={navOpen}
           className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1.5"
         >
-          ☰
+          <Menu aria-hidden="true" className="size-[18px] stroke-[1.75]" />
         </button>
         <div className="flex items-center gap-2 font-semibold tracking-tight">
           <span className="flex h-4 items-end gap-[2.5px]" aria-hidden="true">
@@ -162,7 +183,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
             title={t("nav.shrink_hint")}
             className="text-fg-faint hover:bg-bg-soft hover:text-fg hidden rounded-lg px-2 py-1.5 sm:block"
           >
-            ⤡
+            <Minimize2 aria-hidden="true" className="size-4 stroke-[1.75]" />
           </button>
         </div>
       </header>

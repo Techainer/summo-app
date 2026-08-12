@@ -1,7 +1,8 @@
+import { CalendarDays } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button } from "../components/ui";
+import { Button, Empty } from "../components/ui";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
@@ -130,7 +131,7 @@ export function AgendaScreen() {
       )}
 
       {entries.length === 0 ? (
-        <p className="text-fg-faint mt-12 text-center">{t("agenda.empty")}</p>
+        <Empty icon={CalendarDays} title={t("empty.agenda")} hint={t("empty.agenda_hint")} />
       ) : (
         <div className="mt-8 space-y-6">
           {grouped.map(([day, items]) => (

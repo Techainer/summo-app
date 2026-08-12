@@ -1,6 +1,7 @@
+import { ChartNoAxesColumn, Square } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
+import { Card, CardBody, CardHeader, Empty, SegmentedControl } from "../components/ui";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { formatDuration } from "../lib/duration";
@@ -73,7 +74,7 @@ export function AnalyticsScreen() {
       )}
 
       {report && report.meetings.length === 0 && (
-        <p className="text-fg-faint mt-16 text-center">{t("analytics.empty")}</p>
+        <Empty icon={ChartNoAxesColumn} title={t("analytics.empty")} />
       )}
 
       {report && report.meetings.length > 0 && (
@@ -131,9 +132,10 @@ export function AnalyticsScreen() {
               <CardBody className="space-y-1.5">
                 {report.open_actions.map((action, i) => (
                   <div key={`${action.meeting}-${i}`} className="flex items-baseline gap-2 text-sm">
-                    <span aria-hidden="true" className="text-fg-faint">
-                      ☐
-                    </span>
+                    <Square
+                      aria-hidden="true"
+                      className="text-fg-faint mt-0.5 size-3.5 shrink-0 stroke-[1.75]"
+                    />
                     <span className="flex-1">{action.text}</span>
                     <span className="text-fg-faint shrink-0 text-[12px]">
                       {action.meeting_title}

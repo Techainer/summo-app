@@ -1,3 +1,4 @@
+import { PencilLine } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../lib/cn";
@@ -387,7 +388,11 @@ function MeetingRow({
       {/* A note has no time of day worth showing — it was typed, not scheduled — so the column
           carries a mark instead. Same width either way, so the titles still line up. */}
       <span className="tabular text-fg-faint shrink-0 text-[12px]">
-        {meeting.kind === "note" ? "✎" : timeOfDay(meeting.date)}
+        {meeting.kind === "note" ? (
+          <PencilLine aria-hidden="true" className="mx-auto size-3.5 stroke-[1.75]" />
+        ) : (
+          timeOfDay(meeting.date)
+        )}
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-1.5 leading-snug font-medium">

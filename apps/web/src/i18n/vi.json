@@ -462,5 +462,14 @@
     "purple": "Tím",
     "pink": "Hồng",
     "grey": "Xám"
+  },
+  "empty": {
+    "tasks": "Chưa có việc nào",
+    "tasks_hint": "Việc lấy từ các ô tick trong ghi chú cuộc họp. Viết “- [ ] @ngoc chốt spec” vào một buổi họp là nó hiện ở đây.",
+    "column": "Chưa có gì",
+    "chat": "Hỏi về các cuộc họp của bạn",
+    "chat_hint": "Câu trả lời lấy từ chính bản ghi của bạn, kèm buổi họp và mốc thời gian nó đến từ đâu.",
+    "agenda": "Chưa có lịch nào",
+    "agenda_hint": "Xuất file .ics từ Google Calendar hay Fastmail rồi thêm ở trên. Summo không tự ghi âm theo lịch — chỉ dùng để đặt tên cho biên bản."
   }
 }

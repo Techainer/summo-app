@@ -1,3 +1,4 @@
+import { FolderOpen, Inbox } from "lucide-react";
 import { useMemo } from "react";
 
 import { useT } from "../../i18n/context";
@@ -79,9 +80,19 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
                   : "text-fg-dim hover:bg-bg-soft hover:text-fg",
               )}
             >
-              <span aria-hidden="true" className="text-fg-faint">
-                {node.path === "" ? "◇" : "▸"}
-              </span>
+              {/* `Inbox` for the root rather than a folder: what sits there is not filed, and a
+                  folder icon on "unfiled" says the opposite of what the row means. */}
+              {node.path === "" ? (
+                <Inbox
+                  aria-hidden="true"
+                  className="text-fg-faint size-3.5 shrink-0 stroke-[1.75]"
+                />
+              ) : (
+                <FolderOpen
+                  aria-hidden="true"
+                  className="text-fg-faint size-3.5 shrink-0 stroke-[1.75]"
+                />
+              )}
               <span className="truncate">
                 {node.path === "" ? t("library.unfiled") : node.name}
               </span>
