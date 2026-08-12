@@ -39,7 +39,7 @@ use std::{
 
 use ort::{
     session::{Session, builder::GraphOptimizationLevel},
-    value::Tensor,
+    value::{Tensor, TensorRef},
 };
 use summo_core::{Error, Result};
 use tokenizers::{
@@ -313,7 +313,7 @@ impl Seq2Seq {
         let context = match &mut *graphs {
             Graphs::Single(_) => None,
             Graphs::Split { encoder, .. } => {
-                let ids = Tensor::from_array(([1_usize, input.len()], input.clone()))
+                let ids = TensorRef::from_array_view(([1_usize, input.len()], &input[..]))
                     .map_err(|e| Error::Other(e.to_string()))?;
                 let outputs = encoder
                     .run(ort::inputs! { "input_ids" => ids })
@@ -326,15 +326,21 @@ impl Seq2Seq {
             }
         };
 
+        // Built once and borrowed on every step. These do not change while a line is generated,
+        // and `Tensor::from_array` takes ownership — so building them inside the loop copied the
+        // encoder's output, ~50 KB, once per generated token for no reason at all.
+        let mask: Vec<i64> = vec![1; input.len()];
+
         let mut decoded: Vec<i64> = vec![EOS];
         for _ in 0..MAX_TOKENS {
-            let decoder_ids = Tensor::from_array(([1_usize, decoded.len()], decoded.clone()))
+            let decoder_ids = TensorRef::from_array_view(([1_usize, decoded.len()], &decoded[..]))
                 .map_err(|e| Error::Other(e.to_string()))?;
 
             let outputs = match (&mut *graphs, &context) {
                 (Graphs::Single(session), _) => {
-                    let encoder_ids = Tensor::from_array(([1_usize, input.len()], input.clone()))
-                        .map_err(|e| Error::Other(e.to_string()))?;
+                    let encoder_ids =
+                        TensorRef::from_array_view(([1_usize, input.len()], &input[..]))
+                            .map_err(|e| Error::Other(e.to_string()))?;
                     session
                         .run(ort::inputs! {
                             "input_ids" => encoder_ids,
@@ -343,13 +349,12 @@ impl Seq2Seq {
                         .map_err(|e| Error::Other(format!("the model failed: {e}")))?
                 }
                 (Graphs::Split { decoder, .. }, Some((shape, values))) => {
-                    let hidden = Tensor::from_array((shape.clone(), values.clone()))
+                    let hidden = TensorRef::from_array_view((shape.clone(), &values[..]))
                         .map_err(|e| Error::Other(e.to_string()))?;
                     // All ones: an utterance is one sequence with nothing padded, so there is
                     // nothing for the mask to hide. It is required all the same.
-                    let mask =
-                        Tensor::from_array(([1_usize, input.len()], vec![1_i64; input.len()]))
-                            .map_err(|e| Error::Other(e.to_string()))?;
+                    let mask = TensorRef::from_array_view(([1_usize, mask.len()], &mask[..]))
+                        .map_err(|e| Error::Other(e.to_string()))?;
                     decoder
                         .run(ort::inputs! {
                             "input_ids" => decoder_ids,

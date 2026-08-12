@@ -141,6 +141,34 @@ rather than the way in — the registry gives content-addressed downloads, resum
 and none of that applies to a file you made yourself. It exists because the alternative is that the
 smallest translation Summo can do is a number in a document.
 
+## Is it fast enough
+
+Yes, with room to spare, and the remaining headroom is not worth spending.
+
+Measured on eight CPU threads: **244 ms a line**. Speech arrives at roughly one utterance every four
+seconds, so a meeting is translated about sixteen times faster than it is spoken. A one-hour meeting
+is around six hundred lines and two and a half minutes of CPU.
+
+Threads, on the same sentences:
+
+| 1 | 2 | 4 | 8 | 16 |
+|---|---|---|---|---|
+| 570 ms | 414 ms | 278 ms | **248 ms** | 255 ms |
+
+Eight is the knee, and the default is capped there — past it the model stops getting faster and
+starts taking cores from the speech recognition that is the reason the app is open.
+
+Two optimisations were measured and **not** taken:
+
+- **A KV cache.** The obvious one, and it does nothing here: 7.9 ms a step with the merged
+  past-key-value decoder against 7.0 ms without. An utterance is a dozen tokens, so the quadratic
+  term never gets going, and the per-step cost is dominated by the projection to a 128 000-token
+  vocabulary — which is the same work either way.
+- **Beam search.** Worse output at five times the cost. See above.
+
+What did help was the export shape (encoder once instead of once per token, 2x) and not copying the
+encoder's output into a new tensor on every step.
+
 ## Why the prompt is different
 
 MiLMMT, and the NLLB and M2M families before it, were trained to continue exactly one string:

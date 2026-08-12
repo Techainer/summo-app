@@ -482,5 +482,10 @@
     "chat_hint": "答えは自分の文字起こしから作られ、出典の会議と時刻が付きます。",
     "agenda": "カレンダーはまだありません",
     "agenda_hint": "GoogleカレンダーやFastmailから .ics を書き出して、上から追加してください。Summoが勝手に録音することはなく、会議に名前を付けるためだけに使います。"
+  },
+  "transcript": {
+    "pause": "{seconds}秒の沈黙",
+    "at_the_same_time": "同時に発言",
+    "follow": "最新に追従"
   }
 }

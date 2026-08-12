@@ -482,5 +482,10 @@
     "chat_hint": "答案来自你自己的转写，并注明出自哪场会议、哪个时间点。",
     "agenda": "还没有日历",
     "agenda_hint": "从 Google 日历或 Fastmail 导出 .ics，在上面添加。Summo 不会自己录音，这只用来给会议起名。"
+  },
+  "transcript": {
+    "pause": "沉默 {seconds} 秒",
+    "at_the_same_time": "同时在说",
+    "follow": "跟随最新"
   }
 }

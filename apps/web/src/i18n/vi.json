@@ -482,5 +482,10 @@
     "chat_hint": "Câu trả lời lấy từ chính bản ghi của bạn, kèm buổi họp và mốc thời gian nó đến từ đâu.",
     "agenda": "Chưa có lịch nào",
     "agenda_hint": "Xuất file .ics từ Google Calendar hay Fastmail rồi thêm ở trên. Summo không tự ghi âm theo lịch — chỉ dùng để đặt tên cho biên bản."
+  },
+  "transcript": {
+    "pause": "im lặng {seconds} giây",
+    "at_the_same_time": "nói cùng lúc",
+    "follow": "Theo dòng mới nhất"
   }
 }

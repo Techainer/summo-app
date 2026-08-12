@@ -482,5 +482,10 @@
     "chat_hint": "Answers come from your own transcripts, with the meeting and timestamp they came from.",
     "agenda": "No calendars yet",
     "agenda_hint": "Export an .ics from Google Calendar or Fastmail and add it above. Summo never records on its own — it only uses this to name a meeting."
+  },
+  "transcript": {
+    "pause": "{seconds}s of silence",
+    "at_the_same_time": "at the same time",
+    "follow": "Follow the latest"
   }
 }

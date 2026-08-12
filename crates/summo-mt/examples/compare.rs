@@ -34,10 +34,10 @@ impl Model {
                 .file_name()
                 .map_or_else(|| "onnx".to_string(), |n| n.to_string_lossy().into_owned());
             Ok(Self::Onnx(Box::new(
-                Seq2Seq::load(&summo_mt::seq2seq::discover(path), Some(8))?.named(name),
+                Seq2Seq::load(&summo_mt::seq2seq::discover(path), threads())?.named(name),
             )))
         } else {
-            Ok(Self::Gguf(Box::new(Local::load(path, Some(8))?)))
+            Ok(Self::Gguf(Box::new(Local::load(path, threads())?)))
         }
     }
 
@@ -99,6 +99,13 @@ const CASES: &[(&str, &str, &str)] = &[
         "The tribal chieftain called for the boy and presented him with fifty pieces of gold.",
     ),
 ];
+
+/// `SUMMO_MT_THREADS`, so a thread sweep is a shell loop rather than a rebuild.
+fn threads() -> Option<usize> {
+    std::env::var("SUMMO_MT_THREADS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+}
 
 fn main() {
     let paths: Vec<String> = std::env::args().skip(1).collect();

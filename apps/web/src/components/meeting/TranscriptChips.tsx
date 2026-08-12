@@ -3,6 +3,7 @@ import { useMemo, useRef } from "react";
 
 import { useT } from "../../i18n/context";
 import { cn } from "../../lib/cn";
+import { decorate, italicise, type Row } from "../../lib/reading";
 import { clock } from "./Player";
 
 /**
@@ -17,6 +18,10 @@ export interface Line {
   text: string;
   /** Seconds from the start of the meeting. */
   t0: number;
+  /** When it ended, where the source knows. Only used to tell two speakers apart from one. */
+  t1?: number;
+  /** Which capture this came from, so two unnamed voices are not merged into one. */
+  lane?: string;
   /** `null` from the vault when nobody was identified, absent from a live event. */
   speaker?: string | null;
   /** Present only while recording; a partial is still being revised. */
@@ -49,6 +54,10 @@ export function TranscriptChips({ segments, at, onSeek, reading = false }: Props
   const t = useT();
   const scroller = useRef<HTMLDivElement>(null);
 
+  // The same rules the recording screen uses. Two views of one transcript that disagreed about
+  // who was talking over whom would be two answers to a question with one answer.
+  const rows = useMemo(() => decorate(segments), [segments]);
+
   const virtualizer = useVirtualizer({
     count: segments.length,
     getScrollElement: () => scroller.current,
@@ -77,8 +86,8 @@ export function TranscriptChips({ segments, at, onSeek, reading = false }: Props
     <div ref={scroller} className="h-full overflow-y-auto px-1">
       <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
         {virtualizer.getVirtualItems().map((row) => {
-          const segment = segments[row.index];
-          if (!segment) return null;
+          const line = rows[row.index];
+          if (!line) return null;
           const isActive = row.index === active;
           return (
             <div
@@ -88,7 +97,12 @@ export function TranscriptChips({ segments, at, onSeek, reading = false }: Props
               className="absolute inset-x-0 top-0 pb-2"
               style={{ transform: `translateY(${row.start}px)` }}
             >
-              <Chip segment={segment} active={isActive} reading={reading} onSeek={onSeek} />
+              {line.pause !== null && (
+                <p className="text-fg-faint px-3 pt-1 pb-2 text-[11px]" data-testid="pause">
+                  {t("transcript.pause", { seconds: Math.round(line.pause) })}
+                </p>
+              )}
+              <Chip row={line} active={isActive} reading={reading} onSeek={onSeek} />
             </div>
           );
         })}
@@ -98,16 +112,17 @@ export function TranscriptChips({ segments, at, onSeek, reading = false }: Props
 }
 
 function Chip({
-  segment,
+  row,
   active,
   reading,
   onSeek,
 }: {
-  segment: Line;
+  row: Row<Line>;
   active: boolean;
   reading: boolean;
   onSeek?: (seconds: number) => void;
 }) {
+  const { segment, overlapping, showSpeaker } = row;
   // Unconditionally, at the top. Below the early return this was a hook called only on some
   // renders, which is the one thing React's rules forbid outright — the hook order changes the
   // first time a chip becomes seekable and every hook after it in the tree reads somebody else's
@@ -118,10 +133,18 @@ function Chip({
   const body = (
     <>
       <span className="flex items-baseline gap-2">
-        {segment.speaker && (
+        {/* Only at the start of a run. Three chips in a row from one person is one turn, and
+            repeating the name on each of them is what turns a paragraph into a list — the exact
+            thing this component's chips exist to make visible. */}
+        {segment.speaker && showSpeaker && (
           <span className="text-fg-dim text-[12px] font-semibold">{segment.speaker}</span>
         )}
         <span className="tabular text-fg-faint text-[11px]">{clock(segment.t0)}</span>
+        {/* Two people talking at once. Without this the two chips read as a question and an
+            answer, and nothing on screen would tell a reader otherwise. */}
+        {overlapping && (
+          <span className="text-accent text-[11px]">{t("transcript.at_the_same_time")}</span>
+        )}
       </span>
       <span
         className={cn(
@@ -136,7 +159,16 @@ function Chip({
       >
         {segment.text}
         {segment.translation && (
-          <span lang={segment.translation.lang} className="text-fg-dim mt-1 block italic">
+          <span
+            lang={segment.translation.lang}
+            className={cn(
+              "text-fg-dim mt-1 block",
+              // Italic is how this says "the machine wrote this line". CJK, Thai, Arabic and
+              // Hebrew have no italic form, so a browser shears the glyphs instead — harder to
+              // read, and it looks like a rendering fault.
+              italicise(segment.translation.lang) && "italic",
+            )}
+          >
             {segment.translation.text}
           </span>
         )}
@@ -149,15 +181,22 @@ function Chip({
     active
       ? "border-accent/40 bg-accent-soft"
       : "border-transparent hover:border-line hover:bg-bg-soft",
+    // Indented and ruled, so simultaneous speech is visible before it is read.
+    overlapping && "border-l-accent/40 ms-3 rounded-l-none border-l-2",
   );
 
   if (!seekable) {
-    return <div className={className}>{body}</div>;
+    return (
+      <div className={className} data-overlapping={overlapping || undefined}>
+        {body}
+      </div>
+    );
   }
   return (
     <button
       type="button"
       className={className}
+      data-overlapping={overlapping || undefined}
       onClick={() => onSeek(segment.t0)}
       aria-label={t("meeting.play_from", { time: clock(segment.t0) })}
     >
