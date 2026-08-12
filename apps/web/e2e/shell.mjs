@@ -112,6 +112,39 @@ async function open(scheme, viewport) {
     console.log(`screen ${label}: ${body.slice(0, 60).replace(/\n/g, " ")}…`);
   }
 
+  // Navigating twice in quick succession must leave the screen *visible*.
+  //
+  // It did not. The screen wrapper sat at `opacity: 0` — the exit variant — with the whole page
+  // laid out behind it, because `AnimatePresence mode="wait"` was stranded by a second route
+  // change arriving inside the 180 ms it holds the incoming child for.
+  //
+  // The loop above walks every screen and did not catch it, because `innerText` reports text
+  // nobody can see. So this checks paint, not presence: every ancestor of the heading has to be
+  // fully opaque.
+  for (const [first, second] of [
+    ["Thư viện", "Việc"],
+    ["Ghi chú", "Thống kê"],
+  ]) {
+    const nav = page.getByRole("navigation", { name: "Màn hình" });
+    await nav.getByRole("button", { name: first, exact: true }).click();
+    await nav.getByRole("button", { name: second, exact: true }).click();
+    await page.waitForTimeout(600);
+    const faded = await page.evaluate(() => {
+      const start = document.querySelector("main h1") ?? document.querySelector("main");
+      for (let node = start; node && node !== document.documentElement; node = node.parentElement) {
+        const opacity = getComputedStyle(node).opacity;
+        if (opacity !== "1")
+          return `${node.tagName}.${String(node.className).slice(0, 24)} → ${opacity}`;
+      }
+      return null;
+    });
+    if (faded) {
+      problems.push(`${first} then ${second} left the screen invisible: ${faded}`);
+    }
+  }
+  await page.goBack();
+  await page.waitForTimeout(600);
+
   // Analytics reads the report endpoint, which is arithmetic over the seeded vault.
   await page
     .getByRole("navigation", { name: "Màn hình" })

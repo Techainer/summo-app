@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { FileAudio } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -25,10 +26,15 @@ import { Button } from "../ui";
  * life of the screen — an idle poll every two seconds is a wakeup every two seconds, and this
  * screen is often left open.
  *
- * There is no drag-and-drop. A browser drop gives a `File` whose bytes live in the page, and the
- * daemon needs a path to hand ffmpeg; accepting a drop would mean reading a two-gigabyte video into
- * the webview and posting it back to a process on the same disk. The file dialog returns the path
- * directly, so that is the affordance.
+ * There is no drag-and-drop, and the panel is shaped like a drop target anyway. That is not a
+ * bluff — it is the shape people read as "put a file here", and the button inside it does exactly
+ * that. What a browser drop *cannot* do is give a path: it gives a `File` whose bytes live in the
+ * page, and the daemon needs a path to hand ffmpeg. Accepting one would mean reading a
+ * two-gigabyte video into the webview and posting it back to a process on the same disk.
+ *
+ * The desktop shell could do it properly — Tauri's drop event carries real paths — and that is the
+ * version worth building. It is not built here because it cannot be tested from a browser, and a
+ * drop handler that silently does nothing in the build most people run is worse than a button.
  */
 export function ImportPanel() {
   const { handshake } = useEngine();
@@ -94,10 +100,26 @@ export function ImportPanel() {
 
   return (
     <div className="mx-auto mt-10 w-full max-w-xl px-4">
-      <h2 className="text-lg font-medium">{t("import.title")}</h2>
-      <p className="text-fg-dim mt-1 text-sm">{t("import.hint")}</p>
+      {/* A dashed panel, because that is the shape people read as "a file goes here" — and the
+          button inside it is what puts one there. The bare text field this replaced said nothing
+          about what the screen wanted, what it accepted, or where the file would go. */}
+      <div className="border-line-strong bg-bg-soft/40 hover:border-fg-faint flex flex-col items-center gap-3 rounded-[var(--radius-panel)] border border-dashed px-6 py-10 text-center transition-colors">
+        <span className="bg-bg-soft ring-line grid size-12 place-items-center rounded-full ring-1">
+          <FileAudio aria-hidden="true" className="text-fg-faint size-5 stroke-[1.5]" />
+        </span>
+        <div>
+          <p className="font-medium">{t("import.title")}</p>
+          <p className="text-fg-dim mx-auto mt-1 max-w-sm text-[13px] leading-relaxed">
+            {t("import.hint")}
+          </p>
+        </div>
+        <Button onClick={() => void browse()}>{t("import.browse")}</Button>
+        {/* The formats, said once and plainly. Finding out by being refused is the worst way. */}
+        <p className="text-fg-faint font-mono text-[11px]">{t("import.formats")}</p>
+      </div>
 
-      <div className="mt-4 flex gap-2">
+      <div className="mt-3 flex items-center gap-2">
+        <span className="text-fg-faint shrink-0 text-[12px]">{t("import.or_path")}</span>
         <input
           value={path}
           onChange={(e) => setPath(e.target.value)}
@@ -106,12 +128,9 @@ export function ImportPanel() {
           }}
           placeholder={t("import.path_placeholder")}
           aria-label={t("import.path_label")}
-          className="border-line bg-bg-soft focus:border-accent min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+          className="border-line bg-bg-soft focus:border-accent min-w-0 flex-1 rounded-lg border px-3 py-1.5 text-[13px] outline-none"
         />
-        <Button onClick={() => void browse()} variant="ghost">
-          {t("import.browse")}
-        </Button>
-        <Button onClick={() => void submit(path)} disabled={!path.trim() || starting}>
+        <Button size="sm" onClick={() => void submit(path)} disabled={!path.trim() || starting}>
           {t("import.submit")}
         </Button>
       </div>
@@ -122,6 +141,9 @@ export function ImportPanel() {
         </p>
       )}
 
+      {/* No empty state for the job list. The panel above already says what this screen wants and
+          what happens to the file; a second block below repeating it is two paragraphs of the same
+          sentence stacked, which is what it looked like when it was there. */}
       <ul className="mt-6 space-y-2">
         <AnimatePresence initial={false}>
           {jobs.map((job) => {

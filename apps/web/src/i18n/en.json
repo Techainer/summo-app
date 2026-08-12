@@ -67,7 +67,9 @@
     "state_done": "Done — {count} lines",
     "state_failed": "Failed",
     "sentences_one": "{count} line",
-    "sentences_other": "{count} lines"
+    "sentences_other": "{count} lines",
+    "formats": "mp3 · m4a · wav · mp4 · mkv · webm",
+    "or_path": "or paste a path"
   },
   "meeting": {
     "untitled": "Meeting",

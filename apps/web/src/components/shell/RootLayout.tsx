@@ -24,7 +24,7 @@ import { deviceWarning } from "../../lib/session";
 import { RecordButton } from "../RecordButton";
 import { StatusBar } from "../StatusBar";
 import { Waveform } from "../Waveform";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 
 import { SNAPPY, screen as screenVariants } from "../../lib/motion";
 import { FirstRun } from "../onboarding/FirstRun";
@@ -218,23 +218,32 @@ export function RootLayout({ children }: { children: ReactNode }) {
           header={header}
         >
           <FirstRun>
-            {/* Keyed on the path so a route change is a change of element, which is what gives
-                `AnimatePresence` something to animate out. `mode="wait"` rather than a cross-fade:
-                two screens overlapping mid-transition means two scroll positions and two sets of
-                focusable controls, and a keyboard user can tab into the screen that is leaving. */}
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={pathname}
-                variants={screenVariants}
-                initial="hidden"
-                animate="shown"
-                exit="gone"
-                transition={SNAPPY}
-                className="h-full"
-              >
-                {children}
-              </motion.div>
-            </AnimatePresence>
+            {/* Keyed on the path, so a route change is a change of element and the new screen
+                fades in. No `AnimatePresence`, and therefore no exit animation.
+                
+                It was wrapped in `<AnimatePresence mode="wait">`, and clicking two navigation items
+                in quick succession left the whole app blank — the wrapper stuck at the `gone`
+                variant, `opacity: 0`, with the screen fully laid out behind it. `mode="wait"` holds
+                the incoming child until the outgoing one has finished leaving, and a second key
+                change arriving inside that 180 ms window stranded the presence.
+                
+                Nothing caught it. The browser suites assert on `innerText`, which is happy to
+                report text nobody can see, and the screenshot pass reloads the page for every
+                shot so it never navigates twice.
+                
+                The exit was worth four pixels and a fade. Dropping it removes the state machine
+                that produced the bug, and takes the original objection with it: with no outgoing
+                screen there are never two scroll positions or two sets of tab stops. */}
+            <motion.div
+              key={pathname}
+              variants={screenVariants}
+              initial="hidden"
+              animate="shown"
+              transition={SNAPPY}
+              className="h-full"
+            >
+              {children}
+            </motion.div>
           </FirstRun>
         </AppShell>
       </div>

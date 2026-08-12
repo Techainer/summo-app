@@ -1,3 +1,4 @@
+import { Pause, Play } from "lucide-react";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 
 import { useT } from "../../i18n/context";
@@ -102,9 +103,16 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
           type="button"
           onClick={toggle}
           aria-label={playing ? t("meeting.pause") : t("meeting.play")}
-          className="bg-accent text-accent-fg grid size-9 shrink-0 place-items-center rounded-full hover:brightness-110"
+          className="bg-accent text-accent-fg grid size-9 shrink-0 place-items-center rounded-full transition-all duration-150 hover:brightness-110 active:scale-95"
         >
-          <span aria-hidden="true">{playing ? "⏸" : "▶"}</span>
+          {/* Filled, and the play triangle nudged right by a pixel. A triangle centred on its
+              bounding box looks left of centre inside a circle, because its mass is not where its
+              box is — every media player in the world corrects for this. */}
+          {playing ? (
+            <Pause aria-hidden="true" className="size-4 fill-current" />
+          ) : (
+            <Play aria-hidden="true" className="ms-px size-4 fill-current" />
+          )}
         </button>
 
         <Scrubber

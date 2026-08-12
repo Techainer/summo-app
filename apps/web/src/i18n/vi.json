@@ -67,7 +67,9 @@
     "state_done": "Xong — {count} câu",
     "state_failed": "Lỗi",
     "sentences_one": "{count} câu",
-    "sentences_other": "{count} câu"
+    "sentences_other": "{count} câu",
+    "formats": "mp3 · m4a · wav · mp4 · mkv · webm",
+    "or_path": "hoặc dán đường dẫn"
   },
   "meeting": {
     "untitled": "Buổi họp",
