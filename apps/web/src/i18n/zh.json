@@ -28,7 +28,8 @@
     "agents": "智能体",
     "collapse": "收起{name}",
     "models": "模型",
-    "setup": "工作区"
+    "setup": "工作区",
+    "home": "主页"
   },
   "record": {
     "source": "来源",
@@ -518,5 +519,19 @@
     "on_disk": "占用磁盘 {size}",
     "use": "使用",
     "in_use": "使用中"
+  },
+  "home": {
+    "heading": "你的工作区",
+    "subheading": "你录下的、写下的、问过的，都留在这台机器上。",
+    "capture_hint": "按下开始录音，全部在本机运行。",
+    "write": "写",
+    "waiting": "等你处理",
+    "all_clear": "没有待办。",
+    "overdue": "已逾期",
+    "no_summary": "未生成摘要",
+    "recent": "最近",
+    "see_all": "查看全部",
+    "ask": "提问",
+    "assistant_hint": "录过的、写过的都能问，答案会注明出处。"
   }
 }

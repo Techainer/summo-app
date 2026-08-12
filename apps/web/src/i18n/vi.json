@@ -28,7 +28,8 @@
     "agents": "Agent",
     "collapse": "Thu gọn {name}",
     "models": "Mô hình",
-    "setup": "Không gian"
+    "setup": "Không gian",
+    "home": "Trang chính"
   },
   "record": {
     "source": "Nguồn",
@@ -518,5 +519,19 @@
     "on_disk": "{size} trên đĩa",
     "use": "Dùng",
     "in_use": "Đang dùng"
+  },
+  "home": {
+    "heading": "Không gian của bạn",
+    "subheading": "Mọi thứ bạn ghi, viết và hỏi — giữ trên máy này.",
+    "capture_hint": "Bấm để ghi. Mọi thứ chạy ở đây.",
+    "write": "Viết",
+    "waiting": "Đang chờ bạn",
+    "all_clear": "Không có gì chờ.",
+    "overdue": "quá hạn",
+    "no_summary": "chưa tóm tắt",
+    "recent": "Gần đây",
+    "see_all": "Xem tất cả",
+    "ask": "Hỏi",
+    "assistant_hint": "Hỏi bất cứ điều gì bạn đã ghi hoặc đã viết — câu trả lời luôn nói rõ lấy từ đâu."
   }
 }

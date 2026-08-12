@@ -80,8 +80,18 @@ pub struct Report {
 ///
 /// Both bounds are `YYYY-MM-DD`. A range where `to` precedes `from` yields an empty report rather
 /// than an error — it is a query with no answer, not a mistake worth interrupting anyone over.
+///
+/// `vault` is the vault root. Only `meetings/` and `notes/` are read from it, which is the same
+/// pair `Library::scan` reads: the rest of the vault is machinery — agent definitions, translation
+/// files, comment threads — and none of it is a document a person wrote. Scanning the whole tree,
+/// which this used to do, put `AGENT`, `Memory` and `Tasks` into the "not summarised" list on the
+/// home screen, so the first thing a new user saw was three configuration files described as
+/// meetings they had failed to summarise.
 pub fn between(vault: &std::path::Path, from: &str, to: &str) -> Result<Report> {
-    let index = MeetingIndex::scan(vault)?;
+    let index = MeetingIndex::scan_all([
+        vault.join("meetings").as_path(),
+        vault.join("notes").as_path(),
+    ])?;
 
     let mut meetings = Vec::new();
     let mut total_seconds = 0u64;
@@ -319,6 +329,26 @@ mod tests {
         assert_eq!(report.people[0].meetings, 1);
     }
 
+    /// The bug this prevents was on the first screen a user sees: the home queue listed `AGENT`,
+    /// `Memory` and `Tasks` as recordings they had failed to summarise. Those are agent definition
+    /// files. The report scanned the whole vault tree while the library scanned two folders of it,
+    /// so the two disagreed about what counts as something a person wrote.
+    #[test]
+    fn machinery_in_the_vault_is_not_a_document_somebody_failed_to_summarise() {
+        let dir = vault_with(&[(
+            "hop.md",
+            &meeting("01A", "2026-08-10T10:00:00+07:00", "Họp", ""),
+        )]);
+        // Agent definitions live beside the content and are not content.
+        let agents = dir.path().join("agents/scribe");
+        std::fs::create_dir_all(&agents).unwrap();
+        std::fs::write(agents.join("AGENT.md"), "# AGENT\n\nWrites summaries.\n").unwrap();
+        std::fs::write(agents.join("Memory.md"), "# Memory\n").unwrap();
+
+        let report = day(dir.path(), "2026-08-10").unwrap();
+        assert_eq!(report.without_summary, vec!["Họp"]);
+    }
+
     /// The analytics screen drew a bar chart labelled `[[Bạn]]`, `[[Ngọc]]`, `[[Bình]]`. Three
     /// other modules stripped the brackets and this one had never grown its own copy; there is one
     /// implementation now, and this is the test that keeps the report using it.
@@ -330,7 +360,9 @@ mod tests {
              participants: [\"[[Bạn]]\", \"[[Ngọc|Ngọc Nguyễn]]\"]\n---\n# Họp\n",
         )]);
 
-        let report = day(&dir.path().join("meetings"), "2026-08-10").unwrap();
+        // The vault root, which is what every caller passes: `between` reads `meetings/` and
+        // `notes/` from it and nothing else.
+        let report = day(dir.path(), "2026-08-10").unwrap();
         let names: Vec<&str> = report.people.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(
             names,

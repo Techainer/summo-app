@@ -10,6 +10,7 @@ import {
   Maximize2,
   Menu,
   MessageCircleQuestion,
+  House,
   Mic,
   Package,
   Minimize2,
@@ -46,7 +47,8 @@ import { NudgeBar } from "./NudgeBar";
 /// while the vault has always held typed notes beside recordings and the daemon has always returned
 /// both. `Kho` is that shelf, with a control for which kind you want to see.
 const NAV: { key: string; labelKey: string; icon: LucideIcon; group?: "work" | "setup" }[] = [
-  { key: "/", labelKey: "nav.record", icon: Mic },
+  { key: "/", labelKey: "nav.home", icon: House },
+  { key: "/record", labelKey: "nav.record", icon: Mic },
   { key: "/library", labelKey: "nav.library", icon: Library },
   { key: "/tasks", labelKey: "nav.tasks", icon: ListChecks },
   { key: "/agenda", labelKey: "nav.agenda", icon: CalendarDays },

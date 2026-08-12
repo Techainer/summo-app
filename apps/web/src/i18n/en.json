@@ -28,7 +28,8 @@
     "agents": "Agents",
     "collapse": "Collapse {name}",
     "models": "Models",
-    "setup": "Workspace"
+    "setup": "Workspace",
+    "home": "Home"
   },
   "record": {
     "source": "Source",
@@ -518,5 +519,19 @@
     "on_disk": "{size} on disk",
     "use": "Use",
     "in_use": "In use"
+  },
+  "home": {
+    "heading": "Your workspace",
+    "subheading": "Everything you record, write and ask — kept on this machine.",
+    "capture_hint": "Press to record. Everything runs here.",
+    "write": "Write",
+    "waiting": "Waiting on you",
+    "all_clear": "Nothing waiting.",
+    "overdue": "overdue",
+    "no_summary": "no summary yet",
+    "recent": "Recent",
+    "see_all": "See all",
+    "ask": "Ask",
+    "assistant_hint": "Ask anything you have recorded or written, and the answer names where it came from."
   }
 }

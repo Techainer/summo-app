@@ -9,6 +9,7 @@ import {
 import { claimHandshake } from "./lib/session";
 import { RootLayout } from "./components/shell/RootLayout";
 import { AgendaScreen } from "./screens/AgendaScreen";
+import { HomeScreen } from "./screens/HomeScreen";
 import { AnalyticsScreen } from "./screens/AnalyticsScreen";
 import { AgentsScreen } from "./screens/AgentsScreen";
 import { ChatScreen } from "./screens/ChatScreen";
@@ -53,9 +54,21 @@ const rootRoute = createRootRoute({
   ),
 });
 
-const indexRoute = createRoute({
+const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
+  component: HomeScreen,
+});
+
+/// Recording keeps a destination of its own.
+///
+/// It used to be the landing page, which was an honest picture of a recorder and a poor one of a
+/// workspace. It is still the one irreversible action, so it keeps a route, a sidebar item and a
+/// header button — moving it into a card on Home would have made the thing you cannot undo the
+/// thing you have to hunt for.
+const recordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/record",
   component: RecordScreen,
 });
 
@@ -142,7 +155,8 @@ const settingsRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  indexRoute,
+  homeRoute,
+  recordRoute,
   libraryRoute,
   meetingRoute,
   notesRoute,

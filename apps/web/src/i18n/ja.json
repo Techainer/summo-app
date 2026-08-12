@@ -28,7 +28,8 @@
     "agents": "エージェント",
     "collapse": "{name}をたたむ",
     "models": "モデル",
-    "setup": "ワークスペース"
+    "setup": "ワークスペース",
+    "home": "ホーム"
   },
   "record": {
     "source": "入力",
@@ -518,5 +519,19 @@
     "on_disk": "ディスク使用 {size}",
     "use": "使う",
     "in_use": "使用中"
+  },
+  "home": {
+    "heading": "あなたのワークスペース",
+    "subheading": "録音・記述・質問したものすべてを、この端末に。",
+    "capture_hint": "押すと録音が始まります。すべてここで動きます。",
+    "write": "書く",
+    "waiting": "あなた待ち",
+    "all_clear": "待っているものはありません。",
+    "overdue": "期限切れ",
+    "no_summary": "要約なし",
+    "recent": "最近",
+    "see_all": "すべて見る",
+    "ask": "質問",
+    "assistant_hint": "録音したことも書いたことも聞けます。答えには出典が付きます。"
   }
 }
