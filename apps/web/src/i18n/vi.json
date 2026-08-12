@@ -538,5 +538,13 @@
     "title": "Tìm mọi thứ",
     "placeholder": "Tìm hoặc nhảy tới…",
     "nothing": "Không có gì khớp."
+  },
+  "assistant": {
+    "title": "Trợ lý",
+    "intro": "Hỏi bất cứ điều gì bạn đã ghi hoặc đã viết, hoặc giao việc cho agent.",
+    "mode_ask": "Hỏi",
+    "mode_do": "Làm",
+    "ask_placeholder": "Ngọc nói gì về ngân sách?",
+    "do_placeholder": "Soạn lịch cho đợt ra mắt…"
   }
 }

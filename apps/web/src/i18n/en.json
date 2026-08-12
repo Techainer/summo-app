@@ -538,5 +538,13 @@
     "title": "Search everything",
     "placeholder": "Search or jump to…",
     "nothing": "Nothing matches."
+  },
+  "assistant": {
+    "title": "Assistant",
+    "intro": "Ask about anything you have recorded or written, or tell an agent to do something.",
+    "mode_ask": "Ask",
+    "mode_do": "Do",
+    "ask_placeholder": "What did Ngọc say about the budget?",
+    "do_placeholder": "Draft the calendar events for the launch…"
   }
 }

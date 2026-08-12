@@ -138,6 +138,7 @@ impl Server {
             .route("/catalogue", get(catalogue))
             .route("/models/{id}", axum::routing::delete(remove_model))
             .route("/settings/models", post(set_models))
+            .route("/agent/run", post(run_errand))
             .route("/status", get(status))
             .route("/storage", get(storage))
             .route("/storage/prune", post(prune_storage))
@@ -500,6 +501,43 @@ async fn catalogue(
         "chosen": chosen,
     }))
     .into_response()
+}
+
+/// Hand an agent a sentence.
+///
+/// The instruction becomes a `- [ ] @agent …` checkbox in the day's scratch note and runs through
+/// the same path a checkbox typed by hand does — see [`crate::errand`]. That is deliberate: the
+/// agent writes its steps into the file as it works, so an errand started from a text box leaves
+/// the same readable trace in Markdown as one started from a note.
+///
+/// Synchronous. An agent run is seconds, the panel shows a spinner for them, and streaming the
+/// steps would mean a second delivery mechanism for something the vault is already recording.
+async fn run_errand(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<ErrandBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    as_response(
+        crate::errand::run(
+            state.engine.paths(),
+            &body.instruction,
+            body.agent.as_deref(),
+        )
+        .await
+        .map(crate::errand::Errand::from),
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct ErrandBody {
+    instruction: String,
+    /// A slug from `vault/agents/`. Absent uses the coordinator, which is what the roster is for.
+    #[serde(default)]
+    agent: Option<String>,
 }
 
 /// Choose which installed model a role uses.

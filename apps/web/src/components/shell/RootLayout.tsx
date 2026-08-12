@@ -14,11 +14,14 @@ import {
   Mic,
   Package,
   Search,
+  Sparkles,
   Minimize2,
   NotebookPen,
   Settings,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+
+import { cn } from "../../lib/cn";
 
 import { useT } from "../../i18n/context";
 import { useIsNarrow } from "../../lib/breakpoint";
@@ -30,6 +33,7 @@ import { Waveform } from "../Waveform";
 import { motion } from "motion/react";
 
 import { SNAPPY, screen as screenVariants } from "../../lib/motion";
+import { AssistantPanel } from "../assistant/AssistantPanel";
 import { Palette, usePaletteShortcut } from "../search/Palette";
 import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
@@ -90,6 +94,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
   // phone that would paint the sidebar over the whole app for one frame before closing it.
   const [navOpen, setNavOpen] = useState(() => !narrow);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   usePaletteShortcut(useCallback(() => setPaletteOpen(true), []));
   const [compact, setCompact] = useState(false);
   const [folders, setFolders] = useState<string[]>([]);
@@ -197,6 +202,21 @@ export function RootLayout({ children }: { children: ReactNode }) {
           <span className="hidden sm:flex">
             <Waveform level={engine.level} active={engine.session.recording} />
           </span>
+          {/* The assistant, from every screen. It was a destination you navigated away to, which
+              is the wrong shape for asking about the thing currently on screen. */}
+          <button
+            type="button"
+            onClick={() => setAssistantOpen((open) => !open)}
+            aria-pressed={assistantOpen}
+            aria-label={t("assistant.title")}
+            title={t("assistant.title")}
+            className={cn(
+              "rounded-[var(--radius-pill)] px-2 py-1.5 transition-colors",
+              assistantOpen ? "bg-ai-soft text-ai" : "text-fg-faint hover:bg-bg-soft hover:text-fg",
+            )}
+          >
+            <Sparkles aria-hidden="true" className="size-4 stroke-[1.75]" />
+          </button>
           <RecordButton
             recording={engine.session.recording}
             elapsed={engine.elapsed}
@@ -263,16 +283,32 @@ export function RootLayout({ children }: { children: ReactNode }) {
                 The exit was worth four pixels and a fade. Dropping it removes the state machine
                 that produced the bug, and takes the original objection with it: with no outgoing
                 screen there are never two scroll positions or two sets of tab stops. */}
-            <motion.div
-              key={pathname}
-              variants={screenVariants}
-              initial="hidden"
-              animate="shown"
-              transition={SNAPPY}
-              className="h-full"
-            >
-              {children}
-            </motion.div>
+            {/* Beside the screen, not over it: the two things people do with the assistant are
+                asking about the meeting currently open and telling an agent to act while they keep
+                reading. Both need the screen to stay visible.
+                
+                Below the breakpoint there is no room for two columns, so the panel takes the
+                whole width — the same component, the same state, one implementation. */}
+            <div className="flex h-full min-h-0">
+              <motion.div
+                key={pathname}
+                variants={screenVariants}
+                initial="hidden"
+                animate="shown"
+                transition={SNAPPY}
+                className={cn(
+                  "h-full min-w-0 flex-1 overflow-y-auto",
+                  assistantOpen && narrow && "hidden",
+                )}
+              >
+                {children}
+              </motion.div>
+              {assistantOpen && (
+                <div className={cn("h-full shrink-0", narrow ? "w-full" : "w-[380px]")}>
+                  <AssistantPanel onClose={() => setAssistantOpen(false)} />
+                </div>
+              )}
+            </div>
           </FirstRun>
         </AppShell>
       </div>

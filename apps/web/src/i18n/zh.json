@@ -538,5 +538,13 @@
     "title": "搜索全部",
     "placeholder": "搜索或跳转…",
     "nothing": "没有匹配项。"
+  },
+  "assistant": {
+    "title": "助手",
+    "intro": "问任何你录过或写过的内容，也可以让智能体去做事。",
+    "mode_ask": "提问",
+    "mode_do": "执行",
+    "ask_placeholder": "关于预算，小明说了什么？",
+    "do_placeholder": "帮我起草上线的日程…"
   }
 }
