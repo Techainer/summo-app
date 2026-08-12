@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../lib/cn";
 import { formatDuration } from "../lib/duration";
@@ -18,6 +19,7 @@ import {
   type SearchHit,
 } from "../lib/library";
 import { ColourPicker, Dot, Finder } from "./library/Finder";
+import { GENTLE, listItem, stagger } from "../lib/motion";
 
 /** How long to wait after the last keystroke before searching. */
 const SEARCH_DEBOUNCE_MS = 180;
@@ -252,7 +254,16 @@ export function Library({
             <SearchResults hits={hits} onSelect={setSelected} selected={selected} />
           ) : (
             (view?.groups ?? []).map((g) => (
-              <section key={g.key} className="mb-3.5">
+              // Keyed on the filter as well as the day, so changing a filter re-runs the stagger:
+              // the list assembling is what tells the user the change took effect on a screen
+              // where the only other feedback is that some rows are gone.
+              <motion.section
+                key={`${g.key}-${folder ?? ""}-${tags.join()}-${colour ?? ""}`}
+                className="mb-3.5"
+                initial="hidden"
+                animate="shown"
+                transition={stagger(g.meetings.length)}
+              >
                 <h3 data-testid="group-heading">{groupLabel(g.key, group, today, words)}</h3>
                 {g.meetings.map((m) => (
                   <MeetingRow
@@ -263,7 +274,7 @@ export function Library({
                     onOpen={onOpen ? () => onOpen(m.id) : undefined}
                   />
                 ))}
-              </section>
+              </motion.section>
             ))
           )}
 
@@ -352,7 +363,9 @@ function MeetingRow({
 }) {
   const { t, locale } = useI18n();
   return (
-    <button
+    <motion.button
+      variants={listItem}
+      transition={GENTLE}
       type="button"
       className={cn(
         "flex w-full items-baseline gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors",
@@ -391,7 +404,7 @@ function MeetingRow({
           {meeting.kind !== "note" && !meeting.has_summary && t("meeting.not_summarised_suffix")}
         </span>
       </span>
-    </button>
+    </motion.button>
   );
 }
 

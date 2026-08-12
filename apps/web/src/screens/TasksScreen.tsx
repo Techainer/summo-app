@@ -290,8 +290,11 @@ function PersonCard({
       onDragEnd={onDragEnd}
       className={cn(
         "border-line bg-bg-raised cursor-grab rounded-[var(--radius-card)] border p-2.5",
+        "transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]",
         "active:cursor-grabbing",
-        dragging && "opacity-50",
+        // Held, not hovered: a card under the pointer lifts a little, one being dragged lifts
+        // further and dims, so the gap it left reads as a gap rather than as a deleted row.
+        dragging && "scale-[1.02] opacity-50 shadow-[var(--shadow-pop)]",
       )}
     >
       <p

@@ -167,8 +167,11 @@ export function AgentsScreen() {
             type="button"
             onClick={() => void open(each.slug)}
             className={cn(
-              "rounded-card bg-bg-soft border p-4 text-left transition-colors",
-              each.slug === chosen ? "border-accent" : "border-line hover:border-fg-faint",
+              "rounded-card bg-bg-soft border p-4 text-left",
+              "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]",
+              each.slug === chosen
+                ? "border-accent shadow-[0_0_0_1px_var(--color-accent)]"
+                : "border-line hover:border-fg-faint",
             )}
           >
             <div className="flex items-baseline gap-2">
