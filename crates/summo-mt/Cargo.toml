@@ -6,14 +6,29 @@ license.workspace = true
 publish = false
 
 [features]
-# The in-process translator. Behind a feature because it links llama.cpp, and a build that only
-# needs the registry client should not pay a C++ compile for it.
+# MiLMMT and other GGUF models, through llama.cpp. Behind a feature because it needs a C++
+# toolchain, and a build that only needs the registry client should not pay for one.
 local = ["dep:llama-cpp-2"]
+# SMALL100 and the M2M100 family, through ONNX Runtime. Pure Rust plus a prebuilt `ort`, so this
+# one costs no C++ build — which is why it is the path a plain `cargo build` can afford.
+onnx = ["dep:ort", "dep:tokenizers", "dep:serde_json"]
+
 
 [dependencies]
 summo-core.workspace = true
 tracing.workspace = true
 llama-cpp-2 = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+ort = { workspace = true, optional = true, features = [
+    # Fetch a prebuilt ONNX Runtime at build time, matching `summo-vad`.
+    "download-binaries",
+    "tls-rustls",
+] }
+# `fancy-regex` rather than the default `onig`: onig is a C library, and the point of the ONNX
+# path is that it needs no C++ toolchain to build.
+tokenizers = { version = "0.23.1", default-features = false, features = [
+    "fancy-regex",
+], optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true

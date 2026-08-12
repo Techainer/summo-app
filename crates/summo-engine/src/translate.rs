@@ -69,7 +69,51 @@ pub struct Translator {
 enum Backend {
     Http(LlmClient),
     #[cfg(feature = "local-mt")]
-    Local(std::sync::Arc<summo_mt::Local>),
+    Local(std::sync::Arc<LocalModel>),
+}
+
+/// A translation model in this process, whichever runtime it needs.
+///
+/// Two runtimes because there are two shapes of translation model and neither runs the other's:
+/// llama.cpp serves decoder-only GGUF, ONNX Runtime serves the encoder–decoder M2M100 family. Which
+/// one a model needs is a fact about the model, so it is read from the manifest rather than from a
+/// setting somebody could get wrong.
+#[cfg(feature = "local-mt")]
+pub enum LocalModel {
+    // Boxed: an ONNX session plus two 128 000-entry vocabularies is an order of magnitude larger
+    // than a llama.cpp handle, and an unboxed enum is as big as its biggest variant everywhere it
+    // is moved.
+    Gguf(Box<summo_mt::Local>),
+    Onnx(Box<summo_mt::Seq2Seq>),
+}
+
+#[cfg(feature = "local-mt")]
+impl LocalModel {
+    fn name(&self) -> &str {
+        match self {
+            Self::Gguf(model) => model.name(),
+            Self::Onnx(model) => model.name(),
+        }
+    }
+
+    /// Translate one line.
+    ///
+    /// The two runtimes want different things and the difference is not cosmetic: a decoder-only
+    /// model continues a prompt, so it gets the template it was trained on and its reply is cut at
+    /// the first newline. A seq2seq model is *given* a target language as a token and generates
+    /// only the translation, so a prompt would be translated along with the sentence.
+    fn translate(&self, line: &str, source: Option<&str>, lang: &str) -> Result<Option<String>> {
+        match self {
+            Self::Gguf(model) => {
+                let prompt = prompt::mt_text(line, source, lang);
+                Ok(prompt::parse_mt(&model.complete(&prompt)?))
+            }
+            Self::Onnx(model) => {
+                let text = model.translate(line, lang)?;
+                Ok((!text.trim().is_empty()).then(|| text.trim().to_string()))
+            }
+        }
+    }
 }
 
 impl Translator {
@@ -89,7 +133,7 @@ impl Translator {
     /// translate one line.
     #[cfg(feature = "local-mt")]
     #[must_use]
-    pub fn local(model: std::sync::Arc<summo_mt::Local>, source: Option<String>) -> Self {
+    pub fn local(model: std::sync::Arc<LocalModel>, source: Option<String>) -> Self {
         Self {
             backend: Backend::Local(model),
             style: Style::Local,
@@ -270,9 +314,8 @@ impl Translator {
             owned
                 .iter()
                 .map(|line| {
-                    let prompt = prompt::mt_text(line, source.as_deref(), &lang);
-                    match model.complete(&prompt) {
-                        Ok(response) => accept(&response, &lang),
+                    match model.translate(line, source.as_deref(), &lang) {
+                        Ok(response) => response.filter(|text| plausible(text, &lang)),
                         // One line failing is that line, not the meeting. It stays untranslated,
                         // is counted as missing, and the rest still run.
                         Err(e) => {
@@ -394,7 +437,7 @@ fn local_translator(
     mt: &summo_core::settings::Translator,
 ) -> Result<Translator> {
     use std::sync::{Arc, OnceLock};
-    static LOADED: OnceLock<std::result::Result<Arc<summo_mt::Local>, String>> = OnceLock::new();
+    static LOADED: OnceLock<std::result::Result<Arc<LocalModel>, String>> = OnceLock::new();
 
     let id = mt.model.as_deref().unwrap_or("milmmt-46-1b").to_string();
     let store = summo_models::ModelStore::new(paths.clone());
@@ -425,7 +468,24 @@ fn load_local(
     store: &summo_models::ModelStore,
     id: &str,
     threads: Option<usize>,
-) -> Result<summo_mt::Local> {
+) -> Result<LocalModel> {
+    // A path on disk is taken as one, before it is tried as a registry id.
+    //
+    // The registry is the right way in and this is deliberately the exception, for the case the
+    // registry cannot serve: a model the user produced themselves. SMALL100's published export is
+    // fp32 and 1.8 GB; quantized to int8 it is 449 MB and faster, and that file exists nowhere but
+    // on the machine that made it. Without this, the smallest translation Summo can do is a number
+    // in a document rather than something a user can run.
+    let path = std::path::Path::new(id);
+    if path.is_dir() {
+        return load_seq2seq_dir(path, threads);
+    }
+    if path.is_file() {
+        return Ok(LocalModel::Gguf(Box::new(summo_mt::Local::load(
+            path, threads,
+        )?)));
+    }
+
     let model_id = summo_core::ModelId::parse(id).map_err(Error::Config)?;
     let manifest = store.installed(&model_id)?;
 
@@ -437,14 +497,56 @@ fn load_local(
     }
 
     let installed = store.resolve(&manifest)?;
-    let path = installed
-        .param_path("model")
-        .ok_or_else(|| Error::InvalidManifest {
-            id: id.to_string(),
-            reason: "no `params.model` naming the GGUF".into(),
-        })?;
+    let file = |key: &str| {
+        installed
+            .param_path(key)
+            .cloned()
+            .ok_or_else(|| Error::InvalidManifest {
+                id: id.to_string(),
+                reason: format!("no `params.{key}`"),
+            })
+    };
 
-    Ok(summo_mt::Local::load(path, threads)?.named(id))
+    if manifest.runtime.contains("onnx") {
+        let paths = summo_mt::Seq2SeqPaths {
+            model: file("model")?,
+            spm: file("spm")?,
+            vocab: file("vocab")?,
+        };
+        Ok(LocalModel::Onnx(Box::new(
+            summo_mt::Seq2Seq::load(&paths, threads)?.named(id),
+        )))
+    } else if manifest.runtime.contains("gguf") {
+        Ok(LocalModel::Gguf(Box::new(
+            summo_mt::Local::load(file("model")?, threads)?.named(id),
+        )))
+    } else {
+        Err(Error::UnsupportedRuntime(manifest.runtime.clone()))
+    }
+}
+
+/// A directory somebody exported themselves.
+///
+/// The quantized file is preferred when both are there, because that is the reason to have a
+/// directory of one's own at all.
+#[cfg(feature = "local-mt")]
+fn load_seq2seq_dir(dir: &std::path::Path, threads: Option<usize>) -> Result<LocalModel> {
+    let quantized = dir.join("model.int8.onnx");
+    let paths = summo_mt::Seq2SeqPaths {
+        model: if quantized.is_file() {
+            quantized
+        } else {
+            dir.join("model.onnx")
+        },
+        spm: dir.join("sentencepiece.bpe.model"),
+        vocab: dir.join("vocab.json"),
+    };
+    let name = dir
+        .file_name()
+        .map_or_else(|| "local".to_string(), |n| n.to_string_lossy().into_owned());
+    Ok(LocalModel::Onnx(Box::new(
+        summo_mt::Seq2Seq::load(&paths, threads)?.named(name),
+    )))
 }
 
 /// Without the feature, the local option is a configuration that cannot be honoured — and saying so
@@ -475,16 +577,23 @@ fn local_translator(
 /// Refused rather than retried. `None` leaves the original line in place, which the user can read
 /// and check, and the outcome already reports it as missing.
 fn accept(response: &str, lang: &str) -> Option<String> {
-    prompt::parse_mt(response).filter(|text| {
-        let ok = summo_llm::lang::plausible(text, lang);
-        if !ok {
-            tracing::warn!(
-                %lang,
-                "a translated line came back in another language; keeping the original"
-            );
-        }
-        ok
-    })
+    prompt::parse_mt(response).filter(|text| plausible(text, lang))
+}
+
+/// Whether a reply is in the language it was asked for.
+///
+/// Split from [`accept`] because the in-process path has already parsed its own output — a seq2seq
+/// model generates only the translation, so there is no continuation to cut — and would otherwise
+/// have to run the parser twice to reach this check.
+fn plausible(text: &str, lang: &str) -> bool {
+    let ok = summo_llm::lang::plausible(text, lang);
+    if !ok {
+        tracing::warn!(
+            %lang,
+            "a translated line came back in another language; keeping the original"
+        );
+    }
+    ok
 }
 
 /// A copy of the meeting with every translated line swapped in.

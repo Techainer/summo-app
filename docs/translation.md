@@ -25,7 +25,8 @@ before. Nothing about an existing setup changes.
 ## Setting it up
 
 ```bash
-summo pull milmmt-46-1b     # 806 MB, once
+summo pull milmmt-46-1b     # 806 MB, once — the default
+summo pull small100         # or the small one; see "Which model"
 ```
 
 That is the whole setup. Settings → Translation model → on, and it runs **in the daemon**: no
@@ -36,14 +37,17 @@ and anything OpenAI-compatible works. That path is one line at a time over HTTP 
 the in-process path is one line at a time with every thread. They are about the same speed, and the
 in-process one needs nothing installed.
 
-The in-process runtime is behind a build feature, because it compiles llama.cpp:
+The in-process runtimes are behind a build feature:
 
 ```bash
 cargo build -p summo-cli --release --features serve,transcribe,local-mt
 ```
 
-On Linux that build needs clang's own headers — `libclang-common-18-dev` on Ubuntu — or bindgen
-fails with `'stdbool.h' file not found`.
+That feature turns on both. The ONNX one (`summo-mt/onnx`, for SMALL100) is pure Rust over a
+prebuilt `ort`. The GGUF one (`summo-mt/local`, for MiLMMT) compiles llama.cpp, and on Linux that
+needs clang's own headers — `libclang-common-18-dev` on Ubuntu — or bindgen fails with
+`'stdbool.h' file not found`. A build that only wants the small model can take `summo-mt/onnx`
+alone and skip the C++ toolchain entirely.
 
 ## Which model
 
@@ -54,11 +58,23 @@ English product terms mid-clause, the register a colleague actually uses. Reprod
 cargo run -p summo-mt --features local --example compare -- model-a.gguf model-b.gguf
 ```
 
-| Model | Disk | ms/line | Verdict |
-|---|---|---|---|
-| **milmmt-46-1b** | 806 MB | ~1150 | The default. Fits everywhere, good enough for meeting notes |
-| **milmmt-46-4b** | 2.5 GB | ~2059 | Better on every sentence tried. Worth it if the memory is there |
-| SMALL100 (ONNX) | 1.8 GB | ~785 | Worse on every sentence tried. Not shipped — see below |
+| Model | Disk | ms/line | Runtime | Verdict |
+|---|---|---|---|---|
+| **milmmt-46-1b** `Q4_K_M` | 806 MB | ~1150 | llama.cpp | The default |
+| milmmt-46-1b `Q3_K_M` | 689 MB | ~620 | llama.cpp | As good, faster, smaller. Worth switching to |
+| milmmt-46-1b `Q2_K` | 658 MB | ~707 | llama.cpp | The floor for this model, and slightly worse |
+| **small100** int8 | **449 MB** | **~377** | ONNX | The small option. MIT. Lexical errors — see below |
+| milmmt-46-4b `Q4_K_M` | 2.5 GB | ~2059 | llama.cpp | Best. Point it at Ollama rather than loading it in-process |
+| Qwen3-0.6B `Q4_K_M` | 379 MB | ~1042 | llama.cpp | Collapses |
+| Gemma3-270m `Q8_0` | 279 MB | ~172 | llama.cpp | Collapses |
+
+**MiLMMT cannot get much under 650 MB.** It is built on Gemma 3, and a 262 000-token embedding
+table dominates the file — `Q2_K` is 658 MB against `Q4_K_M`'s 769 MB, and translates worse. Below
+that needs a different architecture, which is what SMALL100 is.
+
+**Small general models are not an option.** Qwen3-0.6B repeated `お疲れ様です` forty times on one
+line and returned nothing at all for English→Vietnamese; Gemma3-270m returned empty strings for
+three of seven. A model trained for translation beats a general model several times its size.
 
 The 4B fixed every error the 1B made on the sample:
 
@@ -68,25 +84,50 @@ The 4B fixed every error the 1B made on the sample:
 | test tải | 测试下载速度 (download speed) ✗ | 负载测试 ✓ |
 | dời mốc ra thứ Sáu | answered in **Thai** ✗ | 締め切りを来週の金曜日に延期します ✓ |
 
-### Not SMALL100
+### SMALL100, and a correction
 
-[SMALL100](https://huggingface.co/alirezamsh/small100) is MIT, 330M parameters and covers 100
-languages, so it looks like the obvious smaller option. It was tried properly — real ONNX inference,
-real SentencePiece tokenizer, the same sentences — and it lost on every axis that matters:
+An earlier version of this page rejected [SMALL100](https://huggingface.co/alirezamsh/small100) on
+four grounds. Two of them were wrong, and they were wrong in the same way: they were properties of
+the *published export*, not of the model.
 
-- **Quality.** "chốt lại spec API" became *lock up the spec API*; the Japanese school sentence came
-  back as Vietnamese that does not mean what the original said; the line the 1B got wrong in Thai,
-  SMALL100 got wrong in Japanese.
-- **Size.** The published ONNX export is **1.8 GB** — more than twice the 1B GGUF. Dynamic int8
-  would bring it to about 450 MB, at a further quality cost that was not worth measuring given the
-  starting point.
-- **Speed.** ~785 ms/line, no better, because the export carries no KV cache: the 12-layer encoder
-  re-runs for *every generated token*.
-- **Cost to ship.** llama.cpp does not serve encoder–decoder seq2seq, so it would mean a second
-  runtime — an ONNX generation loop plus SMALL100's own language-token scheme — in Rust.
+- ~~1.8 GB~~ — that is the fp32 export. Dynamic int8 quantization takes it to **449 MB**, and the
+  output is in the same band. It is the smallest usable translation model here by a wide margin.
+- ~~No faster~~ — int8 is **377 ms/line**, the fastest of anything usable.
+- **A second runtime** — true, and paid: `summo-mt::seq2seq`. llama.cpp serves decoder-only models,
+  so an encoder–decoder needs ONNX Runtime, a SentencePiece BPE segmenter and M2M100's
+  language-token scheme. About 700 lines. `ort` was already a dependency for the voice detector, and
+  the tokenizer is pure Rust, so unlike the GGUF path this one needs **no C++ toolchain**.
+- **Quality** — true, and the real reason to prefer MiLMMT when the disk is there. On Vietnamese
+  meeting speech SMALL100 renders "chốt lại spec API" as *lock the spec API*, "dời mốc ra thứ Sáu"
+  as *leave the hotel on Friday*, and `go-live` as `GOD`. The sentences are complete, on-topic and
+  in the right language; the words are sometimes wrong.
 
-**If 800 MB is too much, drop the quantization, not the model.** `IQ4_XS` is 718 MB at ~807 ms/line
-with comparable output; `Q3_K_M` is about 560 MB.
+Beam search does not close the gap — the export has no KV cache, so five beams cost five full
+forward passes per token (3.3 s/line) and the output was not better. Greedy is used.
+
+It is shipped: `summo pull small100`.
+
+### Getting the 449 MB
+
+The published export is fp32, so `summo pull small100` fetches 1.8 GB. Quantizing is three lines and
+about 25 seconds:
+
+```python
+from onnxruntime.quantization import quantize_dynamic, QuantType
+quantize_dynamic("model.onnx", "model.int8.onnx", weight_type=QuantType.QInt8)
+```
+
+Put `model.int8.onnx`, `sentencepiece.bpe.model` and `vocab.json` in a directory and point the
+setting at the directory instead of a model id:
+
+```json
+"translator": { "provider": "local", "model": "/path/to/small100-int8" }
+```
+
+A path is taken as a path before it is tried as a registry id. This is deliberately the exception
+rather than the way in — the registry gives content-addressed downloads, resume and a sha256 check,
+and none of that applies to a file you made yourself. It exists because the alternative is that the
+smallest translation Summo can do is a number in a document.
 
 ## Why the prompt is different
 

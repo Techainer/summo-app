@@ -158,12 +158,15 @@ Translating a meeting is a separate question with its own model, and it runs **i
 Ollama, no second process:
 
 ```bash
-summo pull milmmt-46-1b     # 806 MB, once
+summo pull milmmt-46-1b     # 806 MB — the default
+summo pull small100         # 449 MB quantized — smaller, MIT, less accurate
 cargo build -p summo-cli --release --features serve,transcribe,local-mt
 ```
 
-46 languages, about a second a line on a CPU, nothing per line ever. Which model, why not a smaller
-one, and the two ways a small translation model fails: [`docs/translation.md`](docs/translation.md).
+46 languages, well under a second a line on a CPU, nothing per line ever. Two runtimes, because
+there are two shapes of translation model: llama.cpp for decoder-only GGUF, ONNX Runtime for the
+encoder–decoder M2M100 family. Which to pick, what every candidate measured, and the two ways a
+small translation model fails: [`docs/translation.md`](docs/translation.md).
 
 To check whether a search index would be worth it on your own corpus size:
 
