@@ -18,6 +18,7 @@ import { NotesScreen } from "./screens/NotesScreen";
 import { PeopleScreen } from "./screens/PeopleScreen";
 import { RecordScreen } from "./screens/RecordScreen";
 import { TasksScreen } from "./screens/TasksScreen";
+import { ModelsScreen } from "./screens/ModelsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 
 /**
@@ -128,6 +129,12 @@ const analyticsRoute = createRoute({
   component: AnalyticsScreen,
 });
 
+const modelsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/models",
+  component: ModelsScreen,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -145,6 +152,7 @@ const routeTree = rootRoute.addChildren([
   chatRoute,
   peopleRoute,
   analyticsRoute,
+  modelsRoute,
   settingsRoute,
 ]);
 

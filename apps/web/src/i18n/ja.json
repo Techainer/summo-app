@@ -26,7 +26,8 @@
     "expand": "{name}を広げる",
     "expand_hint": "広げる",
     "agents": "エージェント",
-    "collapse": "{name}をたたむ"
+    "collapse": "{name}をたたむ",
+    "models": "モデル"
   },
   "record": {
     "source": "入力",
@@ -487,5 +488,24 @@
     "pause": "{seconds}秒の沈黙",
     "at_the_same_time": "同時に発言",
     "follow": "最新に追従"
+  },
+  "models": {
+    "title": "モデル",
+    "hint": "この端末で動かせるモデルの一覧です。音声認識と話者の識別は端末から出ません。翻訳モデルも同じです。容量はダウンロード量です。",
+    "offline": "モデル一覧に接続できませんでした。導入済みのものだけ表示しています。",
+    "none": "モデルがありません",
+    "installed": "導入済み",
+    "install": "導入",
+    "starting": "開始中…",
+    "failed": "ダウンロード失敗",
+    "needs_ram": "メモリが{mb} MB必要ですが、この端末はそれより少ないです。",
+    "upstream": "公開元から直接、その配布元のライセンスで取得します。Summoは保管していません。",
+    "task_asr": "音声認識",
+    "task_translate": "翻訳",
+    "task_vad": "音声区間検出",
+    "task_speaker_embed": "話者の識別",
+    "task_diarize_seg": "話者分離",
+    "task_denoise": "ノイズ抑制",
+    "task_embed": "テキスト検索"
   }
 }

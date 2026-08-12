@@ -19,6 +19,9 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
+/** The registry checkout, which lives beside this repository. */
+const REGISTRY = join(HERE, "../../../../summo-registry");
+
 /** The daemon, built with the interface inside it. `--features bundled` is what puts it there. */
 const BINARY = join(HERE, "../../../target/debug/summo-engine");
 
@@ -125,7 +128,13 @@ export async function boot({ name = "e2e", seed = true } = {}) {
   writeFileSync(join(home, ONBOARDED), "");
   if (seed) seedVault(home);
 
-  const child = spawn(BINARY, ["--home", home, "--port", "0"], { stdio: "pipe" });
+  const child = spawn(BINARY, ["--home", home, "--port", "0"], {
+    stdio: "pipe",
+    // The registry the catalogue reads from. Pointed at the checkout beside this one so the suite
+    // tests a real registry without depending on a deployed CDN — and so it keeps passing when the
+    // network is not there.
+    env: { ...process.env, SUMMO_REGISTRY: REGISTRY },
+  });
   // Detached from Node's own exit accounting. A suite that forgets `stop()` should end with a
   // failed assertion, not hang until whatever is running it gives up — which is how a passing
   // suite came back as a 124.

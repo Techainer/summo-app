@@ -114,7 +114,21 @@ export function decorate<T extends Utterance>(segments: T[]): Row<T>[] {
  */
 export function italicise(language: string): boolean {
   const primary = language.trim().toLowerCase().split(/[-_]/)[0] ?? "";
-  return !["zh", "ja", "ko", "yue", "th", "ar", "fa", "ur", "he", "hi", "bn", "ta", "km", "lo", "my"].includes(
-    primary,
-  );
+  return ![
+    "zh",
+    "ja",
+    "ko",
+    "yue",
+    "th",
+    "ar",
+    "fa",
+    "ur",
+    "he",
+    "hi",
+    "bn",
+    "ta",
+    "km",
+    "lo",
+    "my",
+  ].includes(primary);
 }

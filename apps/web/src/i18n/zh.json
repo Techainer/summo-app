@@ -26,7 +26,8 @@
     "expand": "展开{name}",
     "expand_hint": "展开",
     "agents": "智能体",
-    "collapse": "收起{name}"
+    "collapse": "收起{name}",
+    "models": "模型"
   },
   "record": {
     "source": "来源",
@@ -487,5 +488,24 @@
     "pause": "沉默 {seconds} 秒",
     "at_the_same_time": "同时在说",
     "follow": "跟随最新"
+  },
+  "models": {
+    "title": "模型",
+    "hint": "这台机器能跑的全部模型。语音识别和说话人归属永远不出本机，翻译模型也一样。大小是要下载的量。",
+    "offline": "连不上模型目录——只显示已安装的。",
+    "none": "还没有模型",
+    "installed": "已安装",
+    "install": "安装",
+    "starting": "正在开始…",
+    "failed": "下载失败",
+    "needs_ram": "需要 {mb} MB 内存，这台机器不够。",
+    "upstream": "直接从发布方下载，遵循他们的许可协议。Summo 不托管这个模型。",
+    "task_asr": "语音识别",
+    "task_translate": "翻译",
+    "task_vad": "语音活动检测",
+    "task_speaker_embed": "说话人归属",
+    "task_diarize_seg": "说话人分离",
+    "task_denoise": "降噪",
+    "task_embed": "文本检索"
   }
 }

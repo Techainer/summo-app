@@ -26,7 +26,8 @@
     "expand": "Mở rộng {name}",
     "expand_hint": "Mở rộng",
     "agents": "Agent",
-    "collapse": "Thu gọn {name}"
+    "collapse": "Thu gọn {name}",
+    "models": "Mô hình"
   },
   "record": {
     "source": "Nguồn",
@@ -487,5 +488,24 @@
     "pause": "im lặng {seconds} giây",
     "at_the_same_time": "nói cùng lúc",
     "follow": "Theo dòng mới nhất"
+  },
+  "models": {
+    "title": "Mô hình",
+    "hint": "Tất cả mô hình Summo chạy được trên máy này. Nhận dạng giọng nói và tách người nói không bao giờ rời máy; mô hình dịch cũng vậy. Dung lượng là phần phải tải về.",
+    "offline": "Không kết nối được kho mô hình — đang hiện những mô hình đã cài.",
+    "none": "Chưa có mô hình nào",
+    "installed": "Đã cài",
+    "install": "Cài",
+    "starting": "Đang bắt đầu…",
+    "failed": "Tải thất bại",
+    "needs_ram": "Cần {mb} MB bộ nhớ; máy này ít hơn.",
+    "upstream": "Tải thẳng từ nơi phát hành, theo giấy phép của họ. Summo không lưu trữ mô hình này.",
+    "task_asr": "Nhận dạng giọng nói",
+    "task_translate": "Dịch",
+    "task_vad": "Phát hiện tiếng nói",
+    "task_speaker_embed": "Nhận diện người nói",
+    "task_diarize_seg": "Tách người nói",
+    "task_denoise": "Khử ồn",
+    "task_embed": "Tìm kiếm văn bản"
   }
 }

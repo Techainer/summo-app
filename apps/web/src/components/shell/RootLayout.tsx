@@ -11,6 +11,7 @@ import {
   Menu,
   MessageCircleQuestion,
   Mic,
+  Package,
   Minimize2,
   NotebookPen,
   Settings,
@@ -48,6 +49,7 @@ const NAV: { key: string; labelKey: string; icon: LucideIcon }[] = [
   { key: "/chat", labelKey: "nav.chat", icon: MessageCircleQuestion },
   { key: "/people", labelKey: "nav.people", icon: AudioLines },
   { key: "/analytics", labelKey: "nav.analytics", icon: ChartNoAxesColumn },
+  { key: "/models", labelKey: "nav.models", icon: Package },
   { key: "/settings", labelKey: "nav.settings", icon: Settings },
 ];
 

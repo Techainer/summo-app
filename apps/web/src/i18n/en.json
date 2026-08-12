@@ -26,7 +26,8 @@
     "expand": "Expand {name}",
     "expand_hint": "Expand",
     "agents": "Agents",
-    "collapse": "Collapse {name}"
+    "collapse": "Collapse {name}",
+    "models": "Models"
   },
   "record": {
     "source": "Source",
@@ -487,5 +488,24 @@
     "pause": "{seconds}s of silence",
     "at_the_same_time": "at the same time",
     "follow": "Follow the latest"
+  },
+  "models": {
+    "title": "Models",
+    "hint": "Everything Summo can run on this machine. Speech recognition and speaker attribution never leave it; a translation model does not either. Sizes are what the download costs.",
+    "offline": "Could not reach the model catalogue — showing what is already installed.",
+    "none": "No models yet",
+    "installed": "Installed",
+    "install": "Install",
+    "starting": "Starting…",
+    "failed": "Download failed",
+    "needs_ram": "Needs {mb} MB of memory; this machine has less.",
+    "upstream": "Downloaded from whoever published it, under their own licence. Summo does not host this one.",
+    "task_asr": "Speech recognition",
+    "task_translate": "Translation",
+    "task_vad": "Voice activity",
+    "task_speaker_embed": "Speaker attribution",
+    "task_diarize_seg": "Speaker segmentation",
+    "task_denoise": "Noise suppression",
+    "task_embed": "Text search"
   }
 }

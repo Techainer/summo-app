@@ -135,6 +135,7 @@ impl Server {
             .route("/health", get(health))
             .route("/hw", get(hardware))
             .route("/models", get(models))
+            .route("/catalogue", get(catalogue))
             .route("/status", get(status))
             .route("/storage", get(storage))
             .route("/storage/prune", post(prune_storage))
@@ -399,6 +400,83 @@ async fn models(
         return rejection.into_response();
     }
     Json(state.engine.store().list()).into_response()
+}
+
+/// Everything the registry offers, with what is already here marked.
+///
+/// Distinct from `/models`, which lists what is installed. This is the shop window: a user deciding
+/// whether to spend 600 MB on a better translator needs to see the size, the licence, the languages
+/// and what it is *for* before they commit, and none of that is on the machine yet.
+///
+/// The registry is remote and may be unreachable — on a plane, behind a proxy, or simply not
+/// deployed yet. That is not an error here: the installed models are still returned, with
+/// `reachable: false`, so the screen shows what the user has rather than a failure. A model
+/// manager that goes blank without a network is worse than one that admits it is offline.
+async fn catalogue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<RecommendQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    let installed: std::collections::HashMap<String, u64> = state
+        .engine
+        .store()
+        .list()
+        .into_iter()
+        .map(|m| (m.id.to_string(), m.size_bytes))
+        .collect();
+
+    let mut reachable = true;
+    let manifests = match candidates(&state, q.registry.as_deref()).await {
+        Ok(manifests) => manifests,
+        Err(e) => {
+            tracing::warn!(error = %e, "registry unavailable; showing installed models only");
+            reachable = false;
+            state.engine.store().list()
+        }
+    };
+    // `candidates` swallows a registry failure and returns the installed set, so "did the registry
+    // answer" cannot be read from the result alone. Anything the user has not installed came from
+    // the registry, which means it did.
+    if reachable
+        && manifests
+            .iter()
+            .all(|m| installed.contains_key(&m.id.to_string()))
+    {
+        reachable = !installed.is_empty() && manifests.len() > installed.len();
+    }
+
+    let hardware = state.engine.hardware();
+    let models: Vec<_> = manifests
+        .iter()
+        .map(|m| {
+            let id = m.id.to_string();
+            serde_json::json!({
+                "id": id,
+                "name": m.name,
+                "task": m.task,
+                "mode": m.mode,
+                "langs": m.langs,
+                "license": m.license,
+                "attribution": m.attribution,
+                "redistributable": m.redistributable,
+                "gated": m.gated,
+                "description": m.description,
+                "size_bytes": m.size_bytes,
+                "installed": installed.contains_key(&id),
+                // Whether this machine can run it at all, so a phone is not offered a model that
+                // will be refused at load with an out-of-memory error.
+                "fits": m.profile.min_ram_mb == 0
+                    || m.profile.min_ram_mb <= hardware.total_ram_mb,
+                "min_ram_mb": m.profile.min_ram_mb,
+            })
+        })
+        .collect();
+
+    Json(serde_json::json!({ "models": models, "reachable": reachable })).into_response()
 }
 
 /// Turn a vault failure into a status a client can act on.
