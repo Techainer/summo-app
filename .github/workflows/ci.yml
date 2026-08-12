@@ -141,7 +141,13 @@ jobs:
       # The catalogue is a separate repository. Checking it out here catches the case that matters:
       # a tightening of the manifest rules in this repo that would reject a manifest already in the
       # wild, which would break `summo pull` for everybody rather than only in review.
-      - uses: actions/checkout@v4
+      #
+      # `continue-on-error`, because the repository does not exist yet. Without it every push to
+      # this one fails red on something nobody in this repository can fix, and a CI that is always
+      # red is a CI nobody reads. The step below notices the absence and says so instead.
+      - id: catalogue
+        continue-on-error: true
+        uses: actions/checkout@v4
         with:
           repository: Techainer/summo-registry
           path: registry
@@ -149,5 +155,56 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p summo-models
       - name: Validate every published manifest against this build
+        if: steps.catalogue.outcome == 'success'
         run: cargo run --quiet -p summo-cli -- registry check registry
+      - name: Say so when there is no published registry to check
+        if: steps.catalogue.outcome != 'success'
+        run: |
+          echo "::warning::Techainer/summo-registry is not reachable, so no published manifest was checked."
+
+  # The two in-process translation runtimes. `cargo test --workspace` covers neither: the crate is
+  # empty without a feature, so a change that breaks the ONNX path compiles and tests green.
+  #
+  # Only the ONNX one. The GGUF one builds llama.cpp, which is several minutes and a clang install
+  # for a path the same tests already exercise the shape of.
+  translation:
+    name: the in-process translator compiles and passes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -p summo-mt --features onnx --all-targets -- -D warnings
+      - run: cargo test -p summo-mt --features onnx
+
+  # The browser suites. They need a daemon with the interface compiled in, which is why they are
+  # their own job: the check above builds the web app, this one bakes it into the binary and drives
+  # it. Ten suites, and they are the only tests that see what a user sees.
+  browser:
+    name: browser suites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: Techainer/summo-registry
+          path: ../summo-registry
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C apps/web exec playwright install --with-deps chromium
+      - run: pnpm -C apps/web build
+      # `--features bundled` is what puts the interface inside the binary. Without it every suite
+      # fails on a missing header, which is a long way from the cause — `e2e/daemon.mjs` detects
+      # that case and says so, and this is the line that prevents it.
+      - run: cargo build --bin summo-engine --features bundled
+      - run: pnpm -C apps/web e2e
 

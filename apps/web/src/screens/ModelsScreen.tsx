@@ -1,4 +1,4 @@
-import { CloudOff, HardDriveDownload, Package } from "lucide-react";
+import { CloudOff, HardDriveDownload, Package, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button, Empty } from "../components/ui";
@@ -7,6 +7,8 @@ import { cn } from "../lib/cn";
 import {
   CatalogueClient,
   byTask,
+  installedBytes,
+  roleFor,
   size,
   tags,
   type CatalogueModel,
@@ -45,6 +47,8 @@ export function ModelsScreen() {
   const [models, setModels] = useState<CatalogueModel[] | null>(null);
   const [reachable, setReachable] = useState(true);
   const [installs, setInstalls] = useState<Install[]>([]);
+  /** Which model fills each role, so the card can say "in use" rather than offering a button. */
+  const [chosen, setChosen] = useState<Record<string, string | null>>({});
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -53,6 +57,7 @@ export function ModelsScreen() {
       setModels(next.models);
       setReachable(next.reachable);
       setInstalls(running);
+      setChosen(next.chosen ?? {});
       setError(null);
     } catch (e) {
       // The daemon answers with `reachable: false` when the *registry* is unreachable, so getting
@@ -78,6 +83,36 @@ export function ModelsScreen() {
     return () => window.clearInterval(timer);
   }, [downloading, load]);
 
+  const remove = useCallback(
+    async (id: string) => {
+      try {
+        await catalogue.remove(id);
+        await load();
+        setError(null);
+      } catch (e) {
+        // The daemon refuses to remove a model the settings point at, and says which role it
+        // fills. That message is the whole answer, so it is shown rather than summarised.
+        setError(say(e));
+      }
+    },
+    [catalogue, load, say],
+  );
+
+  const choose = useCallback(
+    async (model: CatalogueModel) => {
+      const role = roleFor(model.task);
+      if (!role) return;
+      try {
+        await catalogue.use(role, model.id);
+        setChosen((current) => ({ ...current, [role]: model.id }));
+        setError(null);
+      } catch (e) {
+        setError(say(e));
+      }
+    },
+    [catalogue, say],
+  );
+
   const pull = useCallback(
     async (id: string) => {
       try {
@@ -99,9 +134,13 @@ export function ModelsScreen() {
   return (
     <div className="p-5" data-testid="models">
       <h1 className="text-xl font-semibold tracking-tight">{t("models.title")}</h1>
-      <p className="text-fg-faint mt-2 max-w-2xl text-[13px] leading-relaxed">
-        {t("models.hint")}
-      </p>
+      <p className="text-fg-faint mt-2 max-w-2xl text-[13px] leading-relaxed">{t("models.hint")}</p>
+      {/* What they cost, which is why somebody opens this screen a second time. */}
+      {installedBytes(models) > 0 && (
+        <p className="text-fg-dim tabular mt-1.5 text-[12px]">
+          {t("models.on_disk", { size: size(installedBytes(models)) })}
+        </p>
+      )}
 
       {!reachable && (
         <p className="border-blocked/30 bg-blocked-soft text-blocked mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-[13px]">
@@ -130,6 +169,9 @@ export function ModelsScreen() {
                   model={model}
                   job={installs.find((job) => job.model === model.id)}
                   onPull={() => void pull(model.id)}
+                  onRemove={() => void remove(model.id)}
+                  onUse={() => void choose(model)}
+                  inUse={chosen[roleFor(model.task) ?? ""] === model.id}
                 />
               ))}
             </div>
@@ -144,12 +186,21 @@ function Card({
   model,
   job,
   onPull,
+  onRemove,
+  onUse,
+  inUse,
 }: {
   model: CatalogueModel;
   job: Install | undefined;
   onPull: () => void;
+  onRemove: () => void;
+  onUse: () => void;
+  inUse: boolean;
 }) {
   const t = useT();
+  // Two clicks, not a dialog. Re-downloading a gigabyte is a real cost, and a modal for it would
+  // be one more thing to dismiss on the screen where somebody is tidying up several models.
+  const [confirming, setConfirming] = useState(false);
   const running = job !== undefined && !isFinished(job);
   const done = percent(job ?? ({} as Install));
 
@@ -164,9 +215,35 @@ function Card({
           </p>
         </div>
         {model.installed ? (
-          <span className="text-done shrink-0 text-[12px] font-medium">
-            {t("models.installed")}
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Installed and *chosen* are different states, and conflating them is what made the
+                catalogue decorative: a user could install a Japanese model and record in
+                Vietnamese with no indication of why. */}
+            {inUse ? (
+              <span className="text-accent text-[12px] font-medium">{t("models.in_use")}</span>
+            ) : (
+              roleFor(model.task) !== null && (
+                <Button size="sm" variant="secondary" onClick={onUse}>
+                  {t("models.use")}
+                </Button>
+              )
+            )}
+            {!inUse && (
+              <span className="text-done text-[12px] font-medium">{t("models.installed")}</span>
+            )}
+            <Button
+              size="sm"
+              variant={confirming ? "danger" : "ghost"}
+              onClick={() => {
+                if (confirming) onRemove();
+                setConfirming(!confirming);
+              }}
+              onBlur={() => setConfirming(false)}
+            >
+              <Trash2 aria-hidden="true" className="me-1 size-3.5" />
+              {confirming ? t("models.remove_confirm") : t("models.remove")}
+            </Button>
+          </div>
         ) : (
           <Button
             size="sm"

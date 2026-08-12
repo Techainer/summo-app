@@ -506,6 +506,11 @@
     "task_speaker_embed": "話者の識別",
     "task_diarize_seg": "話者分離",
     "task_denoise": "ノイズ抑制",
-    "task_embed": "テキスト検索"
+    "task_embed": "テキスト検索",
+    "remove": "削除",
+    "remove_confirm": "削除しますか？",
+    "on_disk": "ディスク使用 {size}",
+    "use": "使う",
+    "in_use": "使用中"
   }
 }

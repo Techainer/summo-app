@@ -50,7 +50,11 @@ try {
       await page.goto(`${daemon.url}#${screen}`);
       await page.waitForTimeout(700);
 
-      const h1 = await page.locator("h1, h2").first().innerText().catch(() => "");
+      const h1 = await page
+        .locator("h1, h2")
+        .first()
+        .innerText()
+        .catch(() => "");
       headings[locale][screen] = h1.trim();
 
       // Anything sticking out of the window. `documentElement` rather than `body`: a fixed sidebar

@@ -506,6 +506,11 @@
     "task_speaker_embed": "Nhận diện người nói",
     "task_diarize_seg": "Tách người nói",
     "task_denoise": "Khử ồn",
-    "task_embed": "Tìm kiếm văn bản"
+    "task_embed": "Tìm kiếm văn bản",
+    "remove": "Xoá",
+    "remove_confirm": "Xoá?",
+    "on_disk": "{size} trên đĩa",
+    "use": "Dùng",
+    "in_use": "Đang dùng"
   }
 }

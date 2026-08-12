@@ -48,6 +48,7 @@ export type Event =
   | { kind: "error"; message: string; transient: boolean };
 
 export interface SessionSpec {
+  /** Empty means "whatever the settings say"; the daemon resolves it. */
   live_model: string;
   refine_model?: string;
   lanes?: Lane[];

@@ -44,8 +44,7 @@ export function Transcript({
     if (!element) return;
     // 48px of slack: a scroll that lands a hair short of the bottom, or a row growing by a line
     // after it renders, should not read as "the user scrolled away".
-    const atBottom =
-      element.scrollHeight - element.scrollTop - element.clientHeight < 48;
+    const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 48;
     setFollowing(atBottom);
   }, []);
 
@@ -135,9 +134,7 @@ export function Transcript({
                     meeting appears to have been. The rule is indented and tied to the line above
                     it, and it says so in words for anyone who cannot see the rule. */}
                 <div
-                  className={cn(
-                    overlapping && "border-accent/40 -mt-0.5 border-l-2 ps-2.5",
-                  )}
+                  className={cn(overlapping && "border-accent/40 -mt-0.5 border-l-2 ps-2.5")}
                   data-overlapping={overlapping || undefined}
                 >
                   {overlapping && (

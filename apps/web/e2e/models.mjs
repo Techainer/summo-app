@@ -71,6 +71,68 @@ try {
 
   await page.screenshot({ path: "/tmp/shots/models.png", fullPage: true });
 
+  // Install, then remove. These are 73 MB to 2.5 GB each and installing the wrong one is the most
+  // likely mistake this screen invites, so the way back has to be on it.
+  const vad = page.locator("article", { hasText: "silero-vad-v5" });
+  await vad.getByRole("button", { name: "Cài", exact: true }).click();
+  await page.waitForTimeout(400);
+  await vad.getByText("Đã cài").waitFor({ timeout: 60000 });
+
+  // Two clicks, not a dialog: re-downloading a gigabyte is a real cost, and a modal is one more
+  // thing to dismiss while tidying up several models.
+  await vad.getByRole("button", { name: "Xoá", exact: true }).click();
+  await vad.getByRole("button", { name: "Xoá?", exact: true }).click();
+  await page.waitForTimeout(800);
+  if ((await vad.getByText("Đã cài").count()) !== 0) {
+    fail("a removed model is still shown as installed");
+  }
+
+  // Installing a model and then having no way to say "use this one" is what made the catalogue
+  // decorative: the interface used to send a hardcoded `gipformer-65m`, so installing a Japanese
+  // model changed nothing about what recording reached for.
+  const sense = page.locator("article", { hasText: "sense-voice-small" });
+  await sense.getByRole("button", { name: "Cài", exact: true }).click();
+  await sense.getByText("Đã cài").waitFor({ timeout: 120000 });
+  await sense.getByRole("button", { name: "Dùng", exact: true }).click();
+  await sense.getByText("Đang dùng").waitFor({ timeout: 10000 });
+
+  // And it reached the settings file, not only the screen.
+  const settings = await page.evaluate(
+    async ({ port, token }) =>
+      await (await fetch(`http://127.0.0.1:${port}/settings?token=${token}`)).json(),
+    { port: engine.port, token: engine.token },
+  );
+  if (settings?.settings?.models?.live !== "sense-voice-small") {
+    fail(
+      `choosing a model did not reach the settings: ${JSON.stringify(settings?.settings?.models)}`,
+    );
+  }
+
+  // The daemon refuses to remove a model the settings point at, because the alternative is a
+  // recording that fails to start much later with nothing connecting the two.
+  // Passed in rather than read from the URL: the app strips `port` and `token` during its
+  // handshake, so by now they are gone from `location`.
+  const refused = await page.evaluate(
+    async ({ port, token }) => {
+      await fetch(`http://127.0.0.1:${port}/settings/llm?token=${token}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "ollama",
+          translator: { provider: "local", model: "small100" },
+        }),
+      });
+      const response = await fetch(`http://127.0.0.1:${port}/models/small100?token=${token}`, {
+        method: "DELETE",
+      });
+      return { ok: response.ok, body: await response.text() };
+    },
+    { port: engine.port, token: engine.token },
+  );
+  if (refused.ok || !refused.body.includes("translation")) {
+    fail(`removing the model in use was not refused with a reason: ${JSON.stringify(refused)}`);
+  }
+
   // An unreachable registry is a state, not a blank screen: this is an app expected to work on a
   // plane. Simulated by refusing the request the catalogue makes.
   await page.route("**/catalogue*", (route) => route.abort());

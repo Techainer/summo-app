@@ -39,7 +39,7 @@ use std::{
 
 use ort::{
     session::{Session, builder::GraphOptimizationLevel},
-    value::{Tensor, TensorRef},
+    value::TensorRef,
 };
 use summo_core::{Error, Result};
 use tokenizers::{

@@ -33,6 +33,11 @@ pub enum Command {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionSpec {
     /// Model driving live text.
+    ///
+    /// May be empty, meaning "whatever the settings say" — see `server::resolve_models`. The
+    /// interface leaves it empty; a client that knows exactly which model it wants, such as the
+    /// import job, names one.
+    #[serde(default)]
     pub live_model: String,
     /// Slower model that re-decodes finished utterances, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]

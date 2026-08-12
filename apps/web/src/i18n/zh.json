@@ -506,6 +506,11 @@
     "task_speaker_embed": "说话人归属",
     "task_diarize_seg": "说话人分离",
     "task_denoise": "降噪",
-    "task_embed": "文本检索"
+    "task_embed": "文本检索",
+    "remove": "删除",
+    "remove_confirm": "删除？",
+    "on_disk": "占用磁盘 {size}",
+    "use": "使用",
+    "in_use": "使用中"
   }
 }

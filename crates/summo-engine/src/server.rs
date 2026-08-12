@@ -136,6 +136,8 @@ impl Server {
             .route("/hw", get(hardware))
             .route("/models", get(models))
             .route("/catalogue", get(catalogue))
+            .route("/models/{id}", axum::routing::delete(remove_model))
+            .route("/settings/models", post(set_models))
             .route("/status", get(status))
             .route("/storage", get(storage))
             .route("/storage/prune", post(prune_storage))
@@ -476,7 +478,209 @@ async fn catalogue(
         })
         .collect();
 
-    Json(serde_json::json!({ "models": models, "reachable": reachable })).into_response()
+    // Which model each role points at. Installed and *chosen* are different states, and a screen
+    // that cannot tell them apart is one where installing a Japanese model appears to do nothing.
+    let settings = summo_core::Settings::load(&state.engine.paths().settings()).unwrap_or_default();
+    let chosen = serde_json::json!({
+        "live": settings.models.live,
+        "refine": settings.models.refine,
+        "vad": settings.models.vad,
+        "speaker": settings.models.speaker,
+        "translator": settings
+            .llm
+            .translator
+            .as_ref()
+            .filter(|mt| mt.is_local())
+            .and_then(|mt| mt.model.clone()),
+    });
+
+    Json(serde_json::json!({
+        "models": models,
+        "reachable": reachable,
+        "chosen": chosen,
+    }))
+    .into_response()
+}
+
+/// Choose which installed model a role uses.
+///
+/// The missing half of the catalogue: installing a model and then having no way to say "use this
+/// one" made the whole screen decorative. Roles are named rather than inferred from the task,
+/// because `asr` fills two of them — the live model and the slower one that re-decodes after it —
+/// and which is wanted is the user's decision, not a property of the model.
+async fn set_models(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<ModelsBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    as_response((|| {
+        let path = state.engine.paths().settings();
+        let mut settings = summo_core::Settings::load(&path)?;
+        let id = body.model.trim();
+
+        // Only something that is here. A setting naming a model that was never installed fails at
+        // the start of a recording, which is the worst moment to find out.
+        let model_id = summo_core::ModelId::parse(id).map_err(Error::Config)?;
+        let manifest = state.engine.store().installed(&model_id)?;
+
+        let expected = match body.role.as_str() {
+            "live" | "refine" => summo_models::Task::Asr,
+            "vad" => summo_models::Task::Vad,
+            "speaker" => summo_models::Task::SpeakerEmbed,
+            "translator" => summo_models::Task::Translate,
+            other => return Err(Error::Config(format!("no such model role: `{other}`"))),
+        };
+        if manifest.task != expected {
+            return Err(Error::Config(format!(
+                "`{id}` cannot be the {} model",
+                body.role
+            )));
+        }
+
+        match body.role.as_str() {
+            "live" => {
+                settings.models.live = Some(id.to_string());
+                // A refinement model identical to the live one decodes everything twice for
+                // nothing, and `SessionSpec::validate` refuses it — so choosing one as live clears
+                // the other rather than leaving a session that cannot start.
+                if settings.models.refine.as_deref() == Some(id) {
+                    settings.models.refine = None;
+                }
+            }
+            "refine" => settings.models.refine = Some(id.to_string()),
+            "vad" => settings.models.vad = Some(id.to_string()),
+            "speaker" => settings.models.speaker = Some(id.to_string()),
+            "translator" => {
+                settings.llm.translator = Some(summo_core::settings::Translator {
+                    provider: summo_core::settings::LOCAL.to_string(),
+                    model: Some(id.to_string()),
+                });
+            }
+            _ => unreachable!("the role was checked above"),
+        }
+
+        settings.save(&path)?;
+        Ok(settings)
+    })())
+}
+
+#[derive(Deserialize)]
+struct ModelsBody {
+    /// `live`, `refine`, `vad`, `speaker` or `translator`.
+    role: String,
+    model: String,
+}
+
+/// Fill in the models a session did not name.
+#[cfg(feature = "models")]
+///
+/// The interface used to send a hardcoded `gipformer-65m`, which made the whole model catalogue
+/// decorative: installing SenseVoice for a Japanese meeting changed nothing, because recording
+/// still reached for the Vietnamese transducer — and on a machine without it, recording failed with
+/// a missing-model error naming a model the user never chose.
+///
+/// Order: what the session asked for, then what the settings say, then the only installed speech
+/// model if there is exactly one. The last is the case that matters on a fresh install — one model
+/// is there, it is obviously the one to use, and asking would be asking a question with one answer.
+fn resolve_models(
+    spec: &crate::protocol::SessionSpec,
+    engine: &EngineState,
+) -> crate::protocol::SessionSpec {
+    let mut spec = spec.clone();
+    if !spec.live_model.trim().is_empty() {
+        return spec;
+    }
+
+    let settings = summo_core::Settings::load(&engine.paths().settings()).unwrap_or_default();
+    if let Some(chosen) = settings.models.live.filter(|m| !m.trim().is_empty()) {
+        spec.live_model = chosen;
+    } else {
+        let speech: Vec<_> = engine
+            .store()
+            .list()
+            .into_iter()
+            .filter(|m| m.task == summo_models::Task::Asr)
+            .collect();
+        if let [only] = speech.as_slice() {
+            spec.live_model = only.id.to_string();
+        }
+    }
+
+    if spec.language.is_none() {
+        spec.language = settings.models.language;
+    }
+    spec
+}
+
+/// Delete an installed model, reclaiming whatever nothing else references.
+///
+/// A model manager without this is half a manager: these are 73 MB to 2.5 GB each, and installing
+/// the wrong one is the most likely mistake the catalogue screen invites. Until now the only way
+/// back was `summo rm` on a command line.
+///
+/// Refuses to remove a model the settings currently point at. The alternative is a recording that
+/// fails to start with a missing-file error, some time later, with nothing connecting the two —
+/// and choosing a replacement first is one click on the screen this is called from.
+async fn remove_model(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    as_response((|| {
+        let model_id = summo_core::ModelId::parse(&id).map_err(Error::Config)?;
+        let paths = state.engine.paths();
+
+        if let Some(role) = in_use(
+            &summo_core::settings::Settings::load(&paths.settings())?,
+            &id,
+        ) {
+            return Err(Error::Config(format!(
+                "`{id}` is in use as the {role} model; choose another one first"
+            )));
+        }
+
+        let freed = state.engine.store().remove(&model_id)?;
+        Ok(serde_json::json!({ "removed": id, "freed_bytes": freed }))
+    })())
+}
+
+/// Which setting names this model, if any.
+///
+/// Read from the settings file rather than from a running session: a model is "in use" if the next
+/// recording would reach for it, not only if one is happening now.
+fn in_use(settings: &summo_core::settings::Settings, id: &str) -> Option<&'static str> {
+    let named = |value: &Option<String>| value.as_deref() == Some(id);
+    if named(&settings.models.live) {
+        return Some("speech");
+    }
+    if named(&settings.models.refine) {
+        return Some("refinement");
+    }
+    if named(&settings.models.vad) {
+        return Some("voice activity");
+    }
+    if named(&settings.models.speaker) {
+        return Some("speaker");
+    }
+    if settings
+        .llm
+        .translator
+        .as_ref()
+        .is_some_and(|mt| mt.is_local() && mt.model.as_deref() == Some(id))
+    {
+        return Some("translation");
+    }
+    None
 }
 
 /// Turn a vault failure into a status a client can act on.
@@ -2876,6 +3080,10 @@ fn handle_command_with_models(
 
     match command {
         Command::SessionStart(spec) => {
+            // Before `begin`, not inside `start_session`: `begin` validates the spec, and an empty
+            // live model is exactly what validation refuses. Resolving afterwards would mean the
+            // interface — which deliberately names no model — could never start a recording at all.
+            let spec = resolve_models(&spec, engine);
             if let Err(e) = engine.begin(&spec) {
                 return (vec![Event::error(&e)], session);
             }
@@ -3084,6 +3292,60 @@ fn handle_audio(bytes: &[u8], engine: &EngineState) -> Vec<Event> {
             Vec::new()
         }
         Err(e) => vec![Event::error(&e)],
+    }
+}
+
+#[cfg(all(test, feature = "models"))]
+mod resolve_tests {
+    use super::*;
+    use summo_core::paths::Paths;
+
+    fn engine(home: &std::path::Path) -> EngineState {
+        EngineState::new(Paths::at(home)).unwrap()
+    }
+
+    /// The bug this exists for: the interface sent a hardcoded `gipformer-65m`, so installing a
+    /// model for another language changed nothing about what recording reached for — and on a
+    /// machine without that model, recording failed naming one the user never chose.
+    #[test]
+    fn a_session_that_names_no_model_takes_the_settings() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("sense-voice-small".into());
+        settings.models.language = Some("ja".into());
+        settings.save(&path).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.live_model, "sense-voice-small");
+        assert_eq!(resolved.language.as_deref(), Some("ja"));
+    }
+
+    /// A client that knows which model it wants keeps it. The import job names one on purpose.
+    #[test]
+    fn a_named_model_is_left_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("sense-voice-small".into());
+        settings.save(&engine.paths().settings()).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new("whisper-tiny"), &engine);
+        assert_eq!(resolved.live_model, "whisper-tiny");
+    }
+
+    /// Nothing chosen and nothing installed is left empty, so `validate` refuses it with a message
+    /// about a missing model rather than this inventing one.
+    #[test]
+    fn nothing_to_choose_from_stays_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        assert!(
+            resolve_models(&crate::protocol::SessionSpec::new(""), &engine)
+                .live_model
+                .is_empty()
+        );
     }
 }
 

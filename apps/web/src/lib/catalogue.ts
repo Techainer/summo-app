@@ -12,7 +12,8 @@ import { url } from "./library";
  */
 
 /** What a model is for. Matches `summo_models::Task`. */
-export type Task = "asr" | "vad" | "denoise" | "diarize-seg" | "speaker-embed" | "embed" | "translate";
+export type Task =
+  "asr" | "vad" | "denoise" | "diarize-seg" | "speaker-embed" | "embed" | "translate";
 
 export interface CatalogueModel {
   id: string;
@@ -34,8 +35,26 @@ export interface CatalogueModel {
   min_ram_mb: number;
 }
 
+/** Which job a model is being pointed at. */
+export type Role = "live" | "refine" | "vad" | "speaker" | "translator";
+
+/**
+ * The role a task fills by default, or `null` when choosing is not a thing a user does.
+ *
+ * A voice detector and a speaker embedder are one each and picked by the machine; there is nothing
+ * to choose between. Speech and translation are the two where a user genuinely decides, and they
+ * are the two the catalogue offers more than one of.
+ */
+export function roleFor(task: Task): Role | null {
+  if (task === "asr") return "live";
+  if (task === "translate") return "translator";
+  return null;
+}
+
 export interface Catalogue {
   models: CatalogueModel[];
+  /** Which model each role currently points at, keyed by [`Role`]. */
+  chosen?: Record<string, string | null>;
   /**
    * Whether the registry answered.
    *
@@ -50,6 +69,31 @@ export class CatalogueClient {
 
   async load(): Promise<Catalogue> {
     return readJson<Catalogue>(await fetch(url(this.handshake, "/catalogue")));
+  }
+
+  /**
+   * Say which installed model fills a role.
+   *
+   * The role is named rather than inferred: `asr` fills two of them — the live model and the
+   * slower one that re-decodes after it — and which is wanted is the user's decision.
+   */
+  async use(role: Role, model: string): Promise<void> {
+    await readJson(
+      await fetch(url(this.handshake, "/settings/models"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role, model }),
+      }),
+    );
+  }
+
+  /** Delete an installed model. Returns the bytes reclaimed. */
+  async remove(id: string): Promise<{ freed_bytes: number }> {
+    return readJson<{ freed_bytes: number }>(
+      await fetch(url(this.handshake, `/models/${encodeURIComponent(id)}`), {
+        method: "DELETE",
+      }),
+    );
   }
 }
 
@@ -121,6 +165,11 @@ export function tags(model: CatalogueModel): { label: string; kind: "plain" | "w
   if (!model.redistributable) out.push({ label: "upstream", kind: "warn" });
   if (!model.fits) out.push({ label: "ram", kind: "warn" });
   return out;
+}
+
+/** How much disk the installed models take, which is the number a user came to check. */
+export function installedBytes(models: CatalogueModel[]): number {
+  return models.filter((m) => m.installed).reduce((total, m) => total + m.size_bytes, 0);
 }
 
 /** Bytes as something a person reads, matching the onboarding screen's wording. */

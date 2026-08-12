@@ -36,6 +36,7 @@ const SCREENS = [
   ["chat", "/chat"],
   ["analytics", "/analytics"],
   ["people", "/people"],
+  ["models", "/models"],
   ["settings", "/settings"],
 ];
 

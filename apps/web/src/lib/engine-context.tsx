@@ -113,7 +113,11 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     // user last chose rather than whatever was set when the window opened.
     const chosen = loadCapture();
     await controller.current?.start({
-      live_model: "gipformer-65m",
+      // Deliberately not named here. This was hardcoded to `gipformer-65m`, which made the model
+      // catalogue decorative: installing a Japanese model changed nothing, because recording still
+      // reached for the Vietnamese transducer. The daemon reads the setting, and falls back to the
+      // only installed speech model when there is one.
+      live_model: "",
       lanes: chosen.lanes,
       // Diarization needs the system lane; asking for it on the microphone alone is refused.
       diarize: chosen.lanes.includes("system"),
