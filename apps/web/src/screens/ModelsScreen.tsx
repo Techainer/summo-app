@@ -260,8 +260,16 @@ function Card({
         )}
       </div>
 
+      {/* Clamped, and the registry's own text is not shortened to match.
+          A manifest description is written for the model's page — measured numbers, licence
+          reasoning, why one model beats another — which is right there and far too long here. One
+          card ran to twelve lines beside a neighbour that ran to three, and a two-column grid of
+          those is unreadable before a word of it is read. Three lines is enough to decide whether
+          to keep reading. */}
       {model.description && (
-        <p className="text-fg-dim mt-2 text-[13px] leading-relaxed">{model.description}</p>
+        <p className="text-fg-dim mt-2 line-clamp-3 text-[13px] leading-relaxed">
+          {model.description}
+        </p>
       )}
 
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">

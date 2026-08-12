@@ -28,7 +28,7 @@ function Idle() {
   const t = useT();
 
   return (
-    <div className="mt-14 flex flex-col items-center gap-5 px-4 text-center">
+    <div className="flex flex-col items-center gap-5 px-4 text-center">
       <button
         type="button"
         onClick={toggle}
@@ -104,11 +104,22 @@ export function RecordScreen() {
           <ImportPanel />
         ) : (
           <>
-            <CaptureControls />
+            {/* Before a meeting starts there is one button and nothing else, so the pane is
+                mostly empty — and top-aligned it reads as a screen that failed to load the rest.
+                Centred, the emptiness is the point rather than a gap. Once text starts arriving
+                the transcript takes the height and this stops applying. */}
             {transcript.segments.length === 0 ? (
-              <Idle />
+              <div className="flex h-full flex-col">
+                <CaptureControls />
+                <div className="flex min-h-0 flex-1 items-center justify-center pb-16">
+                  <Idle />
+                </div>
+              </div>
             ) : (
-              <Transcript segments={transcript.segments} />
+              <>
+                <CaptureControls />
+                <Transcript segments={transcript.segments} />
+              </>
             )}
           </>
         )}

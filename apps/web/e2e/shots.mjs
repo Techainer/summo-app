@@ -174,6 +174,10 @@ async function textColours(page) {
 for (const scheme of ["light", "dark"]) {
   for (const [width, viewport] of VIEWPORTS) {
     const context = await browser.newContext({ locale, viewport, colorScheme: scheme });
+    // The quick tour is a first-run overlay. It is correct that it appears, and it covers a
+    // quarter of the screen — so every picture of every screen would be a picture of the tour.
+    // Marked as seen, the way it is for anybody who has used the app once.
+    await context.addInitScript(() => window.localStorage.setItem("summo.tour", "done"));
     const page = await context.newPage();
     page.on("console", (m) => {
       if (m.type() === "error") problems.push(`console ${scheme}/${width}: ${m.text()}`);
