@@ -6,7 +6,7 @@
   "nav": {
     "label": "Điều hướng",
     "record": "Ghi",
-    "library": "Thư viện",
+    "library": "Kho",
     "tasks": "Việc",
     "chat": "Hỏi đáp",
     "analytics": "Thống kê",
@@ -27,7 +27,8 @@
     "expand_hint": "Mở rộng",
     "agents": "Agent",
     "collapse": "Thu gọn {name}",
-    "models": "Mô hình"
+    "models": "Mô hình",
+    "setup": "Không gian"
   },
   "record": {
     "source": "Nguồn",
@@ -165,7 +166,7 @@
   "library": {
     "title": "Thư viện",
     "search": "Tìm kiếm",
-    "search_placeholder": "Tìm trong mọi cuộc họp…",
+    "search_placeholder": "Tìm mọi thứ…",
     "group_by": "Nhóm theo",
     "by_day": "Ngày",
     "by_week": "Tuần",
@@ -177,7 +178,7 @@
     "empty": "Chưa có buổi họp nào.",
     "meetings_one": "{count} buổi họp",
     "meetings_other": "{count} buổi họp",
-    "heading": "Kho họp của bạn",
+    "heading": "Mọi thứ bạn đã lưu",
     "loading": "Đang đọc kho họp…",
     "no_content": "Chưa có nội dung.",
     "recorded": "Đã ghi",
@@ -189,7 +190,7 @@
     "unreadable": "Không đọc được {path}: {reason}",
     "more_lines": "+{count} dòng nữa",
     "vault_hint": "Mọi thứ nằm trong ~/.summo/vault — mở bằng Obsidian, grep, hay sao lưu tuỳ bạn.",
-    "record_new": "Ghi cuộc họp mới",
+    "record_new": "Ghi mới",
     "recordings": "{count} bản ghi âm",
     "trash_confirm": "Chuyển vào thùng rác?",
     "trash_yes": "Chuyển",
@@ -199,7 +200,11 @@
     "yesterday": "Hôm qua",
     "week": "Tuần {n}, {year}",
     "unfiled_group": "Chưa phân loại",
-    "filter_colour": "Lọc theo màu"
+    "filter_colour": "Lọc theo màu",
+    "filter_kind": "Lọc theo loại",
+    "kind_all": "Tất cả",
+    "kind_meeting": "Bản ghi",
+    "kind_note": "Ghi chú"
   },
   "analytics": {
     "title": "Thống kê",

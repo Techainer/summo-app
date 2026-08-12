@@ -10,6 +10,15 @@ export interface NavItem {
   key: string;
   label: string;
   /**
+   * Which band of the sidebar this belongs to.
+   *
+   * Eleven flat destinations is a list nobody reads, and the flatness said something untrue about
+   * the product: recording, reading, tasks and analytics are the work, while voices, agents and
+   * models are the machinery that makes the work possible. Two bands say which is which without a
+   * word of explanation.
+   */
+  group?: "work" | "setup";
+  /**
    * A drawn icon, not a character.
    *
    * These were typographic glyphs — `●`, `▤`, `◫`, `◔` — picked because they were free. They also
@@ -68,37 +77,41 @@ export function Sidebar({
   return (
     <div className="flex h-full flex-col">
       <nav aria-label={t("nav.screens")} className="px-3 pt-3">
-        <p className="text-fg-faint px-2 pb-1.5 text-[11px] font-semibold tracking-wider uppercase">
+        <p className="text-fg-faint text-micro px-2 pb-1.5 font-semibold tracking-wider uppercase">
           {t("nav.menu")}
         </p>
         <ul className="space-y-0.5">
-          {items.map((item) => (
-            <li key={item.key}>
-              <button
-                type="button"
-                onClick={() => onNavigate(item.key)}
-                aria-current={active === item.key ? "page" : undefined}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors",
-                  active === item.key
-                    ? "bg-accent-soft text-accent font-medium"
-                    : "text-fg-dim hover:bg-bg-soft hover:text-fg",
-                )}
-              >
-                {/* `size-4` and `stroke-[1.75]`: the same optical weight as the 13px label beside
-                    it. A 2px stroke at this size reads heavier than the text and pulls the eye to
-                    the icon rather than to the word, which is the wrong way round in a nav. */}
-                <item.icon aria-hidden="true" className="size-4 shrink-0 stroke-[1.75]" />
-                {item.label}
-                {item.badge ? (
-                  <span className="tabular bg-rec ml-auto rounded-full px-1.5 py-0.5 text-[11px] font-semibold text-white">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </button>
-            </li>
-          ))}
+          {items
+            .filter((item) => (item.group ?? "work") === "work")
+            .map((item) => (
+              <li key={item.key}>
+                <NavButton item={item} active={active === item.key} onNavigate={onNavigate} />
+              </li>
+            ))}
         </ul>
+
+        {/* The machinery, below a rule and a quieter label.
+        
+            Eleven flat destinations is a list nobody reads, and the flatness also said something
+            untrue: recording, reading, tasks and analytics are the work, while voices, agents and
+            models are what makes the work possible. Two bands say which is which without a word of
+            explanation. */}
+        {items.some((item) => item.group === "setup") && (
+          <>
+            <p className="text-fg-faint text-micro px-2 pt-4 pb-1.5 font-semibold tracking-wider uppercase">
+              {t("nav.setup")}
+            </p>
+            <ul className="space-y-0.5">
+              {items
+                .filter((item) => item.group === "setup")
+                .map((item) => (
+                  <li key={item.key}>
+                    <NavButton item={item} active={active === item.key} onNavigate={onNavigate} />
+                  </li>
+                ))}
+            </ul>
+          </>
+        )}
       </nav>
 
       <div className="border-line mt-4 border-t" />
@@ -210,5 +223,46 @@ function FolderRow({
         {label}
       </button>
     </div>
+  );
+}
+
+/**
+ * One destination.
+ *
+ * Extracted so the two bands render the same row rather than two copies that drift — the thing a
+ * second list in a sidebar reliably becomes.
+ */
+function NavButton({
+  item,
+  active,
+  onNavigate,
+}: {
+  item: NavItem;
+  active: boolean;
+  onNavigate: (key: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(item.key)}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-[var(--radius-pill)] px-2.5 py-2 text-sm transition-colors",
+        active
+          ? "bg-accent-soft text-accent font-medium"
+          : "text-fg-dim hover:bg-bg-raised hover:text-fg",
+      )}
+    >
+      {/* `size-4` and `stroke-[1.75]`: the same optical weight as the label beside it. A 2px stroke
+          at this size reads heavier than the text and pulls the eye to the icon rather than to the
+          word, which is the wrong way round in a nav. */}
+      <item.icon aria-hidden="true" className="size-4 shrink-0 stroke-[1.75]" />
+      {item.label}
+      {item.badge ? (
+        <span className="tabular bg-rec text-micro ml-auto rounded-full px-1.5 py-0.5 font-semibold text-white">
+          {item.badge}
+        </span>
+      ) : null}
+    </button>
   );
 }

@@ -39,18 +39,25 @@ import { NudgeBar } from "./NudgeBar";
 /// interface more than they saved — each rendered in whatever face the system fell back to, at that
 /// face's weight and baseline, so a column of ten looked like ten pieces of punctuation from
 /// different books rather than one set.
-const NAV: { key: string; labelKey: string; icon: LucideIcon }[] = [
+/// Two bands: the work, then the machinery that makes it possible.
+///
+/// This was eleven flat items, and the flatness said something untrue about the product. `Thư viện`
+/// sat second and listed meetings only, so the navigation claimed Summo was a meeting recorder —
+/// while the vault has always held typed notes beside recordings and the daemon has always returned
+/// both. `Kho` is that shelf, with a control for which kind you want to see.
+const NAV: { key: string; labelKey: string; icon: LucideIcon; group?: "work" | "setup" }[] = [
   { key: "/", labelKey: "nav.record", icon: Mic },
   { key: "/library", labelKey: "nav.library", icon: Library },
-  { key: "/notes", labelKey: "nav.notes", icon: NotebookPen },
-  { key: "/agenda", labelKey: "nav.agenda", icon: CalendarDays },
   { key: "/tasks", labelKey: "nav.tasks", icon: ListChecks },
-  { key: "/agents", labelKey: "nav.agents", icon: Bot },
-  { key: "/chat", labelKey: "nav.chat", icon: MessageCircleQuestion },
-  { key: "/people", labelKey: "nav.people", icon: AudioLines },
+  { key: "/agenda", labelKey: "nav.agenda", icon: CalendarDays },
   { key: "/analytics", labelKey: "nav.analytics", icon: ChartNoAxesColumn },
-  { key: "/models", labelKey: "nav.models", icon: Package },
-  { key: "/settings", labelKey: "nav.settings", icon: Settings },
+
+  { key: "/notes", labelKey: "nav.notes", icon: NotebookPen, group: "setup" },
+  { key: "/chat", labelKey: "nav.chat", icon: MessageCircleQuestion, group: "setup" },
+  { key: "/people", labelKey: "nav.people", icon: AudioLines, group: "setup" },
+  { key: "/agents", labelKey: "nav.agents", icon: Bot, group: "setup" },
+  { key: "/models", labelKey: "nav.models", icon: Package, group: "setup" },
+  { key: "/settings", labelKey: "nav.settings", icon: Settings, group: "setup" },
 ];
 
 /**
@@ -71,6 +78,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
         key: item.key,
         label: t(item.labelKey),
         icon: item.icon,
+        group: item.group,
       })),
     [t],
   );

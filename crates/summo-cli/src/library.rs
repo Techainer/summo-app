@@ -115,6 +115,7 @@ pub fn run(paths: &Paths, cmd: MeetingCmd) -> Result<()> {
             without_summary,
         } => {
             let query = LibraryQuery {
+                kind: None,
                 token: None,
                 group: parse_group(&group)?,
                 folder,

@@ -6,7 +6,7 @@
   "nav": {
     "label": "Navigation",
     "record": "Record",
-    "library": "Library",
+    "library": "Vault",
     "tasks": "Tasks",
     "chat": "Ask",
     "analytics": "Analytics",
@@ -27,7 +27,8 @@
     "expand_hint": "Expand",
     "agents": "Agents",
     "collapse": "Collapse {name}",
-    "models": "Models"
+    "models": "Models",
+    "setup": "Workspace"
   },
   "record": {
     "source": "Source",
@@ -165,7 +166,7 @@
   "library": {
     "title": "Library",
     "search": "Search",
-    "search_placeholder": "Search every meeting…",
+    "search_placeholder": "Search everything…",
     "group_by": "Group by",
     "by_day": "Day",
     "by_week": "Week",
@@ -177,7 +178,7 @@
     "empty": "No meetings yet.",
     "meetings_one": "{count} meeting",
     "meetings_other": "{count} meetings",
-    "heading": "Your meetings",
+    "heading": "Everything you have kept",
     "loading": "Reading the vault…",
     "no_content": "Nothing here yet.",
     "recorded": "Recorded",
@@ -189,7 +190,7 @@
     "unreadable": "Could not read {path}: {reason}",
     "more_lines": "+{count} more lines",
     "vault_hint": "Everything lives in ~/.summo/vault — open it in Obsidian, grep it, back it up however you like.",
-    "record_new": "Record a meeting",
+    "record_new": "Record something",
     "recordings": "{count} recordings",
     "trash_confirm": "Move to trash?",
     "trash_yes": "Move",
@@ -199,7 +200,11 @@
     "yesterday": "Yesterday",
     "week": "Week {n}, {year}",
     "unfiled_group": "Unfiled",
-    "filter_colour": "Filter by colour"
+    "filter_colour": "Filter by colour",
+    "filter_kind": "Filter by kind",
+    "kind_all": "All",
+    "kind_meeting": "Recordings",
+    "kind_note": "Notes"
   },
   "analytics": {
     "title": "Analytics",

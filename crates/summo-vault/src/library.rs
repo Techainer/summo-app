@@ -39,6 +39,8 @@ pub struct LibraryQuery {
     pub token: Option<String>,
     #[serde(default)]
     pub group: GroupBy,
+    /// `meeting` or `note`. Absent means both, which is what the workspace shows by default.
+    pub kind: Option<String>,
     pub folder: Option<String>,
     /// Only what is filed nowhere: the vault root.
     ///
@@ -61,6 +63,13 @@ pub struct LibraryQuery {
 impl LibraryQuery {
     fn filter(&self) -> Filter {
         Filter {
+            // An unrecognised kind filters to nothing rather than to everything. "Which of these
+            // are voice memos?" answered with the whole vault is the most confidently wrong answer
+            // available, and it is the same reasoning as the colour filter below.
+            kind: self.kind.as_deref().map(|k| match k {
+                "note" => crate::index::Kind::Note,
+                _ => crate::index::Kind::Meeting,
+            }),
             // `Some("")` is the root and matches nothing below it, which is what "unfiled" means.
             folder: if self.unfiled {
                 Some(String::new())

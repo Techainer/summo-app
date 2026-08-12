@@ -92,7 +92,7 @@ async function open(scheme, viewport) {
   // `exact` on every label: "Ghi" is a prefix of "Ghi chú", and a substring match resolves to both
   // the record screen and the notes screen.
   for (const [label, marker] of [
-    ["Thư viện", /thư viện|họp|hôm/i],
+    ["Kho", /mọi thứ|họp|hôm/i],
     ["Ghi chú", /ghi chú|chưa có ghi chú|chọn một ghi chú/i],
     ["Lịch", /lịch|chưa có lịch/i],
     ["Việc", /việc|agent|chưa có/i],
@@ -122,7 +122,7 @@ async function open(scheme, viewport) {
   // nobody can see. So this checks paint, not presence: every ancestor of the heading has to be
   // fully opaque.
   for (const [first, second] of [
-    ["Thư viện", "Việc"],
+    ["Kho", "Việc"],
     ["Ghi chú", "Thống kê"],
   ]) {
     const nav = page.getByRole("navigation", { name: "Màn hình" });
@@ -156,7 +156,7 @@ async function open(scheme, viewport) {
   // The sidebar collapses on demand and comes back.
   await page
     .getByRole("navigation", { name: "Màn hình" })
-    .getByRole("button", { name: "Thư viện" })
+    .getByRole("button", { name: "Kho" })
     .click();
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${shots}/shell-wide-dark.png` });
@@ -192,7 +192,7 @@ async function open(scheme, viewport) {
   await page.screenshot({ path: `${shots}/shell-narrow-sheet.png` });
   await page
     .getByRole("navigation", { name: "Màn hình" })
-    .getByRole("button", { name: "Thư viện" })
+    .getByRole("button", { name: "Kho" })
     .click();
   try {
     await page

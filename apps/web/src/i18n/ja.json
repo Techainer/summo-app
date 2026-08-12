@@ -6,7 +6,7 @@
   "nav": {
     "label": "ナビゲーション",
     "record": "録音",
-    "library": "ライブラリ",
+    "library": "保管庫",
     "tasks": "タスク",
     "chat": "質問",
     "analytics": "分析",
@@ -27,7 +27,8 @@
     "expand_hint": "広げる",
     "agents": "エージェント",
     "collapse": "{name}をたたむ",
-    "models": "モデル"
+    "models": "モデル",
+    "setup": "ワークスペース"
   },
   "record": {
     "source": "入力",
@@ -165,7 +166,7 @@
   "library": {
     "title": "ライブラリ",
     "search": "検索",
-    "search_placeholder": "すべての会議から検索…",
+    "search_placeholder": "すべてから検索…",
     "group_by": "まとめ方",
     "by_day": "日",
     "by_week": "週",
@@ -177,7 +178,7 @@
     "empty": "会議はまだありません。",
     "meetings_one": "{count}件の会議",
     "meetings_other": "{count}件の会議",
-    "heading": "会議一覧",
+    "heading": "保存したものすべて",
     "loading": "保管庫を読んでいます…",
     "no_content": "まだ何もありません。",
     "recorded": "録音",
@@ -189,7 +190,7 @@
     "unreadable": "{path}を読めませんでした：{reason}",
     "more_lines": "他{count}行",
     "vault_hint": "すべては ~/.summo/vault にあります。Obsidianで開くのも、grepするのも、好きな方法でバックアップするのも自由です。",
-    "record_new": "会議を録音する",
+    "record_new": "録音する",
     "recordings": "{count}件の録音",
     "trash_confirm": "ゴミ箱に移しますか？",
     "trash_yes": "移す",
@@ -199,7 +200,11 @@
     "yesterday": "昨日",
     "week": "{year}年 第{n}週",
     "unfiled_group": "未整理",
-    "filter_colour": "色で絞り込む"
+    "filter_colour": "色で絞り込む",
+    "filter_kind": "種類で絞り込む",
+    "kind_all": "すべて",
+    "kind_meeting": "録音",
+    "kind_note": "ノート"
   },
   "analytics": {
     "title": "分析",

@@ -99,8 +99,13 @@ export interface MeetingDetail {
 
 export type GroupBy = "day" | "week" | "folder" | "none";
 
+/** What a vault entry is. A recording has a transcript; a note is typed. */
+export type Kind = "meeting" | "note";
+
 export interface LibraryFilters {
   group?: GroupBy;
+  /** One kind, or absent for both — which is what the workspace shows by default. */
+  kind?: Kind;
   /** A folder path; `""` is the vault root, meaning things nobody has filed. */
   folder?: string;
   /** Comma-separated; a document must carry every one of them. */

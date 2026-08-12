@@ -14,6 +14,7 @@ import {
   timeOfDay,
   timestamp,
   type GroupBy,
+  type Kind,
   type LibraryView,
   type MeetingDetail,
   type MeetingSummary,
@@ -27,6 +28,13 @@ const SEARCH_DEBOUNCE_MS = 180;
 
 // Keys, resolved at render: a module-level array is built before any provider exists, so baking
 // the text in would freeze whichever language loaded first.
+// Keys, resolved at render, for the same reason as `GROUPS` below.
+const KINDS: { value: Kind | undefined; labelKey: string }[] = [
+  { value: undefined, labelKey: "library.kind_all" },
+  { value: "meeting", labelKey: "library.kind_meeting" },
+  { value: "note", labelKey: "library.kind_note" },
+];
+
 const GROUPS: { value: GroupBy; labelKey: string }[] = [
   { value: "day", labelKey: "library.by_day" },
   { value: "week", labelKey: "library.by_week" },
@@ -103,6 +111,14 @@ export function Library({
   const say = useErrorText();
   const [view, setView] = useState<LibraryView | null>(null);
   const [group, setGroup] = useState<GroupBy>("day");
+  /**
+   * Which kind of thing is being looked at, or all of them.
+   *
+   * Local rather than in the route, unlike the folder and tag filters: those narrow *what exists*
+   * and are worth a shareable URL, while this is a lens on the same shelf and switching it is a
+   * glance rather than a destination.
+   */
+  const [kind, setKind] = useState<Kind | undefined>(undefined);
   // What is in the box, which leads what is in the URL by one debounce. A controlled input driven
   // straight from the route would push a history entry per keystroke and make the back button undo
   // the query one letter at a time.
@@ -119,12 +135,12 @@ export function Library({
     try {
       // Joined here rather than in the client, because the daemon takes one query parameter: a
       // query string cannot express a repeated key that every deserialiser agrees on.
-      setView(await client.view({ group, folder, tag: tags.join(","), colour }));
+      setView(await client.view({ group, kind, folder, tag: tags.join(","), colour }));
       setError(null);
     } catch (e) {
       setError(say(e));
     }
-  }, [client, group, folder, tags, colour, say]);
+  }, [client, group, kind, folder, tags, colour, say]);
 
   useEffect(() => {
     void refresh();
@@ -214,9 +230,39 @@ export function Library({
           />
         </div>
 
+        {/* What kind of thing, before how it is grouped.
+            
+            The vault has always held recordings and typed notes side by side and there was no way
+            to ask for one — which is how a workspace ends up telling the user that meetings are the
+            product. `Tất cả` first and selected, because both together is the honest default. */}
         {hits === null && (
           <div
-            className="bg-bg-soft flex gap-0.5 rounded-lg p-0.5"
+            className="bg-bg-soft flex gap-0.5 rounded-[var(--radius-pill)] p-0.5"
+            role="group"
+            aria-label={t("library.filter_kind")}
+          >
+            {KINDS.map((k) => (
+              <button
+                key={k.labelKey}
+                type="button"
+                aria-pressed={kind === k.value}
+                className={cn(
+                  "text-meta flex-1 rounded-[var(--radius-pill)] px-3 py-1.5 transition-colors",
+                  kind === k.value
+                    ? "bg-bg-raised text-fg font-medium shadow-[var(--shadow-sm)]"
+                    : "text-fg-dim hover:text-fg",
+                )}
+                onClick={() => setKind(k.value)}
+              >
+                {t(k.labelKey)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {hits === null && (
+          <div
+            className="bg-bg-soft flex gap-0.5 rounded-[var(--radius-pill)] p-0.5"
             role="group"
             aria-label={t("library.group_by")}
           >
@@ -225,8 +271,10 @@ export function Library({
                 key={g.value}
                 type="button"
                 className={cn(
-                  "flex-1 rounded-md px-3 py-1.5 text-[13px] transition-colors",
-                  group === g.value ? "bg-bg text-fg font-medium" : "text-fg-dim hover:text-fg",
+                  "text-meta flex-1 rounded-[var(--radius-pill)] px-3 py-1.5 transition-colors",
+                  group === g.value
+                    ? "bg-bg-raised text-fg font-medium shadow-[var(--shadow-sm)]"
+                    : "text-fg-dim hover:text-fg",
                 )}
                 onClick={() => setGroup(g.value)}
               >

@@ -6,7 +6,7 @@
   "nav": {
     "label": "导航",
     "record": "录音",
-    "library": "资料库",
+    "library": "仓库",
     "tasks": "任务",
     "chat": "提问",
     "analytics": "统计",
@@ -27,7 +27,8 @@
     "expand_hint": "展开",
     "agents": "智能体",
     "collapse": "收起{name}",
-    "models": "模型"
+    "models": "模型",
+    "setup": "工作区"
   },
   "record": {
     "source": "来源",
@@ -165,7 +166,7 @@
   "library": {
     "title": "资料库",
     "search": "搜索",
-    "search_placeholder": "在所有会议里搜索…",
+    "search_placeholder": "搜索全部…",
     "group_by": "分组方式",
     "by_day": "按天",
     "by_week": "按周",
@@ -177,7 +178,7 @@
     "empty": "还没有会议。",
     "meetings_one": "{count}场会议",
     "meetings_other": "{count}场会议",
-    "heading": "你的会议",
+    "heading": "你保存的一切",
     "loading": "正在读取仓库…",
     "no_content": "这里还是空的。",
     "recorded": "已录制",
@@ -189,7 +190,7 @@
     "unreadable": "读不了{path}：{reason}",
     "more_lines": "还有{count}行",
     "vault_hint": "所有内容都在 ~/.summo/vault —— 用 Obsidian 打开、用 grep 搜、想怎么备份都行。",
-    "record_new": "录一场会议",
+    "record_new": "开始录制",
     "recordings": "{count}段录音",
     "trash_confirm": "移到回收站？",
     "trash_yes": "移动",
@@ -199,7 +200,11 @@
     "yesterday": "昨天",
     "week": "{year}年第{n}周",
     "unfiled_group": "未归档",
-    "filter_colour": "按颜色筛选"
+    "filter_colour": "按颜色筛选",
+    "filter_kind": "按类型筛选",
+    "kind_all": "全部",
+    "kind_meeting": "录音",
+    "kind_note": "笔记"
   },
   "analytics": {
     "title": "统计",

@@ -444,6 +444,13 @@ impl MeetingIndex {
 /// Which meetings a caller wants. Every field is an `AND`; within a field, a match is enough.
 #[derive(Debug, Clone, Default)]
 pub struct Filter {
+    /// Only entries of this kind.
+    ///
+    /// A meeting is a recording with a transcript; a note is typed. Both live in the same vault and
+    /// the library has always returned both — what was missing was any way to ask for one. A
+    /// workspace whose second navigation item lists only meetings is a workspace telling the user
+    /// meetings are the product, which they are not.
+    pub kind: Option<Kind>,
     pub folder: Option<String>,
     /// Every tag named must be present, not merely one of them.
     ///
@@ -466,6 +473,11 @@ impl Filter {
     /// apply the same rules, and a second copy of them would drift.
     #[must_use]
     pub fn matches(&self, e: &MeetingEntry) -> bool {
+        if let Some(kind) = self.kind
+            && e.kind != kind
+        {
+            return false;
+        }
         if let Some(folder) = &self.folder {
             // A folder filter includes its subfolders: asking for `khach-hang` should not hide
             // `khach-hang/2026`.
@@ -1289,6 +1301,40 @@ mod tests {
                 })
                 .len(),
             3
+        );
+    }
+
+    /// Both kinds live in the same vault and the library has always returned both. What was
+    /// missing was any way to ask for one — which is why the second navigation item listed
+    /// meetings and called itself the library.
+    #[test]
+    fn a_kind_filter_separates_recordings_from_notes() {
+        let dir = vault();
+        write(
+            dir.path(),
+            "y-tuong.md",
+            "---\nid: 01N\ndate: 2026-08-06\n---\n# Ý tưởng\n\nvài dòng\n",
+        );
+        let index = MeetingIndex::scan(dir.path()).unwrap();
+
+        let notes = index.filter(&Filter {
+            kind: Some(Kind::Note),
+            ..Default::default()
+        });
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].title, "Ý tưởng");
+
+        let recordings = index.filter(&Filter {
+            kind: Some(Kind::Meeting),
+            ..Default::default()
+        });
+        assert!(recordings.iter().all(|e| e.kind == Kind::Meeting));
+        assert!(!recordings.is_empty());
+
+        // Absent means both, which is what the workspace shows by default.
+        assert_eq!(
+            index.filter(&Filter::default()).len(),
+            notes.len() + recordings.len()
         );
     }
 
