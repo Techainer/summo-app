@@ -30,6 +30,13 @@ pub enum Task {
     SpeakerEmbed,
     /// Text embedding for retrieval.
     Embed,
+    /// Machine translation, run in-process from a GGUF.
+    ///
+    /// The first model here that is not speech. It is in the registry for the same reason the
+    /// others are: `summo pull` already does content-addressed download with resume and a sha256
+    /// check, and the setup screen already lists what is installed. A translation model fetched by
+    /// hand into a path typed into settings would be the one model with none of that.
+    Translate,
 }
 
 /// How the model is driven.

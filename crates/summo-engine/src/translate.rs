@@ -33,13 +33,18 @@ pub const BATCH: usize = 25;
 /// take effect.
 pub const MT_CONCURRENCY: usize = 4;
 
-/// Which shape of request a translation goes out as.
+/// Which shape of request a translation goes out as, and where it goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Style {
-    /// Numbered batches to a general instruction-following model.
+    /// Numbered batches to a general instruction-following model, over HTTP.
     Chat,
-    /// One line at a time to a dedicated translation model, in the template it was trained on.
+    /// One line at a time to a dedicated translation model, over HTTP, in the template it was
+    /// trained on. For somebody already running Ollama or llama.cpp.
     Mt,
+    /// The same template, to a model loaded in this process. Nothing else to install and nothing
+    /// else to keep running, which is what makes translation free in practice rather than only in
+    /// principle.
+    Local,
 }
 
 /// The model translation goes to, and how to talk to it.
@@ -50,21 +55,46 @@ pub enum Style {
 /// language — so a configuration that could pair the wrong two would be a configuration that
 /// silently produces nonsense.
 pub struct Translator {
-    client: LlmClient,
+    backend: Backend,
     style: Style,
     /// The language being spoken, when Summo knows it. Only [`Style::Mt`] uses it, and only as a
     /// hint: see [`summo_llm::prompt::mt`] for why a wrong answer here is cheap.
     source: Option<String>,
 }
 
+/// Where the request actually goes.
+///
+/// An enum rather than two `Option`s, so "an HTTP translator with no client" is not a state that
+/// can be constructed. The `Local` arm only exists when the feature that can build it does.
+enum Backend {
+    Http(LlmClient),
+    #[cfg(feature = "local-mt")]
+    Local(std::sync::Arc<summo_mt::Local>),
+}
+
 impl Translator {
     /// A general model, prompted with numbered batches.
     pub fn chat(provider: summo_llm::Provider) -> Result<Self> {
         Ok(Self {
-            client: LlmClient::new(provider)?,
+            backend: Backend::Http(LlmClient::new(provider)?),
             style: Style::Chat,
             source: None,
         })
+    }
+
+    /// A translation model loaded in this process.
+    ///
+    /// Takes an `Arc` because the model is hundreds of megabytes of weights and the daemon builds a
+    /// translator per request. Loading it per request would spend a second and a gigabyte to
+    /// translate one line.
+    #[cfg(feature = "local-mt")]
+    #[must_use]
+    pub fn local(model: std::sync::Arc<summo_mt::Local>, source: Option<String>) -> Self {
+        Self {
+            backend: Backend::Local(model),
+            style: Style::Local,
+            source,
+        }
     }
 
     /// A dedicated translation model, prompted one line at a time.
@@ -80,7 +110,7 @@ impl Translator {
     pub fn mt(mut provider: summo_llm::Provider, source: Option<String>) -> Result<Self> {
         provider.temperature = 0.0;
         Ok(Self {
-            client: LlmClient::new(provider)?,
+            backend: Backend::Http(LlmClient::new(provider)?),
             style: Style::Mt,
             source,
         })
@@ -94,6 +124,7 @@ impl Translator {
     pub fn from_settings(paths: &Paths, settings: &Settings) -> Result<Self> {
         let catalogue = summo_llm::provider::catalogue(&paths.providers());
         match &settings.llm.translator {
+            Some(mt) if mt.is_local() => local_translator(paths, settings, mt),
             Some(mt) => {
                 let provider = summo_llm::Provider::resolve_in(
                     &catalogue,
@@ -121,14 +152,26 @@ impl Translator {
     }
 
     /// The sampling temperature this translator will use, for the test that pins it at zero.
+    ///
+    /// `0.0` for the in-process model too, and not by configuration: `summo_mt` decodes greedily
+    /// and has no temperature to set.
     #[must_use]
     pub fn temperature(&self) -> f32 {
-        self.client.provider().temperature
+        match &self.backend {
+            Backend::Http(client) => client.provider().temperature,
+            #[cfg(feature = "local-mt")]
+            Backend::Local(_) => 0.0,
+        }
     }
 
+    /// What goes in the translation file's header, so a reader can tell which model wrote it.
     #[must_use]
     pub fn model(&self) -> &str {
-        &self.client.provider().model
+        match &self.backend {
+            Backend::Http(client) => &client.provider().model,
+            #[cfg(feature = "local-mt")]
+            Backend::Local(local) => local.name(),
+        }
     }
 
     /// Translate one run of lines, returning one slot per input line and the requests it cost.
@@ -142,13 +185,24 @@ impl Translator {
         lang: &str,
         glossary: &prompt::Glossary,
     ) -> Result<(Vec<Option<String>>, usize)> {
+        // Allowed, not fixed: with `local-mt` this match has two arms and is exactly right; without
+        // it `Backend` has one variant and every way of writing this warns — a `let ... else` as an
+        // irrefutable pattern, a match as an infallible destructure. The lint is correct for one
+        // build configuration and wrong for the other, so it is silenced rather than obeyed.
+        #[allow(clippy::infallible_destructuring_match)]
+        let client = match &self.backend {
+            Backend::Http(client) => client,
+            #[cfg(feature = "local-mt")]
+            Backend::Local(_) => return self.run_local(lines, lang).await,
+        };
+
         match self.style {
             Style::Chat => {
                 let messages = prompt::translate(lines, lang, glossary);
-                let response = self.client.complete(&messages).await?;
+                let response = client.complete(&messages).await?;
                 Ok((prompt::parse_translation(&response, lines.len()), 1))
             }
-            Style::Mt => {
+            Style::Mt | Style::Local => {
                 // Per line, several at a time. `buffered` keeps the results in input order however
                 // the responses come back, which is what makes the alignment above safe.
                 let source = self.source.as_deref();
@@ -160,28 +214,8 @@ impl Translator {
                     .copied()
                     .map(|line: &str| async move {
                         let messages = prompt::mt(line, source, lang);
-                        let response = self.client.complete(&messages).await?;
-                        Ok::<_, Error>(
-                            prompt::parse_mt(&response).filter(|text| {
-                                // A small translation model sometimes answers in a language nobody
-                                // asked for. Measured: MiLMMT-46-1B, given a Vietnamese line and
-                                // asked for Japanese, returned fluent **Thai** — at temperature
-                                // zero, reproducibly. Writing it would put a language the reader
-                                // cannot read into a file labelled with one they can.
-                                //
-                                // Dropped rather than retried: a `None` here leaves the original
-                                // Vietnamese in place, which is a line the user can at least read
-                                // and check, and the outcome already reports it as missing.
-                                let ok = summo_llm::lang::plausible(text, lang);
-                                if !ok {
-                                    tracing::warn!(
-                                        %lang,
-                                        "a translated line came back in another language; keeping the original"
-                                    );
-                                }
-                                ok
-                            }),
-                        )
+                        let response = client.complete(&messages).await?;
+                        Ok::<_, Error>(accept(&response, lang))
                     })
                     .collect();
                 let results: Vec<Result<Option<String>>> =
@@ -204,7 +238,55 @@ impl Translator {
             // Each line is its own request anyway; the chunk only decides how often progress is
             // written, and a chunk of `MT_CONCURRENCY` would leave the pipeline empty between them.
             Style::Mt => MT_CONCURRENCY * 8,
+            // The in-process model translates one line at a time with every thread, so a chunk is
+            // only how often progress reaches the file. Small, because this is the slow path and a
+            // user who stops it half way should keep what it had done.
+            Style::Local => 16,
         }
+    }
+
+    /// The in-process path: one line at a time, on a blocking thread.
+    ///
+    /// No concurrency, and that is the fast choice rather than the lazy one. `summo_mt` gives one
+    /// decode every thread it has; running four at once on the same cores would divide the threads
+    /// four ways and multiply the KV cache, for the same total throughput and four times the memory.
+    ///
+    /// `spawn_blocking` because a decode is seconds of unbroken CPU. On the async runtime it would
+    /// stall every other request the daemon is serving — including the WebSocket carrying the
+    /// transcript of a meeting being recorded right now.
+    #[cfg(feature = "local-mt")]
+    async fn run_local(&self, lines: &[&str], lang: &str) -> Result<(Vec<Option<String>>, usize)> {
+        let Backend::Local(model) = &self.backend else {
+            unreachable!("run_local is only reached with a local backend")
+        };
+
+        let model = model.clone();
+        let lang = lang.to_string();
+        let source = self.source.clone();
+        let owned: Vec<String> = lines.iter().map(|l| (*l).to_string()).collect();
+        let count = owned.len();
+
+        let out = tokio::task::spawn_blocking(move || {
+            owned
+                .iter()
+                .map(|line| {
+                    let prompt = prompt::mt_text(line, source.as_deref(), &lang);
+                    match model.complete(&prompt) {
+                        Ok(response) => accept(&response, &lang),
+                        // One line failing is that line, not the meeting. It stays untranslated,
+                        // is counted as missing, and the rest still run.
+                        Err(e) => {
+                            tracing::warn!(error = %e, "a line failed to translate");
+                            None
+                        }
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .await
+        .map_err(|e| Error::Other(format!("the translation thread failed: {e}")))?;
+
+        Ok((out, count))
     }
 }
 
@@ -293,6 +375,115 @@ pub async fn translate(
         translated,
         missing,
         requests,
+    })
+}
+
+/// The in-process translator named by the settings, loaded once per process.
+///
+/// Cached in a `OnceLock` keyed by nothing, because there is one translation model at a time and
+/// it is hundreds of megabytes. The daemon builds a `Translator` per request; loading the weights
+/// each time would spend a second and a gigabyte to translate one line.
+///
+/// A changed model id is therefore not picked up until the daemon restarts. That is a deliberate
+/// trade and the settings screen says so — the alternative is holding two models resident to make
+/// a setting nobody changes twice take effect a few seconds sooner.
+#[cfg(feature = "local-mt")]
+fn local_translator(
+    paths: &Paths,
+    settings: &Settings,
+    mt: &summo_core::settings::Translator,
+) -> Result<Translator> {
+    use std::sync::{Arc, OnceLock};
+    static LOADED: OnceLock<std::result::Result<Arc<summo_mt::Local>, String>> = OnceLock::new();
+
+    let id = mt.model.as_deref().unwrap_or("milmmt-46-1b").to_string();
+    let store = summo_models::ModelStore::new(paths.clone());
+    let threads = settings.models.threads;
+
+    let model = LOADED
+        .get_or_init(move || {
+            load_local(&store, &id, threads)
+                .map(Arc::new)
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| Error::Other(e.clone()))?;
+
+    Ok(Translator::local(
+        model.clone(),
+        settings.models.language.clone(),
+    ))
+}
+
+/// Find the GGUF for `id` in the blob store and load it.
+///
+/// Goes through the registry rather than taking a path from the settings file, so a translation
+/// model is installed by `summo pull` like everything else — content-addressed, resumable, sha256
+/// checked — instead of being the one model a user has to place by hand.
+#[cfg(feature = "local-mt")]
+fn load_local(
+    store: &summo_models::ModelStore,
+    id: &str,
+    threads: Option<usize>,
+) -> Result<summo_mt::Local> {
+    let model_id = summo_core::ModelId::parse(id).map_err(Error::Config)?;
+    let manifest = store.installed(&model_id)?;
+
+    // A speech model and a translation model are installed the same way and are not
+    // interchangeable. Without this, pointing the translator at `gipformer-65m` fails inside
+    // llama.cpp with a message about a file that is not a GGUF.
+    if manifest.task != summo_models::Task::Translate {
+        return Err(Error::Config(format!("`{id}` is not a translation model")));
+    }
+
+    let installed = store.resolve(&manifest)?;
+    let path = installed
+        .param_path("model")
+        .ok_or_else(|| Error::InvalidManifest {
+            id: id.to_string(),
+            reason: "no `params.model` naming the GGUF".into(),
+        })?;
+
+    Ok(summo_mt::Local::load(path, threads)?.named(id))
+}
+
+/// Without the feature, the local option is a configuration that cannot be honoured — and saying so
+/// beats translating with a model the user did not choose.
+#[cfg(not(feature = "local-mt"))]
+fn local_translator(
+    _paths: &Paths,
+    _settings: &Settings,
+    _mt: &summo_core::settings::Translator,
+) -> Result<Translator> {
+    Err(Error::Config(
+        "this build cannot run a translation model in-process; point the translator at an \
+         endpoint, or use a build with the `local-mt` feature"
+            .into(),
+    ))
+}
+
+/// Take a model's reply, or refuse it.
+///
+/// Two things can be wrong with an answer that parsed perfectly well, and both are silent:
+///
+/// * It kept talking past the sentence, and everything after the first line is the model's own
+///   continuation. [`prompt::parse_mt`] cuts that.
+/// * It answered in the wrong language. Measured: MiLMMT-46-1B, given a Vietnamese line and asked
+///   for Japanese, returned fluent **Thai** — at temperature zero, reproducibly, in two different
+///   quantizations. A wrong language is not a malformed response, so nothing downstream can see it.
+///
+/// Refused rather than retried. `None` leaves the original line in place, which the user can read
+/// and check, and the outcome already reports it as missing.
+fn accept(response: &str, lang: &str) -> Option<String> {
+    prompt::parse_mt(response).filter(|text| {
+        let ok = summo_llm::lang::plausible(text, lang);
+        if !ok {
+            tracing::warn!(
+                %lang,
+                "a translated line came back in another language; keeping the original"
+            );
+        }
+        ok
     })
 }
 

@@ -323,3 +323,35 @@ fn settings_decide_the_style_and_the_endpoint_together() {
     assert_eq!(dedicated.style(), Style::Mt);
     assert_eq!(dedicated.model(), "milmmt-46-1b");
 }
+
+/// `local` is not an endpoint and must never be resolved as one. If it were, it would fall through
+/// to the "some other OpenAI-compatible server" branch and the daemon would spend every translation
+/// connecting to `http://local`.
+#[test]
+fn local_is_not_treated_as_an_endpoint() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = summo_core::paths::Paths::at(dir.path());
+    let mut settings = Settings::default();
+    settings.llm.translator = Some(TranslatorSettings {
+        provider: "local".into(),
+        model: Some("milmmt-46-1b".into()),
+    });
+
+    // Nothing is installed in this temp home, so the local path must fail for that reason — not by
+    // quietly building an HTTP client for a host called `local`.
+    let err = Translator::from_settings(&paths, &settings)
+        .err()
+        .map(|e| e.to_string())
+        .unwrap_or_default();
+    assert!(
+        !err.contains("http"),
+        "`local` was resolved as an endpoint: {err}"
+    );
+}
+
+/// The default is the one that needs nothing installed. A user who turns translation on and is then
+/// told to install a model server has not been given a feature that costs nothing.
+#[test]
+fn the_default_translator_runs_in_this_process() {
+    assert!(TranslatorSettings::default().is_local());
+}

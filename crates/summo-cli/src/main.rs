@@ -536,6 +536,10 @@ fn check_registry(dir: &std::path::Path) -> Result<()> {
     let mut checked = 0;
     let mut failures = Vec::new();
     let mut published = Vec::new();
+    // Manifests that exist but did not parse. Without this they look *absent* to the index check
+    // below, which then reports "there is no models/x.json behind it" about a file sitting right
+    // there — two failures for one cause, and the second one sends the reader to the wrong place.
+    let mut unreadable = Vec::new();
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -569,7 +573,12 @@ fn check_registry(dir: &std::path::Path) -> Result<()> {
                     }
                 );
             }
-            Err(e) => failures.push(format!("{}: {e}", path.display())),
+            Err(e) => {
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    unreadable.push(stem.to_string());
+                }
+                failures.push(format!("{}: {e}", path.display()));
+            }
         }
     }
 
@@ -577,7 +586,7 @@ fn check_registry(dir: &std::path::Path) -> Result<()> {
     if index.is_file() {
         let body = std::fs::read_to_string(&index)?;
         match serde_json::from_str::<summo_models::registry::Index>(&body) {
-            Ok(parsed) => failures.extend(index_disagreements(&parsed, &published)),
+            Ok(parsed) => failures.extend(index_disagreements(&parsed, &published, &unreadable)),
             Err(e) => failures.push(format!("{}: {e}", index.display())),
         }
     } else {
@@ -605,7 +614,11 @@ fn check_registry(dir: &std::path::Path) -> Result<()> {
 ///
 /// The reverse — an index row with no manifest behind it — is worse, because it is visible: the
 /// model appears in the picker, the user chooses it, and the download 404s.
-fn index_disagreements(index: &summo_models::registry::Index, published: &[String]) -> Vec<String> {
+fn index_disagreements(
+    index: &summo_models::registry::Index,
+    published: &[String],
+    unreadable: &[String],
+) -> Vec<String> {
     let listed: Vec<String> = index.models.iter().map(|m| m.id.to_string()).collect();
     let mut out = Vec::new();
 
@@ -617,7 +630,9 @@ fn index_disagreements(index: &summo_models::registry::Index, published: &[Strin
         }
     }
     for id in &listed {
-        if !published.contains(id) {
+        // A manifest that failed to parse has already been reported by name; saying it is also
+        // missing would be a second, wrong explanation of the same problem.
+        if !published.contains(id) && !unreadable.contains(id) {
             out.push(format!(
                 "index.json lists `{id}` but there is no models/{id}.json behind it"
             ));

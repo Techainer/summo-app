@@ -502,7 +502,7 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
           than as a number. `word-break: keep-all` keeps a word whole; the wrap still happens, at
           the space between the hours and the minutes, where a reader expects it. */}
       <span
-        className="tabular text-2xl font-semibold tracking-tight break-keep text-balance"
+        className="tabular text-2xl font-semibold tracking-tight text-balance break-keep"
         data-testid="tile-value"
       >
         {value}

@@ -172,19 +172,28 @@ pub fn translate(lines: &[&str], target_language: &str, glossary: &Glossary) -> 
 /// appended to the prompt would be translated as if it were part of the sentence.
 #[must_use]
 pub fn mt(line: &str, source: Option<&str>, target_language: &str) -> Vec<Message> {
+    // One user turn, no system message. A system prompt is a chat-model convention, and prepending
+    // one moves the model off the exact string it was trained to continue.
+    vec![Message::user(mt_text(line, source, target_language))]
+}
+
+/// The same request as [`mt`], as the raw string a completion takes.
+///
+/// Two callers need this in two shapes: the HTTP path wraps it in a chat message, and the
+/// in-process runtime in `summo-mt` continues it directly. They must be the *same string* — a
+/// translation that changed depending on which path produced it would be a bug nobody could see
+/// from either side.
+#[must_use]
+pub fn mt_text(line: &str, source: Option<&str>, target_language: &str) -> String {
     let target = crate::lang::name(target_language);
     let line = line.trim();
 
-    let prompt = match source.map(crate::lang::name).filter(|s| !s.is_empty()) {
+    match source.map(crate::lang::name).filter(|s| !s.is_empty()) {
         Some(source) => {
             format!("Translate this from {source} to {target}:\n{source}: {line}\n{target}:")
         }
         None => format!("Translate this to {target}:\n{line}\n{target}:"),
-    };
-
-    // One user turn, no system message. A system prompt is a chat-model convention, and prepending
-    // one moves the model off the exact string it was trained to continue.
-    vec![Message::user(prompt)]
+    }
 }
 
 /// Clean up a dedicated translation model's reply.

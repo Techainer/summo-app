@@ -35,6 +35,9 @@ use crate::manifest::{Accel, FileEntry, Manifest, current_platform};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Precision {
+    /// 4-bit, as in a GGUF k-quant. Half the size of int8 again, and the only precision at which a
+    /// 1B model is small enough to be worth shipping as "the translation model".
+    Int4,
     /// 8-bit. Smallest and fastest; measurably less accurate.
     Int8,
     /// 16-bit float. The usual middle ground on a GPU.
@@ -51,6 +54,7 @@ impl Precision {
     #[must_use]
     pub fn weight(self) -> f32 {
         match self {
+            Precision::Int4 => 0.5,
             Precision::Int8 => 1.0,
             Precision::Fp16 => 2.0,
             Precision::Fp32 => 4.0,
@@ -254,6 +258,7 @@ fn rank(variant: &Variant, hw: &HwProfile) -> f32 {
         Some(Precision::Fp32) => 3.0,
         Some(Precision::Fp16) => 2.0,
         Some(Precision::Int8) => 1.0,
+        Some(Precision::Int4) => 0.5,
         None => 2.5,
     };
     score

@@ -287,9 +287,12 @@
     "mt_heading": "翻訳モデル",
     "mt_hint": "翻訳には専用の小さなモデルを使えます。1Bの翻訳モデルは汎用の8Bより翻訳が上手で、CPUで動き、1行あたりの費用もかかりません。APIキーがまったくなくても翻訳は使えます。",
     "mt_enable": "翻訳には別のモデルを使う",
-    "mt_endpoint": "翻訳モデルのアドレス",
+    "mt_endpoint": "別のアドレス",
     "mt_model": "翻訳モデル",
-    "mt_run": "`llama-server -m milmmt-46-1b.gguf --port 8080` で起動するか、Ollama から。ディスク使用量は約800 MBです。"
+    "mt_run": "`llama-server -m milmmt-46-1b.gguf --port 8080` で起動するか、Ollama から。ディスク使用量は約800 MBです。",
+    "mt_where": "実行場所",
+    "mt_in_app": "Summo の中",
+    "mt_pull": "`summo pull milmmt-46-1b` で一度入れるだけ。約800 MBで、ほかに動かすものはありません。`milmmt-46-4b` はもっと良く、速度は約半分です。"
   },
   "status": {
     "top_bar": "上部バー",

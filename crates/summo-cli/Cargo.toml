@@ -15,6 +15,8 @@ transcribe = ["dep:summo-asr", "dep:summo-vad", "dep:hound", "summo-asr/sherpa",
 # `summo serve`: the daemon and the interface in this binary, the way `ollama serve` is one
 # executable. `bundled` additionally bakes the built interface in.
 serve = ["dep:summo-engine"]
+# Translation inside this binary, with no model server to install or keep running.
+local-mt = ["dep:summo-engine", "summo-engine/local-mt"]
 # `summo mcp`: the vault as tools for an MCP client. Tiny and pure Rust, so it is on by default —
 # the one-binary story only holds if the binary actually has everything in it.
 mcp = ["dep:summo-mcp"]

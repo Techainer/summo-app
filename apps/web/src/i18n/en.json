@@ -287,9 +287,12 @@
     "mt_heading": "Translation model",
     "mt_hint": "Translation can use a small model of its own. A 1B translation model is better at translating than a general 8B one, runs on your CPU, and costs nothing per line — so translation keeps working even with no API key at all.",
     "mt_enable": "Use a separate model for translation",
-    "mt_endpoint": "Translation endpoint",
+    "mt_endpoint": "At an endpoint",
     "mt_model": "Translation model",
-    "mt_run": "Serve it with `llama-server -m milmmt-46-1b.gguf --port 8080`, or from Ollama. About 800 MB on disk."
+    "mt_run": "Serve it with `llama-server -m milmmt-46-1b.gguf --port 8080`, or from Ollama. About 800 MB on disk.",
+    "mt_where": "Runs",
+    "mt_in_app": "In Summo",
+    "mt_pull": "Install it once with `summo pull milmmt-46-1b`. About 800 MB, and nothing else to run. `milmmt-46-4b` is better and about twice as slow."
   },
   "status": {
     "top_bar": "Top bar",

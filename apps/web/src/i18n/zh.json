@@ -287,9 +287,12 @@
     "mt_heading": "翻译模型",
     "mt_hint": "翻译可以单独用一个小模型。1B 的翻译模型比通用的 8B 翻得更好，跑在你的 CPU 上，按行也不花钱——所以就算完全没有 API key，翻译照样能用。",
     "mt_enable": "翻译单独用一个模型",
-    "mt_endpoint": "翻译模型地址",
+    "mt_endpoint": "在别的地址",
     "mt_model": "翻译模型",
-    "mt_run": "用 `llama-server -m milmmt-46-1b.gguf --port 8080` 启动，或者走 Ollama。占磁盘约 800 MB。"
+    "mt_run": "用 `llama-server -m milmmt-46-1b.gguf --port 8080` 启动，或者走 Ollama。占磁盘约 800 MB。",
+    "mt_where": "运行位置",
+    "mt_in_app": "在 Summo 里",
+    "mt_pull": "用 `summo pull milmmt-46-1b` 装一次就行，约 800 MB，不用再跑别的东西。`milmmt-46-4b` 翻得更好，速度大约慢一倍。"
   },
   "status": {
     "top_bar": "顶栏",

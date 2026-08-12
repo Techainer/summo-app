@@ -44,6 +44,14 @@ const HINT = "mt-1.5 ml-[162px] text-[12px] leading-normal text-fg-faint";
 /** The pseudo-entry for "some other OpenAI-compatible server". Not a preset; there is no list of them. */
 const CUSTOM = "custom";
 
+/**
+ * The translator provider that means "inside Summo".
+ *
+ * Matches `summo_core::settings::LOCAL`. Deliberately not a URL: it is the *absence* of an
+ * endpoint, and the daemon must never try to resolve it as one.
+ */
+const LOCAL = "local";
+
 interface Llm {
   provider: string;
   model: string | null;
@@ -263,9 +271,11 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         onChange={(on) =>
           void save({
             ...llm,
-            // Turning it on proposes the endpoint `llama-server` listens on by default, because
-            // "enable this, now go and find out what to type" is not a setting anyone completes.
-            translator: on ? { provider: "llama-cpp", model: "milmmt-46-1b" } : null,
+            // Turning it on proposes the in-app model, not an endpoint. "Enable this, now go and
+            // install a model server" is not a setting anybody finishes, and the whole claim of
+            // this feature is that translation costs nothing — which stops being true the moment
+            // it depends on a second program.
+            translator: on ? { provider: LOCAL, model: "milmmt-46-1b" } : null,
           })
         }
       >
@@ -275,21 +285,45 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       {llm.translator != null && (
         <>
           <label className={FIELD}>
-            <span className={LABEL}>{t("settings.endpoint")}</span>
-            <input
+            <span className={LABEL}>{t("settings.mt_where")}</span>
+            <select
               className={CONTROL}
-              value={llm.translator.provider}
-              aria-label={t("settings.mt_endpoint")}
-              placeholder="llama-cpp"
+              value={llm.translator.provider === LOCAL ? LOCAL : "endpoint"}
+              aria-label={t("settings.mt_where")}
               onChange={(e) =>
-                setLlm({
+                void save({
                   ...llm,
-                  translator: { model: llm.translator?.model ?? null, provider: e.target.value },
+                  translator:
+                    e.target.value === LOCAL
+                      ? { provider: LOCAL, model: "milmmt-46-1b" }
+                      : { provider: "llama-cpp", model: "milmmt-46-1b" },
                 })
               }
-              onBlur={() => void save(llm)}
-            />
+            >
+              <option value={LOCAL}>{t("settings.mt_in_app")}</option>
+              <option value="endpoint">{t("settings.mt_endpoint")}</option>
+            </select>
           </label>
+
+          {llm.translator.provider !== LOCAL && (
+            <label className={FIELD}>
+              <span className={LABEL}>{t("settings.endpoint")}</span>
+              <input
+                className={CONTROL}
+                value={llm.translator.provider}
+                aria-label={t("settings.mt_endpoint")}
+                placeholder="llama-cpp"
+                onChange={(e) =>
+                  setLlm({
+                    ...llm,
+                    translator: { model: llm.translator?.model ?? null, provider: e.target.value },
+                  })
+                }
+                onBlur={() => void save(llm)}
+              />
+            </label>
+          )}
+
           <label className={FIELD}>
             <span className={LABEL}>{t("settings.model")}</span>
             <input
@@ -301,7 +335,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
                 setLlm({
                   ...llm,
                   translator: {
-                    provider: llm.translator?.provider ?? "llama-cpp",
+                    provider: llm.translator?.provider ?? LOCAL,
                     model: e.target.value,
                   },
                 })
@@ -309,7 +343,10 @@ export function Settings({ handshake }: { handshake: Handshake }) {
               onBlur={() => void save(llm)}
             />
           </label>
-          <p className={HINT}>{t("settings.mt_run")}</p>
+
+          <p className={HINT}>
+            {llm.translator.provider === LOCAL ? t("settings.mt_pull") : t("settings.mt_run")}
+          </p>
         </>
       )}
 

@@ -9,6 +9,7 @@ members = [
     "crates/summo-asr",
     "crates/summo-diar",
     "crates/summo-llm",
+    "crates/summo-mt",
     "crates/summo-vault",
     "crates/summo-store",
     "crates/summo-agent",
@@ -42,6 +43,7 @@ summo-engine = { path = "crates/summo-engine" }
 summo-asr = { path = "crates/summo-asr" }
 summo-diar = { path = "crates/summo-diar" }
 summo-llm = { path = "crates/summo-llm" }
+summo-mt = { path = "crates/summo-mt" }
 summo-vault = { path = "crates/summo-vault" }
 summo-store = { path = "crates/summo-store" }
 summo-agent = { path = "crates/summo-agent" }
@@ -112,6 +114,9 @@ symphonia = { version = "0.5", features = ["all-codecs"] }
 
 # --- ml runtime ---
 sherpa-rs = "0.6"
+# llama.cpp in-process, for the translation model. Same shape of dependency as sherpa-rs: a C++
+# library built at compile time, behind a feature, so the plain registry client does not pay for it.
+llama-cpp-2 = "0.1.154"
 ort = { version = "2.0.0-rc.10", default-features = false, features = ["std"] }
 # Must match the version `ort` links against, and must keep `std` on — `ort` uses
 # `ndarray::NdFloat`, which is gated behind it.

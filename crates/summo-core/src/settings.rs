@@ -109,18 +109,37 @@ pub struct Llm {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Translator {
-    /// Preset id or base URL, exactly as [`Llm::provider`].
+    /// Where the model runs.
+    ///
+    /// `local` loads it into the daemon and needs nothing else installed. Anything else is a
+    /// preset id or a base URL, exactly as [`Llm::provider`] — for somebody who already runs
+    /// Ollama and would rather keep one model server than two.
     pub provider: String,
+    /// Which model: a registry id such as `milmmt-46-1b` when `provider` is `local`, or the name
+    /// the endpoint knows it by otherwise.
     pub model: Option<String>,
 }
+
+impl Translator {
+    /// Whether this translator runs inside the daemon.
+    #[must_use]
+    pub fn is_local(&self) -> bool {
+        self.provider.trim().eq_ignore_ascii_case(LOCAL)
+    }
+}
+
+/// The provider name that means "in this process".
+///
+/// Not a URL and never resolved against the endpoint catalogue: it is the absence of an endpoint.
+pub const LOCAL: &str = "local";
 
 impl Default for Translator {
     fn default() -> Self {
         Self {
-            // The endpoint you get by running `llama-server -m milmmt-46-1b.gguf`, which is the
-            // documented way to get a translation model onto a machine that has none.
-            provider: "llama-cpp".into(),
-            model: None,
+            // In this process, which is the whole point: translation is the one text feature that
+            // can cost nothing, and it only actually does if there is nothing to install first.
+            provider: LOCAL.into(),
+            model: Some("milmmt-46-1b".into()),
         }
     }
 }

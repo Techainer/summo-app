@@ -8,6 +8,8 @@ license.workspace = true
 repository.workspace = true
 
 [features]
+# Translation without a second process: loads a GGUF in this daemon. Compiles llama.cpp.
+local-mt = ["dep:summo-mt", "summo-mt/local"]
 default = []
 # Compile the built interface into the binary, so one executable is the whole app — the way
 # `ollama` is one executable. Requires `apps/web/dist` to exist, which is why it is not default:
@@ -35,6 +37,7 @@ summo-core.workspace = true
 summo-models.workspace = true
 summo-audio.workspace = true
 summo-llm.workspace = true
+summo-mt = { workspace = true, optional = true }
 summo-vault.workspace = true
 summo-mcp.workspace = true
 summo-vad = { workspace = true, optional = true }

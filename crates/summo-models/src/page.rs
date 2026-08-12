@@ -192,6 +192,7 @@ pub fn task_name(task: Task) -> &'static str {
         Task::Denoise => "noise suppression",
         Task::DiarizeSeg => "speaker segmentation",
         Task::Embed => "text embedding",
+        Task::Translate => "translation",
     }
 }
 

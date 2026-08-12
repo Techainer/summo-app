@@ -1,0 +1,29 @@
+[package]
+name = "summo-mt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+# The in-process translator. Behind a feature because it links llama.cpp, and a build that only
+# needs the registry client should not pay a C++ compile for it.
+local = ["dep:llama-cpp-2"]
+
+[dependencies]
+summo-core.workspace = true
+tracing.workspace = true
+llama-cpp-2 = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+# The `compare` example prints translations for two models side by side, and builds the prompt
+# with the same function the daemon uses — comparing models on a different prompt would compare
+# the prompts.
+summo-llm.workspace = true
+
+# Without the feature the crate is empty, so the example cannot compile — and `cargo clippy
+# --all-targets` on a plain checkout would fail on it rather than skipping it.
+[[example]]
+name = "compare"
+required-features = ["local"]

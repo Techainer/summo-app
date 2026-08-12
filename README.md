@@ -152,9 +152,18 @@ cargo run --release -p summo-cli --features transcribe -- transcribe recording.w
 ```
 
 The interface ships in **Tiếng Việt, English, 日本語 and 简体中文**; any other language is a JSON file
-dropped into `~/.summo/locales/`. Translating a meeting is a separate question with its own model —
-see [`docs/translation.md`](docs/translation.md), which is also how translation ends up costing
-nothing.
+dropped into `~/.summo/locales/`.
+
+Translating a meeting is a separate question with its own model, and it runs **inside Summo** — no
+Ollama, no second process:
+
+```bash
+summo pull milmmt-46-1b     # 806 MB, once
+cargo build -p summo-cli --release --features serve,transcribe,local-mt
+```
+
+46 languages, about a second a line on a CPU, nothing per line ever. Which model, why not a smaller
+one, and the two ways a small translation model fails: [`docs/translation.md`](docs/translation.md).
 
 To check whether a search index would be worth it on your own corpus size:
 

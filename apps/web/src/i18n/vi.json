@@ -287,9 +287,12 @@
     "mt_heading": "Mô hình dịch",
     "mt_hint": "Dịch có thể dùng một mô hình nhỏ riêng. Mô hình dịch 1B dịch tốt hơn mô hình đa dụng 8B, chạy trên CPU của bạn, và không tốn tiền theo từng dòng — nên vẫn dịch được kể cả khi không có API key nào.",
     "mt_enable": "Dùng mô hình riêng để dịch",
-    "mt_endpoint": "Địa chỉ mô hình dịch",
+    "mt_endpoint": "Ở một địa chỉ khác",
     "mt_model": "Mô hình dịch",
-    "mt_run": "Chạy bằng `llama-server -m milmmt-46-1b.gguf --port 8080`, hoặc qua Ollama. Khoảng 800 MB trên đĩa."
+    "mt_run": "Chạy bằng `llama-server -m milmmt-46-1b.gguf --port 8080`, hoặc qua Ollama. Khoảng 800 MB trên đĩa.",
+    "mt_where": "Chạy ở",
+    "mt_in_app": "Trong Summo",
+    "mt_pull": "Cài một lần bằng `summo pull milmmt-46-1b`. Khoảng 800 MB, không cần chạy thêm gì. `milmmt-46-4b` dịch tốt hơn và chậm khoảng gấp đôi."
   },
   "status": {
     "top_bar": "Thanh trên cùng",

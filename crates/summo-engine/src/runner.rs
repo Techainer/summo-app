@@ -313,6 +313,22 @@ fn param_path(
         })
 }
 
+/// What a model is for, in the words an error message needs.
+///
+/// Not `Debug`: `SpeakerEmbed` is a type name, and the reader of this message is somebody who put
+/// the wrong id in a settings file.
+fn task_words(task: summo_models::Task) -> &'static str {
+    match task {
+        summo_models::Task::Asr => "speech recognition",
+        summo_models::Task::Vad => "voice activity detection",
+        summo_models::Task::Denoise => "noise suppression",
+        summo_models::Task::DiarizeSeg => "speaker segmentation",
+        summo_models::Task::SpeakerEmbed => "speaker embedding",
+        summo_models::Task::Embed => "text embedding",
+        summo_models::Task::Translate => "translation",
+    }
+}
+
 /// Load the speech model named by the session, choosing a runtime from its manifest.
 fn load_decoder(
     id: &str,
@@ -322,6 +338,19 @@ fn load_decoder(
 ) -> Result<Box<dyn Decoder>> {
     let model_id = ModelId::parse(id).map_err(Error::Config)?;
     let manifest = store.installed(&model_id)?;
+
+    // The registry holds several kinds of model and they are not interchangeable: a voice-activity
+    // detector, a speaker embedder and a translator are all installed the same way and are all
+    // useless here. Nothing stops `models.live` in the settings file naming one — a user editing
+    // JSON, or a copied line from a `summo pull` — and without this the failure surfaces further
+    // down as an unsupported-runtime error naming a string the user never typed.
+    if manifest.task != summo_models::Task::Asr {
+        return Err(Error::Config(format!(
+            "`{id}` is a {} model, not a speech model",
+            task_words(manifest.task)
+        )));
+    }
+
     let installed = store.resolve(&manifest)?;
 
     if manifest.runtime.contains("whisper") {
