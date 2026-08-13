@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
 import { useErrorText } from "../../lib/errors";
@@ -16,6 +16,7 @@ import {
 import { GENTLE, listItem } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
 import { Button } from "../ui";
+import { useRefresh } from "../../lib/use-load";
 
 /**
  * The conversation about a meeting, beside the meeting.
@@ -58,9 +59,7 @@ export function Comments({
     }
   }, [client, say]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useRefresh(refresh);
 
   const send = async () => {
     const body = draft.trim();

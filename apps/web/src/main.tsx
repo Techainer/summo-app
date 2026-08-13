@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 
 import { AppI18n } from "./i18n/AppI18n";
 import { REDUCED } from "./lib/motion";
-import { EngineProvider } from "./lib/engine-context";
+import { EngineProvider } from "./lib/engine-provider";
 import { router } from "./router";
 import "./styles/theme.css";
 

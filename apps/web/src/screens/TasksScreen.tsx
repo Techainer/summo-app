@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   Avatar,
@@ -8,6 +8,7 @@ import {
   CardBody,
   CardHeader,
   EmptyColumn,
+  Page,
   SegmentedControl,
   StatusChip,
 } from "../components/ui";
@@ -16,6 +17,7 @@ import { cn } from "../lib/cn";
 import { useT } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
 import { today } from "../lib/report";
+import { useRefresh } from "../lib/use-load";
 import {
   COLUMNS,
   TaskClient,
@@ -67,9 +69,7 @@ export function TasksScreen() {
     }
   }, [client, say]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useRefresh(load);
 
   const move = useCallback(
     async (id: string, status: ColumnStatus) => {
@@ -122,19 +122,19 @@ export function TasksScreen() {
     // A column that fills the pane, so the board below the header can be told to take what is left.
     // Four kanban lanes 180px tall with 300px of background under them read as a screen that failed
     // to load; a lane is a place you drop things into and it should look like one.
-    <div className="flex h-full min-h-0 flex-col p-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">{t("tasks.heading")}</h1>
+    <Page
+      fill
+      title={t("tasks.heading")}
+      actions={
         <SegmentedControl
-          className="ml-auto"
           label={t("tasks.kind")}
           size="sm"
           options={VIEWS.map((v) => ({ value: v.value, label: t(v.labelKey) }))}
           value={view}
           onChange={setView}
         />
-      </div>
-
+      }
+    >
       {error && (
         <p className="border-rec/30 bg-rec-soft text-rec text-meta mt-3 rounded-lg border px-3 py-2">
           {error}
@@ -206,7 +206,7 @@ export function TasksScreen() {
           )}
         </div>
       )}
-    </div>
+    </Page>
   );
 }
 

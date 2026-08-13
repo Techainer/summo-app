@@ -33,7 +33,12 @@ export function MeetingScreen() {
   const say = useErrorText();
   const { meetingId } = useParams({ from: "/meetings/$meetingId" });
   const { library, handshake } = useEngine();
-  const [detail, setDetail] = useState<MeetingDetail | null>(null);
+  // Stored with the meeting it belongs to, so switching meetings does not need an effect to blank
+  // it first. The `setDetail(null)` that used to do that ran synchronously inside the effect — one
+  // extra render per navigation, and a frame in which the new meeting's title sat above the old
+  // meeting's transcript.
+  const [loaded, setLoaded] = useState<{ id: string; detail: MeetingDetail } | null>(null);
+  const detail = loaded?.id === meetingId ? loaded.detail : null;
   const [error, setError] = useState<string | null>(null);
   const [pane, setPane] = useState<Pane>("comments");
   const [at, setAt] = useState(0);
@@ -46,7 +51,7 @@ export function MeetingScreen() {
   const applyDraft = useCallback(
     async (next: Draft | null) => {
       setDraft(next);
-      setDetail(await library.detail(meetingId));
+      setLoaded({ id: meetingId, detail: await library.detail(meetingId) });
       setError(null);
     },
     [library, meetingId],
@@ -90,10 +95,9 @@ export function MeetingScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    setDetail(null);
     library
       .detail(meetingId)
-      .then((d) => !cancelled && setDetail(d))
+      .then((d) => !cancelled && setLoaded({ id: meetingId, detail: d }))
       .catch((e: unknown) => {
         if (!cancelled) setError(say(e));
       });

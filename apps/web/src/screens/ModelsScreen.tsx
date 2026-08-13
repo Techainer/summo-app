@@ -2,7 +2,7 @@ import { CloudOff, HardDriveDownload, Package, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button, Empty } from "../components/ui";
+import { Button, Empty, Page, PageGlow, SectionTitle } from "../components/ui";
 import { useT } from "../i18n/context";
 import { cn } from "../lib/cn";
 import {
@@ -18,6 +18,7 @@ import { useEngine } from "../lib/engine-context";
 import { useErrorText } from "../lib/errors";
 import { listItem, stagger } from "../lib/motion";
 import { OnboardingClient, POLL_MS, isFinished, percent, type Install } from "../lib/onboarding";
+import { useRefresh } from "../lib/use-load";
 
 /**
  * Every model, what it is for, and a button.
@@ -72,9 +73,7 @@ export function ModelsScreen() {
     }
   }, [catalogue, installer, say]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useRefresh(load);
 
   // While something is downloading, and only then. Polling an idle screen every second is a
   // request per second for a list that has not changed.
@@ -138,12 +137,11 @@ export function ModelsScreen() {
   const groups = byTask(models);
 
   return (
-    <div className="p-5" data-testid="models">
-      <h1 className="text-xl font-semibold tracking-tight">{t("models.title")}</h1>
-      <p className="text-fg-faint text-meta mt-2 max-w-2xl leading-relaxed">{t("models.hint")}</p>
+    <Page title={t("models.title")} subtitle={t("models.hint")} data-testid="models">
+      <PageGlow />
       {/* What they cost, which is why somebody opens this screen a second time. */}
       {installedBytes(models) > 0 && (
-        <p className="text-fg-dim tabular text-micro mt-1.5">
+        <p className="text-fg-dim tabular text-micro -mt-4">
           {t("models.on_disk", { size: size(installedBytes(models)) })}
         </p>
       )}
@@ -164,10 +162,8 @@ export function ModelsScreen() {
         <Empty icon={Package} title={t("models.none")} hint={t("models.offline")} />
       ) : (
         groups.map((group) => (
-          <section key={group.task} className="mt-7">
-            <h2 className="text-fg-faint text-micro font-semibold tracking-wider uppercase">
-              {t(`models.task_${group.task.replace("-", "_")}`)}
-            </h2>
+          <section key={group.task}>
+            <SectionTitle>{t(`models.task_${group.task.replace("-", "_")}`)}</SectionTitle>
             {/* Cards arrive rather than appear. A grid of eight that pops in at once reads as a
                 page repainting; a short stagger reads as a list being laid out, and it gives the
                 eye an order to follow. `stagger` shortens the step as the count grows, so a long
@@ -193,7 +189,7 @@ export function ModelsScreen() {
           </section>
         ))
       )}
-    </div>
+    </Page>
   );
 }
 

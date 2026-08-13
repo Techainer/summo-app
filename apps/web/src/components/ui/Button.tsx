@@ -45,8 +45,15 @@ export function Button({
     <Comp
       className={cn(
         "inline-flex items-center justify-center rounded-full font-medium",
-        "transition-[background,border-color,filter,opacity] duration-150",
-        "disabled:pointer-events-none disabled:opacity-50",
+        "transition-[background,border-color,filter,opacity,transform] duration-150",
+        "disabled:pointer-events-none disabled:opacity-[var(--disabled-opacity)]",
+        // Pressed, not just hovered. A button that does not move under the finger is the single
+        // most common reason an interface feels dead, and it costs one transform.
+        "active:scale-[0.97]",
+        // The ring sits off the edge rather than on it, so it stays visible on a control whose own
+        // border is already the accent colour — which is what the focus ring is drawn in.
+        "focus-visible:ring-accent focus-visible:ring-2 focus-visible:ring-offset-[var(--ring-offset)]",
+        "focus-visible:ring-offset-bg focus-visible:outline-none",
         VARIANTS[variant],
         SIZES[size],
         className,

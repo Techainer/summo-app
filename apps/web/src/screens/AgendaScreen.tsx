@@ -1,14 +1,15 @@
 import { CalendarDays } from "lucide-react";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import { Avatar, Button, Empty } from "../components/ui";
+import { Avatar, Button, Empty, Page, PageGlow } from "../components/ui";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
 import { pickFile } from "../lib/imports";
 import { GENTLE, listItem } from "../lib/motion";
 import { AgendaClient, byDay, clock, length, service, type AgendaEntry } from "../lib/notes";
+import { useRefresh } from "../lib/use-load";
 
 /**
  * What is on the calendar, and nothing more than that.
@@ -40,9 +41,7 @@ export function AgendaScreen() {
     }
   }, [client, say]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useRefresh(refresh);
 
   const add = async (from: string) => {
     const file = from.trim();
@@ -73,9 +72,8 @@ export function AgendaScreen() {
   const grouped = byDay(entries).reverse();
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col px-6 py-8">
-      <h1 className="text-lg font-semibold">{t("agenda.title")}</h1>
-      <p className="text-fg-dim mt-1 text-sm">{t("agenda.hint")}</p>
+    <Page fill title={t("agenda.title")} subtitle={t("agenda.hint")} width="narrow">
+      <PageGlow />
 
       {error && (
         <p role="alert" className="text-danger mt-4 text-sm">
@@ -208,7 +206,7 @@ export function AgendaScreen() {
           ))}
         </div>
       )}
-    </div>
+    </Page>
   );
 }
 

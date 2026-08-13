@@ -24,12 +24,12 @@
    * Very slightly warm. A neutral-cold near-black is what a terminal looks like; a hint of red in
    * the darks is what the reference shots do and it is most of the difference between "developer
    * tool" and "product". */
-  --color-bg: #0c0b0f;
-  --color-bg-soft: #141319;
-  --color-bg-raised: #1b1a22;
-  --color-bg-elevated: #23222c;
-  --color-line: #292731;
-  --color-line-strong: #38353f;
+  --color-bg: #0a0910;
+  --color-bg-soft: #16141e;
+  --color-bg-raised: #211e2c;
+  --color-bg-elevated: #2c2939;
+  --color-line: #2f2c3d;
+  --color-line-strong: #423e54;
 
   /* Text, from most to least important.
    *
@@ -37,9 +37,9 @@
    * a setting, the group labels in the sidebar. It is not decoration, so it holds 4.5:1 against the
    * *lightest* surface it can land on, which is now `bg-elevated` rather than `bg-raised`. Adding a
    * fourth surface raised that bar, and the old value fell under it. */
-  --color-fg: #eceef3;
-  --color-fg-dim: #a3aab8;
-  --color-fg-faint: #878e9c;
+  --color-fg: #f1f2f7;
+  --color-fg-dim: #aab0be;
+  --color-fg-faint: #949bab;
 
   /* One accent, used for what is live and what is chosen. */
   --color-accent: #64e3a1;
@@ -81,11 +81,11 @@
    * `text-[11px]`, and two screens meaning the same thing said it in different numbers. Five steps
    * cover everything here: a screen title, a card title, prose, a label beside prose, and a
    * timestamp. */
-  --text-display: 1.75rem;
-  --text-display--line-height: 2.125rem;
+  --text-display: 2rem;
+  --text-display--line-height: 2.375rem;
   --text-display--letter-spacing: -0.02em;
-  --text-title: 1.0625rem;
-  --text-title--line-height: 1.4rem;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.5rem;
   --text-title--letter-spacing: -0.01em;
   --text-body: 0.9375rem;
   --text-body--line-height: 1.5rem;
@@ -108,6 +108,18 @@
 
   /* Fast enough to feel like a response, slow enough to be followed. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Three details worth borrowing from HeroUI, which was evaluated as a replacement for these
+   * components and rejected — themed to this palette it looked identical to what was already here,
+   * for 390 KB of extra CSS. What it does better is small and copyable:
+   *
+   * A focus ring that sits *off* the element rather than on its edge, so it is visible on a control
+   * whose own border is already the accent colour; an inset hairline of light along the top of
+   * anything floating, which is what separates a popover from the page without a heavier shadow;
+   * and one disabled opacity everywhere instead of the four this file used to have. */
+  --ring-offset: 2px;
+  --edge-light: inset 0 1px 0 0 rgb(255 255 255 / 0.06);
+  --disabled-opacity: 0.5;
 }
 
 /* The eight colours a note can be filed under.
@@ -198,21 +210,66 @@
   }
 }
 
+/* Ánh sáng: the decorative layer.
+ *
+ * Read through `var()` from a class or an inline style, never through a generated Tailwind utility,
+ * so they live in `:root` rather than `@theme` — Tailwind v4 emits only the theme variables some
+ * utility mentions, and a gradient nothing names would be dropped from the bundle.
+ *
+ * Two rules keep this from becoming decoration for its own sake. Nothing here ever sits behind
+ * body text — a wash under a paragraph is a contrast pair nobody audits — and every one of them is
+ * a *tint of a colour that already means something*: the accent for capture, the assistant violet
+ * for anything a model wrote. A new hue would be a new meaning. */
+:root {
+  /* The header wash. Two soft corners rather than a band, so it reads as light in the room and not
+   * as a coloured stripe somebody forgot to remove. */
+  --gradient-page:
+    radial-gradient(
+      80% 120% at 0% 0%,
+      color-mix(in oklab, var(--color-ai) 22%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      70% 110% at 100% 0%,
+      color-mix(in oklab, var(--color-accent) 16%, transparent),
+      transparent 58%
+    );
+  /* The capture card, which is the one surface allowed to be loud. */
+  --gradient-capture: radial-gradient(
+    90% 120% at 50% 0%,
+    color-mix(in oklab, var(--color-rec) 22%, transparent),
+    transparent 65%
+  );
+  /* Anything the assistant produced. */
+  --gradient-ai: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--color-ai) 16%, transparent),
+    transparent 70%
+  );
+  /* A ring of light instead of a border, for the element that is currently doing something. */
+  --glow-rec:
+    0 0 0 1px color-mix(in oklab, var(--color-rec) 45%, transparent),
+    0 0 32px -4px color-mix(in oklab, var(--color-rec) 55%, transparent);
+  --glow-accent:
+    0 0 0 1px color-mix(in oklab, var(--color-accent) 40%, transparent),
+    0 0 28px -6px color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+
 /* An explicit choice overrides the system one. Set on <html> by the theme switcher. */
 :root[data-theme="light"] {
   color-scheme: light;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-bg: #0c0b0f;
-  --color-bg-soft: #141319;
-  --color-bg-raised: #1b1a22;
-  --color-bg-elevated: #23222c;
-  --color-line: #292731;
-  --color-line-strong: #38353f;
-  --color-fg: #eceef3;
-  --color-fg-dim: #a3aab8;
-  --color-fg-faint: #878e9c;
+  --color-bg: #0a0910;
+  --color-bg-soft: #16141e;
+  --color-bg-raised: #211e2c;
+  --color-bg-elevated: #2c2939;
+  --color-line: #2f2c3d;
+  --color-line-strong: #423e54;
+  --color-fg: #f1f2f7;
+  --color-fg-dim: #aab0be;
+  --color-fg-faint: #949bab;
   --color-accent: #64e3a1;
   --color-accent-soft: #64e3a11a;
   --color-accent-fg: #06110c;
@@ -274,5 +331,36 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Bars in a live waveform. Scaled from the middle so a rising bar grows both ways, which is what a
+ * meter looks like; growing from the baseline reads as a bar chart being filled in.
+ *
+ * `prefers-reduced-motion` stops it. A waveform that never stops moving is the exact thing that
+ * setting exists for, and the recording state is carried by colour and a timer as well. */
+@keyframes wave {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

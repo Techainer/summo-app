@@ -1,10 +1,19 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { Transcript } from "../components/Transcript";
-import { Waveform } from "../components/Waveform";
 import { ImportPanel } from "../components/import/ImportPanel";
 import { CaptureControls } from "../components/record/CaptureControls";
-import { SegmentedControl } from "../components/ui";
+import { Recent } from "../components/library/Recent";
+import {
+  Card,
+  CardBody,
+  Page,
+  PageGlow,
+  SectionTitle,
+  SegmentedControl,
+  Wave,
+} from "../components/ui";
 import { useT } from "../i18n/context";
 import { cn } from "../lib/cn";
 import { useEngine } from "../lib/engine-context";
@@ -23,48 +32,93 @@ type Source = "record" | "upload";
  * and this screen is not where they will be. Both drive the same `toggle`, so there is one
  * behaviour and two places to reach it, not two controls that can disagree.
  */
+/**
+ * The capture panel: the button, the clock, the meter, and what it is listening to.
+ *
+ * It was a bare circle floating in the middle of an otherwise empty pane, with the source
+ * checkboxes drifting on their own a few hundred pixels above it. Three unrelated things, none of
+ * them attached to anything — which is what a screen looks like when its parts have no container.
+ *
+ * One card now holds all of it, in the order somebody uses it: what will be captured, the button,
+ * and the meter that proves the microphone is live.
+ */
 function Idle() {
   const { session, elapsed, level, toggle } = useEngine();
   const t = useT();
 
   return (
-    <div className="flex flex-col items-center gap-5 px-4 text-center">
-      <button
-        type="button"
-        onClick={toggle}
-        aria-pressed={session.recording}
-        aria-label={session.recording ? t("record.stop") : t("record.start")}
-        className={cn(
-          "grid size-24 place-items-center rounded-full border-2 transition-colors",
-          "focus-visible:border-accent focus:outline-none",
-          session.recording
-            ? "border-rec bg-rec-soft"
-            : "border-line-strong bg-bg-soft hover:border-rec",
-        )}
-      >
-        {/* A circle that becomes a square, which is what every recorder in the world does. The
-            pulse is only while recording: a dot that always throbs stops meaning anything. */}
-        <span
-          aria-hidden="true"
-          className={cn(
-            "bg-rec transition-all duration-200",
-            session.recording
-              ? "size-7 rounded-[6px] motion-safe:animate-[pulse_1.6s_ease-in-out_infinite]"
-              : "size-11 rounded-full",
-          )}
-        />
-      </button>
-
-      {session.recording ? (
-        <>
-          <p className="tabular text-2xl font-semibold">{formatTime(elapsed)}</p>
-          <Waveform level={level} active />
-          <p className="text-fg-faint text-meta">{t("record.listening")}</p>
-        </>
-      ) : (
-        <p className="text-fg-faint text-meta max-w-sm leading-relaxed">{t("record.idle")}</p>
+    <Card
+      className={cn(
+        "relative overflow-hidden transition-shadow duration-300",
+        session.recording && "shadow-[var(--glow-rec)]",
       )}
-    </div>
+    >
+      <div
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-0 bg-[image:var(--gradient-capture)] transition-opacity duration-500",
+          session.recording ? "opacity-100" : "opacity-40",
+        )}
+      />
+
+      <CardBody className="relative flex flex-col gap-6 p-6">
+        <div className="flex items-center gap-5">
+          <button
+            type="button"
+            onClick={toggle}
+            aria-pressed={session.recording}
+            aria-label={session.recording ? t("record.stop") : t("record.start")}
+            className={cn(
+              "grid size-20 shrink-0 place-items-center rounded-full border-2 transition-all duration-200",
+              "focus-visible:ring-accent focus-visible:ring-2 focus-visible:ring-offset-[var(--ring-offset)]",
+              "focus-visible:ring-offset-bg focus:outline-none",
+              session.recording
+                ? "border-rec bg-rec-soft"
+                : "border-line-strong bg-bg-elevated hover:border-rec hover:scale-105",
+            )}
+          >
+            {/* A circle that becomes a square, which is what every recorder in the world does. */}
+            <span
+              aria-hidden="true"
+              className={cn(
+                "bg-rec transition-all duration-200",
+                session.recording ? "size-6 rounded-[6px]" : "size-10 rounded-full",
+              )}
+            />
+          </button>
+
+          <div className="min-w-0">
+            <p className="text-title font-semibold">
+              {session.recording ? t("record.listening") : t("record.start")}
+            </p>
+            {session.recording ? (
+              <p className="tabular text-display mt-1 font-semibold">{formatTime(elapsed)}</p>
+            ) : (
+              <p className="text-fg-dim text-meta mt-1 max-w-md leading-relaxed">
+                {t("record.idle")}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div
+          className={cn(
+            "h-20 transition-[color,opacity] duration-300",
+            session.recording ? "text-rec" : "text-fg-faint/40",
+          )}
+          style={{ opacity: session.recording ? 1 : 0.55 + Math.min(0.45, level * 0.9) }}
+        >
+          {/* Seeded rather than a flat line scaled by `level`: equal bars across a thousand pixels
+              read as a ruler, which is what the first version of this looked like. The level moves
+              the whole panel's opacity instead, so the microphone still visibly does something. */}
+          <Wave seed="record" bars={56} live={session.recording} />
+        </div>
+
+        <div className="border-line border-t pt-4">
+          <CaptureControls />
+        </div>
+      </CardBody>
+    </Card>
   );
 }
 
@@ -80,13 +134,16 @@ function Idle() {
  * first. The transcript comes back the moment they switch back.
  */
 export function RecordScreen() {
+  const navigate = useNavigate();
   const { transcript } = useEngine();
   const [source, setSource] = useState<Source>("record");
   const t = useT();
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex justify-center px-4 pt-4">
+    <Page
+      fill
+      title={t("nav.record")}
+      actions={
         <SegmentedControl
           label={t("record.source")}
           size="sm"
@@ -97,33 +154,41 @@ export function RecordScreen() {
             { value: "upload", label: t("record.tab_upload") },
           ]}
         />
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-auto">
-        {source === "upload" ? (
-          <ImportPanel />
-        ) : (
-          <>
-            {/* Before a meeting starts there is one button and nothing else, so the pane is
-                mostly empty — and top-aligned it reads as a screen that failed to load the rest.
-                Centred, the emptiness is the point rather than a gap. Once text starts arriving
-                the transcript takes the height and this stops applying. */}
-            {transcript.segments.length === 0 ? (
-              <div className="flex h-full flex-col">
-                <CaptureControls />
-                <div className="flex min-h-0 flex-1 items-center justify-center pb-16">
-                  <Idle />
-                </div>
-              </div>
-            ) : (
-              <>
-                <CaptureControls />
-                <Transcript segments={transcript.segments} />
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+      }
+    >
+      <PageGlow />
+      {source === "upload" ? (
+        <ImportPanel />
+      ) : transcript.segments.length === 0 ? (
+        <>
+          <Idle />
+          {/* What is already here, under the button that makes more of it. Without this the screen
+              is one panel and half a window of background — and "open the app, carry on with the
+              thing from yesterday" is a more common intent than starting something new. */}
+          <section className="flex flex-col gap-2.5">
+            <SectionTitle>{t("home.recent")}</SectionTitle>
+            <Recent
+              limit={3}
+              onOpen={(entry) =>
+                void navigate(
+                  entry.kind === "note"
+                    ? { to: "/notes" }
+                    : { to: "/meetings/$meetingId", params: { meetingId: entry.id } },
+                )
+              }
+            />
+          </section>
+        </>
+      ) : (
+        // Once words are arriving they are the screen: the panel shrinks to its controls and the
+        // transcript takes every pixel that is left.
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <Idle />
+          <div className="min-h-0 flex-1">
+            <Transcript segments={transcript.segments} />
+          </div>
+        </div>
+      )}
+    </Page>
   );
 }

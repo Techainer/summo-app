@@ -205,7 +205,8 @@
     "filter_kind": "按类型筛选",
     "kind_all": "全部",
     "kind_meeting": "录音",
-    "kind_note": "笔记"
+    "kind_note": "笔记",
+    "recent_heading": "最近"
   },
   "analytics": {
     "title": "统计",
@@ -255,7 +256,8 @@
     "voice_styles": "{count}种声音状态",
     "relabelled": "已在过去{meetings}场会议中更正{utterances}行",
     "unmerged": "已从另外{count}个人那里移除",
-    "empty_title": "还没有声音"
+    "empty_title": "还没有声音",
+    "subtitle": "你的录音里有谁 — Summo 学习每个声音，下次自动标注。"
   },
   "settings": {
     "title": "设置",
@@ -532,7 +534,17 @@
     "recent": "最近",
     "see_all": "查看全部",
     "ask": "提问",
-    "assistant_hint": "录过的、写过的都能问，答案会注明出处。"
+    "assistant_hint": "录过的、写过的都能问，答案会注明出处。",
+    "greeting_morning": "早上好",
+    "greeting_afternoon": "下午好",
+    "greeting_evening": "晚上好",
+    "stat_meetings": "条记录 · 14 天",
+    "stat_time": "录制时长",
+    "stat_open": "待办事项",
+    "recording_now": "正在录制",
+    "tap_to_stop": "点击停止",
+    "shortcut_hint": "⌘K 搜索或跳转到任何地方",
+    "quick": "快捷操作"
   },
   "palette": {
     "title": "搜索全部",

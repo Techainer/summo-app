@@ -1,7 +1,17 @@
-import { PencilLine } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  AudioLines,
+  CalendarRange,
+  CircleAlert,
+  Clock,
+  Mic,
+  PencilLine,
+  Users,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Avatar } from "./ui";
+import { Recent } from "./library/Recent";
+import { Avatar, Button, SectionTitle, Wave } from "./ui";
 import { cn } from "../lib/cn";
 import { formatDuration } from "../lib/duration";
 import { useI18n, useT } from "../i18n/context";
@@ -23,6 +33,7 @@ import {
 } from "../lib/library";
 import { ColourPicker, Dot, Finder } from "./library/Finder";
 import { GENTLE, listItem, stagger } from "../lib/motion";
+import { useRefresh } from "../lib/use-load";
 
 /** How long to wait after the last keystroke before searching. */
 const SEARCH_DEBOUNCE_MS = 180;
@@ -124,13 +135,19 @@ export function Library({
   // straight from the route would push a history entry per keystroke and make the back button undo
   // the query one letter at a time.
   const [typed, setTyped] = useState(query);
-  const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [fetchedHits, setHits] = useState<SearchHit[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [detail, setDetail] = useState<MeetingDetail | null>(null);
+  const [fetchedDetail, setDetail] = useState<MeetingDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const today = useMemo(() => localDay(), []);
+
+  // Derived, not stored. With no query there are no hits and with nothing selected there is no
+  // detail — both are facts about the query and the selection, and keeping a second copy of them in
+  // state meant every keystroke that emptied the box wrote `null` over a `null`.
+  const hits = query.trim() === "" ? null : fetchedHits;
+  const detail = selected === null ? null : fetchedDetail;
 
   const refresh = useCallback(async () => {
     try {
@@ -143,16 +160,20 @@ export function Library({
     }
   }, [client, group, kind, folder, tags, colour, say]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useRefresh(refresh);
 
   // A query arriving from outside — a reload, or the back button — is a new box, not an edit to
-  // what is in it. Guarded so it does not fight the debounce below, which sets the same value one
-  // beat after the user typed it.
-  useEffect(() => {
-    setTyped((current) => (current.trim() === query.trim() ? current : query));
-  }, [query]);
+  // what is in it.
+  //
+  // Adjusted during render rather than in an effect. React documents this exact shape for "reset
+  // state when a prop changes": compare against the value the state was derived from, and set both
+  // on the spot. The effect version rendered once with the stale text and once with the new, which
+  // is a visible flicker in the search box on every back-button press.
+  const [seenQuery, setSeenQuery] = useState(query);
+  if (seenQuery !== query) {
+    setSeenQuery(query);
+    if (typed.trim() !== query.trim()) setTyped(query);
+  }
 
   // Searching on every keystroke would send a request per character; waiting for a pause sends one
   // per word, which is what a person means by typing anyway. The same pause is when the URL
@@ -167,11 +188,11 @@ export function Library({
     };
   }, [typed, query, onQuery]);
 
+  // No `setHits(null)` for the empty query: "there is no search" is not a state to store, it is a
+  // fact about the query, and `shown` below reads it off the query directly. Storing it meant a
+  // synchronous state write on every keystroke that emptied the box.
   useEffect(() => {
-    if (query.trim() === "") {
-      setHits(null);
-      return;
-    }
+    if (query.trim() === "") return;
     client
       .search(query)
       .then(setHits)
@@ -179,10 +200,7 @@ export function Library({
   }, [client, query, say]);
 
   useEffect(() => {
-    if (selected === null) {
-      setDetail(null);
-      return;
-    }
+    if (selected === null) return;
     client
       .detail(selected)
       .then(setDetail)
@@ -377,6 +395,7 @@ export function Library({
 
         {detail ? (
           <MeetingPane
+            key={detail.summary.id}
             detail={detail}
             folders={view?.folders ?? []}
             palette={view?.palette ?? []}
@@ -393,7 +412,7 @@ export function Library({
             }
           />
         ) : (
-          <Dashboard stats={stats} onRecord={onRecord} />
+          <Dashboard stats={stats} onRecord={onRecord} onOpen={setSelected} />
         )}
       </section>
     </div>
@@ -443,6 +462,15 @@ function MeetingRow({
           timeOfDay(meeting.date)
         )}
       </span>
+
+      {/* A silhouette per recording. Two rows that say "42 phút · Bạn, Ngọc" are the same row until
+          you read them; two waveforms are different at a glance, which is what makes a page of
+          recordings a page rather than a paragraph. Notes have none — they were typed. */}
+      {meeting.kind !== "note" && (
+        <span className="text-accent/60 hidden h-6 w-10 shrink-0 sm:block">
+          <Wave seed={meeting.id} bars={11} />
+        </span>
+      )}
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-1.5 leading-snug font-medium">
           {/* Beside the title rather than as a stripe down the row: a colour is one signal among
@@ -521,43 +549,116 @@ function SearchResults({
   );
 }
 
-function Dashboard({ stats, onRecord }: { stats?: Stats; onRecord: () => void }) {
+/**
+ * The right-hand pane with nothing selected.
+ *
+ * It was five outlined boxes, a sentence and a button, over four hundred pixels of background — the
+ * screen that most deserved the complaint that started this redesign. What a vault screen owes the
+ * person opening it is a picture of what is *in* the vault, so: the numbers, then the recordings
+ * themselves, each with the silhouette and the faces that make a list of them scannable.
+ */
+function Dashboard({
+  stats,
+  onRecord,
+  onOpen,
+}: {
+  stats?: Stats;
+  onRecord: () => void;
+  onOpen: (id: string) => void;
+}) {
   const { t, locale } = useI18n();
   if (!stats) return <p className="text-fg-faint mt-10 text-center">{t("library.loading")}</p>;
+
   return (
-    <div className="max-w-2xl">
-      <h2>{t("library.heading")}</h2>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2.5">
-        <Tile label={t("library.meeting")} value={String(stats.meetings)} />
-        <Tile
-          label={t("library.recorded")}
-          value={formatDuration(stats.total_duration, locale, "short")}
-        />
-        <Tile
-          label={t("library.last_7")}
-          value={`${stats.last_seven_days}`}
-          note={formatDuration(stats.last_seven_days_duration, locale, "short")}
-        />
-        <Tile label={t("library.people")} value={String(stats.people)} />
-        <Tile label={t("meeting.no_summary")} value={String(stats.without_summary)} />
+    <div className="relative mx-auto max-w-4xl">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -inset-x-6 -top-8 h-56 bg-[image:var(--gradient-page)]"
+      />
+
+      <div className="relative">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-display font-semibold">{t("library.heading")}</h2>
+          <Button variant="primary" onClick={onRecord}>
+            <Mic aria-hidden="true" className="me-1.5 size-4" />
+            {t("library.record_new")}
+          </Button>
+        </div>
+
+        <motion.div
+          initial="hidden"
+          animate="shown"
+          transition={stagger(4)}
+          className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4"
+        >
+          <Tile
+            icon={AudioLines}
+            label={t("library.meeting")}
+            value={String(stats.meetings)}
+            tone="accent"
+          />
+          <Tile
+            icon={Clock}
+            label={t("library.recorded")}
+            value={formatDuration(stats.total_duration, locale, "short")}
+          />
+          <Tile
+            icon={CalendarRange}
+            label={t("library.last_7")}
+            value={`${stats.last_seven_days}`}
+            note={formatDuration(stats.last_seven_days_duration, locale, "short")}
+          />
+          <Tile icon={Users} label={t("library.people")} value={String(stats.people)} />
+        </motion.div>
+
+        {/* Unsummarised is not a statistic, it is a chore: it belongs beside the others only when
+            there are some, and coloured like the work it is. */}
+        {stats.without_summary > 0 && (
+          <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-3 inline-flex items-center gap-2 rounded-[var(--radius-pill)] border px-3 py-1.5">
+            <CircleAlert aria-hidden="true" className="size-3.5" />
+            {t("meeting.no_summary")} · {stats.without_summary}
+          </p>
+        )}
+
+        <section className="mt-7 flex flex-col gap-2.5">
+          <SectionTitle>{t("library.recent_heading")}</SectionTitle>
+          <Recent limit={6} columns={2} onOpen={(entry) => onOpen(entry.id)} />
+        </section>
+
+        <p className="text-fg-faint text-meta mt-7">{t("library.vault_hint")}</p>
       </div>
-      <p className="text-fg-faint text-meta my-4">{t("library.vault_hint")}</p>
-      <button
-        type="button"
-        className="bg-accent text-accent-fg rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
-        onClick={onRecord}
-      >
-        {t("library.record_new")}
-      </button>
     </div>
   );
 }
 
 type Stats = NonNullable<LibraryView["stats"]>;
 
-function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
+function Tile({
+  label,
+  value,
+  note,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  icon: LucideIcon;
+  tone?: "accent";
+}) {
   return (
-    <div className="rounded-card border-line bg-bg-soft flex flex-col gap-0.5 border p-3.5">
+    <motion.div
+      variants={listItem}
+      className="rounded-card border-line bg-bg-soft flex flex-col gap-0.5 border p-3.5 shadow-[var(--shadow-sm)]"
+    >
+      <span
+        className={cn(
+          "mb-1.5 grid size-8 place-items-center rounded-[var(--radius-card)]",
+          tone === "accent" ? "bg-accent-soft text-accent" : "bg-bg-raised text-fg-faint",
+        )}
+      >
+        <Icon aria-hidden="true" className="size-4 stroke-[1.75]" />
+      </span>
       {/* `break-keep`: Japanese and Chinese have no spaces, so a browser is free to break a line
           anywhere at all — and `text-balance` then took it up on that, splitting 時間 down the
           middle and justifying the halves across two lines. It read as a rendering fault rather
@@ -571,7 +672,7 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
       </span>
       <span className="text-fg-dim text-micro">{label}</span>
       {note && <span className="text-fg-faint text-micro">{note}</span>}
-    </div>
+    </motion.div>
   );
 }
 
@@ -602,12 +703,10 @@ function MeetingPane({
   const [tags, setTags] = useState(summary.tags.join(", "));
   const [confirming, setConfirming] = useState(false);
 
-  // A different meeting is a different set of fields, not an edit to the current ones.
-  useEffect(() => {
-    setTitle(summary.title);
-    setTags(summary.tags.join(", "));
-    setConfirming(false);
-  }, [summary.id, summary.title, summary.tags]);
+  // A different meeting is a different set of fields, not an edit to the current ones — and the
+  // parent keys this component on the meeting id, so a different meeting is a different component
+  // and the fields above start from its own values. The effect that used to copy them in ran after
+  // the first paint, so switching meetings showed the previous title for one frame.
 
   const words = useDayWords();
   const known = useMemo(

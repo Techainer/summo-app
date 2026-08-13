@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight, Folder, FolderOpen } from "lucide-react";
+import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 
 import { useT } from "../../i18n/context";
@@ -247,12 +248,22 @@ function NavButton({
       onClick={() => onNavigate(item.key)}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-[var(--radius-pill)] px-2.5 py-2 text-sm transition-colors",
-        active
-          ? "bg-accent-soft text-accent font-medium"
-          : "text-fg-dim hover:bg-bg-raised hover:text-fg",
+        "relative flex w-full items-center gap-2.5 rounded-[var(--radius-pill)] px-2.5 py-2 text-sm transition-colors",
+        active ? "text-accent font-medium" : "text-fg-dim hover:bg-bg-raised hover:text-fg",
       )}
     >
+      {/* The highlight is one element that moves between rows rather than a background that blinks
+          on and off. `layoutId` makes the browser interpolate it, so changing screen reads as the
+          selection travelling down the list — which is the thing that tells you the list is one
+          list. */}
+      {active && (
+        <motion.span
+          layoutId="nav-active"
+          aria-hidden="true"
+          transition={{ type: "spring", stiffness: 420, damping: 34 }}
+          className="bg-accent-soft ring-accent/20 absolute inset-0 -z-10 rounded-[var(--radius-pill)] ring-1"
+        />
+      )}
       {/* `size-4` and `stroke-[1.75]`: the same optical weight as the label beside it. A 2px stroke
           at this size reads heavier than the text and pulls the eye to the icon rather than to the
           word, which is the wrong way round in a nav. */}

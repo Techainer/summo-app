@@ -33,7 +33,7 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-center gap-3 px-4 py-3", className)}>
+    <div className={cn("flex items-center gap-3 px-5 pt-4 pb-3", className)}>
       <h2 className="text-body font-semibold tracking-tight">
         {title}
         {count !== undefined && <span className="text-fg-faint ml-2 font-normal">· {count}</span>}
@@ -44,5 +44,8 @@ export function CardHeader({
 }
 
 export function CardBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-4 pb-4", className)} {...props} />;
+  // 20px sides, matching the header above it, and 20px at the foot. A card whose body is inset
+  // less than its title is a card whose text does not line up with its own heading, which is
+  // visible on every screen at once and nameable on none of them.
+  return <div className={cn("px-5 pb-5", className)} {...props} />;
 }

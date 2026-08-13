@@ -205,7 +205,8 @@
     "filter_kind": "Lọc theo loại",
     "kind_all": "Tất cả",
     "kind_meeting": "Bản ghi",
-    "kind_note": "Ghi chú"
+    "kind_note": "Ghi chú",
+    "recent_heading": "Gần đây"
   },
   "analytics": {
     "title": "Thống kê",
@@ -255,7 +256,8 @@
     "voice_styles": "{count} kiểu giọng",
     "relabelled": "Đã sửa {utterances} câu trong {meetings} buổi họp cũ",
     "unmerged": "gỡ nhầm khỏi {count} người khác",
-    "empty_title": "Chưa có giọng nào"
+    "empty_title": "Chưa có giọng nào",
+    "subtitle": "Ai nói trong các buổi ghi của bạn — Summo học giọng và tự đặt tên lần sau."
   },
   "settings": {
     "title": "Cài đặt",
@@ -532,7 +534,17 @@
     "recent": "Gần đây",
     "see_all": "Xem tất cả",
     "ask": "Hỏi",
-    "assistant_hint": "Hỏi bất cứ điều gì bạn đã ghi hoặc đã viết — câu trả lời luôn nói rõ lấy từ đâu."
+    "assistant_hint": "Hỏi bất cứ điều gì bạn đã ghi hoặc đã viết — câu trả lời luôn nói rõ lấy từ đâu.",
+    "greeting_morning": "Chào buổi sáng",
+    "greeting_afternoon": "Chào buổi chiều",
+    "greeting_evening": "Chào buổi tối",
+    "stat_meetings": "buổi ghi · 14 ngày",
+    "stat_time": "thời gian đã ghi",
+    "stat_open": "việc còn treo",
+    "recording_now": "Đang ghi",
+    "tap_to_stop": "Bấm để dừng",
+    "shortcut_hint": "⌘K để tìm hoặc nhảy tới bất kỳ đâu",
+    "quick": "Làm nhanh"
   },
   "palette": {
     "title": "Tìm mọi thứ",

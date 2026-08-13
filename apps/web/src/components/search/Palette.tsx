@@ -25,7 +25,21 @@ const DEBOUNCE_MS = 140;
  * notes alike. The kind travels with each hit because it decides where opening it goes, and a note
  * sent to a meeting's route opens a page that does not exist.
  */
+/**
+ * Mounted only while open.
+ *
+ * The dialog used to stay mounted and return `null`, which meant its query, its results and its
+ * cursor outlived the close — the browser test opened it, navigated, opened it again and typed the
+ * second search onto the end of the first. That was patched with an effect that cleared three
+ * pieces of state whenever `open` changed, which is a synchronous re-render for something React
+ * does for free: unmount it, and there is no state left to be stale.
+ */
 export function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return <PaletteDialog onClose={onClose} />;
+}
+
+function PaletteDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const navigate = useNavigate();
   const { handshake } = useEngine();
@@ -70,26 +84,13 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
     [t],
   );
 
-  // Cleared on *every* change of `open`, not only on opening.
-  //
-  // Resetting on the way in looked equivalent and was not: the component stays mounted and only
-  // returns `null`, so the old query survived the close, and the browser test — which opens the
-  // palette, navigates, and opens it again — typed the second search onto the end of the first and
-  // searched for `mo hinhkhinhkhicau`. Clearing on the way out as well makes the state after a
-  // close identical to the state before the first open, which is the only version with no ordering
-  // to get wrong.
-  useEffect(() => {
-    setQuery("");
-    setThings([]);
-    setCursor(0);
-    if (open) input.current?.focus();
-  }, [open]);
+  // Fewer than two characters is not a short search, it is no search — so the results are read off
+  // the query rather than stored as an empty list. `setThings([])` in the effect body was a
+  // synchronous write on every keystroke back down to one character.
+  const found = query.trim().length < 2 ? [] : things;
 
   useEffect(() => {
-    if (!open || query.trim().length < 2) {
-      setThings([]);
-      return undefined;
-    }
+    if (query.trim().length < 2) return undefined;
     const timer = window.setTimeout(() => {
       library
         .search(query.trim(), 8)
@@ -99,9 +100,9 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
         .catch(() => setThings([]));
     }, DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [library, open, query]);
+  }, [library, query]);
 
-  const results = order(matchPlaces(places, query), things as never, query).slice(0, 12);
+  const results = order(matchPlaces(places, query), found as never, query).slice(0, 12);
 
   const run = useCallback(
     (result: Result | undefined) => {
@@ -117,8 +118,6 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
     },
     [navigate, onClose],
   );
-
-  if (!open) return null;
 
   return (
     <div
@@ -142,6 +141,9 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
           <Search aria-hidden="true" className="text-fg-faint size-4 shrink-0" />
           <input
             ref={input}
+            // Mounted only while open, so the browser can focus it the ordinary way instead of an
+            // effect reaching for a ref after the fact.
+            autoFocus
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -219,23 +221,4 @@ export function Palette({ open, onClose }: { open: boolean; onClose: () => void 
       </motion.div>
     </div>
   );
-}
-
-/**
- * `⌘K` / `Ctrl-K`, from anywhere.
- *
- * A hook rather than a listener inside the dialog, because the dialog is not mounted when the
- * shortcut has to work — which is the whole point of it.
- */
-export function usePaletteShortcut(onOpen: () => void) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        onOpen();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onOpen]);
 }

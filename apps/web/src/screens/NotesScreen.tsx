@@ -8,6 +8,7 @@ import { useI18n } from "../i18n/context";
 import { Dot } from "../components/library/Finder";
 import { useEngine } from "../lib/engine-context";
 import { NoteClient, SAVE_DEBOUNCE_MS, byDay, titleFrom, type NoteSummary } from "../lib/notes";
+import { useRefresh } from "../lib/use-load";
 
 /**
  * Notes: a list on the left, the note on the right.
@@ -57,9 +58,7 @@ export function NotesScreen() {
     }
   }, [client, say]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useRefresh(refresh);
 
   const open = useCallback(
     async (id: string) => {

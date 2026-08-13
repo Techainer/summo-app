@@ -1,4 +1,4 @@
-import { Checkbox } from "./ui";
+import { Checkbox, Input, Page } from "./ui";
 import { useCallback, useEffect, useState } from "react";
 
 import { useI18n, useT } from "../i18n/context";
@@ -36,8 +36,12 @@ interface ProviderInfo {
 /** One row of the form: a fixed-width label beside its control. */
 const FIELD = "mt-3.5 flex items-center gap-3 text-meta text-fg-dim";
 const LABEL = "w-[150px] shrink-0";
-const CONTROL =
-  "flex-1 rounded-lg border border-line bg-bg-soft px-2.5 py-1.5 text-sm text-fg focus:outline-none focus-visible:border-accent";
+/** Settings controls are `Input`s that stretch; the shared field owns everything else about them. */
+const CONTROL = "flex-1";
+/** A native `<select>`, which cannot be an `Input` — same box, drawn by hand. */
+const SELECT =
+  "h-9 flex-1 rounded-[var(--radius-card)] border border-line bg-bg-soft px-3 text-sm text-fg" +
+  " transition-colors hover:border-line-strong focus-visible:border-accent focus:outline-none";
 /** The note under a field. Indented to line up with the control it explains. */
 const HINT = "mt-1.5 ml-[162px] text-micro leading-normal text-fg-faint";
 
@@ -163,7 +167,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
   const hosted = providers.filter((p) => !p.local);
 
   return (
-    <div className="max-w-xl p-6" data-testid="settings">
+    <Page width="narrow" data-testid="settings">
       <LanguagePicker />
 
       <h2 className="text-xl font-semibold tracking-tight">{t("settings.llm_heading")}</h2>
@@ -176,7 +180,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       <label className={FIELD}>
         <span className={LABEL}>{t("settings.provider")}</span>
         <select
-          className={CONTROL}
+          className={SELECT}
           value={selected}
           aria-label={t("settings.provider")}
           onChange={(e) => {
@@ -220,7 +224,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       {selected === "custom" && (
         <label className={FIELD}>
           <span className={LABEL}>{t("settings.address")}</span>
-          <input
+          <Input
             className={CONTROL}
             value={custom}
             aria-label={t("settings.endpoint")}
@@ -233,7 +237,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
 
       <label className={FIELD}>
         <span className={LABEL}>{t("settings.model")}</span>
-        <input
+        <Input
           className={CONTROL}
           value={llm.model ?? ""}
           aria-label={t("settings.model")}
@@ -245,7 +249,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
 
       <label className={FIELD}>
         <span className={LABEL}>{t("settings.summary_language")}</span>
-        <input
+        <Input
           className={CONTROL}
           value={llm.language}
           aria-label={t("settings.summary_language")}
@@ -291,7 +295,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
           <label className={FIELD}>
             <span className={LABEL}>{t("settings.mt_where")}</span>
             <select
-              className={CONTROL}
+              className={SELECT}
               value={llm.translator.provider === LOCAL ? LOCAL : "endpoint"}
               aria-label={t("settings.mt_where")}
               onChange={(e) =>
@@ -312,7 +316,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
           {llm.translator.provider !== LOCAL && (
             <label className={FIELD}>
               <span className={LABEL}>{t("settings.endpoint")}</span>
-              <input
+              <Input
                 className={CONTROL}
                 value={llm.translator.provider}
                 aria-label={t("settings.mt_endpoint")}
@@ -330,7 +334,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
 
           <label className={FIELD}>
             <span className={LABEL}>{t("settings.model")}</span>
-            <input
+            <Input
               className={CONTROL}
               value={llm.translator.model ?? ""}
               aria-label={t("settings.mt_model")}
@@ -388,7 +392,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
         </p>
       )}
       <About />
-    </div>
+    </Page>
   );
 }
 

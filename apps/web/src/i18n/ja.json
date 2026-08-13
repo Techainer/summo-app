@@ -205,7 +205,8 @@
     "filter_kind": "種類で絞り込む",
     "kind_all": "すべて",
     "kind_meeting": "録音",
-    "kind_note": "ノート"
+    "kind_note": "ノート",
+    "recent_heading": "最近"
   },
   "analytics": {
     "title": "分析",
@@ -255,7 +256,8 @@
     "voice_styles": "{count}通りの声色",
     "relabelled": "過去{meetings}件の会議で{utterances}行を修正しました",
     "unmerged": "他{count}人から外しました",
-    "empty_title": "まだ声がありません"
+    "empty_title": "まだ声がありません",
+    "subtitle": "録音に登場する人。Summo は声を学習し、次回から自動で名前を付けます。"
   },
   "settings": {
     "title": "設定",
@@ -532,7 +534,17 @@
     "recent": "最近",
     "see_all": "すべて見る",
     "ask": "質問",
-    "assistant_hint": "録音したことも書いたことも聞けます。答えには出典が付きます。"
+    "assistant_hint": "録音したことも書いたことも聞けます。答えには出典が付きます。",
+    "greeting_morning": "おはようございます",
+    "greeting_afternoon": "こんにちは",
+    "greeting_evening": "こんばんは",
+    "stat_meetings": "件の記録 · 14日",
+    "stat_time": "録音時間",
+    "stat_open": "未完了のタスク",
+    "recording_now": "録音中",
+    "tap_to_stop": "タップで停止",
+    "shortcut_hint": "⌘K でどこへでも検索・移動",
+    "quick": "クイック操作"
   },
   "palette": {
     "title": "すべてを検索",

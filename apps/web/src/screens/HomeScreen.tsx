@@ -1,15 +1,17 @@
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
-import { CircleAlert, FileUp, Mic, NotebookPen, PencilLine, Sparkles, Waves } from "lucide-react";
+import { ArrowRight, CircleAlert, FileUp, PencilLine, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button, Card, CardBody, CardHeader } from "../components/ui";
+import { Recent } from "../components/library/Recent";
+import { Avatar, Button, Card, CardBody, CardHeader, Page, PageGlow, Wave } from "../components/ui";
 import { useI18n, useT } from "../i18n/context";
+import { clock } from "../lib/clock";
 import { cn } from "../lib/cn";
 import { formatDuration } from "../lib/duration";
 import { useEngine } from "../lib/engine-context";
 import { useErrorText } from "../lib/errors";
-import { LibraryClient, dayLabel, localDay, timeOfDay, type MeetingSummary } from "../lib/library";
+import type { MeetingSummary } from "../lib/library";
 import { listItem, stagger } from "../lib/motion";
 import { ReportClient, shiftDay, today, type ActionItem, type Report } from "../lib/report";
 
@@ -29,20 +31,21 @@ import { ReportClient, shiftDay, today, type ActionItem, type Report } from "../
  * 3. **Gần đây**, of every kind, because "the thing I had open yesterday" is the most common reason
  *    to open a notes app at all.
  *
- * Everything here is derived from `/library` and `/report`, both of which already existed and
- * neither of which anything was showing together.
+ * The second pass at this screen was about weight rather than content. A card holding one small
+ * circle in the middle of four hundred pixels is still a void, only now it has a border around it;
+ * so capture became a wide panel that shows what it is doing — a live waveform and a running clock
+ * while recording, its own light when idle — and the rows underneath grew the things that make a
+ * list scannable: a silhouette per recording, a face per name, a number per fact.
  */
 export function HomeScreen() {
   const t = useT();
   const { locale } = useI18n();
   const say = useErrorText();
   const navigate = useNavigate();
-  const { handshake, session, toggle } = useEngine();
+  const { handshake, session, elapsed, level, toggle } = useEngine();
 
-  const library = useMemo(() => new LibraryClient(handshake), [handshake]);
   const reports = useMemo(() => new ReportClient(handshake), [handshake]);
 
-  const [recent, setRecent] = useState<MeetingSummary[] | null>(null);
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,12 +55,8 @@ export function HomeScreen() {
       try {
         // A fortnight rather than a week: the queue is "what is still waiting", and something
         // waiting for nine days is exactly what a seven-day window would hide.
-        const [view, summary] = await Promise.all([
-          library.view({ group: "day" }),
-          reports.between(shiftDay(today(), -14), today()),
-        ]);
+        const summary = await reports.between(shiftDay(today(), -14), today());
         if (cancelled) return;
-        setRecent(view.groups.flatMap((group) => group.meetings).slice(0, 6));
         setReport(summary);
       } catch (e) {
         if (!cancelled) setError(say(e));
@@ -66,7 +65,7 @@ export function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [library, reports, say]);
+  }, [reports, say]);
 
   const open = useCallback(
     (entry: MeetingSummary) => {
@@ -82,12 +81,30 @@ export function HomeScreen() {
   const waiting = queue(report);
 
   return (
-    <div className="mx-auto max-w-5xl p-5" data-testid="home">
-      <h1 className="text-display font-semibold">{t("home.heading")}</h1>
-      <p className="text-fg-faint text-meta mt-1">{t("home.subheading")}</p>
+    <Page
+      data-testid="home"
+      eyebrow={t(greetingKey())}
+      title={t("home.heading")}
+      subtitle={t("home.subheading")}
+      aside={
+        // Three numbers, because a workspace should say how much is in it. All three are already
+        // computed for the analytics screen; nothing new is fetched to show them.
+        report ? (
+          <dl className="flex gap-6">
+            <Stat value={String(report.meetings.length)} label={t("home.stat_meetings")} />
+            <Stat
+              value={formatDuration(report.total_seconds, locale, "short")}
+              label={t("home.stat_time")}
+            />
+            <Stat value={String(report.open_actions.length)} label={t("home.stat_open")} />
+          </dl>
+        ) : undefined
+      }
+    >
+      <PageGlow />
 
       {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec text-meta mt-4 rounded-[var(--radius-card)] border px-3 py-2">
+        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-[var(--radius-card)] border px-3 py-2">
           {error}
         </p>
       )}
@@ -96,35 +113,82 @@ export function HomeScreen() {
         initial="hidden"
         animate="shown"
         transition={stagger(4)}
-        className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_1fr]"
+        className="grid gap-4 lg:grid-cols-[1.35fr_1fr]"
       >
         {/* Capture. Still the one irreversible action, so it keeps the largest target on the
-            screen even though it is no longer the whole screen. */}
+              screen — but it now shows the state it is in rather than only offering to change it. */}
         <motion.div variants={listItem}>
-          <Card className="h-full">
-            <CardBody className="flex h-full flex-col items-center justify-center gap-4 pt-6 pb-7">
-              <button
-                type="button"
-                onClick={toggle}
-                aria-pressed={session.recording}
-                aria-label={session.recording ? t("record.stop") : t("record.start")}
+          <Card
+            className={cn(
+              "relative h-full overflow-hidden transition-shadow duration-300",
+              session.recording && "shadow-[var(--glow-rec)]",
+            )}
+          >
+            <div
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute inset-0 bg-[image:var(--gradient-capture)] transition-opacity duration-500",
+                session.recording ? "opacity-100" : "opacity-40",
+              )}
+            />
+            <CardBody className="relative flex h-full flex-col gap-5 p-6">
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={toggle}
+                  aria-pressed={session.recording}
+                  aria-label={session.recording ? t("record.stop") : t("record.start")}
+                  className={cn(
+                    "grid size-16 shrink-0 place-items-center rounded-full border-2 transition-all duration-200",
+                    "focus-visible:border-accent focus:outline-none",
+                    session.recording
+                      ? "border-rec bg-rec-soft"
+                      : "border-line-strong bg-bg-elevated hover:border-rec hover:scale-105",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "bg-rec block transition-all duration-200",
+                      session.recording ? "size-5 rounded-md" : "size-8 rounded-full",
+                    )}
+                  />
+                </button>
+
+                <div className="min-w-0">
+                  <p className="text-title font-semibold">
+                    {session.recording ? t("home.recording_now") : t("record.start")}
+                  </p>
+                  <p className="text-fg-dim text-meta mt-0.5">
+                    {session.recording ? (
+                      <span className="tabular">{clock(elapsed)}</span>
+                    ) : (
+                      t("home.capture_hint")
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* The waveform is the whole reason this panel is worth its width: recording is the
+                    one state in the app where the screen should be visibly doing something. Idle it
+                    is a flat, quiet silhouette; live it moves with the input level. */}
+              <div
                 className={cn(
-                  "grid size-20 place-items-center rounded-full border-2 transition-all duration-200",
-                  "focus-visible:border-accent focus:outline-none",
-                  session.recording
-                    ? "border-rec bg-rec-soft scale-105"
-                    : "border-line-strong bg-bg-elevated hover:border-rec hover:scale-105",
+                  "min-h-16 flex-1 transition-colors duration-300",
+                  session.recording ? "text-rec" : "text-fg-faint/35",
                 )}
               >
-                <span
-                  className={cn(
-                    "bg-rec block transition-all duration-200",
-                    session.recording ? "size-6 rounded-md" : "size-10 rounded-full",
-                  )}
+                {/* Idle it draws its own silhouette at a quarter height — a flat row of equal
+                      bars reads as a dotted rule, not as sound. Live it takes the input level, so
+                      the panel is the meter as well as the button. */}
+                <Wave
+                  seed="capture"
+                  bars={40}
+                  live={session.recording}
+                  levels={session.recording ? undefined : resting(40, level)}
                 />
-              </button>
-              <p className="text-fg-faint text-meta text-center">{t("home.capture_hint")}</p>
-              <div className="flex flex-wrap justify-center gap-2">
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" variant="secondary" onClick={() => void navigate({ to: "/" })}>
                   <FileUp aria-hidden="true" className="me-1 size-3.5" />
                   {t("record.tab_upload")}
@@ -137,6 +201,9 @@ export function HomeScreen() {
                   <PencilLine aria-hidden="true" className="me-1 size-3.5" />
                   {t("home.write")}
                 </Button>
+                <p className="text-fg-faint text-micro ms-auto hidden sm:block">
+                  {t("home.shortcut_hint")}
+                </p>
               </div>
             </CardBody>
           </Card>
@@ -158,17 +225,17 @@ export function HomeScreen() {
               {waiting.length === 0 ? (
                 <p className="text-fg-faint text-meta py-6 text-center">{t("home.all_clear")}</p>
               ) : (
-                <ul className="space-y-1.5">
+                <ul className="space-y-1">
                   {waiting.slice(0, 5).map((item) => (
                     <li key={`${item.kind}-${item.key}`}>
                       <button
                         type="button"
                         onClick={() => void navigate({ to: item.to })}
-                        className="hover:bg-bg-elevated flex w-full items-start gap-2.5 rounded-[var(--radius-card)] px-2 py-1.5 text-left transition-colors"
+                        className="hover:bg-bg-elevated group flex w-full items-center gap-2.5 rounded-[var(--radius-card)] px-2.5 py-2 text-left transition-colors"
                       >
                         <span
                           className={cn(
-                            "mt-1.5 size-1.5 shrink-0 rounded-full",
+                            "size-1.5 shrink-0 rounded-full",
                             item.kind === "overdue" ? "bg-rec" : "bg-blocked",
                           )}
                         />
@@ -176,6 +243,11 @@ export function HomeScreen() {
                           <span className="text-body block truncate">{item.text}</span>
                           <span className="text-fg-faint text-micro">{t(item.labelKey)}</span>
                         </span>
+                        {item.owner && <Avatar name={item.owner} size="sm" />}
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="text-fg-faint size-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                        />
                       </button>
                     </li>
                   ))}
@@ -186,7 +258,7 @@ export function HomeScreen() {
         </motion.div>
 
         {/* Recent, of every kind. The most common reason to open a notes app is to pick something
-            back up, and until now that took two clicks through a screen called Thư viện. */}
+              back up, and until now that took two clicks through a screen called Thư viện. */}
         <motion.div variants={listItem} className="lg:col-span-2">
           <Card>
             <CardHeader
@@ -198,69 +270,71 @@ export function HomeScreen() {
               }
             />
             <CardBody>
-              {recent === null ? (
-                <p className="text-fg-faint text-meta py-6 text-center">{t("common.loading")}</p>
-              ) : recent.length === 0 ? (
-                <p className="text-fg-faint text-meta py-6 text-center">{t("library.empty")}</p>
-              ) : (
-                <ul className="grid gap-1.5 sm:grid-cols-2">
-                  {recent.map((entry) => (
-                    <li key={entry.id}>
-                      <button
-                        type="button"
-                        onClick={() => open(entry)}
-                        className="hover:bg-bg-elevated flex w-full items-center gap-3 rounded-[var(--radius-card)] px-2.5 py-2 text-left transition-colors"
-                      >
-                        <span className="bg-bg-soft ring-line grid size-9 shrink-0 place-items-center rounded-full ring-1">
-                          {entry.kind === "note" ? (
-                            <NotebookPen aria-hidden="true" className="text-fg-faint size-4" />
-                          ) : (
-                            <Waves aria-hidden="true" className="text-fg-faint size-4" />
-                          )}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="text-body block truncate font-medium">
-                            {entry.title}
-                          </span>
-                          <span className="text-fg-faint text-micro">
-                            {dayLabel(entry.day, localDay(), {
-                              locale,
-                              today: t("library.today"),
-                              yesterday: t("library.yesterday"),
-                              week: t("library.week"),
-                              unfiled: t("library.unfiled_group"),
-                            })}
-                            {entry.kind === "meeting" && entry.duration > 0 && (
-                              <> · {formatDuration(entry.duration, locale, "short")}</>
-                            )}
-                            {entry.kind === "meeting" && <> · {timeOfDay(entry.date)}</>}
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <Recent onOpen={open} />
             </CardBody>
           </Card>
         </motion.div>
 
         {/* What the assistant is for, said once, where somebody opening the app will read it. */}
         <motion.div variants={listItem} className="lg:col-span-2">
-          <Card className="border-ai/25 bg-ai-soft">
-            <CardBody className="flex flex-wrap items-center gap-3 pt-4">
-              <Sparkles aria-hidden="true" className="text-ai size-4 shrink-0" />
+          <Card className="border-ai/25 relative overflow-hidden">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-[image:var(--gradient-ai)]"
+            />
+            <CardBody className="relative flex flex-wrap items-center gap-3 py-4">
+              <span className="bg-ai-soft ring-ai/25 grid size-9 shrink-0 place-items-center rounded-full ring-1">
+                <Sparkles aria-hidden="true" className="text-ai size-4" />
+              </span>
               <p className="text-meta text-fg-dim min-w-0 flex-1">{t("home.assistant_hint")}</p>
               <Button size="sm" variant="secondary" onClick={() => void navigate({ to: "/chat" })}>
-                <Mic aria-hidden="true" className="me-1 size-3.5" />
                 {t("home.ask")}
+                <ArrowRight aria-hidden="true" className="ms-1 size-3.5" />
               </Button>
             </CardBody>
           </Card>
         </motion.div>
       </motion.div>
+    </Page>
+  );
+}
+
+/** One number and what it counts. `dl` because that is what this is. */
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="text-end">
+      <dt className="text-fg-faint text-micro">{label}</dt>
+      <dd className="tabular text-title mt-0.5 font-semibold">{value}</dd>
     </div>
   );
+}
+
+/**
+ * Morning, afternoon or evening, by the clock on this machine.
+ *
+ * Local time, like everything else that says "today" here: a greeting computed in UTC would wish
+ * somebody in Hanoi good evening over breakfast.
+ */
+function greetingKey(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "home.greeting_morning";
+  if (hour < 18) return "home.greeting_afternoon";
+  return "home.greeting_evening";
+}
+
+/**
+ * The idle silhouette, and the live meter between recordings.
+ *
+ * A seeded shape scaled down, not a flat line: equal bars are a dotted rule and read as a divider
+ * somebody left in. `level` lifts the whole thing while the microphone is being previewed, so the
+ * panel responds before the recording starts.
+ */
+function resting(bars: number, level: number): number[] {
+  const lift = 0.22 + Math.min(0.4, level * 0.8);
+  return Array.from({ length: bars }, (_, at) => {
+    const swell = 0.5 + 0.5 * Math.sin((at / bars) * Math.PI * 3.1);
+    return Math.max(0.06, swell * lift);
+  });
 }
 
 /** One thing waiting on a person. */
@@ -270,6 +344,8 @@ interface Waiting {
   text: string;
   labelKey: string;
   to: "/tasks" | "/library";
+  /** Who owes it, when anyone does. Only tasks have one. */
+  owner?: string;
 }
 
 /**
@@ -291,6 +367,7 @@ function queue(report: Report | null): Waiting[] {
       text: action.text,
       labelKey: "home.overdue",
       to: "/tasks" as const,
+      owner: action.owner ?? undefined,
     }));
 
   const unsummarised: Waiting[] = report.without_summary.map((title) => ({

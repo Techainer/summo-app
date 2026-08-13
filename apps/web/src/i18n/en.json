@@ -205,7 +205,8 @@
     "filter_kind": "Filter by kind",
     "kind_all": "All",
     "kind_meeting": "Recordings",
-    "kind_note": "Notes"
+    "kind_note": "Notes",
+    "recent_heading": "Recent"
   },
   "analytics": {
     "title": "Analytics",
@@ -255,7 +256,8 @@
     "voice_styles": "{count} voice styles",
     "relabelled": "Corrected {utterances} lines across {meetings} earlier meetings",
     "unmerged": "removed from {count} other people",
-    "empty_title": "No voices yet"
+    "empty_title": "No voices yet",
+    "subtitle": "Who speaks in your recordings — Summo learns each voice and names it next time."
   },
   "settings": {
     "title": "Settings",
@@ -532,7 +534,17 @@
     "recent": "Recent",
     "see_all": "See all",
     "ask": "Ask",
-    "assistant_hint": "Ask anything you have recorded or written, and the answer names where it came from."
+    "assistant_hint": "Ask anything you have recorded or written, and the answer names where it came from.",
+    "greeting_morning": "Good morning",
+    "greeting_afternoon": "Good afternoon",
+    "greeting_evening": "Good evening",
+    "stat_meetings": "recordings · 14 days",
+    "stat_time": "time recorded",
+    "stat_open": "open tasks",
+    "recording_now": "Recording",
+    "tap_to_stop": "Tap to stop",
+    "shortcut_hint": "⌘K to search or jump anywhere",
+    "quick": "Quick actions"
   },
   "palette": {
     "title": "Search everything",

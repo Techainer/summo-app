@@ -26,6 +26,15 @@ export function Transcript({
   segments: Segment[];
   onEvent?: (event: Event) => void;
 }) {
+  // Not compiled by the React Compiler, deliberately.
+  //
+  // `useVirtualizer` keeps a mutable instance and reads layout during render, which the compiler
+  // cannot prove is safe to memoise, so it declines the whole component. `"use no memo"` states
+  // that; the lint rule reports the skip regardless, so it is silenced here with the reason rather
+  // than left to be scrolled past every day. This list is fast because it renders twenty rows out
+  // of ten thousand, not because of memoisation — nothing is lost by not compiling it.
+  "use no memo";
+
   const t = useT();
   const parentRef = useRef<HTMLDivElement>(null);
   const rows = decorate(segments);
@@ -49,6 +58,7 @@ export function Transcript({
     setFollowing(atBottom);
   }, []);
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- see the note above the directive
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,

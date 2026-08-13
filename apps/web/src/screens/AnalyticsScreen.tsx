@@ -1,14 +1,23 @@
 import { ChartNoAxesColumn, Square } from "lucide-react";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { Avatar, Card, CardBody, CardHeader, Empty, SegmentedControl } from "../components/ui";
+import {
+  Avatar,
+  Card,
+  CardBody,
+  CardHeader,
+  Empty,
+  Page,
+  PageGlow,
+  SegmentedControl,
+} from "../components/ui";
 import { GENTLE } from "../lib/motion";
-import { useErrorText } from "../lib/errors";
+import { useLoad } from "../lib/use-load";
 import { useI18n } from "../i18n/context";
 import { formatDuration } from "../lib/duration";
 import { useEngine } from "../lib/engine-context";
-import { ReportClient, share, shiftDay, today, type Report } from "../lib/report";
+import { ReportClient, share, shiftDay, today } from "../lib/report";
 
 type Range = "day" | "week" | "month";
 
@@ -30,34 +39,20 @@ const DAYS: Record<Range, number> = { day: 0, week: 6, month: 29 };
  */
 export function AnalyticsScreen() {
   const { t, locale } = useI18n();
-  const say = useErrorText();
   const { handshake } = useEngine();
   const client = useMemo(() => new ReportClient(handshake), [handshake]);
   const [range, setRange] = useState<Range>("week");
-  const [report, setReport] = useState<Report | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const to = today();
-    const from = shiftDay(to, -DAYS[range]);
-    try {
-      setReport(await client.between(from, to));
-      setError(null);
-    } catch (e) {
-      setError(say(e));
-    }
-  }, [client, range, say]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data: report, error } = useLoad(
+    () => client.between(shiftDay(today(), -DAYS[range]), today()),
+    [client, range],
+  );
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-5">
-      <div className="flex items-center gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">{t("analytics.title")}</h1>
+    <Page
+      title={t("analytics.title")}
+      actions={
         <SegmentedControl
-          className="ml-auto"
           label={t("analytics.range")}
           options={RANGES.map((r) => ({
             value: r.value,
@@ -67,7 +62,9 @@ export function AnalyticsScreen() {
           onChange={setRange}
           size="sm"
         />
-      </div>
+      }
+    >
+      <PageGlow />
 
       {error && (
         <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
@@ -163,7 +160,7 @@ export function AnalyticsScreen() {
           )}
         </>
       )}
-    </div>
+    </Page>
   );
 }
 

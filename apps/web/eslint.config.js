@@ -51,16 +51,18 @@ export default tseslint.config(
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
 
       /*
-       * A warning, not an error, and the count is capped rather than ignored — see `lint` in
-       * package.json.
+       * A warning, and there are none left — `lint` runs with `--max-warnings 0`.
        *
-       * Every one of the nineteen places this fires is the app reading from something outside
-       * React on mount: fetching the library from the daemon, subscribing to a media query,
-       * loading the i18n catalogue. The rule's own message names that as the legitimate use of an
-       * effect; it cannot see through the `await` to tell that the `setState` is not synchronous.
+       * It used to fire in nineteen places, all of them the app reading from something outside
+       * React on mount, and the cap was raised each time somebody added a screen. That was the
+       * wrong reading: about half were genuinely synchronous writes inside an effect — a media
+       * query read twice, a sidebar state pushed back and forth across the breakpoint, three
+       * pieces of dialog state cleared on close — and each one was a real extra render, one of
+       * them a visible flash of the previous meeting's title.
        *
-       * Left on because the shape it describes is worth noticing in review, and capped because a
-       * warning nobody counts is a warning nobody reads.
+       * They are gone rather than suppressed. The async reads live behind `useLoad` and
+       * `useRefresh`, which is one place instead of twenty; the resets are derived during render or
+       * done by unmounting; the media query uses `useSyncExternalStore`, which is the API for it.
        */
       "react-hooks/set-state-in-effect": "warn",
 

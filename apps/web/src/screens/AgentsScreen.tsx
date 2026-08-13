@@ -1,13 +1,23 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
-import { Avatar, Button, Card, CardBody, CardHeader, StatusChip } from "../components/ui";
+import {
+  Avatar,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Page,
+  PageGlow,
+  StatusChip,
+} from "../components/ui";
 import { cn } from "../lib/cn";
 import { useEngine } from "../lib/engine-context";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { GENTLE, listItem, screen as screenVariants, stagger } from "../lib/motion";
 import { url } from "../lib/library";
+import { useRefresh } from "../lib/use-load";
 
 /**
  * The agents, and the files behind them.
@@ -108,9 +118,7 @@ export function AgentsScreen() {
     }
   }, [handshake, open, say]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useRefresh(load);
 
   const agent = useMemo(
     () => roster?.agents.find((a) => a.slug === chosen) ?? null,
@@ -141,11 +149,8 @@ export function AgentsScreen() {
   }, [chosen, draft, handshake, load, say, t]);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 p-5">
-      <div className="flex items-baseline gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">{t("agents.title")}</h1>
-        <p className="text-fg-faint text-meta">{t("agents.subtitle")}</p>
-      </div>
+    <Page title={t("agents.title")} subtitle={t("agents.subtitle")}>
+      <PageGlow />
 
       {error && (
         <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
@@ -308,9 +313,7 @@ export function AgentsScreen() {
       {/* Under the roster, not floating in the middle of the pane: it is an instruction about the
           cards above it, and centring it in the empty half below made it look like the page had
           two unrelated halves. */}
-      {roster && !agent && (
-        <p className="text-fg-faint text-meta mt-5 text-center">{t("agents.pick")}</p>
-      )}
-    </div>
+      {roster && !agent && <p className="text-fg-faint text-meta">{t("agents.pick")}</p>}
+    </Page>
   );
 }

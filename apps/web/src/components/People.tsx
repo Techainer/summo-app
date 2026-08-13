@@ -1,12 +1,13 @@
 import { AudioLines } from "lucide-react";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
-import { Avatar, Empty } from "./ui";
+import { Avatar, Empty, Page, SectionTitle } from "./ui";
 import { listItem, stagger } from "../lib/motion";
 import { useI18n } from "../i18n/context";
 import { formatDuration } from "../lib/duration";
 import { useErrorText } from "../lib/errors";
+import { useRefresh } from "../lib/use-load";
 import {
   PeopleClient,
   confidenceLabel,
@@ -53,9 +54,7 @@ export function People({ client, meeting }: Props) {
     }
   }, [client, meeting, say]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useRefresh(refresh);
 
   const name = useCallback(
     async (label: string, personName: string) => {
@@ -120,7 +119,7 @@ export function People({ client, meeting }: Props) {
     // Without a height to fill, `Empty full` centres itself inside its own content box, which is
     // two lines tall — and the result is an empty state pinned to the top of five hundred pixels
     // of nothing, which is what it looked like before.
-    <section className="mx-auto flex h-full max-w-3xl flex-col space-y-4 p-6">
+    <Page title={t("people.title")} subtitle={t("people.subtitle")} width="narrow" fill>
       {error && (
         <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
           {error}
@@ -141,7 +140,7 @@ export function People({ client, meeting }: Props) {
 
       {voices.length > 0 && (
         <>
-          <h2 className="text-xl font-semibold tracking-tight">{t("people.unknown")}</h2>
+          <SectionTitle>{t("people.unknown")}</SectionTitle>
           <ul className="space-y-2.5">
             {voices.map((voice) => (
               <li key={voice.label} className="rounded-card border-line bg-bg-soft border p-3.5">
@@ -213,7 +212,7 @@ export function People({ client, meeting }: Props) {
         </>
       )}
 
-      <h2 className="pt-2 text-xl font-semibold tracking-tight">{t("people.known")}</h2>
+      <SectionTitle>{t("people.known")}</SectionTitle>
       {space && (
         <p className="text-fg-dim text-micro -mt-2">{t("people.identified_by", { space })}</p>
       )}
@@ -287,6 +286,6 @@ export function People({ client, meeting }: Props) {
           ))}
         </motion.ul>
       )}
-    </section>
+    </Page>
   );
 }

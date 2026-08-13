@@ -1,15 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 
-import {
-  BUILT_IN_LANGUAGES,
-  catalogFor,
-  detectLocale,
-  flatten,
-  translator,
-  type Catalog,
-  type Language,
-  type Translator,
-} from ".";
+import { flatten, type Catalog, type Language, type Translator } from ".";
 
 /**
  * The active language, for the whole app.
@@ -20,19 +11,19 @@ import {
  * before the daemon handshake completes or the first paint is in the wrong language.
  */
 
-const STORAGE_KEY = "summo.locale";
+export const STORAGE_KEY = "summo.locale";
 
-interface Value extends Translator {
+export interface Value extends Translator {
   languages: Language[];
   setLocale: (locale: string) => void;
 }
 
-const I18nContext = createContext<Value | null>(null);
+export const I18nContext = createContext<Value | null>(null);
 
 /** Locale files the user added, keyed by tag. Fetched from the daemon; empty until it answers. */
 export type ExtraLocales = Record<string, { label?: string; catalog: Catalog }>;
 
-interface Props {
+export interface Props {
   children: ReactNode;
   /** User-supplied catalogs, already fetched. Separate from the provider so tests can inject. */
   extra?: ExtraLocales;
@@ -40,62 +31,7 @@ interface Props {
   locale?: string;
 }
 
-export function I18nProvider({ children, extra, locale: forced }: Props) {
-  const languages = useMemo<Language[]>(() => {
-    const added = Object.entries(extra ?? {})
-      .filter(([code]) => !BUILT_IN_LANGUAGES.some((l) => l.code === code))
-      .map(([code, value]) => ({ code, label: value.label ?? code }));
-    return [...BUILT_IN_LANGUAGES, ...added];
-  }, [extra]);
-
-  const [locale, setLocaleState] = useState(() =>
-    detectLocale(
-      languages.map((l) => l.code),
-      read(),
-    ),
-  );
-
-  const active = forced ?? locale;
-
-  // A user-added language that arrives after first paint must be selectable, and a saved choice
-  // pointing at one must take effect once it loads rather than being silently ignored.
-  useEffect(() => {
-    const saved = read();
-    if (saved && saved !== locale && languages.some((l) => l.code === saved)) {
-      setLocaleState(saved);
-    }
-  }, [languages, locale]);
-
-  const value = useMemo<Value>(() => {
-    const catalog = catalogFor(active, extra?.[active]?.catalog);
-    const base = translator(active, catalog, (key) => {
-      // Once per key per session; the translator itself dedupes.
-      console.warn(`[i18n] missing key: ${key}`);
-    });
-    return {
-      ...base,
-      languages,
-      setLocale: (next: string) => {
-        setLocaleState(next);
-        try {
-          window.localStorage.setItem(STORAGE_KEY, next);
-        } catch {
-          // Private browsing and locked-down webviews both throw here. The choice still applies to
-          // this session; it just will not be remembered.
-        }
-      },
-    };
-  }, [active, extra, languages]);
-
-  useEffect(() => {
-    // Screen readers announce in the wrong language without this, and CSS `:lang()` cannot match.
-    document.documentElement.lang = active;
-  }, [active]);
-
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
-}
-
-function read(): string | null {
+export function read(): string | null {
   try {
     return window.localStorage.getItem(STORAGE_KEY);
   } catch {

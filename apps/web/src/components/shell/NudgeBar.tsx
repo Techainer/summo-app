@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "../../i18n/context";
 import { GENTLE, collapse } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
-import { NudgeClient, POLL_MS, canNotify, iconFor, notify, type Nudge } from "../../lib/nudges";
+import { NudgeClient, POLL_MS, iconFor, notify, type Nudge } from "../../lib/nudges";
 
 /**
  * What the agent wants to tell you, when it is allowed to.
@@ -47,9 +47,15 @@ export function NudgeBar() {
     // one moment the machine is busiest.
     if (session.recording) return undefined;
 
-    void poll();
+    // The first poll goes through the same timer as the rest, at zero delay, rather than being
+    // called straight from the effect body. Same behaviour — a request as soon as the bar mounts —
+    // without a state write that lands before the browser has painted the bar it belongs to.
+    const first = window.setTimeout(() => void poll(), 0);
     const timer = window.setInterval(() => void poll(), POLL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
   }, [poll, session.recording]);
 
   const dismiss = (key: string) => setQueue((q) => q.filter((n) => n.key !== key));
@@ -97,9 +103,4 @@ export function NudgeBar() {
       ))}
     </AnimatePresence>
   );
-}
-
-/** Whether to offer turning OS notifications on. Exported so Settings can show the same state. */
-export function notificationsOn(): boolean {
-  return canNotify();
 }

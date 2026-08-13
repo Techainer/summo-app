@@ -40,7 +40,10 @@ export function CaptureControls() {
   const busy = session.recording;
 
   return (
-    <div className="mx-auto mt-6 w-full max-w-xl px-4">
+    // No margin, no width of its own, no centring: it is a row inside whatever card or toolbar
+    // puts it there. It used to centre itself in a `max-w-xl`, which is why the record screen had
+    // its controls floating in the middle of a pane and its button somewhere else entirely.
+    <div className="w-full">
       <fieldset disabled={busy} className="disabled:opacity-60">
         <legend className="sr-only">{t("record.audio_source")}</legend>
 
@@ -69,7 +72,7 @@ export function CaptureControls() {
               value={capture.translateTo}
               aria-label={t("record.translate_live")}
               onChange={(e) => update({ ...capture, translateTo: e.target.value })}
-              className="border-line bg-bg-soft text-fg focus-visible:border-accent rounded-lg border px-2 py-1.5 text-sm focus:outline-none"
+              className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-8 rounded-[var(--radius-card)] border px-2 text-sm transition-colors focus:outline-none"
             >
               {TARGETS.map((target) => (
                 <option key={target.code} value={target.code}>

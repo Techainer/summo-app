@@ -20,6 +20,7 @@ import {
   type Status,
 } from "../../lib/onboarding";
 import { Button } from "../ui";
+import { useRefresh } from "../../lib/use-load";
 
 /**
  * The first screen, when there is something in the way.
@@ -57,9 +58,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
     }
   }, [client, say]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useRefresh(refresh);
 
   // The recommendation is for the language the interface is in: someone who switched to English is
   // very likely recording in English.

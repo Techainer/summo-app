@@ -18,6 +18,7 @@ import {
   type Job,
 } from "../../lib/imports";
 import { Button } from "../ui";
+import { useRefresh } from "../../lib/use-load";
 
 /**
  * The other way a meeting gets into Summo: a file that already exists.
@@ -56,9 +57,7 @@ export function ImportPanel() {
     }
   }, [client]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useRefresh(refresh);
 
   const busy = jobs.some((job) => !isFinished(job));
   useEffect(() => {

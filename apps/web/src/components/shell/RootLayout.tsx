@@ -34,7 +34,8 @@ import { motion } from "motion/react";
 
 import { SNAPPY, screen as screenVariants } from "../../lib/motion";
 import { AssistantPanel } from "../assistant/AssistantPanel";
-import { Palette, usePaletteShortcut } from "../search/Palette";
+import { Palette } from "../search/Palette";
+import { usePaletteShortcut } from "../../lib/use-palette-shortcut";
 import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
 import { NudgeBar } from "./NudgeBar";
@@ -92,7 +93,14 @@ export function RootLayout({ children }: { children: ReactNode }) {
   );
   // Initialised from the breakpoint rather than defaulting open and correcting in an effect: on a
   // phone that would paint the sidebar over the whole app for one frame before closing it.
-  const [navOpen, setNavOpen] = useState(() => !narrow);
+  // Two states, one per layout, rather than one state pushed back and forth by an effect on every
+  // crossing of the breakpoint. A wide window has a column that can be collapsed and starts open; a
+  // narrow one has a sheet that starts closed. Kept apart, resizing needs no synchronisation at
+  // all, and each layout remembers what the user last did to it.
+  const [columnOpen, setColumnOpen] = useState(true);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const navOpen = narrow ? sheetOpen : columnOpen;
+  const setNavOpen = narrow ? setSheetOpen : setColumnOpen;
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   usePaletteShortcut(useCallback(() => setPaletteOpen(true), []));
@@ -103,9 +111,6 @@ export function RootLayout({ children }: { children: ReactNode }) {
   const search = useRouterState({ select: (s) => s.location.search }) as {
     folder?: string;
   };
-
-  // Crossing the breakpoint by resizing resets the sidebar to that layout's natural state.
-  useEffect(() => setNavOpen(!narrow), [narrow]);
 
   // Folders come from the library view and drive the sidebar tree.
   useEffect(() => {

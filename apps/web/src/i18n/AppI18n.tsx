@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { useEngine } from "../lib/engine-context";
 import { url } from "../lib/library";
-import { I18nProvider, parseLocales, type ExtraLocales } from "./context";
+import { parseLocales, type ExtraLocales } from "./context";
+import { I18nProvider } from "./provider";
 
 /**
  * The translation provider, with the user's own locale files loaded in.
