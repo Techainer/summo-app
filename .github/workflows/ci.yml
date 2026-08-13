@@ -5,6 +5,13 @@ on:
     branches: [master, main]
   pull_request:
 
+# One run per branch. Pushing three times in ten minutes used to start three full matrices, and the
+# first two spend Windows and macOS minutes answering a question that is already out of date — while
+# the third waits behind them in the same queue.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   # No `RUSTFLAGS` here on purpose.
@@ -63,18 +70,41 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  # Which platforms this run links on.
+  #
+  # `cargo clippy --workspace --all-targets` in the `check` job already type-checks every crate on
+  # every push, so what the matrix below adds is *linking per platform* — a packaging question, and
+  # packaging is what `master` and a tag are for. On a pull request that was five extra platforms,
+  # one of which (macOS Intel) queues for hours because those runners are scarce, holding up review
+  # of a one-line change behind a question that will be asked again on merge anyway.
+  plan:
+    name: which platforms
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.pick.outputs.targets }}
+    steps:
+      - id: pick
+        run: |
+          full='[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"},
+                 {"os":"ubuntu-24.04-arm","target":"aarch64-unknown-linux-gnu"},
+                 {"os":"macos-latest","target":"aarch64-apple-darwin"},
+                 {"os":"macos-13","target":"x86_64-apple-darwin"},
+                 {"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]'
+          one='[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"}]'
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "targets=$(echo "$one" | tr -d '\n ')" >> "$GITHUB_OUTPUT"
+          else
+            echo "targets=$(echo "$full" | tr -d '\n ')" >> "$GITHUB_OUTPUT"
+          fi
+
   desktop:
     name: build ${{ matrix.target }}
+    needs: plan
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu }
-          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
-          - { os: macos-latest,   target: aarch64-apple-darwin }
-          - { os: macos-13,       target: x86_64-apple-darwin }
-          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+        include: ${{ fromJSON(needs.plan.outputs.targets) }}
           # No `aarch64-pc-windows-msvc`.
           #
           # `audiopus_sys` 0.1.8 has no ARM64 Windows support: its build script picks an MSVC
@@ -290,6 +320,14 @@ jobs:
       - name: System dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: pnpm install --frozen-lockfile
+      # Chromium is ~130 MB, downloaded on every run of this job. Keyed on the Playwright version,
+      # because a cached browser from an older Playwright is a browser it refuses to launch.
+      - id: playwright
+        run: echo "version=$(pnpm -C apps/web exec playwright --version | tr -d ' ')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - run: pnpm -C apps/web exec playwright install --with-deps chromium
       - run: pnpm -C apps/web build
       # `--features bundled` is what puts the interface inside the binary. Without it every suite
