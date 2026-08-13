@@ -42,7 +42,7 @@ export function HomeScreen() {
   const { locale } = useI18n();
   const say = useErrorText();
   const navigate = useNavigate();
-  const { handshake, session, elapsed, level, toggle } = useEngine();
+  const { handshake, session, elapsed, toggle, transcript } = useEngine();
 
   const reports = useMemo(() => new ReportClient(handshake), [handshake]);
 
@@ -79,6 +79,11 @@ export function HomeScreen() {
   );
 
   const waiting = queue(report);
+
+  // The last three lines, newest at the bottom. Three because the card has room for three without
+  // pushing the controls off it, and because a person glancing at it wants "is it hearing me",
+  // not a transcript.
+  const recent = transcript.segments.slice(-3);
 
   return (
     <Page
@@ -168,24 +173,40 @@ export function HomeScreen() {
                 </div>
               </div>
 
-              {/* The waveform is the whole reason this panel is worth its width: recording is the
-                    one state in the app where the screen should be visibly doing something. Idle it
-                    is a flat, quiet silhouette; live it moves with the input level. */}
+              {/* Words, while they are being said.
+                  
+                  Pressing record here used to start a recording and show a waveform — and the
+                  waveform is honest about *sound* and says nothing about *words*. Somebody who has
+                  just installed the app presses record, says a sentence, and has no way to tell
+                  whether recognition is working at all until they stop. The last few lines answer
+                  that in the place the question is asked; the full transcript is one click away on
+                  the record screen, which is where a whole meeting belongs. */}
+              {session.recording && recent.length > 0 && (
+                <ul className="min-h-0 flex-1 space-y-1 overflow-hidden" aria-live="polite">
+                  {recent.map((segment) => (
+                    <li
+                      key={`${segment.lane}-${segment.seq}`}
+                      className={cn(
+                        "text-body truncate",
+                        segment.source === "partial" ? "text-fg-dim" : "text-fg",
+                      )}
+                    >
+                      {segment.text}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
               <div
                 className={cn(
-                  "min-h-16 flex-1 transition-colors duration-300",
+                  "transition-colors duration-300",
+                  session.recording && recent.length > 0 ? "h-10" : "min-h-16 flex-1",
                   session.recording ? "text-rec" : "text-fg-faint/35",
                 )}
               >
-                {/* Idle it draws its own silhouette at a quarter height — a flat row of equal
-                      bars reads as a dotted rule, not as sound. Live it takes the input level, so
-                      the panel is the meter as well as the button. */}
-                <Wave
-                  seed="capture"
-                  bars={40}
-                  live={session.recording}
-                  levels={session.recording ? undefined : resting(40, level)}
-                />
+                {/* Its own silhouette rather than a flat line: equal bars read as a dotted rule
+                    somebody left in, not as sound. */}
+                <Wave seed="capture" bars={40} live={session.recording} />
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -320,21 +341,6 @@ function greetingKey(): string {
   if (hour < 12) return "home.greeting_morning";
   if (hour < 18) return "home.greeting_afternoon";
   return "home.greeting_evening";
-}
-
-/**
- * The idle silhouette, and the live meter between recordings.
- *
- * A seeded shape scaled down, not a flat line: equal bars are a dotted rule and read as a divider
- * somebody left in. `level` lifts the whole thing while the microphone is being previewed, so the
- * panel responds before the recording starts.
- */
-function resting(bars: number, level: number): number[] {
-  const lift = 0.22 + Math.min(0.4, level * 0.8);
-  return Array.from({ length: bars }, (_, at) => {
-    const swell = 0.5 + 0.5 * Math.sin((at / bars) * Math.PI * 3.1);
-    return Math.max(0.06, swell * lift);
-  });
 }
 
 /** One thing waiting on a person. */

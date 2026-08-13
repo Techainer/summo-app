@@ -43,10 +43,10 @@ await page.getByRole("button", { name: /Bắt đầu ghi/ }).click();
 
 // Wait for the first committed line rather than a fixed sleep: the assertion is that text arrives,
 // and a timeout here is the failure worth reporting.
-await page.locator(".line").first().waitFor({ timeout: 60000 });
+await page.locator('[data-testid="transcript-line"]').first().waitFor({ timeout: 60000 });
 await page.waitForTimeout(12000);
 
-const lines = await page.locator(".line-text").allInnerTexts();
+const lines = await page.locator('[data-testid="transcript-line"]').allInnerTexts();
 await page.screenshot({ path: "/tmp/shots/recording.png" });
 
 // The compact window is what sits on top of a call, so check it renders while recording.

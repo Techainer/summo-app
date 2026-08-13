@@ -155,6 +155,12 @@ export function Transcript({
                     </p>
                   )}
                   <p
+                    // A stable hook for the browser suites. They used to select `.line-text`, a
+                    // class that stopped existing when this component was rewritten — and because
+                    // the suite that used it is not part of `pnpm e2e`, nothing said so for weeks.
+                    // A `data-testid` is a promise to the tests; a utility class is not.
+                    data-testid="transcript-line"
+                    data-source={segment.source}
                     className={cn(
                       "mt-0.5 mb-0 leading-relaxed",
                       // Partial text is dimmed rather than hidden, so the eye can follow it

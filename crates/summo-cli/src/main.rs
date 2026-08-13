@@ -660,13 +660,22 @@ async fn list_registry(spec: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-/// Gather every manifest worth considering: installed ones plus, optionally, the registry.
+/// Gather every manifest worth considering: what is installed, plus the catalogue.
+///
+/// The catalogue is consulted whether or not `--registry` was given. It used to be consulted *only*
+/// when it was given, which meant `summo setup` on a machine with nothing installed ranked an empty
+/// list and said "no model available can run vi on this machine. Point --registry at a registry
+/// with more models, or free up memory" — on a machine with 200 GB free, about a model that
+/// `summo pull` could fetch a second later from the default registry it had just declined to read.
+///
+/// That is the first command a person runs after downloading a release, so the failure was
+/// everybody's, on the way in, and the message sent them looking at their memory.
 async fn candidates(paths: &Paths, registry: Option<&str>) -> Result<Vec<summo_models::Manifest>> {
     let store = ModelStore::new(paths.clone());
     let mut manifests = store.list();
 
-    if let Some(spec) = registry {
-        let reg = registry_for(Some(spec))?;
+    {
+        let reg = registry_for(registry)?;
         match reg.index().await {
             Ok(index) => {
                 for entry in index.models {
