@@ -47,7 +47,7 @@ bằng đúng lệnh ghi kèm; xem đầy đủ phương pháp và các lưu ý 
 | Tốc độ pipeline chạy live | RTF 0,107, tức nhanh hơn thời gian thực khoảng 9 lần (ghi bằng mic thô) | `docs/benchmarks.md`, mục pipeline đầu-cuối — mới đo trên hai đoạn ghi ngắn từ một mic, chưa tính WER |
 | Voice activity detection (VAD) | Silero v5, F1 0,940 (precision 0,925, recall 0,956) | `cargo run --release -p summo-bench --features silero -- vad --sweep` |
 | Tìm một cuộc họp mà không cần index | ~30 ms trên 1.000 cuộc họp (scan 8 luồng) — đây cũng là lý do không có database | `cargo run --release -p summo-bench -- vault --sizes 100,1000,5000` |
-| Dịch một dòng | ~244 ms/dòng, 8 luồng, với model mặc định `small100` nặng 583 MB | `cargo run -p summo-mt --features local,onnx --example compare` |
+| Dịch một dòng | ~244 ms/dòng, 8 luồng, với model mặc định `small100` nặng 583 MB — chạy ngay trong binary phát hành, không cần dựng model server | `cargo run -p summo-mt --features local,onnx --example compare` |
 
 ## Cài đặt và chạy
 

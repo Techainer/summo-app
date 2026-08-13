@@ -45,7 +45,7 @@ command shown; see [`docs/benchmarks.md`](docs/benchmarks.md) and
 | Live pipeline speed | RTF 0.107, roughly 9× faster than realtime (raw mic capture) | `docs/benchmarks.md`, end-to-end pipeline section — two short single-mic captures, not yet WER-scored |
 | Voice activity detection | Silero v5, F1 0.940 (precision 0.925, recall 0.956) | `cargo run --release -p summo-bench --features silero -- vad --sweep` |
 | Finding a meeting without an index | ~30 ms across 1,000 meetings (8-thread scan), which is why there is no database | `cargo run --release -p summo-bench -- vault --sizes 100,1000,5000` |
-| Translating a line | ~244 ms/line, 8 threads, with the default 583 MB `small100` model | `cargo run -p summo-mt --features local,onnx --example compare` |
+| Translating a line | ~244 ms/line, 8 threads, with the default 583 MB `small100` model — in the released binary, with no model server to run | `cargo run -p summo-mt --features local,onnx --example compare` |
 
 ## Install and run
 

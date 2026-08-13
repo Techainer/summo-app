@@ -153,14 +153,35 @@ encoder is ~0.16 s; int8 saves ~0.03 s there and hands it straight back in the d
 measurements are not pinned the same way — end-to-end runs use the whole machine, the encoder rows
 are pinned to four hardware threads — so read the ratios, not the absolute milliseconds.
 
+**And the opposite result, on the model Summo actually defaults to.** `gipformer-65m` publishes an
+fp32 build upstream as well; the same 100 clips, four threads:
+
+| gipformer-65m | WER | CER | RTF | Size |
+|---|---:|---:|---:|---:|
+| int8 | **8.50 %** | 6.73 % | **0.021** | 73 MB |
+| fp32 | 8.56 % | **6.43 %** | 0.026 | 250 MB |
+
+Here int8 is **25 % faster**, a third of the size, and its word error rate is the same — the fp32
+build's advantage is a quarter of a point of *character* error, which is a slightly better guess at
+a wrong word. So the registry ships int8 alone for this model, and there is no fp32 variant to
+choose between.
+
+The difference from whisper is the architecture, not the quantisation. A Zipformer transducer spends
+almost everything in its encoder, one pass per frame, on matrices large enough for int8 kernels to
+pay; its decoder is a single small layer. Whisper spends most of a clip in an autoregressive decoder
+that runs hundreds of times on small matrices. Which is why "is int8 faster" has no general answer
+and every model gets measured.
+
 The OpenVINO column answers the other suspicion — *maybe this CPU is bad at int8*. This is a
 Cascade Lake Xeon with AVX-512 VNNI, the instruction set built for exactly this, and a second
 runtime tuned by Intel for Intel reaches the same conclusion by a different route: it is fastest of
 all on fp32 and worst of all on this int8 graph. The limit is the shape of the model, not the chip.
 
-**Decision:** prefer fp32 and fall back to int8 only when memory forces it, which is what
-`variant::rank` already does. Publish both builds — a machine with 2 GB free needs the smaller one,
-and 81 % WER is still better than no transcription — but never pick int8 to go faster.
+**Decision:** where both builds exist, prefer fp32 and fall back to int8 only when memory forces it,
+which is what `variant::rank` already does. Publish both — a machine with 2 GB free needs the
+smaller one, and 81 % WER is still better than no transcription — but never pick int8 to go faster.
+Where only one build is worth shipping, measure before deciding which: for `gipformer-65m` that is
+int8, and the fp32 export is not in the registry at all.
 
 **Why not ship OpenVINO, or oneDNN, or MKL:** the ONNX Runtime inside our release exports exactly
 one execution provider —

@@ -89,7 +89,13 @@ collect_libs() {
 # mistake into a failed build rather than a failed download.
 export OPUS_STATIC=1
 
-FEATURES="bundled,mcp,models,dub"
+# `mt-onnx` and not `local-mt`: the ONNX translator is pure Rust plus a prebuilt runtime, so it
+# builds on every platform we release for, while llama.cpp needs a C++ toolchain and CMake on each
+# of them. Without it the packaged app answers "this build cannot run a translation model
+# in-process" — which is what v0.1.0 shipped, an offline-first product that could not translate
+# offline unless you pointed it at somebody's server. The GGUF models it would add are not
+# redistributable anyway.
+FEATURES="bundled,mcp,models,dub,mt-onnx"
 SUFFIX=""
 if [[ "${1:-}" == "--no-models" ]]; then
   FEATURES="bundled,mcp"
