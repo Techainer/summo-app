@@ -566,7 +566,7 @@
     "do_placeholder": "Draft the calendar events for the launch…"
   },
   "permissions": {
-    "title": "Microphone access",
+    "title": "Permissions & devices",
     "why": "Summo needs the microphone to record. The audio never leaves this machine — the permission belongs to your operating system, not to us.",
     "state_granted": "granted",
     "state_denied": "refused",
@@ -594,6 +594,18 @@
     "system_macos": "macOS has no built-in route for this. The only way is a virtual device (BlackHole, Loopback) selected as an input — Summo does not ask for the Screen Recording permission to do it, because an audio recorder should not demand the right to watch your screen.",
     "system_unknown": "Whether this machine can capture system audio has not been determined.",
     "fix_macos_any": "macOS grants microphone access to the **application**, and here that is the browser you have Summo open in: System Settings → Privacy & Security → Microphone → enable it. If you started Summo from a terminal, enable it for the terminal.",
-    "open": "Open permission settings"
+    "open": "Open permission settings",
+    "notify_title": "Notifications",
+    "notify_why": "Reminders when a draft is waiting or a task is overdue. Nothing is sent anywhere; the notification is drawn by this machine.",
+    "notify_ask": "Turn on notifications",
+    "notify_browser_chrome": "Click the lock icon at the left of the address bar → Site settings → Notifications → Allow.",
+    "notify_browser_firefox": "Settings → Privacy & Security → Permissions → Notifications → unblock this site.",
+    "notify_browser_safari": "Safari → Settings → Websites → Notifications → set this site to Allow.",
+    "notify_macos": "macOS: System Settings → Notifications → {app} → turn on “Allow notifications”. Then check Focus (Do Not Disturb) is off — with Focus on, the permission still reads granted and you see nothing.",
+    "notify_macos_any": "macOS: System Settings → Notifications → the browser you have Summo open in → turn on “Allow notifications”. Then check Focus (Do Not Disturb) is off.",
+    "notify_windows": "Windows: Settings → System → Notifications → enable it for the browser, and turn off Focus assist / Do not disturb.",
+    "notify_linux": "Linux: check your desktop's Do Not Disturb setting, and note that a Flatpak browser needs access to the D-Bus notification service.",
+    "notify_unsupported": "This browser has no notification API — Summo will remind you inside the app instead.",
+    "mic_title": "Microphone"
   }
 }

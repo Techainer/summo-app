@@ -566,7 +566,7 @@
     "do_placeholder": "Soạn lịch cho đợt ra mắt…"
   },
   "permissions": {
-    "title": "Quyền micro",
+    "title": "Quyền & thiết bị",
     "why": "Summo cần micro để ghi. Âm thanh không rời khỏi máy này — quyền là của hệ điều hành, không phải của chúng tôi.",
     "state_granted": "đã cấp",
     "state_denied": "bị từ chối",
@@ -594,6 +594,18 @@
     "system_macos": "macOS không có đường thu âm hệ thống sẵn. Cách duy nhất là cài một thiết bị ảo (BlackHole, Loopback) rồi chọn nó làm nguồn vào — Summo không xin quyền Screen Recording để làm việc này, vì một ứng dụng ghi âm không nên đòi quyền quay màn hình.",
     "system_unknown": "Chưa xác định được máy này thu được âm thanh hệ thống hay không.",
     "fix_macos_any": "macOS cấp quyền micro cho **ứng dụng**, mà ứng dụng ở đây là trình duyệt bạn đang mở Summo: System Settings → Privacy & Security → Microphone → bật nó. Nếu bạn khởi động Summo từ Terminal thì bật cho Terminal.",
-    "open": "Mở cài đặt quyền"
+    "open": "Mở cài đặt quyền",
+    "notify_title": "Thông báo",
+    "notify_why": "Nhắc bạn khi có bản nháp chờ xác nhận hoặc việc quá hạn. Không có thông báo nào gửi ra ngoài máy.",
+    "notify_ask": "Bật thông báo",
+    "notify_browser_chrome": "Bấm biểu tượng ổ khoá bên trái thanh địa chỉ → Cài đặt trang → Thông báo → Cho phép.",
+    "notify_browser_firefox": "Cài đặt → Quyền riêng tư & Bảo mật → Quyền → Thông báo → bỏ chặn trang này.",
+    "notify_browser_safari": "Safari → Cài đặt → Trang web → Thông báo → chọn Cho phép cho trang này.",
+    "notify_macos": "macOS: System Settings → Notifications → {app} → bật “Allow notifications”. Và kiểm tra Focus (Do Not Disturb) đang tắt — bật Focus thì quyền vẫn “đã cấp” nhưng bạn không thấy gì cả.",
+    "notify_macos_any": "macOS: System Settings → Notifications → chọn trình duyệt bạn đang mở Summo → bật “Allow notifications”. Và kiểm tra Focus (Do Not Disturb) đang tắt.",
+    "notify_windows": "Windows: Settings → System → Notifications → bật cho trình duyệt, và tắt Focus assist / Do not disturb.",
+    "notify_linux": "Linux: kiểm tra chế độ “Do Not Disturb” của môi trường desktop, và trình duyệt trong Flatpak cần quyền truy cập D-Bus notifications.",
+    "notify_unsupported": "Trình duyệt này không có API thông báo — Summo sẽ nhắc trong ứng dụng thay vì gửi thông báo hệ thống.",
+    "mic_title": "Micro"
   }
 }

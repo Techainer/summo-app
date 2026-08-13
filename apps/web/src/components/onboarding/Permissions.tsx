@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 
 import { useT } from "../../i18n/context";
 import {
@@ -7,139 +7,153 @@ import {
   inputDevices,
   micRecovery,
   micState,
+  notificationRecovery,
+  notificationState,
   requestMic,
+  requestNotifications,
   systemAudio,
   type MicState,
   type Platform,
+  type Step,
 } from "../../lib/permissions";
 import { useLoad } from "../../lib/use-load";
 import { Button } from "../ui";
 
 /**
- * The microphone permission, asked for and repaired in the app.
+ * Every permission Summo needs, asked for and repaired in the app.
  *
- * This exists because the failure it prevents is silent and total. A user presses record, the
+ * This exists because the failures it prevents are silent and total. A user presses record, the
  * operating system refuses, and the app has one sentence to explain a checkbox in a settings pane
- * they have never opened — on macOS the system prompt appears *once ever*, so somebody who
+ * they have never opened — on macOS the system prompt appears *once, ever*, so somebody who
  * dismissed it while reading something else has no way back except through this panel.
  *
- * Three rules:
+ * Four rules, and they apply to each permission here:
  *
  * **The request is a button.** Browsers only prompt from a user gesture, and asking on load — before
  * the app has shown what it is for — is how a permission gets refused permanently by somebody who
- * was only looking around. Nothing here runs until it is clicked, except reading the current state.
+ * was only looking around. Nothing runs until it is clicked, except reading the current state.
  *
- * **The device is released immediately.** The point is the permission; holding the stream would
- * light the recording indicator on a machine that is not recording, which is the one thing a
- * local-first recorder must never do.
+ * **Whatever is taken is given back.** The microphone stream is stopped the instant the answer
+ * arrives; holding it would light the recording indicator on a machine that is not recording, which
+ * is the one thing a local-first recorder must never do.
  *
  * **The instructions name the place.** Not "check your settings" — the browser's menu, then the
- * operating system's pane, with the application macOS will actually list, which is the browser and
- * not Summo.
+ * operating system's pane, with the application the OS will actually list, which is the browser and
+ * not Summo. Then how to confirm the fix worked, without restarting anything.
+ *
+ * **A granted permission stops talking.** Once it is on, the row is a statement — no steps, no
+ * button, nothing to do.
  */
 export function Permissions({ compact = false }: { compact?: boolean }) {
   const t = useT();
-  const [asked, setAsked] = useState<{ state: MicState; devices: MediaDeviceInfo[] } | null>(null);
-  const [asking, setAsking] = useState(false);
   // Detected during the first render rather than in an effect: the user agent is available before
   // paint and does not change, so an effect would only add a second render that flashes the wrong
   // operating system's instructions. `chosen` overrides it — a wrong guess costs the reader steps
   // for a machine they are not using, and being able to say so is cheaper than always being right.
   const [chosen, setChosen] = useState<Platform | null>(null);
   const platform = chosen ?? detectPlatform();
-  const setPlatform = setChosen;
   const browser = detectBrowser();
 
   // Read on mount and on demand, through the shared loader: a `setState` in an effect body is what
-  // `react-hooks/set-state-in-effect` exists to catch, and this is the one place in the app allowed
-  // to answer it — see `use-load.ts`.
+  // `react-hooks/set-state-in-effect` exists to catch, and `use-load.ts` is the one place in the
+  // app allowed to answer it.
   const probe = useLoad(
-    useCallback(async () => ({ state: await micState(), devices: await inputDevices() }), []),
+    useCallback(
+      async () => ({
+        mic: await micState(),
+        devices: await inputDevices(),
+        notify: notificationState(),
+      }),
+      [],
+    ),
     [],
   );
-  const read = probe.reload;
 
-  // What the panel shows: the answer to an explicit request wins over the last probe, because after
-  // clicking "allow" the browser's `permissions.query` may still say `prompt` — Chromium does not
-  // update it for a stream that was granted and released.
-  const state: MicState = asked?.state ?? probe.data?.state ?? "unknown";
-  const devices = asked?.devices ?? probe.data?.devices ?? [];
+  // The answer to an explicit request wins over the last probe: after granting a stream, Chromium's
+  // `permissions.query` can still say `prompt`, because the stream was released again.
+  const [asked, setAsked] = useState<{ mic?: MicState; notify?: MicState } | null>(null);
+  const [busy, setBusy] = useState<"mic" | "notify" | null>(null);
+  const [devices, setDevices] = useState<MediaDeviceInfo[] | null>(null);
 
-  const ask = async () => {
-    setAsking(true);
+  const mic = asked?.mic ?? probe.data?.mic ?? "unknown";
+  const notify = asked?.notify ?? probe.data?.notify ?? "unknown";
+  const inputs = devices ?? probe.data?.devices ?? [];
+
+  const recheck = () => {
+    setAsked(null);
+    setDevices(null);
+    probe.reload();
+  };
+
+  const askMic = async () => {
+    setBusy("mic");
     try {
-      setAsked({ state: await requestMic(), devices: await inputDevices() });
+      const state = await requestMic();
+      setAsked((current) => ({ ...current, mic: state }));
+      setDevices(await inputDevices());
     } finally {
-      setAsking(false);
+      setBusy(null);
     }
   };
 
+  const askNotify = async () => {
+    setBusy("notify");
+    try {
+      const state = await requestNotifications();
+      setAsked((current) => ({ ...current, notify: state }));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const named = inputs.filter((device) => device.label.trim().length > 0);
   const system = systemAudio(platform);
-  const named = devices.filter((device) => device.label.trim().length > 0);
 
   return (
     <section className="border-line bg-bg-raised rounded-2xl border p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-medium">{t("permissions.title")}</h2>
-          <p className="text-fg-dim text-meta mt-1">{t("permissions.why")}</p>
-        </div>
-        <MicBadge state={state} />
-      </div>
+      <h2 className="font-medium">{t("permissions.title")}</h2>
 
-      {/* Granted: say what was found rather than only that it worked. A user who sees the name of
-          the wrong microphone here learns something the app cannot tell them any other way. */}
-      {state === "granted" && (
-        <p className="text-fg-dim text-meta mt-3">
-          {named[0]
-            ? t("permissions.found", { count: String(devices.length), name: named[0].label })
-            : t("permissions.found_unnamed", { count: String(devices.length) })}
-        </p>
-      )}
+      <Row
+        testId="permission-mic"
+        title={t("permissions.mic_title")}
+        why={t("permissions.why")}
+        state={mic}
+        askLabel={t("permissions.ask")}
+        busy={busy === "mic"}
+        onAsk={() => void askMic()}
+        onRecheck={recheck}
+        steps={micRecovery(platform, browser)}
+        platform={platform}
+        onPlatform={setChosen}
+      >
+        {mic === "granted" && (
+          <p className="text-fg-dim text-meta mt-2">
+            {named[0]
+              ? t("permissions.found", { count: String(inputs.length), name: named[0].label })
+              : t("permissions.found_unnamed", { count: String(inputs.length) })}
+          </p>
+        )}
+      </Row>
 
-      {state !== "granted" && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button onClick={() => void ask()} disabled={asking}>
-            {asking ? t("permissions.asking") : t("permissions.ask")}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setAsked(null);
-              read();
-            }}
-          >
-            {t("permissions.recheck")}
-          </Button>
-        </div>
-      )}
-
-      {/* Steps only once refused. Showing the repair path to somebody who has not been asked yet
-          makes a first run look like a problem. */}
-      {state === "denied" && (
-        <ol className="text-fg-dim text-meta mt-4 list-decimal space-y-2 pl-5">
-          {micRecovery(platform, browser).map((step) => (
-            <li key={step.key}>{t(step.key, step.values)}</li>
-          ))}
-        </ol>
-      )}
-
-      {state === "denied" && (
-        <p className="text-fg-faint text-micro mt-3">
-          {t("permissions.wrong_os")}{" "}
-          {(["macos", "windows", "linux"] as const)
-            .filter((other) => other !== platform)
-            .map((other) => (
-              <button
-                key={other}
-                type="button"
-                onClick={() => setPlatform(other)}
-                className="mr-2 underline"
-              >
-                {t(`permissions.os_${other}`)}
-              </button>
-            ))}
-        </p>
+      {/* Notifications are optional, so they are second and quieter — but they are here at all
+          because the code that asks for them existed for months with nothing calling it: the
+          comment said "asking is a deliberate action in Settings" and Settings had no such action,
+          so nudges could never notify anyone. */}
+      {!compact && (
+        <Row
+          testId="permission-notify"
+          title={t("permissions.notify_title")}
+          why={t("permissions.notify_why")}
+          state={notify}
+          askLabel={t("permissions.notify_ask")}
+          busy={busy === "notify"}
+          onAsk={() => void askNotify()}
+          onRecheck={recheck}
+          steps={notificationRecovery(platform, browser)}
+          platform={platform}
+          onPlatform={setChosen}
+          unsupported={t("permissions.notify_unsupported")}
+        />
       )}
 
       {!compact && (
@@ -152,8 +166,101 @@ export function Permissions({ compact = false }: { compact?: boolean }) {
   );
 }
 
+/** One permission: what it is for, what it is now, and what to do about it. */
+function Row({
+  testId,
+  title,
+  why,
+  state,
+  askLabel,
+  busy,
+  onAsk,
+  onRecheck,
+  steps,
+  platform,
+  onPlatform,
+  unsupported,
+  children,
+}: {
+  /** So a browser test can address one permission rather than counting lists on the page. */
+  testId: string;
+  title: string;
+  why: string;
+  state: MicState;
+  askLabel: string;
+  busy: boolean;
+  onAsk: () => void;
+  onRecheck: () => void;
+  steps: Step[];
+  platform: Platform;
+  onPlatform: (platform: Platform) => void;
+  /** Shown instead of a button where the browser has no such API at all. */
+  unsupported?: string;
+  children?: ReactNode;
+}) {
+  const t = useT();
+  // `unknown` means the browser could not say. For the microphone that is normal — Safari does not
+  // implement `permissions.query` — so the button still works. For notifications it means the API
+  // is absent, and a button that cannot do anything is worse than a sentence saying so.
+  const missing = unsupported !== undefined && state === "unknown";
+
+  return (
+    <div data-testid={testId} className="border-line mt-5 border-t pt-4 first-of-type:mt-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-meta font-medium">{title}</h3>
+          <p className="text-fg-dim text-meta mt-1">{why}</p>
+        </div>
+        <Badge state={state} />
+      </div>
+
+      {children}
+
+      {missing && <p className="text-fg-faint text-micro mt-3">{unsupported}</p>}
+
+      {!missing && state !== "granted" && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button onClick={onAsk} disabled={busy}>
+            {busy ? t("permissions.asking") : askLabel}
+          </Button>
+          <Button variant="ghost" onClick={onRecheck}>
+            {t("permissions.recheck")}
+          </Button>
+        </div>
+      )}
+
+      {/* Steps only once refused. Showing the repair path to somebody who has not been asked yet
+          makes a first run look like a problem. */}
+      {state === "denied" && (
+        <>
+          <ol className="text-fg-dim text-meta mt-4 list-decimal space-y-2 pl-5">
+            {steps.map((step) => (
+              <li key={step.key}>{t(step.key, step.values)}</li>
+            ))}
+          </ol>
+          <p className="text-fg-faint text-micro mt-3">
+            {t("permissions.wrong_os")}{" "}
+            {(["macos", "windows", "linux"] as const)
+              .filter((other) => other !== platform)
+              .map((other) => (
+                <button
+                  key={other}
+                  type="button"
+                  onClick={() => onPlatform(other)}
+                  className="mr-2 underline"
+                >
+                  {t(`permissions.os_${other}`)}
+                </button>
+              ))}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** The current answer, in one word and one colour. */
-function MicBadge({ state }: { state: MicState }) {
+function Badge({ state }: { state: MicState }) {
   const t = useT();
   const styles: Record<MicState, string> = {
     granted: "bg-accent-soft text-done border-accent/30",
@@ -162,7 +269,7 @@ function MicBadge({ state }: { state: MicState }) {
     unknown: "bg-bg-soft text-fg-faint border-line",
   };
   return (
-    <span className={`text-micro rounded-full border px-2 py-1 ${styles[state]}`}>
+    <span className={`text-micro shrink-0 rounded-full border px-2 py-1 ${styles[state]}`}>
       {t(`permissions.state_${state}`)}
     </span>
   );

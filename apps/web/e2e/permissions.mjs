@@ -29,7 +29,7 @@ const browser = await chromium.launch({
 });
 const problems = [];
 
-/** What a browser looks like when its user pressed Block. */
+/** What a browser looks like when its user pressed Block, for both permissions. */
 const refuse = () => {
   navigator.mediaDevices.getUserMedia = () =>
     Promise.reject(new DOMException("Permission denied", "NotAllowedError"));
@@ -37,7 +37,13 @@ const refuse = () => {
     descriptor && descriptor.name === "microphone"
       ? Promise.resolve({ state: "denied", onchange: null })
       : Promise.resolve({ state: "granted", onchange: null });
+  // Notifications have no permissions.query path in the app — the API reports its own state — so
+  // the property itself is what has to be replaced.
+  Object.defineProperty(Notification, "permission", { get: () => "denied", configurable: true });
 };
+
+/** The microphone row, which is the one most assertions are about. */
+const micRowFirst = (page) => page.getByTestId("permission-mic");
 
 async function open({ allow }) {
   const context = await browser.newContext({
@@ -58,14 +64,15 @@ async function open({ allow }) {
 {
   const { context, page } = await open({ allow: false });
 
-  await page.getByRole("heading", { name: "Quyền micro" }).waitFor({ timeout: 10000 });
-  await page.getByText("bị từ chối").waitFor({ timeout: 10000 });
+  await page.getByRole("heading", { name: "Quyền & thiết bị" }).waitFor({ timeout: 10000 });
+  await micRowFirst(page).getByText("bị từ chối").waitFor({ timeout: 10000 });
 
-  const steps = page.locator("ol li");
+  const micRow = page.getByTestId("permission-mic");
+  const steps = micRow.locator("ol li");
   const count = await steps.count();
   if (count < 3) problems.push(`expected browser + OS + retry steps, got ${count}`);
 
-  const text = await page.locator("ol").innerText();
+  const text = await micRow.locator("ol").innerText();
   // The instructions have to name a place, not a principle. Which operating system appears depends
   // on the machine running this, so any of the three is acceptable — "check your settings" is not.
   if (!/System Settings|Settings →|pavucontrol|PulseAudio/.test(text)) {
@@ -79,10 +86,19 @@ async function open({ allow }) {
   }
 
   // A user whose platform was detected wrongly must still be able to read the right steps.
-  await page.getByRole("button", { name: "macOS", exact: true }).click();
-  const swapped = await page.locator("ol").innerText();
+  await micRow.getByRole("button", { name: "macOS", exact: true }).click();
+  const swapped = await micRow.locator("ol").innerText();
   if (!/System Settings/.test(swapped)) {
     problems.push(`switching to macOS did not change the instructions: ${swapped.slice(0, 160)}`);
+  }
+
+  // Notifications are the second permission, and they need their own repair path: the pane is a
+  // different one on every platform, and on macOS and Windows a granted permission still shows
+  // nothing while a Focus mode is on — which no amount of clicking "allow" will fix.
+  const notifications = page.getByTestId("permission-notify").locator("ol");
+  const notifyText = await notifications.innerText();
+  if (!/Notifications|Focus|Do Not Disturb|thông báo/i.test(notifyText)) {
+    problems.push(`notification steps say nothing specific: ${notifyText.slice(0, 160)}`);
   }
 
   await context.close();
@@ -92,16 +108,16 @@ async function open({ allow }) {
 {
   const { context, page } = await open({ allow: true });
 
-  await page.getByRole("heading", { name: "Quyền micro" }).waitFor({ timeout: 10000 });
+  await page.getByRole("heading", { name: "Quyền & thiết bị" }).waitFor({ timeout: 10000 });
 
   // A context that already holds the permission reports `granted` on load, so there is nothing to
   // click — which is itself the right behaviour. Only press the button when it is offered.
   const ask = page.getByRole("button", { name: "Cho phép dùng micro" });
   if (await ask.isVisible().catch(() => false)) await ask.click();
-  await page.getByText("đã cấp").waitFor({ timeout: 15000 });
+  await page.getByTestId("permission-mic").getByText("đã cấp").waitFor({ timeout: 15000 });
 
   // Granted means no repair steps and nothing asking again — the panel becomes a statement.
-  if ((await page.locator("ol li").count()) > 0) {
+  if ((await page.getByTestId("permission-mic").locator("ol li").count()) > 0) {
     problems.push("repair steps are shown even though the permission was granted");
   }
   if (await page.getByRole("button", { name: "Cho phép dùng micro" }).isVisible()) {

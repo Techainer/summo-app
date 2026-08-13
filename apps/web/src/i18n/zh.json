@@ -566,7 +566,7 @@
     "do_placeholder": "帮我起草上线的日程…"
   },
   "permissions": {
-    "title": "麦克风权限",
+    "title": "权限与设备",
     "why": "录音需要麦克风。音频不会离开本机——权限由操作系统掌管，而不是我们。",
     "state_granted": "已授权",
     "state_denied": "已拒绝",
@@ -594,6 +594,18 @@
     "system_macos": "macOS 没有内置通道。唯一的办法是安装虚拟设备（BlackHole、Loopback）并将其选为输入——Summo 不会为此申请「屏幕录制」权限，因为录音应用不该要求看你的屏幕。",
     "system_unknown": "尚未确定本机能否录制系统声音。",
     "fix_macos_any": "macOS 把麦克风权限授予**应用程序**，这里指你打开 Summo 的浏览器：系统设置 → 隐私与安全性 → 麦克风 → 启用它。若你从终端启动 Summo，请为终端启用。",
-    "open": "打开权限设置"
+    "open": "打开权限设置",
+    "notify_title": "通知",
+    "notify_why": "草稿待确认或任务逾期时提醒你。通知由本机显示，不会发送到任何地方。",
+    "notify_ask": "开启通知",
+    "notify_browser_chrome": "点击地址栏左侧的锁形图标 → 网站设置 → 通知 → 允许。",
+    "notify_browser_firefox": "设置 → 隐私与安全 → 权限 → 通知 → 解除对本站的阻止。",
+    "notify_browser_safari": "Safari → 设置 → 网站 → 通知 → 将本站设为「允许」。",
+    "notify_macos": "macOS：系统设置 → 通知 → {app} → 打开「允许通知」。再确认「专注模式（勿扰）」已关闭——开着时权限仍显示已授权，但你什么都看不到。",
+    "notify_macos_any": "macOS：系统设置 → 通知 → 你打开 Summo 的浏览器 → 打开「允许通知」。并确认专注模式已关闭。",
+    "notify_windows": "Windows：设置 → 系统 → 通知 → 为浏览器开启，并关闭「专注助手 / 免打扰」。",
+    "notify_linux": "Linux：检查桌面环境的「免打扰」设置；Flatpak 中的浏览器需要访问 D-Bus 通知服务。",
+    "notify_unsupported": "此浏览器没有通知 API——Summo 将在应用内提醒你。",
+    "mic_title": "麦克风"
   }
 }

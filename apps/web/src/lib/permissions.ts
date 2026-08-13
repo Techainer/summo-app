@@ -217,3 +217,81 @@ export function systemAudio(platform: Platform): { supported: boolean; key: stri
       return { supported: false, key: "permissions.system_unknown" };
   }
 }
+
+/**
+ * Whether the browser will show a notification right now.
+ *
+ * Same three answers as the microphone, and the same reason for `unknown`: a browser without the
+ * `Notification` API at all — an insecure context, an embedded webview — has no state to report,
+ * and showing a repair path for a feature that cannot exist is worse than staying quiet.
+ */
+export function notificationState(): MicState {
+  if (typeof Notification === "undefined") return "unknown";
+  switch (Notification.permission) {
+    case "granted":
+      return "granted";
+    case "denied":
+      return "denied";
+    default:
+      return "prompt";
+  }
+}
+
+/**
+ * Ask for notifications, from a click.
+ *
+ * Nudges have been able to notify since they were written and never could in practice: the helper
+ * that asks was never called from anywhere, because "asking is a deliberate action in Settings" and
+ * Settings had no such action. This is that action.
+ */
+export async function requestNotifications(): Promise<MicState> {
+  if (typeof Notification === "undefined") return "unknown";
+  if (Notification.permission !== "default") return notificationState();
+  const answer = await Notification.requestPermission();
+  return answer === "granted" ? "granted" : answer === "denied" ? "denied" : "prompt";
+}
+
+/**
+ * Fixing refused notifications, which is a different pane from the microphone on every platform.
+ *
+ * The operating-system step is not about permission at all on two of the three: macOS and Windows
+ * will happily grant the permission and then swallow every notification because a Focus mode is on,
+ * and a user who has granted access and still sees nothing has no way to guess that.
+ */
+export function notificationRecovery(platform: Platform, browser: Browser): Step[] {
+  const steps: Step[] = [];
+
+  switch (browser) {
+    case "firefox":
+      steps.push({ key: "permissions.notify_browser_firefox" });
+      break;
+    case "safari":
+      steps.push({ key: "permissions.notify_browser_safari" });
+      break;
+    default:
+      steps.push({ key: "permissions.notify_browser_chrome" });
+  }
+
+  switch (platform) {
+    case "macos": {
+      const app = hostApp(browser);
+      steps.push(
+        app
+          ? { key: "permissions.notify_macos", values: { app } }
+          : { key: "permissions.notify_macos_any" },
+      );
+      break;
+    }
+    case "windows":
+      steps.push({ key: "permissions.notify_windows" });
+      break;
+    case "linux":
+      steps.push({ key: "permissions.notify_linux" });
+      break;
+    default:
+      break;
+  }
+
+  steps.push({ key: "permissions.fix_retry" });
+  return steps;
+}
