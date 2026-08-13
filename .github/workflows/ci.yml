@@ -187,11 +187,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Inside the workspace, not beside it. `actions/checkout` refuses any path outside
+      # `GITHUB_WORKSPACE`, so `path: ../summo-registry` never worked — the job failed before it
+      # reached a single suite. The suites read `SUMMO_REGISTRY_DIR` instead of assuming a sibling
+      # directory.
       - uses: actions/checkout@v4
         continue-on-error: true
         with:
           repository: Techainer/summo-registry
-          path: ../summo-registry
+          path: .registry
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v4
@@ -207,4 +211,6 @@ jobs:
       # that case and says so, and this is the line that prevents it.
       - run: cargo build --bin summo-engine --features bundled
       - run: pnpm -C apps/web e2e
+        env:
+          SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
 

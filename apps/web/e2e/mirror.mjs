@@ -28,7 +28,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REGISTRY = join(HERE, "../../../../summo-registry");
+/**
+ * The registry checkout.
+ *
+ * Beside this repository by default, which is where a developer clones it. On CI it cannot be:
+ * `actions/checkout` refuses a path outside the workspace, so the job clones it *inside* and points
+ * here with `SUMMO_REGISTRY_DIR`. The old line was a fixed `../../../../summo-registry` and the
+ * browser job spent its life failing on "Repository path is not under GITHUB_WORKSPACE".
+ */
+const REGISTRY = process.env.SUMMO_REGISTRY_DIR ?? join(HERE, "../../../../summo-registry");
 
 /** Shared between runs on purpose: re-downloading the same bytes every suite is what is being fixed. */
 const CACHE = "/tmp/summo-e2e-model-cache";
