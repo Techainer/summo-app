@@ -57,29 +57,41 @@ cargo run --release -p summo-bench --features silero -- vad \
 Single-pass decode per utterance, scored against reference transcripts. This measures the model;
 the session's re-decode multiplier is measured separately below.
 
-**Dataset:** Fleurs VI test, 15 clips, 146.6 s. **Model:** `gipformer-65M` (Zipformer RNN-T, INT8
-ONNX, 73 MB) via sherpa-onnx, 4 threads.
+**Dataset:** FLEURS `vi_vn` test, **100 clips, 1279.8 s (21.3 min)** — the first 100 by filename, so
+the selection is reproducible and not chosen after seeing a score. 16 kHz mono, converted from
+FLEURS' float WAVs. Two runs per row, median reported. Xeon Gold 6226R, sherpa-onnx.
 
-| Model | Dataset | Threads | WER | CER | RTF | Audio | Empty |
-|---|---|---:|---:|---:|---:|---:|---:|
-| gipformer-65M | fleurs_vi (Vietnamese) | 4 | **2.4 %** | 1.7 % | 0.021 | 146.6 s | 0 |
-| whisper-tiny | fleurs_vi (Vietnamese) | 4 | 65.5 % | 47.8 % | 0.116 | 146.6 s | 0 |
-| whisper-tiny | whisper test set (English) | 4 | **4.5 %** | 0.3 % | 0.107 | 23.3 s | 0 |
+| Model | Dataset | Threads | WER | CER | RTF |
+|---|---|---:|---:|---:|---:|
+| gipformer-65M (int8) | fleurs_vi | 4 | **8.5 %** | 6.7 % | 0.023 |
+| gipformer-65M (int8) | fleurs_vi | 8 | 8.6 % | 6.8 % | 0.019 |
+| whisper-tiny (fp32) | fleurs_vi | 4 | 67.6 % | 45.1 % | 0.137 |
+| whisper-tiny (int8) | fleurs_vi | 4 | 81.3 % | 60.0 % | 0.138 |
+| whisper-tiny (fp32) | fleurs_vi | 8 | 67.6 % | 45.1 % | 0.116 |
+| whisper-tiny (int8) | fleurs_vi | 8 | 81.0 % | 59.7 % | 0.120 |
+| whisper-tiny (fp32) | whisper test set (English) | 4 | **4.5 %** | 0.3 % | 0.107 |
 
-Those three rows are the argument for a flat registry rather than a "basic / better / best" ladder.
+Those rows are the argument for a flat registry rather than a "basic / better / best" ladder.
 Whisper-tiny is not a bad model — it scores 4.5 % on English. It is a bad model *for Vietnamese*,
-where it is 27× worse than a 73 MB transducer that also runs five times faster. No single ordering of
-models is correct across languages, so Summo does not impose one: each manifest states which
-languages it was measured on, and the app recommends from that.
+where it is eight times worse than a 73 MB transducer that also runs six times faster. No single
+ordering of models is correct across languages, so Summo does not impose one: each manifest states
+which languages it was measured on, and the app recommends from that.
 
 The English figure comes from two clips and should be read as "the model works", not as a WER
 measurement. A real English number needs LibriSpeech or Common Voice.
 
-**2.4 % WER is exactly what the Python prototype measured on the same model and dataset.** That
-agreement is the point of running this: it confirms the Rust port feeds the model the same audio and
-reads back the same text, rather than being a plausible-looking reimplementation that quietly
-differs. RTF is higher than the prototype's 0.017 because that run used 16 threads against this one's
-4, not because the decode changed.
+**These numbers replace a 15-clip run that reported 2.4 % for gipformer.** 146 s of read speech is
+not a measurement, it is an anecdote: it happened to contain no clip with a number in it. Sixteen of
+these hundred clips do, and FLEURS writes them as digits (`5 trận`) while every speech model spells
+them (`năm trận`), so each one scores as several substitutions. Removing those sixteen clips and
+rescoring the remaining 84 gives **5.3 %** for gipformer and 65.7 % for whisper-tiny fp32 — the gap
+between 8.5 % and 5.3 % is the dataset's number formatting, not the model. The published figure is
+the full hundred, because scoring every model the same way matters more than the flattering subset,
+and because a user's meeting will also contain numbers.
+
+The old figure agreed with the Python prototype on the same 15 clips, which was the point of running
+it: it confirmed the Rust port feeds the model the same audio and reads back the same text. That
+agreement still holds; only the sample it was measured on was too small to publish.
 
 Text is normalised before scoring — lowercased, punctuation stripped, whitespace collapsed. A
 transducer emits uppercase without punctuation while the reference has both, and counting that as
@@ -95,7 +107,91 @@ cargo run --release -p summo-bench --features asr -- asr \
 ```
 
 The dataset directory needs a `transcripts.json` of `{wav, text, duration_s}` entries alongside the
-16 kHz mono WAVs it names.
+16 kHz mono WAVs it names. To rebuild the FLEURS set used above:
+
+```bash
+python -c "
+from huggingface_hub import hf_hub_download
+hf_hub_download('google/fleurs', 'data/vi_vn/audio/test.tar.gz', repo_type='dataset', local_dir='fleurs')
+hf_hub_download('google/fleurs', 'data/vi_vn/test.tsv', repo_type='dataset', local_dir='fleurs')"
+tar xzf fleurs/data/vi_vn/audio/test.tar.gz -C fleurs
+# FLEURS ships float WAVs; hound reads 16-bit PCM.
+for f in $(ls fleurs/test | sort | head -100); do sox "fleurs/test/$f" -r 16000 -c 1 -b 16 -e signed-integer "fleurs/wav/$f"; done
+# transcripts.json: column 2 of test.tsv is the filename, column 3 the reference.
+```
+
+## Quantisation: does int8 pay on a CPU?
+
+The question behind every model we ship: Summo runs on a laptop CPU, and int8 halves the download
+and the resident memory. Does it also make inference faster, the way it does on a GPU with INT8
+tensor cores?
+
+**On the whole model, no — and for Vietnamese it costs a lot of accuracy.** Same 100-clip FLEURS
+set, same runtime, the two builds whisper-tiny publishes:
+
+| | WER | RTF @4t | RTF @8t | Size |
+|---|---:|---:|---:|---:|
+| fp32 | **67.6 %** | **0.137** | **0.116** | 146 MB |
+| int8 | 81.3 % | 0.138 | 0.120 | 99 MB |
+
+Identical speed, **13.7 points worse**. Everything int8 buys here is on disk.
+
+That is not because quantisation does nothing. It is because whisper is an encoder plus an
+*autoregressive* decoder, and the two react in opposite directions. Encoder only, one 30 s window,
+pinned to four cores, 15 runs, median:
+
+| Runtime | fp32 | int8 | |
+|---|---:|---:|---|
+| ONNX Runtime 1.28 | 155 ms | **126 ms** | int8 **1.24× faster** |
+| OpenVINO 2026.3 | **115 ms** | 182 ms | int8 1.59× *slower* |
+
+So int8 does win where the matrices are large and the pass happens once — the encoder, in the
+runtime we ship. It loses in the decoder, which runs a few hundred times per clip on matrices small
+enough that the quantise/dequantise around each one costs more than the cheaper multiply saves.
+Arithmetic on the numbers above: an average 12.8 s clip costs ~1.75 s at 4 threads, of which the
+encoder is ~0.16 s; int8 saves ~0.03 s there and hands it straight back in the decoder. The two
+measurements are not pinned the same way — end-to-end runs use the whole machine, the encoder rows
+are pinned to four hardware threads — so read the ratios, not the absolute milliseconds.
+
+The OpenVINO column answers the other suspicion — *maybe this CPU is bad at int8*. This is a
+Cascade Lake Xeon with AVX-512 VNNI, the instruction set built for exactly this, and a second
+runtime tuned by Intel for Intel reaches the same conclusion by a different route: it is fastest of
+all on fp32 and worst of all on this int8 graph. The limit is the shape of the model, not the chip.
+
+**Decision:** prefer fp32 and fall back to int8 only when memory forces it, which is what
+`variant::rank` already does. Publish both builds — a machine with 2 GB free needs the smaller one,
+and 81 % WER is still better than no transcription — but never pick int8 to go faster.
+
+**Why not ship OpenVINO, or oneDNN, or MKL:** the ONNX Runtime inside our release exports exactly
+one execution provider —
+
+```console
+$ nm -D libonnxruntime.so | grep AppendExecutionProvider
+000000000036d9c0 T OrtSessionOptionsAppendExecutionProvider_CPU@@VERS_1.17.1
+```
+
+— so its kernels are MLAS, which already has AVX-512 and VNNI paths. Adding oneDNN or OpenVINO means
+building ONNX Runtime ourselves for five platforms and carrying that build forever, and the fp32
+result above (169 ms vs 265 ms) is the whole prize. It is real, and it is not worth a bespoke
+toolchain for a decode that is already 6× faster than real time. Revisit if a model ever lands whose
+cost is dominated by one big encoder pass.
+
+Graph optimisation is already at maximum everywhere: `summo-mt` and `summo-vad` set
+`GraphOptimizationLevel::Level3`, and sherpa-onnx leaves ONNX Runtime's default, which is
+`ORT_ENABLE_ALL` — its `SetGraphOptimizationLevel` line is commented out for that reason.
+
+### Reproduce
+
+```bash
+# End-to-end, both builds of the same model, on the same dataset.
+cargo run --release -p summo-bench --features asr -- asr \
+  --dataset fleurs-vi --model whisper:fp32 --model whisper:int8 --lang vi --threads 4
+
+# Encoder only, pinned so the thread pool cannot borrow idle cores.
+pip install onnxruntime openvino
+taskset -c 0-3 python bench/encoder_precision.py \
+  --fp32 fp32/tiny-encoder.onnx --int8 int8/tiny-encoder.int8.onnx
+```
 
 ## Speech recognition — end-to-end pipeline
 

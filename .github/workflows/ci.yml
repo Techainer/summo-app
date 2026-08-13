@@ -75,8 +75,11 @@ jobs:
   # `cargo clippy --workspace --all-targets` in the `check` job already type-checks every crate on
   # every push, so what the matrix below adds is *linking per platform* — a packaging question, and
   # packaging is what `master` and a tag are for. On a pull request that was five extra platforms,
-  # one of which (macOS Intel) queues for hours because those runners are scarce, holding up review
-  # of a one-line change behind a question that will be asked again on merge anyway.
+  # holding up review of a one-line change behind a question that will be asked again on merge
+  # anyway.
+  #
+  # `x86_64-apple-darwin` is not in this list: ONNX Runtime publishes no build for Intel macOS any
+  # more, so it cannot link. The reasoning is in `release.yml`, next to the matrix it was cut from.
   plan:
     name: which platforms
     runs-on: ubuntu-latest
@@ -88,7 +91,6 @@ jobs:
           full='[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"},
                  {"os":"ubuntu-24.04-arm","target":"aarch64-unknown-linux-gnu"},
                  {"os":"macos-latest","target":"aarch64-apple-darwin"},
-                 {"os":"macos-15-intel","target":"x86_64-apple-darwin"},
                  {"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]'
           one='[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"}]'
           if [ "${{ github.event_name }}" = "pull_request" ]; then

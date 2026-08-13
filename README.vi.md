@@ -43,7 +43,7 @@ bằng đúng lệnh ghi kèm; xem đầy đủ phương pháp và các lưu ý 
 
 | Nhận định | Đo được | Nguồn |
 |---|---|---|
-| Độ chính xác nhận dạng tiếng Việt | 2,4 % WER, 1,7 % CER (`gipformer-65M`, bộ test Fleurs VI) | `cargo run --release -p summo-bench --features asr -- asr` |
+| Độ chính xác nhận dạng tiếng Việt | 8,5 % WER, 6,7 % CER (`gipformer-65M`, 100 clip FLEURS VI, 21,3 phút; còn 5,3 % nếu bỏ các clip mà bản tham chiếu viết số bằng chữ số) | `cargo run --release -p summo-bench --features asr -- asr` |
 | Tốc độ pipeline chạy live | RTF 0,107, tức nhanh hơn thời gian thực khoảng 9 lần (ghi bằng mic thô) | `docs/benchmarks.md`, mục pipeline đầu-cuối — mới đo trên hai đoạn ghi ngắn từ một mic, chưa tính WER |
 | Voice activity detection (VAD) | Silero v5, F1 0,940 (precision 0,925, recall 0,956) | `cargo run --release -p summo-bench --features silero -- vad --sweep` |
 | Tìm một cuộc họp mà không cần index | ~30 ms trên 1.000 cuộc họp (scan 8 luồng) — đây cũng là lý do không có database | `cargo run --release -p summo-bench -- vault --sizes 100,1000,5000` |
@@ -58,6 +58,11 @@ nên không có web server nào cần khởi động, cũng không có thư mụ
 ./scripts/bundle.sh          # tạo tarball trong dist/, sẵn sàng chép sang máy khác
 tar -xzf dist/summo-*.tar.gz && cd summo-* && ./summo serve
 ```
+
+Mỗi bản phát hành có bốn bản build: Linux x64 và arm64, macOS trên chip Apple, và Windows x64. Không
+có macOS Intel, vì ONNX Runtime không còn phát hành bản build cho nền tảng đó — bản 1.28 và 1.29 của
+Microsoft chỉ có `osx-arm64`. Build từ source trên máy Mac Intel cũng dừng ở đúng chỗ này, chỉ là
+báo lỗi rõ ràng hơn.
 
 Hoặc build từ source, không đóng gói:
 
