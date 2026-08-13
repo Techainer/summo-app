@@ -212,9 +212,15 @@ jobs:
         with:
           workspaces: ". -> target\napps/desktop/src-tauri -> target"
           # See the note in the browser job: the native libraries live outside `target/`.
+          # Every platform's answer to "where does a library cache go". Missing paths are skipped,
+          # so all six are listed rather than branching on the runner.
           cache-directories: |
             ~/.cache/sherpa-rs
             ~/.cache/ort.pyke.io
+            ~/Library/Caches/sherpa-rs
+            ~/Library/Caches/ort.pyke.io
+            ~/AppData/Local/sherpa-rs
+            ~/AppData/Local/ort.pyke.io
       - name: System libraries Tauri links against
         run: |
           sudo apt-get update
@@ -309,9 +315,15 @@ jobs:
           # directories restores a build that believes the libraries are present, on a runner where
           # they are not — and the link fails with `unable to find library -lonnxruntime`, several
           # hundred crates after the point where anything could have noticed.
+          # Every platform's answer to "where does a library cache go". Missing paths are skipped,
+          # so all six are listed rather than branching on the runner.
           cache-directories: |
             ~/.cache/sherpa-rs
             ~/.cache/ort.pyke.io
+            ~/Library/Caches/sherpa-rs
+            ~/Library/Caches/ort.pyke.io
+            ~/AppData/Local/sherpa-rs
+            ~/AppData/Local/ort.pyke.io
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
