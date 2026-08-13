@@ -26,10 +26,16 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
           - os: macos-13
             target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -53,12 +59,17 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
+      # Bash on every platform, including Windows, where the runner ships Git Bash. One script that
+      # knows the three differences (`.exe`, how to ask the linker for its libraries, which checksum
+      # tool exists) beats three scripts that drift.
       - name: Bundle
+        shell: bash
         run: ./scripts/bundle.sh
 
       # The smaller build, for anyone who wants the vault and the agent without 15 MB of ONNX
       # Runtime — a server, a container, a machine that will never record anything.
       - name: Bundle without recognition
+        shell: bash
         run: ./scripts/bundle.sh --no-models
 
       # The claim the product is sold on, checked on the artefact that is about to be published
@@ -75,6 +86,7 @@ jobs:
           name: summo-${{ matrix.target }}
           path: |
             dist/*.tar.gz
+            dist/*.zip
             dist/*.sha256
 
       - name: Publish
@@ -83,6 +95,7 @@ jobs:
         with:
           files: |
             dist/*.tar.gz
+            dist/*.zip
             dist/*.sha256
           # Written by hand. A changelog generated from commit subjects tells a user what changed in
           # the code; they want to know what changed for them.

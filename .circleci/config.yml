@@ -1,0 +1,174 @@
+version: 2.1
+
+# CircleCI, beside GitHub Actions rather than instead of it.
+#
+# ## What runs where, and why it is split
+#
+# CircleCI's free plan gives Docker/Linux x86, Linux Arm and Windows, 6,000 build minutes a month.
+# **macOS is not on the free plan** — the Apple silicon resource classes are Performance and Scale
+# only. Summo ships a macOS build, and that build has to be made on a Mac: the recognition binary
+# links ONNX Runtime and sherpa-onnx, both C++ libraries whose prebuilt artefacts are per-platform,
+# so a cross-compiled "success" is a binary that fails to load them on the machine it was built for.
+#
+# For a public repository GitHub Actions gives macOS runners at no cost. So:
+#
+# | Platform                 | Here | GitHub Actions |
+# |--------------------------|------|----------------|
+# | Linux x86_64             |  ✓   | ✓              |
+# | Linux aarch64            |  ✓   | ✓              |
+# | Windows x86_64           |  ✓   | ✓              |
+# | Windows aarch64          |  —   | ✓ (no Arm Windows resource class here) |
+# | macOS aarch64 / x86_64   |  —   | ✓ (paid plan required here)            |
+#
+# Moving the macOS build here means a Performance subscription. That is a decision about money, not
+# about engineering, so this file does the part that is free and says plainly what it is not doing
+# rather than quietly dropping a platform.
+#
+# ## Why the jobs are shaped like this
+#
+# The checks are ordered by how fast they fail. Formatting and types answer in seconds; the Rust
+# test suite takes minutes; the bundles take longer still and only run when the rest has passed, so
+# a typo does not spend twenty minutes of Arm and Windows time before it is caught.
+
+orbs:
+  win: circleci/windows@5.0
+
+commands:
+  restore_rust:
+    description: Rust toolchain and a cache keyed on the lockfile.
+    steps:
+      - restore_cache:
+          keys:
+            - cargo-v1-{{ arch }}-{{ checksum "Cargo.lock" }}
+            - cargo-v1-{{ arch }}-
+  save_rust:
+    steps:
+      - save_cache:
+          key: cargo-v1-{{ arch }}-{{ checksum "Cargo.lock" }}
+          paths:
+            - ~/.cargo/registry
+            - ~/.cargo/git
+            - target
+
+jobs:
+  web:
+    docker:
+      - image: cimg/node:22.11
+    resource_class: medium
+    steps:
+      - checkout
+      - run:
+          name: pnpm
+          command: corepack enable && corepack prepare pnpm@latest --activate
+      - restore_cache:
+          keys:
+            - pnpm-v1-{{ checksum "pnpm-lock.yaml" }}
+      - run: pnpm install --frozen-lockfile
+      - save_cache:
+          key: pnpm-v1-{{ checksum "pnpm-lock.yaml" }}
+          paths:
+            - ~/.local/share/pnpm/store
+      - run: pnpm exec tsc --noEmit
+      # `--max-warnings 0`. The count is not a budget to grow into.
+      - run: pnpm lint
+      - run: pnpm exec prettier --check .
+      - run: pnpm test
+      - run: pnpm build
+
+  rust:
+    docker:
+      - image: cimg/rust:1.90
+    resource_class: large
+    steps:
+      - checkout
+      # `summo-audio` links cpal, which wants ALSA headers to *build* even on a machine that will
+      # never open a microphone.
+      - run:
+          name: System dependencies
+          command: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - restore_rust
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - save_rust
+
+  bundle-linux:
+    parameters:
+      arch:
+        type: string
+    machine:
+      image: ubuntu-2404:current
+    resource_class: << parameters.arch >>
+    steps:
+      - checkout
+      - run:
+          name: Toolchain
+          command: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+            echo 'source $HOME/.cargo/env' >> "$BASH_ENV"
+            corepack enable && corepack prepare pnpm@latest --activate
+      - run:
+          name: System dependencies
+          command: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - restore_rust
+      - run:
+          name: Bundle
+          command: ./scripts/bundle.sh
+      - run:
+          name: Bundle without recognition
+          command: ./scripts/bundle.sh --no-models
+      - save_rust
+      - store_artifacts:
+          path: dist
+          destination: bundles
+
+  bundle-windows:
+    executor:
+      name: win/server-2022
+      size: medium
+    steps:
+      - checkout
+      - run:
+          name: Toolchain
+          command: |
+            choco install -y rustup.install
+            refreshenv
+            rustup default stable
+            corepack enable
+            corepack prepare pnpm@latest --activate
+      # Git Bash, so the one bundle script runs here too rather than a second Windows-only copy of
+      # it that nobody remembers to update.
+      - run:
+          name: Bundle
+          shell: bash.exe
+          command: ./scripts/bundle.sh
+      - run:
+          name: Bundle without recognition
+          shell: bash.exe
+          command: ./scripts/bundle.sh --no-models
+      - store_artifacts:
+          path: dist
+          destination: bundles
+
+workflows:
+  check:
+    jobs:
+      - web
+      - rust
+      # Bundles are the expensive half, so they wait for the cheap half to pass. They also only run
+      # on the default branch and on tags: a bundle of somebody's work-in-progress branch is twenty
+      # minutes of Arm and Windows time nobody asked for.
+      - bundle-linux:
+          name: bundle-linux-<< matrix.arch >>
+          matrix:
+            parameters:
+              arch: ["large", "arm.large"]
+          requires: [web, rust]
+          filters:
+            branches:
+              only: [master]
+      - bundle-windows:
+          requires: [web, rust]
+          filters:
+            branches:
+              only: [master]

@@ -28,6 +28,54 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# ---- the three things that differ per platform -------------------------------------------------
+#
+# This script used to be Linux-only while being run on three platforms. `ldd` does not exist on
+# macOS and `sha256sum` does not exist on either macOS or Windows, so the release job for a Mac
+# built the binary, failed at the checksum and published nothing — the kind of break that is only
+# noticed on the day of a release, which is the day it costs the most.
+
+case "$(uname -s)" in
+  Darwin) PLATFORM=macos ;;
+  MINGW* | MSYS* | CYGWIN*) PLATFORM=windows ;;
+  *) PLATFORM=linux ;;
+esac
+
+# Windows names its executables. Everything else does not.
+EXE=""
+[[ "${PLATFORM}" == "windows" ]] && EXE=".exe"
+
+# `sha256sum` on Linux and in Git Bash, `shasum -a 256` on macOS. Same digest, same output shape.
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$@"
+  else
+    shasum -a 256 "$@"
+  fi
+}
+
+# The libraries the binary loads at start: ONNX Runtime and sherpa-onnx. Found by asking the linker
+# what it wants rather than by copying every file in `target/release`, which would sweep in build
+# script leftovers and make the archive larger than the thing inside it.
+collect_libs() {
+  case "${PLATFORM}" in
+    linux)
+      ldd "target/release/summo${EXE}" | awk '/=> \/.*target\/release/ {print $3}'
+      ;;
+    macos)
+      # `@rpath/libfoo.dylib` — the loader resolves it against `$ORIGIN`, so the name is enough to
+      # find the copy in `target/release` that it was linked against.
+      otool -L "target/release/summo${EXE}" |
+        awk '/@rpath\// {sub(/@rpath\//, "", $1); print "target/release/" $1}'
+      ;;
+    windows)
+      # No linker query on Windows that is worth trusting here: the DLLs land beside the binary in
+      # `target/release` and are the only DLLs there.
+      find target/release -maxdepth 1 -name "*.dll" 2>/dev/null || true
+      ;;
+  esac
+}
+
 FEATURES="bundled,mcp,models,dub"
 SUFFIX=""
 if [[ "${1:-}" == "--no-models" ]]; then
@@ -52,13 +100,13 @@ cargo build --release -p summo-cli --features "${FEATURES}"
 echo "==> collecting"
 rm -rf "${OUT}"
 mkdir -p "${OUT}"
-cp target/release/summo "${OUT}/"
+cp "target/release/summo${EXE}" "${OUT}/"
 
 # Only what the binary actually asks for. Copying every `.so` in `target/release` would sweep in
 # build-script leftovers and make the tarball larger than the thing it contains.
 if [[ "${FEATURES}" == *models* ]]; then
-  for lib in $(ldd target/release/summo | awk '/=> \/.*target\/release/ {print $3}'); do
-    cp "${lib}" "${OUT}/"
+  for lib in $(collect_libs); do
+    [[ -f "${lib}" ]] && cp "${lib}" "${OUT}/"
   done
 fi
 
@@ -108,12 +156,22 @@ fi
 
 echo "==> archiving"
 mkdir -p dist
-tar -C dist -czf "dist/${NAME}.tar.gz" "${NAME}"
+
+# A zip on Windows and a tarball everywhere else. Not taste: Windows unpacks a zip by double-click
+# and needs a tool for a `.tar.gz`, and the first thing a new user does with a download is
+# double-click it.
+if [[ "${PLATFORM}" == "windows" ]]; then
+  ARCHIVE="${NAME}.zip"
+  ( cd dist && powershell -NoProfile -Command "Compress-Archive -Path '${NAME}' -DestinationPath '${ARCHIVE}' -Force" )
+else
+  ARCHIVE="${NAME}.tar.gz"
+  tar -C dist -czf "dist/${ARCHIVE}" "${NAME}"
+fi
 
 # A checksum beside the archive, so somebody who did not build it can tell whether they got what we
 # published.
-( cd dist && sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256" )
+( cd dist && sha256 "${ARCHIVE}" > "${ARCHIVE}.sha256" )
 
 echo
-du -sh "dist/${NAME}.tar.gz" | awk '{print "   " $1 "\t" $2}'
-cat "dist/${NAME}.tar.gz.sha256"
+du -sh "dist/${ARCHIVE}" | awk '{print "   " $1 "\t" $2}'
+cat "dist/${ARCHIVE}.sha256"
