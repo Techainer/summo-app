@@ -108,7 +108,8 @@ page.on("websocket", (socket) => {
 
   const chosen = await picker.locator("option:checked").innerText();
   if (!/Tiếng Việt/.test(chosen)) problems.push(`the choice did not stick: "${chosen}"`);
-  if (/MB/.test(chosen)) problems.push(`an installed model still advertises a download: "${chosen}"`);
+  if (/MB/.test(chosen))
+    problems.push(`an installed model still advertises a download: "${chosen}"`);
 }
 
 // ---- the choice reaches the daemon ---------------------------------------
