@@ -68,7 +68,7 @@ pub struct Translator {
 /// can be constructed. The `Local` arm only exists when the feature that can build it does.
 enum Backend {
     Http(LlmClient),
-    #[cfg(feature = "local-mt")]
+    #[cfg(feature = "mt-any")]
     Local(std::sync::Arc<LocalModel>),
 }
 
@@ -78,20 +78,28 @@ enum Backend {
 /// llama.cpp serves decoder-only GGUF, ONNX Runtime serves the encoder–decoder M2M100 family. Which
 /// one a model needs is a fact about the model, so it is read from the manifest rather than from a
 /// setting somebody could get wrong.
-#[cfg(feature = "local-mt")]
+///
+/// Each arm exists only when its runtime was compiled in. The release ships `mt-onnx` alone —
+/// llama.cpp needs a C++ toolchain, and the GGUF models are not ones we may redistribute anyway —
+/// so in that build this enum has one variant and no `match` has a dead arm.
+#[cfg(feature = "mt-any")]
 pub enum LocalModel {
     // Boxed: an ONNX session plus two 128 000-entry vocabularies is an order of magnitude larger
     // than a llama.cpp handle, and an unboxed enum is as big as its biggest variant everywhere it
     // is moved.
+    #[cfg(feature = "mt-gguf")]
     Gguf(Box<summo_mt::Local>),
+    #[cfg(feature = "mt-onnx")]
     Onnx(Box<summo_mt::Seq2Seq>),
 }
 
-#[cfg(feature = "local-mt")]
+#[cfg(feature = "mt-any")]
 impl LocalModel {
     fn name(&self) -> &str {
         match self {
+            #[cfg(feature = "mt-gguf")]
             Self::Gguf(model) => model.name(),
+            #[cfg(feature = "mt-onnx")]
             Self::Onnx(model) => model.name(),
         }
     }
@@ -103,11 +111,18 @@ impl LocalModel {
     /// the first newline. A seq2seq model is *given* a target language as a token and generates
     /// only the translation, so a prompt would be translated along with the sentence.
     fn translate(&self, line: &str, source: Option<&str>, lang: &str) -> Result<Option<String>> {
+        // The source language is a hint only the GGUF prompt carries; a seq2seq model is *given*
+        // the target language as a token and infers the source itself.
+        #[cfg(not(feature = "mt-gguf"))]
+        let _ = source;
+
         match self {
+            #[cfg(feature = "mt-gguf")]
             Self::Gguf(model) => {
                 let prompt = prompt::mt_text(line, source, lang);
                 Ok(prompt::parse_mt(&model.complete(&prompt)?))
             }
+            #[cfg(feature = "mt-onnx")]
             Self::Onnx(model) => {
                 let text = model.translate(line, lang)?;
                 Ok((!text.trim().is_empty()).then(|| text.trim().to_string()))
@@ -131,7 +146,7 @@ impl Translator {
     /// Takes an `Arc` because the model is hundreds of megabytes of weights and the daemon builds a
     /// translator per request. Loading it per request would spend a second and a gigabyte to
     /// translate one line.
-    #[cfg(feature = "local-mt")]
+    #[cfg(feature = "mt-any")]
     #[must_use]
     pub fn local(model: std::sync::Arc<LocalModel>, source: Option<String>) -> Self {
         Self {
@@ -203,7 +218,7 @@ impl Translator {
     pub fn temperature(&self) -> f32 {
         match &self.backend {
             Backend::Http(client) => client.provider().temperature,
-            #[cfg(feature = "local-mt")]
+            #[cfg(feature = "mt-any")]
             Backend::Local(_) => 0.0,
         }
     }
@@ -213,7 +228,7 @@ impl Translator {
     pub fn model(&self) -> &str {
         match &self.backend {
             Backend::Http(client) => &client.provider().model,
-            #[cfg(feature = "local-mt")]
+            #[cfg(feature = "mt-any")]
             Backend::Local(local) => local.name(),
         }
     }
@@ -236,7 +251,7 @@ impl Translator {
         #[allow(clippy::infallible_destructuring_match)]
         let client = match &self.backend {
             Backend::Http(client) => client,
-            #[cfg(feature = "local-mt")]
+            #[cfg(feature = "mt-any")]
             Backend::Local(_) => return self.run_local(lines, lang).await,
         };
 
@@ -298,7 +313,7 @@ impl Translator {
     /// `spawn_blocking` because a decode is seconds of unbroken CPU. On the async runtime it would
     /// stall every other request the daemon is serving — including the WebSocket carrying the
     /// transcript of a meeting being recorded right now.
-    #[cfg(feature = "local-mt")]
+    #[cfg(feature = "mt-any")]
     async fn run_local(&self, lines: &[&str], lang: &str) -> Result<(Vec<Option<String>>, usize)> {
         let Backend::Local(model) = &self.backend else {
             unreachable!("run_local is only reached with a local backend")
@@ -430,7 +445,7 @@ pub async fn translate(
 /// A changed model id is therefore not picked up until the daemon restarts. That is a deliberate
 /// trade and the settings screen says so — the alternative is holding two models resident to make
 /// a setting nobody changes twice take effect a few seconds sooner.
-#[cfg(feature = "local-mt")]
+#[cfg(feature = "mt-any")]
 fn local_translator(
     paths: &Paths,
     settings: &Settings,
@@ -463,7 +478,7 @@ fn local_translator(
 /// Goes through the registry rather than taking a path from the settings file, so a translation
 /// model is installed by `summo pull` like everything else — content-addressed, resumable, sha256
 /// checked — instead of being the one model a user has to place by hand.
-#[cfg(feature = "local-mt")]
+#[cfg(feature = "mt-any")]
 fn load_local(
     store: &summo_models::ModelStore,
     id: &str,
@@ -478,12 +493,18 @@ fn load_local(
     // in a document rather than something a user can run.
     let path = std::path::Path::new(id);
     if path.is_dir() {
+        #[cfg(feature = "mt-onnx")]
         return load_seq2seq_dir(path, threads);
+        #[cfg(not(feature = "mt-onnx"))]
+        return Err(no_runtime("a directory of ONNX files", "mt-onnx"));
     }
     if path.is_file() {
+        #[cfg(feature = "mt-gguf")]
         return Ok(LocalModel::Gguf(Box::new(summo_mt::Local::load(
             path, threads,
         )?)));
+        #[cfg(not(feature = "mt-gguf"))]
+        return Err(no_runtime("a GGUF file", "mt-gguf"));
     }
 
     let model_id = summo_core::ModelId::parse(id).map_err(Error::Config)?;
@@ -508,31 +529,55 @@ fn load_local(
     };
 
     if manifest.runtime.contains("onnx") {
-        let paths = summo_mt::Seq2SeqPaths {
-            model: file("model")?,
-            // Optional: a model published as one graph has no separate decoder, and one published
-            // as a pair runs its encoder once a line instead of once a token.
-            decoder: installed.param_path("decoder").cloned(),
-            spm: file("spm")?,
-            vocab: file("vocab")?,
-        };
-        Ok(LocalModel::Onnx(Box::new(
-            summo_mt::Seq2Seq::load(&paths, threads)?.named(id),
-        )))
+        #[cfg(feature = "mt-onnx")]
+        {
+            let paths = summo_mt::Seq2SeqPaths {
+                model: file("model")?,
+                // Optional: a model published as one graph has no separate decoder, and one
+                // published as a pair runs its encoder once a line instead of once a token.
+                decoder: installed.param_path("decoder").cloned(),
+                spm: file("spm")?,
+                vocab: file("vocab")?,
+            };
+            Ok(LocalModel::Onnx(Box::new(
+                summo_mt::Seq2Seq::load(&paths, threads)?.named(id),
+            )))
+        }
+        #[cfg(not(feature = "mt-onnx"))]
+        Err(no_runtime(&manifest.runtime, "mt-onnx"))
     } else if manifest.runtime.contains("gguf") {
-        Ok(LocalModel::Gguf(Box::new(
-            summo_mt::Local::load(file("model")?, threads)?.named(id),
-        )))
+        #[cfg(feature = "mt-gguf")]
+        {
+            Ok(LocalModel::Gguf(Box::new(
+                summo_mt::Local::load(file("model")?, threads)?.named(id),
+            )))
+        }
+        #[cfg(not(feature = "mt-gguf"))]
+        Err(no_runtime(&manifest.runtime, "mt-gguf"))
     } else {
         Err(Error::UnsupportedRuntime(manifest.runtime.clone()))
     }
+}
+
+/// The model is fine; this build has no runtime for it.
+///
+/// Worth its own message rather than `UnsupportedRuntime`: that one means "nobody supports this",
+/// and a user who reads it goes looking for a different model instead of a different build.
+///
+/// Absent from a build with both runtimes, where every path can be served and nothing can reach it.
+#[cfg(all(feature = "mt-any", not(all(feature = "mt-onnx", feature = "mt-gguf"))))]
+fn no_runtime(what: &str, feature: &str) -> Error {
+    Error::Config(format!(
+        "this build has no runtime for {what}; rebuild with the `{feature}` feature, or choose a \
+         translation model this build can run"
+    ))
 }
 
 /// A directory somebody exported themselves.
 ///
 /// The quantized file is preferred when both are there, because that is the reason to have a
 /// directory of one's own at all.
-#[cfg(feature = "local-mt")]
+#[cfg(feature = "mt-onnx")]
 fn load_seq2seq_dir(dir: &std::path::Path, threads: Option<usize>) -> Result<LocalModel> {
     let name = dir
         .file_name()
@@ -544,7 +589,7 @@ fn load_seq2seq_dir(dir: &std::path::Path, threads: Option<usize>) -> Result<Loc
 
 /// Without the feature, the local option is a configuration that cannot be honoured — and saying so
 /// beats translating with a model the user did not choose.
-#[cfg(not(feature = "local-mt"))]
+#[cfg(not(feature = "mt-any"))]
 fn local_translator(
     _paths: &Paths,
     _settings: &Settings,

@@ -16,6 +16,10 @@ transcribe = ["dep:summo-asr", "dep:summo-vad", "dep:hound", "summo-asr/sherpa",
 # executable. `bundled` additionally bakes the built interface in.
 serve = ["dep:summo-engine"]
 # Translation inside this binary, with no model server to install or keep running.
+#
+# `mt-onnx` is the one the release ships: it builds with no C++ toolchain. `local-mt` adds the
+# llama.cpp runtime for GGUF models on top. See `summo-engine`'s features for why they are split.
+mt-onnx = ["dep:summo-engine", "summo-engine/mt-onnx"]
 local-mt = ["dep:summo-engine", "summo-engine/local-mt"]
 # `summo mcp`: the vault as tools for an MCP client. Tiny and pure Rust, so it is on by default —
 # the one-binary story only holds if the binary actually has everything in it.
