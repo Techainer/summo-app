@@ -41,7 +41,7 @@ command shown; see [`docs/benchmarks.md`](docs/benchmarks.md) and
 
 | Claim | Measured | Source |
 |---|---|---|
-| Vietnamese recognition accuracy | 2.4 % WER, 1.7 % CER (`gipformer-65M`, Fleurs VI test set) | `cargo run --release -p summo-bench --features asr -- asr` |
+| Vietnamese recognition accuracy | 8.5 % WER, 6.7 % CER (`gipformer-65M`, 100 FLEURS VI clips, 21.3 min; 5.3 % on the 84 clips whose reference contains no digits) | `cargo run --release -p summo-bench --features asr -- asr` |
 | Live pipeline speed | RTF 0.107, roughly 9× faster than realtime (raw mic capture) | `docs/benchmarks.md`, end-to-end pipeline section — two short single-mic captures, not yet WER-scored |
 | Voice activity detection | Silero v5, F1 0.940 (precision 0.925, recall 0.956) | `cargo run --release -p summo-bench --features silero -- vad --sweep` |
 | Finding a meeting without an index | ~30 ms across 1,000 meetings (8-thread scan), which is why there is no database | `cargo run --release -p summo-bench -- vault --sizes 100,1000,5000` |
@@ -56,6 +56,11 @@ no web server to start and no directory of static files to keep in step.
 ./scripts/bundle.sh          # a tarball in dist/, ready to move to another machine
 tar -xzf dist/summo-*.tar.gz && cd summo-* && ./summo serve
 ```
+
+Releases carry four builds: Linux x64 and arm64, macOS on Apple silicon, and Windows x64. Intel
+macOS is missing because ONNX Runtime no longer publishes a build for it — Microsoft's 1.28 and 1.29
+releases ship `osx-arm64` only. Building from source on an Intel Mac hits the same wall, with a
+clearer message.
 
 Or building from source, without packaging:
 
