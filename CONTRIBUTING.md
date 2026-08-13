@@ -139,3 +139,56 @@ yourself saying the same words is enough, and does not put a colleague's voice i
 ## Security
 
 Do not open an issue. See [SECURITY.md](SECURITY.md).
+
+### Linking faster, if you want to
+
+Linking is the serial tail of every incremental build, and `summo-engine` with recognition links
+ONNX Runtime and sherpa-onnx — which is where the seconds go. [mold](https://github.com/rui314/mold)
+does that pass several times faster:
+
+```toml
+# ~/.cargo/config.toml — yours, not the project's
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+```
+
+Deliberately not in the repository's `.cargo/config.toml`. `-fuse-ld=mold` is a *fatal* error on a
+machine without mold — `cannot find 'ld'`, no fallback — so putting it there breaks the build for
+everyone who has not installed it, which is every CI runner and every new contributor.
+
+## Branches and releases
+
+`master` is what ships. Nothing is pushed to it directly — including by the people who own the
+repository, because a check that the owner skips is a check that stops meaning anything.
+
+```bash
+git switch -c fix/the-thing        # or feat/…, ci/…, docs/…
+# … work, commit …
+git push -u origin fix/the-thing   # then open a pull request
+```
+
+CI runs on every pull request and on `master`. It does **not** run on a plain branch push: a branch
+with no pull request is somebody's working copy, and building it spends Windows and macOS minutes
+nobody asked for. If a branch's CI matters before review, open the pull request as a draft.
+
+Turn on branch protection for `master` in the repository settings — require the CI checks and at
+least one review. Without it the rule above is a convention, and conventions are what a hurried
+Friday afternoon overrides.
+
+### Releases
+
+A release is a tag, and only a tag:
+
+```bash
+git tag -a v0.1.0 -m "…"
+git push origin v0.1.0
+```
+
+`release.yml` triggers on `v*` and on nothing else — which is why a repository with green CI and no
+tags has no releases. It builds a bundle per platform on that platform (cross-compiled ONNX Runtime
+and sherpa-onnx produce binaries that fail to load on the machine they were built for), publishes a
+**draft**, and waits for somebody to write what changed for a user rather than shipping a list of
+commit subjects.
+
+Tag only what CI is green on. The workflow can also be started by hand from the Actions tab, which
+is how to find out whether the release job works without promising anybody a release.

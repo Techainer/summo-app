@@ -7,7 +7,17 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
+  # No `RUSTFLAGS` here on purpose.
+  #
+  # Setting it as an environment variable does not *add* to `.cargo/config.toml` — it replaces the
+  # `rustflags` in it, which is where this project's linker configuration lives: `-rpath,$ORIGIN`,
+  # so a binary finds ONNX Runtime and sherpa-onnx beside itself. A CI build with `RUSTFLAGS` set is
+  # therefore linked differently from every developer's build and from the release bundle, which is
+  # the kind of difference that is only discovered by a user whose download will not start.
+  #
+  # `-D warnings` is passed to clippy on its own command line below, where it belongs: it is a lint
+  # policy, not a link setting, and applying it through the environment also applies it to every
+  # dependency's build.
 
 jobs:
   check:
@@ -18,9 +28,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      # `summo-audio` links cpal, which needs the ALSA headers to *build* — even in a job that will
-      # never open a microphone. Missing them fails the build script, not the code, so the error
-      # names `alsa-sys` and not the crate anybody has heard of.
+      # Two packages, two reasons.
+      #
+      # ALSA: `summo-audio` links cpal, which needs the headers to *build* even in a job that will
+      # never open a microphone — and the failure names `alsa-sys`, not a crate anybody wrote.
+
       - name: System dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - uses: Swatinem/rust-cache@v2
@@ -63,15 +75,35 @@ jobs:
           - { os: macos-latest,   target: aarch64-apple-darwin }
           - { os: macos-13,       target: x86_64-apple-darwin }
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
-          - { os: windows-11-arm, target: aarch64-pc-windows-msvc }
+          # No `aarch64-pc-windows-msvc`.
+          #
+          # `audiopus_sys` 0.1.8 has no ARM64 Windows support: its build script picks an MSVC
+          # library directory from an `ARCHITECTURE` constant that is only defined for x86 and x64,
+          # so the build fails to *compile the build script itself* — `cannot find value
+          # ARCHITECTURE in this scope`. Nothing in this repository can fix that from here.
+          #
+          # Listing the target and letting it fail every run is worse than not claiming it: a red
+          # CI that is expected to be red is a CI nobody reads. It comes back when the crate gains
+          # ARM64 support or when Opus is linked some other way.
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      # `rustup target add`, not the action's `targets:` input.
+      #
+      # `rust-toolchain.toml` pins 1.95.0, so cargo uses 1.95.0 no matter what the action installed.
+      # The action added the target to *stable*, and every cross build then failed with "can't find
+      # crate for `core`… the target may not be installed" — while pointing at a target that had
+      # been installed, for a different toolchain.
+      - run: rustup target add ${{ matrix.target }}
       - name: System dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      # `audiopus_sys` cannot find a system Opus on a runner, so it builds the bundled copy — and
+      # that starts with `autogen.sh`, which needs autotools. Without them the build script panics
+      # with `autoreconf: command not found`, several hundred crates in.
+      - name: Autotools, for building Opus from source
+        if: runner.os == 'macOS'
+        run: brew install autoconf automake libtool
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
@@ -91,11 +123,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      # `rustup target add`, not the action's `targets:` input.
+      #
+      # `rust-toolchain.toml` pins 1.95.0, so cargo uses 1.95.0 no matter what the action installed.
+      # The action added the target to *stable*, and every cross build then failed with "can't find
+      # crate for `core`… the target may not be installed" — while pointing at a target that had
+      # been installed, for a different toolchain.
+      - run: rustup target add ${{ matrix.target }}
       - name: System dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      # `audiopus_sys` cannot find a system Opus on a runner, so it builds the bundled copy — and
+      # that starts with `autogen.sh`, which needs autotools. Without them the build script panics
+      # with `autoreconf: command not found`, several hundred crates in.
+      - name: Autotools, for building Opus from source
+        if: runner.os == 'macOS'
+        run: brew install autoconf automake libtool
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
@@ -104,6 +147,11 @@ jobs:
         with:
           ndk-version: r27c
           add-to-path: true
+      # `add-to-path` puts the NDK root on PATH, not the compilers: those live three directories
+      # down, and `cc-rs` looked for `aarch64-linux-android24-clang` and found nothing. The error
+      # names the tool and not the fact that it is present a few directories away.
+      - if: matrix.target == 'aarch64-linux-android'
+        run: echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_PATH"
       # The whole workspace, not a hand-picked four.
       #
       # The list used to be `summo-core summo-models summo-vad summo-bench`, chosen when nobody knew
@@ -133,6 +181,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target\napps/desktop/src-tauri -> target"
+          # See the note in the browser job: the native libraries live outside `target/`.
+          cache-directories: |
+            ~/.cache/sherpa-rs
+            ~/.cache/ort.pyke.io
       - name: System libraries Tauri links against
         run: |
           sudo apt-get update
@@ -221,6 +273,15 @@ jobs:
           path: .registry
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          # ONNX Runtime and sherpa-onnx are downloaded by their build scripts into `~/.cache`, and
+          # the *paths* to them are recorded in `target/`. Caching `target/` without caching those
+          # directories restores a build that believes the libraries are present, on a runner where
+          # they are not — and the link fails with `unable to find library -lonnxruntime`, several
+          # hundred crates after the point where anything could have noticed.
+          cache-directories: |
+            ~/.cache/sherpa-rs
+            ~/.cache/ort.pyke.io
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

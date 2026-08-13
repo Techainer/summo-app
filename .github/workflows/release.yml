@@ -34,8 +34,8 @@ jobs:
             target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-          - os: windows-11-arm
-            target: aarch64-pc-windows-msvc
+          # `aarch64-pc-windows-msvc` is absent on purpose — see the note in `ci.yml`. Opus has no
+          # ARM64 Windows build in `audiopus_sys`, so the target cannot be produced at all yet.
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -55,9 +55,19 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
+      # Opus is built from source here — no runner has it — and its `autogen.sh` needs autotools.
+      - name: Autotools, for building Opus from source
+        if: runner.os == 'macOS'
+        run: brew install autoconf automake libtool
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+          # The native libraries are downloaded into `~/.cache`, outside `target/`; caching one
+          # without the other restores a build that believes they are there. See `ci.yml`.
+          cache-directories: |
+            ~/.cache/sherpa-rs
+            ~/.cache/ort.pyke.io
 
       # Bash on every platform, including Windows, where the runner ships Git Bash. One script that
       # knows the three differences (`.exe`, how to ask the linker for its libraries, which checksum
