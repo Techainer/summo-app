@@ -184,6 +184,7 @@ impl Server {
             .route("/onboarding/complete", post(complete_onboarding))
             .route("/onboarding/recommend", get(recommend_models))
             .route("/languages", get(languages))
+            .route("/settings/language", post(set_language))
             .route("/installs", get(list_installs).post(start_install))
             .route("/installs/{id}", get(get_install))
             .route("/meetings/{id}/summarize", post(summarize_meeting))
@@ -613,6 +614,13 @@ struct ModelsBody {
     /// `live`, `refine`, `vad`, `speaker` or `translator`.
     role: String,
     model: String,
+}
+
+#[derive(Deserialize)]
+struct LanguageBody {
+    /// ISO code, or empty for "let the model detect it".
+    #[serde(default)]
+    language: String,
 }
 
 /// Fill in the models a session did not name.
@@ -1997,6 +2005,36 @@ async fn recommend_models(
         "models": models,
         "rejected": ranked.rejected,
     })))
+}
+
+/// Remember which language is being spoken.
+///
+/// Stored in the daemon's settings rather than only in the browser, because it is a fact about this
+/// installation and not about one browser profile. The record bar keeps its own copy — it has to
+/// answer before any network call completes, and it is a per-meeting choice as often as a standing
+/// one — but a first run that picks Japanese must still be recording Japanese in a different
+/// browser, from the tray, or from `summo transcribe`, none of which can read `localStorage`.
+///
+/// An empty value clears it, which is not the same as never having chosen: cleared means the model
+/// decides, and Whisper's own detection is what that resolves to.
+async fn set_language(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<LanguageBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    as_response((|| {
+        let path = state.engine.paths().settings();
+        let mut settings = summo_core::Settings::load(&path)?;
+        let code = body.language.trim().to_lowercase();
+        settings.models.language = (!code.is_empty()).then_some(code);
+        settings.save(&path)?;
+        Ok(serde_json::json!({ "language": settings.models.language }))
+    })())
 }
 
 /// Every language this registry can recognise, and what would serve each one.
@@ -3401,6 +3439,31 @@ mod resolve_tests {
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
         assert_eq!(resolved.live_model, "sense-voice-small");
         assert_eq!(resolved.language.as_deref(), Some("ja"));
+    }
+
+    /// The hole the language picker left when it was first built: the choice lived in one browser's
+    /// `localStorage`, so `/languages` always answered `current: null`, a second browser started
+    /// over, and the tray and the CLI never learned it at all.
+    #[test]
+    fn the_spoken_language_survives_the_browser_that_chose_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+
+        let mut settings = summo_core::Settings::default();
+        settings.models.language = Some("ja".into());
+        settings.save(&path).unwrap();
+
+        // A session that names no language takes it, which is what makes the setting worth writing.
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.language.as_deref(), Some("ja"));
+
+        // And clearing it means detection, not the previous answer left behind.
+        let mut settings = summo_core::Settings::load(&path).unwrap();
+        settings.models.language = None;
+        settings.save(&path).unwrap();
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.language, None);
     }
 
     /// A client that knows which model it wants keeps it. The import job names one on purpose.

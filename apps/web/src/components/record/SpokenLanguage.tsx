@@ -10,6 +10,7 @@ import {
   megabytes,
   quality,
   ready,
+  rememberLanguage,
   type Language,
 } from "../../lib/languages";
 import { OnboardingClient, percent } from "../../lib/onboarding";
@@ -108,7 +109,14 @@ export function SpokenLanguage({
         <select
           value={value}
           aria-label={t("record.spoken")}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            const code = event.target.value;
+            onChange(code);
+            // Written through to the daemon so the choice survives this browser. A failure here is
+            // deliberately swallowed: the recording still has the language, and a preference that
+            // could not be saved must not stop it.
+            void rememberLanguage(handshake, code).catch(() => undefined);
+          }}
           className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-8 max-w-56 rounded-[var(--radius-card)] border px-2 text-sm transition-colors focus:outline-none"
         >
           {/* Detection first when it is possible, because somebody who does not know what will be

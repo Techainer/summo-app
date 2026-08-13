@@ -112,6 +112,16 @@ page.on("websocket", (socket) => {
     problems.push(`an installed model still advertises a download: "${chosen}"`);
 }
 
+// ---- the choice outlives this browser -------------------------------------
+{
+  const body = await (await fetch(`${engine.url}/languages?token=${engine.token}`)).json();
+  if (body.current !== "vi") {
+    problems.push(
+      `the daemon did not remember the choice: current=${JSON.stringify(body.current)}`,
+    );
+  }
+}
+
 // ---- the choice reaches the daemon ---------------------------------------
 {
   // The header carries one too, so this is scoped to the record card rather than by exact text.

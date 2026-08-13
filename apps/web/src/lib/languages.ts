@@ -108,3 +108,24 @@ export function quality(language: Language): "good" | "poor" | "unmeasured" {
   if (language.accuracy <= 0) return "unmeasured";
   return language.accuracy >= 0.8 ? "good" : "poor";
 }
+
+/**
+ * Remember the spoken language in the daemon, not only in this browser.
+ *
+ * The record bar keeps a local copy because it has to answer before any request completes, and
+ * because the language is a per-meeting choice as often as a standing one. But the standing one
+ * belongs to the installation: a first run that picks Japanese must still record Japanese from a
+ * different browser, from the tray, or from `summo transcribe`, none of which can read
+ * `localStorage`.
+ *
+ * Failures are the caller's to ignore. Not being able to write a preference must not stop a
+ * recording that is otherwise ready to start.
+ */
+export async function rememberLanguage(handshake: Handshake, code: string): Promise<void> {
+  const response = await fetch(url(handshake, "/settings/language"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ language: code }),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+}

@@ -21,7 +21,7 @@ import {
 } from "../../lib/onboarding";
 import { Button } from "../ui";
 import { load as loadCapture, save as saveCapture } from "../../lib/capture";
-import { languageName } from "../../lib/languages";
+import { languageName, rememberLanguage } from "../../lib/languages";
 import { Permissions } from "./Permissions";
 import { useRefresh } from "../../lib/use-load";
 
@@ -153,6 +153,9 @@ export function Setup({ onDone }: { onDone: () => void }) {
 
   const finish = async () => {
     saveCapture({ ...loadCapture(), spoken });
+    // The daemon's copy, for every client that is not this browser: the tray, the CLI, a second
+    // profile. Ignored on failure — a preference that would not save must not block the app.
+    await rememberLanguage(handshake, spoken).catch(() => undefined);
     try {
       await client.complete();
     } catch {
