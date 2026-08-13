@@ -76,6 +76,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       // only installed speech model when there is one.
       live_model: "",
       lanes: chosen.lanes,
+      // The spoken language, when the user chose one. Empty is not "unset" here — it is Whisper's
+      // own detection — so it is only sent when it has a value, and the daemon falls back to
+      // `models.language` from the settings file otherwise.
+      ...(chosen.spoken ? { language: chosen.spoken } : {}),
       // Diarization needs the system lane; asking for it on the microphone alone is refused.
       diarize: chosen.lanes.includes("system"),
       ...(chosen.translateTo ? { translate_to: chosen.translateTo } : {}),

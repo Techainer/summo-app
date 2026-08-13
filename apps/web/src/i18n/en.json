@@ -50,7 +50,18 @@
     "translate_live": "Live translation",
     "translate_hint": "Each finished line is translated and shown under the original.",
     "translate_needs_system": "Translation is on but only the microphone is captured — turn on System to translate what is playing.",
-    "short": "Record"
+    "short": "Record",
+    "spoken": "Spoken language",
+    "spoken_auto": "Detect automatically",
+    "spoken_model": "Uses {model}.",
+    "spoken_unmeasured": "nobody has measured this model on that language",
+    "spoken_poor": "low accuracy on this language",
+    "spoken_slow": "this machine cannot keep up in real time; text will lag",
+    "spoken_install": "Download the model ({size})",
+    "spoken_installing": "Downloading… {pct}%",
+    "spoken_wait": "Recording works as soon as it finishes.",
+    "spoken_missing": "No model for this language yet.",
+    "spoken_default": "As configured"
   },
   "import": {
     "title": "Import a recording",
@@ -372,7 +383,9 @@
     "why_models": "needed before anything can be recorded.",
     "start": "Start",
     "skip": "Later",
-    "fix": "Fix this"
+    "fix": "Fix this",
+    "spoken": "Which language will be spoken?",
+    "spoken_hint": "This decides which model is recommended below. Changeable at any time, including just before recording."
   },
   "tour": {
     "title": "Quick tour",

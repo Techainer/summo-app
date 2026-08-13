@@ -50,7 +50,18 @@
     "translate_live": "实时翻译",
     "translate_hint": "每句话说完就翻译，显示在原文下方。",
     "translate_needs_system": "翻译已开启，但只采集了麦克风。要翻译正在播放的声音，请打开系统声音。",
-    "short": "录音"
+    "short": "录音",
+    "spoken": "所讲语言",
+    "spoken_auto": "自动识别",
+    "spoken_model": "使用 {model}。",
+    "spoken_unmeasured": "尚无人测量该模型在此语言上的准确率",
+    "spoken_poor": "在此语言上的准确率较低",
+    "spoken_slow": "本机跟不上实时速度，文字会延迟",
+    "spoken_install": "下载模型（{size}）",
+    "spoken_installing": "下载中… {pct}%",
+    "spoken_wait": "下载完成即可开始录音。",
+    "spoken_missing": "还没有适用于此语言的模型。",
+    "spoken_default": "按设置"
   },
   "import": {
     "title": "导入录音",
@@ -372,7 +383,9 @@
     "why_models": "开始录音之前必须先有。",
     "start": "开始",
     "skip": "以后再说",
-    "fix": "去解决"
+    "fix": "去解决",
+    "spoken": "会议会讲哪种语言？",
+    "spoken_hint": "它决定下面推荐哪个模型。随时可改，录音前也可以。"
   },
   "tour": {
     "title": "快速上手",

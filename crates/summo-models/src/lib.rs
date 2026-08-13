@@ -12,6 +12,7 @@
 pub mod credentials;
 pub mod download;
 pub mod hw;
+pub mod languages;
 pub mod manifest;
 pub mod page;
 pub mod recommend;
@@ -22,6 +23,7 @@ pub mod variant;
 pub use credentials::Credentials;
 pub use download::{DownloadProgress, Downloader};
 pub use hw::{Accel, CpuFeatures, HwProfile};
+pub use languages::{Language, available};
 pub use manifest::{FileEntry, Manifest, Mode, Profile, Task};
 pub use recommend::{Recommendation, Scored, recommend};
 pub use registry::{Registry, RegistrySource};

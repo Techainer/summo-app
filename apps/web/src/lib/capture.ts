@@ -20,6 +20,15 @@ export interface Capture {
   /** Microphone, system audio, or both. */
   lanes: Lane[];
   /**
+   * The language being spoken. Empty means "let the model detect it".
+   *
+   * Here rather than only in the daemon's settings because it is a per-meeting decision as often as
+   * it is a preference — the standup is in Vietnamese and the customer call is in English — and the
+   * record bar has to be able to change it without writing to the vault's settings file. The
+   * daemon's `models.language` remains the default this starts from.
+   */
+  spoken: string;
+  /**
    * Language to translate finished lines into as they land. Empty means off.
    *
    * Off by default and deliberately so: every line becomes a request to a language model, which
@@ -29,7 +38,7 @@ export interface Capture {
   translateTo: string;
 }
 
-export const DEFAULT: Capture = { lanes: ["mic"], translateTo: "" };
+export const DEFAULT: Capture = { lanes: ["mic"], translateTo: "", spoken: "" };
 
 /**
  * Read the saved choice.
@@ -71,6 +80,9 @@ export function normalize(input: Partial<Capture> | null | undefined): Capture {
   return {
     lanes: unique.length > 0 ? unique : DEFAULT.lanes,
     translateTo: typeof input?.translateTo === "string" ? input.translateTo.trim() : "",
+    // Lower-cased, because a language code is compared against the manifests' own spelling and
+    // `VI` from an older build must not read as a language nothing covers.
+    spoken: typeof input?.spoken === "string" ? input.spoken.trim().toLowerCase() : "",
   };
 }
 

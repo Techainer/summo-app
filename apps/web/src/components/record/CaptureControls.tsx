@@ -5,6 +5,7 @@ import { useI18n } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { TARGETS, hearsOthers, load, save, translating, type Capture } from "../../lib/capture";
 import type { Lane } from "../../lib/protocol";
+import { SpokenLanguage } from "./SpokenLanguage";
 
 /**
  * What to listen to, and what language to put it in.
@@ -65,6 +66,15 @@ export function CaptureControls() {
               {t(lane === "mic" ? "record.microphone" : "record.system")}
             </Checkbox>
           ))}
+
+          {/* The language being spoken sits beside the lanes, because it is the same decision:
+              what is going into the recording. The target language stays on the right, where it
+              was, since it is a decision about the output. */}
+          <SpokenLanguage
+            value={capture.spoken}
+            onChange={(spoken) => update({ ...capture, spoken })}
+            compact
+          />
 
           <label className="text-fg-faint ms-auto flex items-center gap-2 text-sm">
             {t("record.translate_live")}

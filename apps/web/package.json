@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "tauri": "tauri",
-    "e2e": "node e2e/shell.mjs && node e2e/library.mjs && node e2e/meeting.mjs && node e2e/tasks.mjs && node e2e/draft.mjs && node e2e/nudges.mjs && node e2e/chat.mjs && node e2e/languages.mjs && node e2e/overlap.mjs && node e2e/models.mjs && node e2e/search.mjs && node e2e/assistant.mjs && node e2e/permissions.mjs && node e2e/density.mjs",
+    "e2e": "node e2e/shell.mjs && node e2e/library.mjs && node e2e/meeting.mjs && node e2e/tasks.mjs && node e2e/draft.mjs && node e2e/nudges.mjs && node e2e/chat.mjs && node e2e/languages.mjs && node e2e/overlap.mjs && node e2e/models.mjs && node e2e/search.mjs && node e2e/assistant.mjs && node e2e/language.mjs && node e2e/permissions.mjs && node e2e/density.mjs",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

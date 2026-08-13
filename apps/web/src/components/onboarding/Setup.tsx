@@ -20,8 +20,54 @@ import {
   type Status,
 } from "../../lib/onboarding";
 import { Button } from "../ui";
+import { load as loadCapture, save as saveCapture } from "../../lib/capture";
+import { languageName } from "../../lib/languages";
 import { Permissions } from "./Permissions";
 import { useRefresh } from "../../lib/use-load";
+
+/**
+ * Languages offered first: the ones the interface itself speaks, which is who is reading this.
+ *
+ * Not a ranking of importance — a ranking of likelihood, and one that stays honest because the
+ * second list underneath holds everything else the registry can serve.
+ */
+const SPOKEN_FIRST = ["vi", "en", "ja", "zh"];
+
+/**
+ * The rest, in the order Whisper's own language list has them, which is roughly by speakers.
+ *
+ * Trimmed to the ones a user is plausibly recording a meeting in. The full ninety-nine are still
+ * reachable — the record bar's picker lists every language the daemon reports — but a first-run
+ * screen with a hundred-item dropdown is a first-run screen nobody finishes.
+ */
+const OTHER_SPOKEN = [
+  "ko",
+  "th",
+  "id",
+  "ms",
+  "fr",
+  "de",
+  "es",
+  "pt",
+  "ru",
+  "hi",
+  "ta",
+  "it",
+  "nl",
+  "pl",
+  "tr",
+  "ar",
+  "sv",
+  "da",
+  "fi",
+  "no",
+  "cs",
+  "el",
+  "he",
+  "uk",
+  "ro",
+  "hu",
+];
 
 /**
  * The first screen, when there is something in the way.
@@ -43,6 +89,11 @@ export function Setup({ onDone }: { onDone: () => void }) {
   const { t, locale } = useI18n();
   const client = useMemo(() => new OnboardingClient(handshake), [handshake]);
 
+  // The language being *spoken*, which is the question this screen used to answer by assuming it
+  // matched the interface. It starts from the interface locale — a reasonable first guess — and is
+  // asked out loud, because the cost of the guess being wrong is a download that cannot transcribe
+  // the meeting it was installed for.
+  const [spoken, setSpoken] = useState(() => loadCapture().spoken || locale);
   const [status, setStatus] = useState<Status | null>(null);
   const [models, setModels] = useState<Recommended[]>([]);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -61,12 +112,13 @@ export function Setup({ onDone }: { onDone: () => void }) {
 
   useRefresh(refresh);
 
-  // The recommendation is for the language the interface is in: someone who switched to English is
-  // very likely recording in English.
+  // The recommendation follows the language above. Changing it re-ranks the models, because "which
+  // model" and "which language" are one decision: gipformer is the best answer for Vietnamese and
+  // no answer at all for Japanese.
   useEffect(() => {
     let cancelled = false;
     client
-      .recommend(locale)
+      .recommend(spoken)
       .then((result) => {
         if (cancelled) return;
         setModels(result.models);
@@ -79,7 +131,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [client, locale]);
+  }, [client, spoken]);
 
   const downloading = installs.some((i) => !isFinished(i));
   useEffect(() => {
@@ -100,6 +152,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
   };
 
   const finish = async () => {
+    saveCapture({ ...loadCapture(), spoken });
     try {
       await client.complete();
     } catch {
@@ -127,6 +180,36 @@ export function Setup({ onDone }: { onDone: () => void }) {
           {error}
         </p>
       )}
+
+      {/* Asked before the models, because it decides them. A picker below a list of models would
+          be a question asked after the answer. */}
+      <section className="border-line bg-bg-raised mt-8 rounded-2xl border p-4">
+        <label className="flex flex-wrap items-center gap-3">
+          <span className="font-medium">{t("setup.spoken")}</span>
+          <select
+            value={spoken}
+            aria-label={t("setup.spoken")}
+            onChange={(event) => setSpoken(event.target.value)}
+            className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-9 rounded-[var(--radius-card)] border px-2 text-sm transition-colors focus:outline-none"
+          >
+            {/* The interface languages first — the overwhelmingly likely answers — then everything
+                the registry can serve, which is where a Japanese speaker reading Vietnamese finds
+                their language. */}
+            {SPOKEN_FIRST.map((code) => (
+              <option key={code} value={code}>
+                {languageName(code, locale)}
+              </option>
+            ))}
+            {models.length > 0 && <option disabled>──────────</option>}
+            {OTHER_SPOKEN.filter((code) => !SPOKEN_FIRST.includes(code)).map((code) => (
+              <option key={code} value={code}>
+                {languageName(code, locale)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="text-fg-dim text-meta mt-2">{t("setup.spoken_hint")}</p>
+      </section>
 
       {stuck ? (
         <section className="mt-8">
