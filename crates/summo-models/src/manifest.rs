@@ -213,6 +213,35 @@ fn default_true() -> bool {
     true
 }
 
+/// Hosts Summo publishes from, for the licence checks below.
+///
+/// A prefix of `host/path`, not a bare domain: `github.com` is where most of the world's models
+/// live, and only the files under our own organisation are ours to have published.
+const OUR_HOSTS: &[&str] = &[
+    "github.com/Techainer/",
+    "raw.githubusercontent.com/Techainer/",
+    "cdn.jsdelivr.net/gh/Techainer/",
+    "summo.techainer.com/",
+];
+
+/// Whether a URL is served by us rather than by a model's upstream.
+///
+/// Matched on the authority and the first path segments rather than by `contains`, so a URL like
+/// `https://evil.example/?ref=github.com/Techainer/` is not read as ours. The comparison is
+/// deliberately blunt in the safe direction: something that looks like ours and is not gets
+/// refused, which costs a registry author one edit; the reverse would publish a model we are not
+/// allowed to publish.
+///
+/// This used to test `url.contains("summo.app")` — a domain that was never registered, so the
+/// licence checks below could not fire on any manifest that has ever existed.
+fn published_by_us(url: &str) -> bool {
+    let rest = match url.split_once("://") {
+        Some((_, rest)) => rest,
+        None => url,
+    };
+    OUR_HOSTS.iter().any(|host| rest.starts_with(host))
+}
+
 impl Manifest {
     /// Parse and validate. Validation is not optional: manifests arrive over the network and their
     /// contents become filesystem paths and HTTP requests.
@@ -289,14 +318,15 @@ impl Manifest {
             )));
         }
 
-        // A model we may not redistribute must be fetched from upstream. If it referenced our CDN,
-        // mirroring it would make us the distributor and put us in breach of its licence.
+        // A model we may not redistribute must be fetched from upstream. If it were served from a
+        // host of ours, mirroring it would make us the distributor and put us in breach of its
+        // licence.
         if !self.redistributable {
             for f in &self.files {
                 for url in std::iter::once(&f.url).chain(&f.mirror) {
-                    if url.contains("summo.app") {
+                    if published_by_us(url) {
                         return Err(bad(format!(
-                            "`{}` is not redistributable but `{}` points at our own CDN",
+                            "`{}` is not redistributable but `{}` is served by us",
                             f.name, url
                         )));
                     }
@@ -304,16 +334,16 @@ impl Manifest {
             }
         }
 
-        // A gated model has to come from the host that does the gating. Mirroring it onto our CDN
-        // would route around the access control its authors deliberately put in place — technically
-        // possible under a permissive licence, and not ours to decide on their behalf.
+        // A gated model has to come from the host that does the gating. Mirroring it onto a host of
+        // ours would route around the access control its authors deliberately put in place —
+        // technically possible under a permissive licence, and not ours to decide on their behalf.
         if self.gated {
             for f in &self.files {
                 for url in std::iter::once(&f.url).chain(&f.mirror) {
-                    if url.contains("summo.app") {
+                    if published_by_us(url) {
                         return Err(bad(format!(
-                            "`{}` is gated upstream but `{url}` points at our own CDN, which would \
-                             route around the access control its authors chose",
+                            "`{}` is gated upstream but `{url}` is served by us, which would route \
+                             around the access control its authors chose",
                             f.name
                         )));
                     }
@@ -537,11 +567,14 @@ mod tests {
     }
 
     #[test]
-    fn non_redistributable_models_may_not_point_at_our_cdn() {
+    fn non_redistributable_models_may_not_point_at_a_host_of_ours() {
         let mut v = base();
         v["redistributable"] = serde_json::json!(false);
+        v["files"][0]["url"] = serde_json::json!(
+            "https://github.com/Techainer/summo-models/releases/download/x-v1/y.onnx"
+        );
         let err = parse(v.clone()).unwrap_err().to_string();
-        assert!(err.contains("our own CDN"), "got: {err}");
+        assert!(err.contains("served by us"), "got: {err}");
 
         // Same model served from upstream is fine.
         v["files"][0]["url"] = serde_json::json!("https://github.com/upstream/model/x");
@@ -557,11 +590,14 @@ mod tests {
     /// pyannote is the case: MIT, so redistributable, but served only to accounts that have
     /// accepted its conditions. Mirroring it would route around that.
     #[test]
-    fn a_gated_model_may_not_point_at_our_cdn_even_when_its_licence_allows_it() {
+    fn a_gated_model_may_not_be_served_by_us_even_when_its_licence_allows_it() {
         let mut v = base();
         v["gated"] = serde_json::json!(true);
         v["license"] = serde_json::json!("MIT");
         v["redistributable"] = serde_json::json!(true);
+        v["files"][0]["url"] = serde_json::json!(
+            "https://cdn.jsdelivr.net/gh/Techainer/summo-models@main/models/x/y.onnx"
+        );
 
         let err = parse(v.clone()).unwrap_err().to_string();
         assert!(err.contains("gated"), "got: {err}");
@@ -587,6 +623,31 @@ mod tests {
         let text = serde_json::to_string(&parsed).expect("serialise");
         let back: Manifest = serde_json::from_str(&text).expect("deserialise");
         assert!(back.gated);
+    }
+
+    /// The check decides whether a licence is being broken, so what counts as "ours" has to be the
+    /// authority and not a substring anywhere in the URL.
+    #[test]
+    fn only_our_own_paths_on_our_own_hosts_count_as_ours() {
+        assert!(published_by_us(
+            "https://github.com/Techainer/summo-models/releases/download/small100-v1/model.onnx"
+        ));
+        assert!(published_by_us(
+            "https://raw.githubusercontent.com/Techainer/summo-registry/main/index.json"
+        ));
+
+        // Somebody else's model, on the same host.
+        assert!(!published_by_us(
+            "https://github.com/openai/whisper/releases/download/v1/tiny.onnx"
+        ));
+        // Upstream, where a gated model must stay.
+        assert!(!published_by_us(
+            "https://huggingface.co/pyannote/segmentation/resolve/main/model.onnx"
+        ));
+        // The shape that a `contains` test reads as ours.
+        assert!(!published_by_us(
+            "https://example.invalid/proxy?to=github.com/Techainer/summo-models/x.onnx"
+        ));
     }
 
     #[test]

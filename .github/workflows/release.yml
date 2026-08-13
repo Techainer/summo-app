@@ -30,7 +30,11 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: macos-13
+          # `macos-15-intel`, not `macos-13`: the 13 image is gone from GitHub's fleet, and a job
+          # asking for a label nobody offers does not fail — it sits in `queued` with an empty
+          # runner name until the run is cancelled. Four platforms went green in eleven minutes
+          # while this one waited half an hour for a machine that no longer exists.
+          - os: macos-15-intel
             target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc

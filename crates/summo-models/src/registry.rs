@@ -1,9 +1,9 @@
 //! Manifest resolution.
 //!
 //! The registry is a set of static JSON files, and the app knows several places to look for them.
-//! That ordering is the mechanism that keeps the open-source build independent of the paid
-//! service: our CDN is merely the fastest source, never the only one. If it disappears, models
-//! still install from GitHub or from a directory the user controls.
+//! That ordering is the mechanism that keeps the open-source build independent of any one host:
+//! every default source is a different view of the same git repository, so none of them is a
+//! single point of failure and a user can always point at a directory of their own instead.
 
 use std::{collections::HashMap, path::PathBuf, time::Duration};
 
@@ -12,10 +12,23 @@ use summo_core::{Error, ModelId, Result, paths::ENV_REGISTRY};
 
 use crate::manifest::{Manifest, Mode, Task};
 
-/// Fast path, maintained by us.
-pub const DEFAULT_CDN: &str = "https://registry.summo.app";
-/// Always-free fallback that requires no infrastructure of ours to stay alive.
+/// The registry repository itself, read straight from the default branch.
+///
+/// First because it is the only source that cannot be stale: it *is* the repository. A CDN in
+/// front of it would be faster for a crowd, and this is a few kilobytes fetched once per install.
 pub const DEFAULT_GITHUB: &str = "https://raw.githubusercontent.com/Techainer/summo-registry/main";
+/// The same files through jsDelivr, for when raw.githubusercontent is blocked or rate-limited.
+///
+/// jsDelivr serves any public GitHub repository with no account and no infrastructure of ours, and
+/// it reaches networks where raw.githubusercontent does not. It caches a branch for up to twelve
+/// hours, which is why it is second: a model published this morning must not be invisible until
+/// tonight when the first source can already see it.
+///
+/// There used to be a `https://registry.summo.app` ahead of both. Nobody ever registered
+/// `summo.app`, so every first run paid a failed DNS lookup — and on a network whose resolver
+/// answers slowly rather than not at all, that is a pause before the app can list a single model.
+/// A source that has never existed is not a fallback, it is latency with a comment above it.
+pub const DEFAULT_JSDELIVR: &str = "https://cdn.jsdelivr.net/gh/Techainer/summo-registry@main";
 
 /// One place manifests can be read from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,7 +107,7 @@ pub struct Registry {
 }
 
 impl Registry {
-    /// Build the default chain: `SUMMO_REGISTRY` first if set, then our CDN, then GitHub.
+    /// Build the default chain: `SUMMO_REGISTRY` first if set, then GitHub, then jsDelivr.
     pub fn discover() -> Result<Self> {
         let mut sources = Vec::new();
         if let Ok(value) = std::env::var(ENV_REGISTRY)
@@ -102,8 +115,8 @@ impl Registry {
         {
             sources.push(RegistrySource::parse(value.trim())?);
         }
-        sources.push(RegistrySource::Http(DEFAULT_CDN.into()));
         sources.push(RegistrySource::Http(DEFAULT_GITHUB.into()));
+        sources.push(RegistrySource::Http(DEFAULT_JSDELIVR.into()));
         Self::with_sources(sources)
     }
 
