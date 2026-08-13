@@ -63,15 +63,35 @@ jobs:
           - { os: macos-latest,   target: aarch64-apple-darwin }
           - { os: macos-13,       target: x86_64-apple-darwin }
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
-          - { os: windows-11-arm, target: aarch64-pc-windows-msvc }
+          # No `aarch64-pc-windows-msvc`.
+          #
+          # `audiopus_sys` 0.1.8 has no ARM64 Windows support: its build script picks an MSVC
+          # library directory from an `ARCHITECTURE` constant that is only defined for x86 and x64,
+          # so the build fails to *compile the build script itself* — `cannot find value
+          # ARCHITECTURE in this scope`. Nothing in this repository can fix that from here.
+          #
+          # Listing the target and letting it fail every run is worse than not claiming it: a red
+          # CI that is expected to be red is a CI nobody reads. It comes back when the crate gains
+          # ARM64 support or when Opus is linked some other way.
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      # `rustup target add`, not the action's `targets:` input.
+      #
+      # `rust-toolchain.toml` pins 1.95.0, so cargo uses 1.95.0 no matter what the action installed.
+      # The action added the target to *stable*, and every cross build then failed with "can't find
+      # crate for `core`… the target may not be installed" — while pointing at a target that had
+      # been installed, for a different toolchain.
+      - run: rustup target add ${{ matrix.target }}
       - name: System dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      # `audiopus_sys` cannot find a system Opus on a runner, so it builds the bundled copy — and
+      # that starts with `autogen.sh`, which needs autotools. Without them the build script panics
+      # with `autoreconf: command not found`, several hundred crates in.
+      - name: Autotools, for building Opus from source
+        if: runner.os == 'macOS'
+        run: brew install autoconf automake libtool
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
@@ -91,11 +111,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      # `rustup target add`, not the action's `targets:` input.
+      #
+      # `rust-toolchain.toml` pins 1.95.0, so cargo uses 1.95.0 no matter what the action installed.
+      # The action added the target to *stable*, and every cross build then failed with "can't find
+      # crate for `core`… the target may not be installed" — while pointing at a target that had
+      # been installed, for a different toolchain.
+      - run: rustup target add ${{ matrix.target }}
       - name: System dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      # `audiopus_sys` cannot find a system Opus on a runner, so it builds the bundled copy — and
+      # that starts with `autogen.sh`, which needs autotools. Without them the build script panics
+      # with `autoreconf: command not found`, several hundred crates in.
+      - name: Autotools, for building Opus from source
+        if: runner.os == 'macOS'
+        run: brew install autoconf automake libtool
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
