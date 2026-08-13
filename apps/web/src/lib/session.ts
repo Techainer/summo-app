@@ -12,6 +12,7 @@
 
 import { EngineClient, type ConnectionState, type Handshake } from "./engine";
 import { Microphone, explainMicrophoneError } from "./microphone";
+import type { Failure } from "./errors";
 import type { Event, SessionSpec } from "./protocol";
 
 export interface SessionCallbacks {
@@ -23,8 +24,14 @@ export interface SessionCallbacks {
 export interface SessionState {
   recording: boolean;
   connection: ConnectionState;
-  /** Set when something went wrong that the user has to act on. */
-  error: string | null;
+  /**
+   * Set when something went wrong that the user has to act on.
+   *
+   * A `Failure` rather than a sentence: the shell translates it, and a refused microphone needs a
+   * different banner from a daemon that is not answering — one of them can be fixed from Settings
+   * and the other cannot.
+   */
+  error: Failure | null;
   deviceLabel: string | null;
   /** The device's real rate. Below 16 kHz means a headset in telephony mode. */
   sampleRate: number | null;
@@ -72,7 +79,10 @@ export class Session {
     const connected = await this.waitForOpen(5000);
     if (!connected) {
       this.update({
-        error: "The recognition engine is not responding. Is summo-engine running?",
+        error: {
+          code: "engine_silent",
+          error: "The recognition engine is not responding. Is summo-engine running?",
+        },
       });
       this.client.close();
       this.client = null;

@@ -96,19 +96,33 @@ export function rms(samples: Float32Array): number {
   return Math.sqrt(sum / samples.length);
 }
 
-/** Turn a permission failure into something a person can act on. */
-export function explainMicrophoneError(error: unknown): string {
+/**
+ * Turn a device failure into something a person can act on, in their own language.
+ *
+ * A code plus English fallback text, the same shape the daemon's failures use — so the interface
+ * translates it through `explain()` and a browser inventing a `DOMException` name nobody has seen
+ * still produces a sentence rather than a blank banner. It used to return English prose directly,
+ * which meant a Vietnamese user's first failed recording was explained to them in English.
+ *
+ * Only `NotAllowedError` is a permission. The rest are hardware, and telling somebody to check
+ * their privacy settings when the microphone is simply unplugged sends them to a pane where
+ * everything is already correct.
+ */
+export function explainMicrophoneError(error: unknown): { error: string; code: string } {
   const name = error instanceof DOMException ? error.name : "";
   switch (name) {
     case "NotAllowedError":
-      return "Microphone access was refused. Grant it in your browser or system settings and try again.";
+      return { code: "mic_denied", error: "Microphone access was refused." };
     case "NotFoundError":
-      return "No microphone was found. Plug one in, or check that it is enabled in system settings.";
+      return { code: "mic_missing", error: "No microphone was found." };
     case "NotReadableError":
-      return "The microphone is in use by another application.";
+      return { code: "mic_busy", error: "The microphone is in use by another application." };
     case "OverconstrainedError":
-      return "That microphone is no longer available. Pick another one in settings.";
+      return { code: "mic_gone", error: "That microphone is no longer available." };
     default:
-      return error instanceof Error ? error.message : "The microphone could not be opened.";
+      return {
+        code: "mic_failed",
+        error: error instanceof Error ? error.message : "The microphone could not be opened.",
+      };
   }
 }

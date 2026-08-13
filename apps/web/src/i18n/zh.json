@@ -445,7 +445,13 @@
     "import.no_audio": "这个文件里没有音频。",
     "calendar.no_name": "日历得有个名字。",
     "calendar.no_events": "这个文件里没有日程——确定是 .ics 吗？",
-    "audio.not_mono": "音频必须是单声道。"
+    "audio.not_mono": "音频必须是单声道。",
+    "mic_denied": "麦克风被拒绝。授权后再次按下录音。",
+    "mic_missing": "未找到麦克风。请插入一个，或在系统设置中启用。",
+    "mic_busy": "麦克风正被其他应用占用。",
+    "mic_gone": "该麦克风已不可用。请在设置中选择其他设备。",
+    "mic_failed": "无法打开麦克风。",
+    "engine_silent": "识别引擎没有响应。Summo 还在运行吗？"
   },
   "agents": {
     "title": "智能体",
@@ -558,5 +564,36 @@
     "mode_do": "执行",
     "ask_placeholder": "关于预算，小明说了什么？",
     "do_placeholder": "帮我起草上线的日程…"
+  },
+  "permissions": {
+    "title": "麦克风权限",
+    "why": "录音需要麦克风。音频不会离开本机——权限由操作系统掌管，而不是我们。",
+    "state_granted": "已授权",
+    "state_denied": "已拒绝",
+    "state_prompt": "尚未询问",
+    "state_unknown": "未知",
+    "ask": "允许使用麦克风",
+    "asking": "询问中…",
+    "recheck": "重新检查",
+    "found": "检测到 {count} 个输入设备。正在使用：{name}。",
+    "found_unnamed": "检测到 {count} 个输入设备。",
+    "fix_browser_chrome": "点击地址栏左侧的锁形（或滑块）图标 → 网站设置 → 麦克风 → 允许。",
+    "fix_browser_firefox": "点击地址栏中被划掉的麦克风图标解除阻止，或进入 设置 → 隐私与安全 → 权限 → 麦克风。",
+    "fix_browser_safari": "Safari → 设置 → 网站 → 麦克风 → 将本站设为「允许」。",
+    "fix_macos": "macOS 把麦克风权限授予**应用程序**，这里的应用是 {app}：系统设置 → 隐私与安全性 → 麦克风 → 启用 {app}。若你从终端启动 Summo，请为终端启用。",
+    "fix_windows": "设置 → 隐私和安全性 → 麦克风 → 开启「允许应用访问你的麦克风」和「允许桌面应用访问你的麦克风」。",
+    "fix_linux": "检查 PulseAudio/PipeWire 中输入是否静音（`pavucontrol` → Recording）；若浏览器运行在 Flatpak 中，请授予 `--device=all`。",
+    "fix_retry": "回到这里点击「重新检查」。无需重启 Summo。",
+    "wrong_os": "不是你的系统？查看：",
+    "os_macos": "macOS",
+    "os_windows": "Windows",
+    "os_linux": "Linux",
+    "system_title": "录制系统声音",
+    "system_linux": "支持：通过 PulseAudio/PipeWire 的 monitor 源录制，无需安装任何东西。",
+    "system_windows": "支持：使用 WASAPI 回环录制，无需安装任何东西。",
+    "system_macos": "macOS 没有内置通道。唯一的办法是安装虚拟设备（BlackHole、Loopback）并将其选为输入——Summo 不会为此申请「屏幕录制」权限，因为录音应用不该要求看你的屏幕。",
+    "system_unknown": "尚未确定本机能否录制系统声音。",
+    "fix_macos_any": "macOS 把麦克风权限授予**应用程序**，这里指你打开 Summo 的浏览器：系统设置 → 隐私与安全性 → 麦克风 → 启用它。若你从终端启动 Summo，请为终端启用。",
+    "open": "打开权限设置"
   }
 }

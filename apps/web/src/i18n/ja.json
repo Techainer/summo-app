@@ -445,7 +445,13 @@
     "import.no_audio": "そのファイルには音声が入っていません。",
     "calendar.no_name": "カレンダーには名前が必要です。",
     "calendar.no_events": "そのファイルに予定がありません。本当に .ics ですか？",
-    "audio.not_mono": "音声はモノラル1チャンネルである必要があります。"
+    "audio.not_mono": "音声はモノラル1チャンネルである必要があります。",
+    "mic_denied": "マイクが拒否されました。許可してから、もう一度録音してください。",
+    "mic_missing": "マイクが見つかりません。接続するか、システム設定で有効にしてください。",
+    "mic_busy": "他のアプリがマイクを使用中です。",
+    "mic_gone": "そのマイクは利用できなくなりました。設定で別のものを選んでください。",
+    "mic_failed": "マイクを開けませんでした。",
+    "engine_silent": "認識エンジンが応答しません。Summo は起動していますか？"
   },
   "agents": {
     "title": "エージェント",
@@ -558,5 +564,36 @@
     "mode_do": "実行",
     "ask_placeholder": "予算について田中さんは何と言っていた？",
     "do_placeholder": "ローンチの予定を下書きして…"
+  },
+  "permissions": {
+    "title": "マイクの許可",
+    "why": "録音にはマイクが必要です。音声はこの端末から出ません。許可を管理するのは OS であり、Summo ではありません。",
+    "state_granted": "許可済み",
+    "state_denied": "拒否",
+    "state_prompt": "未確認",
+    "state_unknown": "不明",
+    "ask": "マイクを許可する",
+    "asking": "確認中…",
+    "recheck": "再確認",
+    "found": "入力デバイス {count} 件。使用中: {name}。",
+    "found_unnamed": "入力デバイス {count} 件。",
+    "fix_browser_chrome": "アドレスバー左の鍵（またはスライダー）アイコン → サイトの設定 → マイク → 許可。",
+    "fix_browser_firefox": "アドレスバーの取り消し線付きマイクをクリックしてブロックを解除、または 設定 → プライバシーとセキュリティ → 許可設定 → マイク。",
+    "fix_browser_safari": "Safari → 設定 → Web サイト → マイク → このサイトを「許可」に。",
+    "fix_macos": "macOS はマイクの許可を**アプリ単位**で与えます。ここでのアプリは {app} です: システム設定 → プライバシーとセキュリティ → マイク → {app} を有効化。ターミナルから起動した場合はターミナルを有効化してください。",
+    "fix_windows": "設定 → プライバシーとセキュリティ → マイク →「アプリがマイクにアクセスできるようにする」と「デスクトップ アプリが…」を有効化。",
+    "fix_linux": "PulseAudio/PipeWire で入力がミュートされていないか確認し（`pavucontrol` → Recording）、Flatpak のブラウザーなら `--device=all` を付与してください。",
+    "fix_retry": "ここに戻って「再確認」を押してください。Summo の再起動は不要です。",
+    "wrong_os": "環境が違いますか？次の手順:",
+    "os_macos": "macOS",
+    "os_windows": "Windows",
+    "os_linux": "Linux",
+    "system_title": "システム音声の録音",
+    "system_linux": "対応: PulseAudio/PipeWire の monitor ソースを使用します。追加インストールは不要です。",
+    "system_windows": "対応: WASAPI ループバックを使用します。追加インストールは不要です。",
+    "system_macos": "macOS には標準の経路がありません。仮想デバイス（BlackHole、Loopback）を入力として選ぶ方法のみです。録音アプリが画面収録の権限を要求すべきではないため、Summo はその権限を求めません。",
+    "system_unknown": "この端末でシステム音声を録音できるかは判定できていません。",
+    "fix_macos_any": "macOS はマイクの許可を**アプリ単位**で与えます。ここでのアプリは Summo を開いているブラウザーです: システム設定 → プライバシーとセキュリティ → マイク → 有効化。ターミナルから起動した場合はターミナルを有効化してください。",
+    "open": "権限設定を開く"
   }
 }

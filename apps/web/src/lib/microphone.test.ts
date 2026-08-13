@@ -12,21 +12,27 @@ describe("signal level", () => {
 });
 
 describe("microphone errors", () => {
-  it("sends a refused permission to settings, not to the hardware", () => {
-    const message = explainMicrophoneError(new DOMException("x", "NotAllowedError"));
-    expect(message).toMatch(/refused/i);
-    expect(message).toMatch(/settings/i);
+  /// The code is what the shell keys the "open permission settings" link off, so a refusal must not
+  /// share a code with anything the user cannot fix there.
+  it("gives a refused permission its own code", () => {
+    const failure = explainMicrophoneError(new DOMException("x", "NotAllowedError"));
+    expect(failure.code).toBe("mic_denied");
+    expect(failure.error).toMatch(/refused/i);
   });
 
   it("distinguishes a missing device from one in use by something else", () => {
-    expect(explainMicrophoneError(new DOMException("x", "NotFoundError"))).toMatch(/No microphone/);
-    expect(explainMicrophoneError(new DOMException("x", "NotReadableError"))).toMatch(
-      /another application/,
-    );
+    expect(explainMicrophoneError(new DOMException("x", "NotFoundError")).code).toBe("mic_missing");
+    expect(explainMicrophoneError(new DOMException("x", "NotReadableError")).code).toBe("mic_busy");
   });
 
+  /// Every branch carries English text as well as a code: a locale that has not been updated, or a
+  /// browser inventing a `DOMException` name, must still produce a sentence rather than a blank
+  /// banner.
   it("falls back to the message rather than saying nothing", () => {
-    expect(explainMicrophoneError(new Error("something odd"))).toBe("something odd");
-    expect(explainMicrophoneError("not an error")).toMatch(/could not be opened/);
+    expect(explainMicrophoneError(new Error("something odd"))).toEqual({
+      code: "mic_failed",
+      error: "something odd",
+    });
+    expect(explainMicrophoneError("not an error").error).toMatch(/could not be opened/);
   });
 });

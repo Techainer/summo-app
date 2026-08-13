@@ -20,6 +20,7 @@ import {
   type Status,
 } from "../../lib/onboarding";
 import { Button } from "../ui";
+import { Permissions } from "./Permissions";
 import { useRefresh } from "../../lib/use-load";
 
 /**
@@ -220,6 +221,15 @@ export function Setup({ onDone }: { onDone: () => void }) {
           <p className="text-fg-dim mt-1 text-sm">{t("setup.ready_hint")}</p>
         </section>
       )}
+
+      {/* After the model, before the "later" list. The model is the one thing that blocks a
+          recording *inside* Summo; the microphone is the one thing that blocks it outside, and a
+          first run that installs 73 MB and then fails on a permission has wasted the download and
+          the trust. Compact here: the system-audio note belongs in Settings, not in the way of
+          somebody who has not recorded anything yet. */}
+      <div className="mt-8">
+        <Permissions compact />
+      </div>
 
       {later.length > 0 && (
         <section className="mt-8">

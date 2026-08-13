@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useI18n, useT } from "../i18n/context";
 import { About } from "./About";
+import { Permissions } from "./onboarding/Permissions";
 import { url } from "../lib/library";
 import type { Handshake } from "../lib/engine";
 
@@ -169,6 +170,13 @@ export function Settings({ handshake }: { handshake: Handshake }) {
   return (
     <Page width="narrow" data-testid="settings">
       <LanguagePicker />
+
+      {/* Above the model and provider settings, because it is the one that stops a recording
+          outright — and because a user who arrives here after a failed recording is looking for
+          exactly this. */}
+      <div className="my-6">
+        <Permissions />
+      </div>
 
       <h2 className="text-xl font-semibold tracking-tight">{t("settings.llm_heading")}</h2>
       <p className="text-fg-faint text-meta my-4 leading-normal">

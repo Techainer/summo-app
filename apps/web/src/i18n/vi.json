@@ -445,7 +445,13 @@
     "import.no_audio": "File này không có âm thanh.",
     "calendar.no_name": "Lịch cần có tên.",
     "calendar.no_events": "File này không có sự kiện nào — có chắc là .ics không?",
-    "audio.not_mono": "File âm thanh phải là 1 kênh mono."
+    "audio.not_mono": "File âm thanh phải là 1 kênh mono.",
+    "mic_denied": "Micro bị từ chối. Cấp quyền rồi bấm ghi lại.",
+    "mic_missing": "Không thấy micro nào. Cắm micro vào, hoặc bật nó trong cài đặt hệ thống.",
+    "mic_busy": "Micro đang bị ứng dụng khác chiếm.",
+    "mic_gone": "Micro đó không còn nữa. Chọn cái khác trong cài đặt.",
+    "mic_failed": "Không mở được micro.",
+    "engine_silent": "Engine nhận dạng không trả lời. Summo còn đang chạy không?"
   },
   "agents": {
     "title": "Agent",
@@ -558,5 +564,36 @@
     "mode_do": "Làm",
     "ask_placeholder": "Ngọc nói gì về ngân sách?",
     "do_placeholder": "Soạn lịch cho đợt ra mắt…"
+  },
+  "permissions": {
+    "title": "Quyền micro",
+    "why": "Summo cần micro để ghi. Âm thanh không rời khỏi máy này — quyền là của hệ điều hành, không phải của chúng tôi.",
+    "state_granted": "đã cấp",
+    "state_denied": "bị từ chối",
+    "state_prompt": "chưa hỏi",
+    "state_unknown": "chưa rõ",
+    "ask": "Cho phép dùng micro",
+    "asking": "Đang hỏi…",
+    "recheck": "Kiểm tra lại",
+    "found": "Thấy {count} thiết bị vào. Đang dùng: {name}.",
+    "found_unnamed": "Thấy {count} thiết bị vào.",
+    "fix_browser_chrome": "Bấm biểu tượng ổ khoá (hoặc thanh trượt) bên trái thanh địa chỉ → Cài đặt trang → Micro → Cho phép.",
+    "fix_browser_firefox": "Bấm biểu tượng micro bị gạch trong thanh địa chỉ → bỏ chặn, hoặc vào Cài đặt → Quyền riêng tư & Bảo mật → Quyền → Micro.",
+    "fix_browser_safari": "Safari → Cài đặt → Trang web → Micro → chọn Cho phép cho trang này.",
+    "fix_macos": "macOS cấp quyền micro cho **ứng dụng**, mà ứng dụng ở đây là {app}: System Settings → Privacy & Security → Microphone → bật {app}. Nếu bạn khởi động Summo từ Terminal thì bật cho Terminal.",
+    "fix_windows": "Settings → Privacy & security → Microphone → bật “Let apps access your microphone” và “Let desktop apps access your microphone”.",
+    "fix_linux": "Kiểm tra micro có bị tắt tiếng trong PulseAudio/PipeWire không (`pavucontrol` → Recording), và nếu trình duyệt chạy trong Flatpak thì cấp quyền `--device=all`.",
+    "fix_retry": "Quay lại đây và bấm “Kiểm tra lại”. Không cần khởi động lại Summo.",
+    "wrong_os": "Không đúng máy bạn? Xem hướng dẫn cho:",
+    "os_macos": "macOS",
+    "os_windows": "Windows",
+    "os_linux": "Linux",
+    "system_title": "Thu âm thanh hệ thống",
+    "system_linux": "Được: Summo dùng nguồn “monitor” của thiết bị ra mặc định qua PulseAudio/PipeWire. Không cần cài gì thêm.",
+    "system_windows": "Được: Summo dùng WASAPI loopback. Không cần cài gì thêm.",
+    "system_macos": "macOS không có đường thu âm hệ thống sẵn. Cách duy nhất là cài một thiết bị ảo (BlackHole, Loopback) rồi chọn nó làm nguồn vào — Summo không xin quyền Screen Recording để làm việc này, vì một ứng dụng ghi âm không nên đòi quyền quay màn hình.",
+    "system_unknown": "Chưa xác định được máy này thu được âm thanh hệ thống hay không.",
+    "fix_macos_any": "macOS cấp quyền micro cho **ứng dụng**, mà ứng dụng ở đây là trình duyệt bạn đang mở Summo: System Settings → Privacy & Security → Microphone → bật nó. Nếu bạn khởi động Summo từ Terminal thì bật cho Terminal.",
+    "open": "Mở cài đặt quyền"
   }
 }

@@ -27,6 +27,7 @@ import { useT } from "../../i18n/context";
 import { useIsNarrow } from "../../lib/breakpoint";
 import { useEngine } from "../../lib/engine-context";
 import { deviceWarning } from "../../lib/session";
+import { useErrorText } from "../../lib/errors";
 import { RecordButton } from "../RecordButton";
 import { StatusBar } from "../StatusBar";
 import { Waveform } from "../Waveform";
@@ -106,6 +107,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
   usePaletteShortcut(useCallback(() => setPaletteOpen(true), []));
   const [compact, setCompact] = useState(false);
   const [folders, setFolders] = useState<string[]>([]);
+  const say = useErrorText();
 
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const search = useRouterState({ select: (s) => s.location.search }) as {
@@ -244,9 +246,21 @@ export function RootLayout({ children }: { children: ReactNode }) {
 
       <NudgeBar />
 
+      {/* A refused microphone is the one failure with a repair path, so it gets a link to the
+          panel that repairs it. Every other failure gets the sentence alone: a button that leads
+          somewhere unhelpful is worse than no button. */}
       {engine.session.error && (
         <p className="border-rec/30 bg-rec-soft text-rec text-meta border-b px-4 py-2">
-          {engine.session.error}
+          {say(engine.session.error)}
+          {engine.session.error.code === "mic_denied" && (
+            <button
+              type="button"
+              onClick={() => void navigate({ to: "/settings" })}
+              className="ml-2 font-medium underline"
+            >
+              {t("permissions.open")}
+            </button>
+          )}
         </p>
       )}
       {warning && (

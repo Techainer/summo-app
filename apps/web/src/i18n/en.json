@@ -445,7 +445,13 @@
     "import.no_audio": "That file has no audio in it.",
     "calendar.no_name": "A calendar needs a name.",
     "calendar.no_events": "That file has no events in it — is it really an .ics?",
-    "audio.not_mono": "The audio has to be single-channel mono."
+    "audio.not_mono": "The audio has to be single-channel mono.",
+    "mic_denied": "The microphone was refused. Grant access, then press record again.",
+    "mic_missing": "No microphone was found. Plug one in, or enable it in system settings.",
+    "mic_busy": "Another application is holding the microphone.",
+    "mic_gone": "That microphone is gone. Pick another one in settings.",
+    "mic_failed": "The microphone could not be opened.",
+    "engine_silent": "The recognition engine is not answering. Is Summo still running?"
   },
   "agents": {
     "title": "Agents",
@@ -558,5 +564,36 @@
     "mode_do": "Do",
     "ask_placeholder": "What did Ngọc say about the budget?",
     "do_placeholder": "Draft the calendar events for the launch…"
+  },
+  "permissions": {
+    "title": "Microphone access",
+    "why": "Summo needs the microphone to record. The audio never leaves this machine — the permission belongs to your operating system, not to us.",
+    "state_granted": "granted",
+    "state_denied": "refused",
+    "state_prompt": "not asked yet",
+    "state_unknown": "unknown",
+    "ask": "Allow the microphone",
+    "asking": "Asking…",
+    "recheck": "Check again",
+    "found": "{count} input device(s). Using: {name}.",
+    "found_unnamed": "{count} input device(s).",
+    "fix_browser_chrome": "Click the lock (or slider) icon at the left of the address bar → Site settings → Microphone → Allow.",
+    "fix_browser_firefox": "Click the crossed-out microphone in the address bar and unblock, or Settings → Privacy & Security → Permissions → Microphone.",
+    "fix_browser_safari": "Safari → Settings → Websites → Microphone → set this site to Allow.",
+    "fix_macos": "macOS grants microphone access to the **application**, and here that application is {app}: System Settings → Privacy & Security → Microphone → enable {app}. If you started Summo from a terminal, enable it for the terminal.",
+    "fix_windows": "Settings → Privacy & security → Microphone → turn on “Let apps access your microphone” and “Let desktop apps access your microphone”.",
+    "fix_linux": "Check the input is not muted in PulseAudio/PipeWire (`pavucontrol` → Recording), and if the browser runs in Flatpak, grant it `--device=all`.",
+    "fix_retry": "Come back here and press “Check again”. Summo does not need restarting.",
+    "wrong_os": "Not your machine? Instructions for:",
+    "os_macos": "macOS",
+    "os_windows": "Windows",
+    "os_linux": "Linux",
+    "system_title": "Capturing system audio",
+    "system_linux": "Supported: Summo uses the default output's monitor source through PulseAudio/PipeWire. Nothing to install.",
+    "system_windows": "Supported: Summo uses WASAPI loopback. Nothing to install.",
+    "system_macos": "macOS has no built-in route for this. The only way is a virtual device (BlackHole, Loopback) selected as an input — Summo does not ask for the Screen Recording permission to do it, because an audio recorder should not demand the right to watch your screen.",
+    "system_unknown": "Whether this machine can capture system audio has not been determined.",
+    "fix_macos_any": "macOS grants microphone access to the **application**, and here that is the browser you have Summo open in: System Settings → Privacy & Security → Microphone → enable it. If you started Summo from a terminal, enable it for the terminal.",
+    "open": "Open permission settings"
   }
 }
