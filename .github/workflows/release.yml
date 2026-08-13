@@ -62,14 +62,17 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install autoconf automake libtool
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
-          # The native libraries are downloaded into `~/.cache`, outside `target/`; caching one
-          # without the other restores a build that believes they are there. See `ci.yml`.
-          cache-directories: |
-            ~/.cache/sherpa-rs
-            ~/.cache/ort.pyke.io
+      # No cache here, on purpose.
+      #
+      # A release is built from scratch. The first two attempts at this workflow failed on macOS and
+      # Windows with `search path … not found` and `cannot open input file 'cargs.lib'` — a restored
+      # `target/` that recorded paths into ONNX Runtime and sherpa-onnx caches which live in
+      # `~/Library/Caches` on macOS and `AppData\Local` on Windows, and were not restored with it.
+      #
+      # That class of failure is worth ten minutes per platform to remove entirely. A cache exists
+      # to make an answer arrive sooner; here the answer is an artefact somebody downloads, and one
+      # built from a half-restored state is a download that fails on a stranger's machine. `ci.yml`
+      # keeps its caches — being wrong there costs a re-run, not a release.
 
       # Bash on every platform, including Windows, where the runner ships Git Bash. One script that
       # knows the three differences (`.exe`, how to ask the linker for its libraries, which checksum
