@@ -3,18 +3,18 @@
 # "libsherpa-onnx-c-api.so: cannot open shared object file" unless LD_LIBRARY_PATH is set by hand.
 # $ORIGIN resolves relative to the executable, which is also what the packaged app needs.
 [target.'cfg(target_os = "linux")']
-# `mold` when it is there, the system linker when it is not.
+# The rpath, and nothing else.
 #
-# Linking is the serial tail of every incremental build: the compiler parallelises across crates and
-# then one process walks the whole binary. `summo-engine` with recognition links ONNX Runtime and
-# sherpa-onnx, which is where the seconds go — mold does that pass several times faster.
+# `-fuse-ld=mold` used to be here, with a comment claiming the C driver ignores it with a warning
+# when mold is absent. That is not true: `collect2: fatal error: cannot find 'ld'`, and the build
+# stops. It was invisible for months because every machine that ran it had mold installed, and
+# because CI set `RUSTFLAGS` as an environment variable — which replaced this file wholesale, so
+# the flag was never reached there either. The first CI run that read this file failed four jobs on
+# it.
 #
-# `-fuse-ld` is passed to the C compiler driver, which ignores it with a warning if mold is absent,
-# so a machine without it still builds. That is why this is not an error to leave in.
-rustflags = [
-    "-C", "link-arg=-fuse-ld=mold",
-    "-C", "link-arg=-Wl,-rpath,$ORIGIN",
-]
+# mold is a preference about how fast one's own machine links, not a property of the project, so it
+# belongs in `~/.cargo/config.toml`. `CONTRIBUTING.md` says how.
+rustflags = ["-C", "link-arg=-Wl,-rpath,$ORIGIN"]
 
 [target.'cfg(target_os = "macos")']
 rustflags = ["-C", "link-arg=-Wl,-rpath,@executable_path"]

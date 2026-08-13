@@ -53,7 +53,7 @@ jobs:
       # never opens a microphone on CI.
       - name: System dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev mold
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       # Opus is built from source here — no runner has it — and its `autogen.sh` needs autotools.
       - name: Autotools, for building Opus from source

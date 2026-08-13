@@ -10,11 +10,10 @@ env:
   # No `RUSTFLAGS` here on purpose.
   #
   # Setting it as an environment variable does not *add* to `.cargo/config.toml` — it replaces the
-  # `rustflags` in it, which is where this project's linker configuration lives: `-rpath,$ORIGIN`
-  # so the binary finds ONNX Runtime and sherpa-onnx beside itself, and `-fuse-ld=mold`. A CI build
-  # with `RUSTFLAGS` set is therefore linked differently from every developer's build and from the
-  # release bundle, which is the kind of difference that is only discovered by a user whose
-  # download will not start.
+  # `rustflags` in it, which is where this project's linker configuration lives: `-rpath,$ORIGIN`,
+  # so a binary finds ONNX Runtime and sherpa-onnx beside itself. A CI build with `RUSTFLAGS` set is
+  # therefore linked differently from every developer's build and from the release bundle, which is
+  # the kind of difference that is only discovered by a user whose download will not start.
   #
   # `-D warnings` is passed to clippy on its own command line below, where it belongs: it is a lint
   # policy, not a link setting, and applying it through the environment also applies it to every
@@ -33,13 +32,9 @@ jobs:
       #
       # ALSA: `summo-audio` links cpal, which needs the headers to *build* even in a job that will
       # never open a microphone — and the failure names `alsa-sys`, not a crate anybody wrote.
-      #
-      # mold: `.cargo/config.toml` links with it, and `-fuse-ld=mold` is a hard error when it is
-      # absent. It used to be absent *and* harmless here only because the workflow set `RUSTFLAGS`,
-      # which replaced that configuration wholesale — so CI was linking differently from every
-      # developer and from the release bundle without anybody choosing that.
+
       - name: System dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev mold
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
@@ -102,7 +97,7 @@ jobs:
       - run: rustup target add ${{ matrix.target }}
       - name: System dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev mold
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       # `audiopus_sys` cannot find a system Opus on a runner, so it builds the bundled copy — and
       # that starts with `autogen.sh`, which needs autotools. Without them the build script panics
       # with `autoreconf: command not found`, several hundred crates in.
@@ -137,7 +132,7 @@ jobs:
       - run: rustup target add ${{ matrix.target }}
       - name: System dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev mold
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       # `audiopus_sys` cannot find a system Opus on a runner, so it builds the bundled copy — and
       # that starts with `autogen.sh`, which needs autotools. Without them the build script panics
       # with `autoreconf: command not found`, several hundred crates in.
@@ -293,7 +288,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - name: System dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev mold
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - run: pnpm install --frozen-lockfile
       - run: pnpm -C apps/web exec playwright install --with-deps chromium
       - run: pnpm -C apps/web build

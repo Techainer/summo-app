@@ -140,6 +140,22 @@ yourself saying the same words is enough, and does not put a colleague's voice i
 
 Do not open an issue. See [SECURITY.md](SECURITY.md).
 
+### Linking faster, if you want to
+
+Linking is the serial tail of every incremental build, and `summo-engine` with recognition links
+ONNX Runtime and sherpa-onnx — which is where the seconds go. [mold](https://github.com/rui314/mold)
+does that pass several times faster:
+
+```toml
+# ~/.cargo/config.toml — yours, not the project's
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+```
+
+Deliberately not in the repository's `.cargo/config.toml`. `-fuse-ld=mold` is a *fatal* error on a
+machine without mold — `cannot find 'ld'`, no fallback — so putting it there breaks the build for
+everyone who has not installed it, which is every CI runner and every new contributor.
+
 ## Branches and releases
 
 `master` is what ships. Nothing is pushed to it directly — including by the people who own the
