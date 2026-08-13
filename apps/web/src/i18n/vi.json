@@ -50,7 +50,18 @@
     "translate_live": "Dịch trực tiếp",
     "translate_hint": "Mỗi câu nói xong sẽ được dịch và hiện ngay dưới câu gốc.",
     "translate_needs_system": "Đang bật dịch nhưng chỉ nghe micro — bật thêm Hệ thống để dịch thứ đang phát.",
-    "short": "Ghi"
+    "short": "Ghi",
+    "spoken": "Ngôn ngữ nói",
+    "spoken_auto": "Tự động nhận biết",
+    "spoken_model": "Dùng model {model}.",
+    "spoken_unmeasured": "chưa ai đo model này trên ngôn ngữ đó",
+    "spoken_poor": "độ chính xác thấp trên ngôn ngữ này",
+    "spoken_slow": "máy này chạy không kịp thời gian thực, chữ sẽ hiện sau",
+    "spoken_install": "Tải model ({size})",
+    "spoken_installing": "Đang tải… {pct}%",
+    "spoken_wait": "Ghi được ngay khi tải xong.",
+    "spoken_missing": "Chưa có model cho ngôn ngữ này.",
+    "spoken_default": "Theo cài đặt"
   },
   "import": {
     "title": "Nhập bản ghi có sẵn",
@@ -372,7 +383,9 @@
     "why_models": "cần để ghi được.",
     "start": "Bắt đầu",
     "skip": "Để sau",
-    "fix": "Cài ngay"
+    "fix": "Cài ngay",
+    "spoken": "Bạn sẽ nói ngôn ngữ nào?",
+    "spoken_hint": "Quyết định model nào được đề xuất bên dưới. Đổi lúc nào cũng được, kể cả ngay trước khi ghi."
   },
   "tour": {
     "title": "Hướng dẫn nhanh",

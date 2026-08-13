@@ -50,7 +50,18 @@
     "translate_live": "リアルタイム翻訳",
     "translate_hint": "確定した行を訳して、原文の下に表示します。",
     "translate_needs_system": "翻訳は有効ですが、マイクしか取り込んでいません。再生中の音を訳すにはシステム音声を有効にしてください。",
-    "short": "録音"
+    "short": "録音",
+    "spoken": "話す言語",
+    "spoken_auto": "自動判定",
+    "spoken_model": "{model} を使用します。",
+    "spoken_unmeasured": "この言語での精度は未計測です",
+    "spoken_poor": "この言語では精度が低めです",
+    "spoken_slow": "この端末ではリアルタイムに追いつかず、表示が遅れます",
+    "spoken_install": "モデルをダウンロード（{size}）",
+    "spoken_installing": "ダウンロード中… {pct}%",
+    "spoken_wait": "完了したらすぐ録音できます。",
+    "spoken_missing": "この言語のモデルはまだありません。",
+    "spoken_default": "設定に従う"
   },
   "import": {
     "title": "録音ファイルを取り込む",
@@ -372,7 +383,9 @@
     "why_models": "録音を始める前に必要です。",
     "start": "開始",
     "skip": "後で",
-    "fix": "解決する"
+    "fix": "解決する",
+    "spoken": "話される言語は？",
+    "spoken_hint": "下で推奨されるモデルを決めます。録音直前を含め、いつでも変更できます。"
   },
   "tour": {
     "title": "かんたん案内",

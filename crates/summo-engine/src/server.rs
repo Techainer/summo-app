@@ -183,6 +183,7 @@ impl Server {
             .route("/onboarding", get(onboarding))
             .route("/onboarding/complete", post(complete_onboarding))
             .route("/onboarding/recommend", get(recommend_models))
+            .route("/languages", get(languages))
             .route("/installs", get(list_installs).post(start_install))
             .route("/installs/{id}", get(get_install))
             .route("/meetings/{id}/summarize", post(summarize_meeting))
@@ -1995,6 +1996,48 @@ async fn recommend_models(
         "lang": q.lang,
         "models": models,
         "rejected": ranked.rejected,
+    })))
+}
+
+/// Every language this registry can recognise, and what would serve each one.
+///
+/// The screen this feeds replaces a guess. Setup used to recommend a model for whatever language
+/// the *interface* was in — right often enough that being wrong was invisible, and being wrong
+/// means a download that cannot transcribe the meeting it was installed for.
+///
+/// Ranked per language rather than filtered: "covered" and "good" are different claims, and this
+/// carries the measured accuracy so a picker can show that Whisper covers Vietnamese at 34 % and a
+/// 73 MB transducer does it at 91 %.
+async fn languages(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<RecommendQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    let manifests = match candidates(&state, q.registry.as_deref()).await {
+        Ok(manifests) => manifests,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+    let installed: Vec<String> = state
+        .engine
+        .store()
+        .list()
+        .into_iter()
+        .map(|m| m.id.to_string())
+        .collect();
+
+    let languages =
+        summo_models::languages::available(&manifests, state.engine.hardware(), &installed);
+    let settings = summo_core::Settings::load(&state.engine.paths().settings()).unwrap_or_default();
+
+    as_response(Ok::<_, summo_core::Error>(serde_json::json!({
+        // What the next recording would use, so a picker can open on the current answer rather than
+        // on a default that silently disagrees with the settings file.
+        "current": settings.models.language,
+        "languages": languages,
     })))
 }
 

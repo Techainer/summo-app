@@ -52,8 +52,8 @@ describe("normalize", () => {
 
 describe("storage", () => {
   it("round-trips a choice", () => {
-    save({ lanes: ["system"], translateTo: "en" });
-    expect(load()).toEqual({ lanes: ["system"], translateTo: "en" });
+    save({ lanes: ["system"], translateTo: "en", spoken: "vi" });
+    expect(load()).toEqual({ lanes: ["system"], translateTo: "en", spoken: "vi" });
   });
 
   it("falls back to the default when nothing was saved", () => {
@@ -74,14 +74,29 @@ describe("storage", () => {
 
 describe("what the capture means", () => {
   it("knows when live translation is on", () => {
-    expect(translating({ lanes: ["mic"], translateTo: "" })).toBe(false);
-    expect(translating({ lanes: ["mic"], translateTo: "en" })).toBe(true);
+    expect(translating({ lanes: ["mic"], translateTo: "", spoken: "" })).toBe(false);
+    expect(translating({ lanes: ["mic"], translateTo: "en", spoken: "" })).toBe(true);
   });
 
   // Translating the microphone lane translates *you*. It is what happens when the system-audio
   // switch is forgotten, and it looks like the feature is broken.
   it("knows when nothing but the local user will be heard", () => {
-    expect(hearsOthers({ lanes: ["mic"], translateTo: "en" })).toBe(false);
-    expect(hearsOthers({ lanes: ["mic", "system"], translateTo: "en" })).toBe(true);
+    expect(hearsOthers({ lanes: ["mic"], translateTo: "en", spoken: "" })).toBe(false);
+    expect(hearsOthers({ lanes: ["mic", "system"], translateTo: "en", spoken: "" })).toBe(true);
+  });
+});
+
+describe("the spoken language", () => {
+  /// An older build wrote no `spoken` at all, and a capture read back without one must record in
+  /// whatever the daemon's settings say rather than refusing or guessing a language.
+  it("defaults to empty, which the daemon reads as its own setting", () => {
+    expect(normalize({ lanes: ["mic"], translateTo: "" }).spoken).toBe("");
+    expect(DEFAULT.spoken).toBe("");
+  });
+
+  /// Codes are compared against the manifests' own spelling, where they are lower case.
+  it("is normalised, so `VI ` from an older build still matches a model", () => {
+    expect(normalize({ spoken: " VI " }).spoken).toBe("vi");
+    expect(normalize({ spoken: 7 as never }).spoken).toBe("");
   });
 });

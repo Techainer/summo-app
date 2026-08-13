@@ -1,0 +1,162 @@
+import { useCallback, useState } from "react";
+
+import { useI18n } from "../../i18n/context";
+import { useEngine } from "../../lib/engine-context";
+import {
+  AUTO,
+  autoAvailable,
+  fetchLanguages,
+  languageName,
+  megabytes,
+  quality,
+  ready,
+  type Language,
+} from "../../lib/languages";
+import { OnboardingClient, percent } from "../../lib/onboarding";
+import { useLoad } from "../../lib/use-load";
+import { Button } from "../ui";
+
+/**
+ * Which language is being spoken, and the model that can hear it.
+ *
+ * The question this asks used to be answered by inference — setup recommended a model for whatever
+ * language the *interface* was in. Right often enough that being wrong was invisible, and being
+ * wrong meant a download that could not transcribe the meeting it was installed for.
+ *
+ * What makes this more than a `<select>`:
+ *
+ * **Every option says what it costs and what it is worth.** A language served by a model that is
+ * not installed shows the download size; one served only through a multilingual model's `*` says
+ * it was never measured on this language. Whisper covers Vietnamese at 34 % and a 73 MB transducer
+ * does it at 91 %, and a picker that hides that is recommending the wrong one.
+ *
+ * **A missing model is a download, not a refusal.** Choosing a language nothing is installed for
+ * offers the download right here, with progress, and the record button waits rather than failing.
+ * The alternative — the state this replaces — is a record button that stops with "no model" and a
+ * user who has to work out which of eight to install.
+ *
+ * **Automatic is offered only when it can work.** Detection is Whisper's own, so it needs a
+ * multilingual model on disk; it also costs accuracy and can flip mid-meeting, so it is never the
+ * default.
+ */
+export function SpokenLanguage({
+  value,
+  onChange,
+  compact = false,
+}: {
+  /** Language code, or `AUTO` for detection. */
+  value: string;
+  onChange: (code: string) => void;
+  /** Drop the explanation line — for the record bar, where space is a row. */
+  compact?: boolean;
+}) {
+  const { handshake } = useEngine();
+  const { t, locale } = useI18n();
+  const [installing, setInstalling] = useState<{ id: string; pct: number } | null>(null);
+
+  const probe = useLoad(
+    useCallback(async () => fetchLanguages(handshake), [handshake]),
+    [handshake],
+  );
+  const languages = probe.data?.languages ?? [];
+  const chosen = languages.find((language) => language.code === value);
+
+  // The download, watched until it finishes. `OnboardingClient` already knows how to start one and
+  // how to report it; this only has to keep asking, because the alternative is a spinner that never
+  // ends when a download fails.
+  const install = async (language: Language) => {
+    if (!language.model) return;
+    const client = new OnboardingClient(handshake);
+    setInstalling({ id: language.model, pct: 0 });
+    try {
+      await client.install(language.model);
+      for (;;) {
+        const jobs = await client.installs();
+        const job = jobs.find((candidate) => candidate.model === language.model);
+        if (!job || job.state === "done") break;
+        if (job.state === "failed") throw new Error(job.error ?? "install failed");
+        // `percent` is null while a job is queued or has no content length; the last known number
+        // is better than a bar that jumps back to zero every time the answer is unknown.
+        setInstalling((current) => ({
+          id: language.model ?? "",
+          pct: percent(job) ?? current?.pct ?? 0,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 700));
+      }
+      probe.reload();
+    } finally {
+      setInstalling(null);
+    }
+  };
+
+  // Measured languages first, then the rest by their *displayed* name. The daemon sorts by code,
+  // which is right for a wire format and wrong for a list a person scrolls: in Vietnamese, `af`
+  // renders as "Tiếng Hà Lan (Nam Phi)" and sits between English and Vietnamese for no reason a
+  // reader can see.
+  const options = languages
+    .filter((language) => language.model)
+    .sort((a, b) => {
+      if (a.accuracy !== b.accuracy) return b.accuracy - a.accuracy;
+      return languageName(a.code, locale).localeCompare(languageName(b.code, locale), locale);
+    });
+  const auto = autoAvailable(languages);
+
+  return (
+    <div className={compact ? "flex flex-wrap items-center gap-2" : ""}>
+      <label className="text-fg-faint flex items-center gap-2 text-sm">
+        {t("record.spoken")}
+        <select
+          value={value}
+          aria-label={t("record.spoken")}
+          onChange={(event) => onChange(event.target.value)}
+          className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-8 max-w-56 rounded-[var(--radius-card)] border px-2 text-sm transition-colors focus:outline-none"
+        >
+          {/* Detection first when it is possible, because somebody who does not know what will be
+              spoken is exactly who needs it. */}
+          {auto && <option value={AUTO}>{t("record.spoken_auto")}</option>}
+
+          {/* When nothing has been chosen and detection is not available, the empty value has to be
+              an option of its own. Without it the browser shows the first entry in the list, so a
+              control that means "whatever the settings say" silently claimed to be recording
+              English — the one wrong answer that never announces itself. */}
+          {!auto && value === AUTO && <option value={AUTO}>{t("record.spoken_default")}</option>}
+          {options.map((language) => (
+            <option key={language.code} value={language.code}>
+              {languageName(language.code, locale)}
+              {language.installed ? "" : ` · ${megabytes(language.size_bytes)}`}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {/* The model that will actually run, named. Two languages can resolve to the same model and
+          one language can resolve to a model the user did not expect; saying which removes both
+          surprises. */}
+      {!compact && chosen?.model_name && (
+        <p className="text-fg-dim text-meta mt-2">
+          {t("record.spoken_model", { model: chosen.model_name })}
+          {quality(chosen) === "unmeasured" && ` — ${t("record.spoken_unmeasured")}`}
+          {quality(chosen) === "poor" && ` — ${t("record.spoken_poor")}`}
+          {!chosen.live && ` — ${t("record.spoken_slow")}`}
+        </p>
+      )}
+
+      {chosen && !ready(chosen) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Button
+            onClick={() => void install(chosen)}
+            disabled={installing !== null}
+            variant={compact ? "ghost" : "primary"}
+          >
+            {installing
+              ? t("record.spoken_installing", { pct: String(installing.pct) })
+              : t("record.spoken_install", { size: megabytes(chosen.size_bytes) })}
+          </Button>
+          {!compact && <span className="text-fg-faint text-micro">{t("record.spoken_wait")}</span>}
+        </div>
+      )}
+
+      {probe.error && <p className="text-rec text-micro mt-2">{probe.error}</p>}
+    </div>
+  );
+}
