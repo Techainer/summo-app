@@ -40,7 +40,20 @@ impl Paths {
     /// be typed from memory. An application-support directory is somewhere data is kept *from* you,
     /// which is the opposite of what is being promised.
     pub fn discover() -> Result<Self> {
-        if let Some(dir) = std::env::var_os(ENV_DATA_DIR) {
+        Self::resolve(std::env::var_os(ENV_DATA_DIR))
+    }
+
+    /// The same rule, with the environment passed in rather than read.
+    ///
+    /// Extracted so it can be tested without touching the process environment. The test that used
+    /// to do that set `SUMMO_HOME`, called `discover`, and removed the variable again — while the
+    /// rest of the suite ran in parallel threads of the same process. It passed locally for years
+    /// and failed on CI, where a different interleaving had another test read `~/.summo` in the
+    /// window where the variable was set, or this one read the home directory in the window after
+    /// it was removed. An environment variable is process-wide state; a test that mutates it is a
+    /// test that can break any other test in the binary.
+    pub fn resolve(from_env: Option<std::ffi::OsString>) -> Result<Self> {
+        if let Some(dir) = from_env {
             return Ok(Self::at(PathBuf::from(dir)));
         }
         let home = directories::UserDirs::new()
@@ -294,10 +307,17 @@ mod tests {
 
     #[test]
     fn env_override_wins() {
-        // SAFETY: single-threaded test process section; no other thread reads the environment here.
-        unsafe { std::env::set_var(ENV_DATA_DIR, "/tmp/summo-override") };
-        let paths = Paths::discover().unwrap();
-        unsafe { std::env::remove_var(ENV_DATA_DIR) };
+        let paths = Paths::resolve(Some("/tmp/summo-override".into())).unwrap();
         assert_eq!(paths.root(), Path::new("/tmp/summo-override"));
+    }
+
+    #[test]
+    fn without_the_variable_it_falls_back_to_the_home_directory() {
+        let paths = Paths::resolve(None).unwrap();
+        assert!(
+            paths.root().ends_with(".summo"),
+            "expected a ~/.summo fallback, got {}",
+            paths.root().display()
+        );
     }
 }
