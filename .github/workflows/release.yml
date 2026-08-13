@@ -53,9 +53,11 @@ jobs:
       # never opens a microphone on CI.
       - name: System dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev autoconf automake libtool
 
-      # Opus is built from source here — no runner has it — and its `autogen.sh` needs autotools.
+      # Opus is built from source and linked in (`OPUS_STATIC=1` in `bundle.sh`), so the tarball
+      # does not depend on a libopus that happens to be installed on the build machine. Building it
+      # needs autotools, which no runner image ships.
       - name: Autotools, for building Opus from source
         if: runner.os == 'macOS'
         run: brew install autoconf automake libtool

@@ -76,6 +76,19 @@ collect_libs() {
   esac
 }
 
+# Opus is linked *into* the binary, not borrowed from the machine that built it.
+#
+# `audiopus_sys` links the system libopus when pkg-config finds one — which it does on a CI runner
+# and on most developer machines, and does not on a user's laptop. The first release built this way
+# produced a tarball that died on launch with
+#
+#   error while loading shared libraries: libopus.so.0: cannot open shared object file
+#
+# on any machine without libopus installed. Nobody saw it locally for the obvious reason: everybody
+# building it had libopus. `check_no_stray_deps` below is the guard that turns that class of
+# mistake into a failed build rather than a failed download.
+export OPUS_STATIC=1
+
 FEATURES="bundled,mcp,models,dub"
 SUFFIX=""
 if [[ "${1:-}" == "--no-models" ]]; then
@@ -153,6 +166,30 @@ This build has no speech recognition compiled in — it browses a vault, imports
 answers questions, but cannot transcribe. The full build is the one without `-nomodels` in its name.
 EOF
 fi
+
+# ---- the guard ---------------------------------------------------------------------------------
+#
+# Whatever the binary still needs from the machine it lands on, and whether that is reasonable.
+#
+# Reasonable is: the C runtime, the C++ runtime, the maths and threading libraries every Linux
+# binary links, and the two `.so` files shipped beside it. Anything else is a library that happened
+# to be installed on the build machine, and a user without it gets a binary that will not start —
+# which is exactly what shipped the first time.
+check_no_stray_deps() {
+  [[ "${PLATFORM}" == "linux" ]] || return 0
+  local allowed="libc|libm|libdl|libpthread|librt|libgcc_s|libstdc\+\+|ld-linux|linux-vdso|libonnxruntime|libsherpa-onnx"
+  local stray
+  stray="$(ldd "${OUT}/summo${EXE}" | awk '{print $1}' | grep -Ev "${allowed}" | grep -E '\.so' || true)"
+  if [[ -n "${stray}" ]]; then
+    echo "!!! the binary depends on libraries this bundle does not ship:" >&2
+    echo "${stray}" | sed 's/^/    /' >&2
+    echo "    a user without them gets \"cannot open shared object file\" at launch." >&2
+    exit 1
+  fi
+  echo "==> dependencies: only the C runtime and the libraries beside the binary"
+}
+
+check_no_stray_deps
 
 echo "==> archiving"
 mkdir -p dist
