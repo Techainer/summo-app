@@ -152,6 +152,53 @@ record.
 Built by Viet Nguyen — CEO, Techainer (https://techainer.com/). AGPL-3.0.
 EOF
 
+# What the operating system does to a downloaded binary before it will run one.
+#
+# This is the first thing a new user meets and it looks like the app is broken, so it belongs in the
+# file that ships beside the app rather than in a page they would have to already be reading. The
+# macOS text is checked against what the binary actually carries: an ad-hoc signature the linker
+# adds — `flags 0x20002`, no CMS blob — which is enough to execute but is not a Developer ID and is
+# not notarised, so Gatekeeper refuses a *quarantined* copy.
+case "${PLATFORM}" in
+  macos)
+    cat >> "${OUT}/RUN.md" <<'EOF'
+
+---
+
+## First launch on macOS
+
+macOS refuses anything downloaded from a browser that Apple has not notarised, and says the
+developer "cannot be verified" rather than what it is really objecting to. This build is ad-hoc
+signed, which is not the same as notarised — we have no Apple Developer certificate yet.
+
+To run it, strip the quarantine flag from the folder, once:
+
+    xattr -dr com.apple.quarantine .
+    ./summo serve
+
+`-r`, because the two `.dylib` files beside the binary are quarantined too, and the app will fail
+when recognition starts rather than when it launches.
+
+The microphone prompt goes to the program that *started* Summo — the terminal — so if you never see
+it, look in System Settings → Privacy & Security → Microphone for your terminal app.
+EOF
+    ;;
+  windows)
+    cat >> "${OUT}/RUN.md" <<'EOF'
+
+---
+
+## First launch on Windows
+
+SmartScreen shows "Windows protected your PC" for any executable without a code-signing
+certificate, and hides the button that runs it: click **More info**, then **Run anyway**.
+
+Keep the `.dll` files in the same folder as `summo.exe`. Copying the executable somewhere on its own
+gives a "code execution cannot proceed" dialog naming a DLL rather than anything about Summo.
+EOF
+    ;;
+esac
+
 # Only the recognition build has libraries beside the binary, and only it should say so. A note
 # about `.so` files in a bundle that has none is the sort of thing that makes a reader distrust the
 # rest of the page.
