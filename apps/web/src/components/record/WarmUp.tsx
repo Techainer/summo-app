@@ -25,7 +25,8 @@ export function WarmUp() {
       // What is loaded already, then — only if nothing is — the request to load one. Asking first
       // keeps a reopened card from rebuilding a decoder that is already sitting there.
       const already = await readyNow(handshake);
-      if (already || session.recording) return already;
+      // `undefined` is "this build cannot warm anything" — do not ask it to.
+      if (already === undefined || already || session.recording) return already ?? null;
       return await warmUp(handshake);
     }, [handshake, session.recording]),
     [handshake, session.recording],

@@ -154,10 +154,18 @@ export async function warmUp(handshake: Handshake): Promise<Ready | null> {
   return body.ready;
 }
 
-/** What is loaded, from the status endpoint the recording banner already reads. */
-export async function readyNow(handshake: Handshake): Promise<Ready | null> {
+/**
+ * What is loaded, from the status endpoint the recording banner already reads.
+ *
+ * Three answers, and the third is the point. `undefined` means this daemon has no warming at all —
+ * a build without recognition does not carry the field — and asking it to warm would be a request
+ * the browser logs as a failed one on a screen where nothing is wrong. Handling the error is not
+ * enough: the console entry appears whatever the code does with the response, and the shell suite
+ * treats console errors as failures because they usually are.
+ */
+export async function readyNow(handshake: Handshake): Promise<Ready | null | undefined> {
   const response = await fetch(url(handshake, "/status"));
-  if (!response.ok) return null;
+  if (!response.ok) return undefined;
   const body = (await response.json()) as { ready?: Ready | null };
-  return body.ready ?? null;
+  return "ready" in body ? (body.ready ?? null) : undefined;
 }
