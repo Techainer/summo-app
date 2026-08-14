@@ -14,7 +14,24 @@
 #
 # mold is a preference about how fast one's own machine links, not a property of the project, so it
 # belongs in `~/.cargo/config.toml`. `CONTRIBUTING.md` says how.
-rustflags = ["-C", "link-arg=-Wl,-rpath,$ORIGIN"]
+#
+# `--exclude-libs,ALL` is the second flag, and it fixes something that was working by luck.
+#
+# Two ONNX Runtimes end up in this binary: `ort` links 1.28 statically, and sherpa-onnx brings its
+# own `libonnxruntime.so` 1.17.1 beside it. Because the executable exported `OrtGetApiBase`, and
+# because ELF resolves symbols from the executable before any shared library, sherpa was calling
+# into *our* 1.28 rather than into the 1.17.1 it was compiled against:
+#
+#     binding file libsherpa-onnx-c-api.so [0] to ./summo [0]: normal symbol `OrtGetApiBase'
+#
+# That works — ONNX Runtime keeps its C API backward compatible, and sherpa asks for API 17, which
+# 1.28 still serves — so nothing failed and nothing would have, until the day it did, at runtime,
+# with an error naming neither library. `--exclude-libs,ALL` hides the symbols that came from static
+# archives, so each library binds to the runtime it was built against.
+rustflags = ["-C", "link-arg=-Wl,-rpath,$ORIGIN", "-C", "link-arg=-Wl,--exclude-libs,ALL"]
 
+# macOS needs no equivalent: its two-level namespace records which dylib each symbol came from, so
+# sherpa's calls go to sherpa's ONNX Runtime whatever the executable also contains. Windows exports
+# nothing from an `.exe` unless asked, so it has the same property for a different reason.
 [target.'cfg(target_os = "macos")']
 rustflags = ["-C", "link-arg=-Wl,-rpath,@executable_path"]
