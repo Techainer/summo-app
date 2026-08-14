@@ -28,6 +28,7 @@ import { useI18n } from "../../i18n/context";
  */
 export function Ticker({ value, className }: { value: string; className?: string }) {
   const node = useRef<HTMLSpanElement>(null);
+  const counted = useRef(false);
   const still = useReducedMotion();
   const { locale } = useI18n();
 
@@ -39,17 +40,26 @@ export function Ticker({ value, className }: { value: string; className?: string
   useEffect(() => {
     const element = node.current;
     if (!element) return;
-    if (target === null || still) {
+    // Counted once, then never again for the life of this element.
+    //
+    // The analytics screen switches range — today, seven days, thirty — and the figure it holds
+    // changes under a person who is comparing it against the one that was there a second ago.
+    // Rolling that from zero every time turns a comparison into a wait, and it is the animation
+    // equivalent of a page reload. Arrival is the only moment counting says anything true.
+    if (target === null || still || counted.current) {
       element.textContent = value;
       return;
     }
-    // From zero, not from the previous number: this only ever runs on first arrival, and "0 → 12"
-    // is the shape of something being counted.
     const running = animate(0, target, {
       duration: Math.min(0.9, 0.25 + target * 0.02),
       ease: [0.16, 1, 0.3, 1],
       onUpdate: (at) => {
         element.textContent = format.format(Math.round(at));
+      },
+      // On completion rather than on start, so an animation that was torn down before it finished
+      // — React's development double-invoke does exactly this — is allowed to run again.
+      onComplete: () => {
+        counted.current = true;
       },
     });
     return () => running.stop();
