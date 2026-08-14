@@ -194,8 +194,16 @@ export function AgentsScreen() {
             onClick={() => void open(each.slug)}
             className={cn(
               "rounded-card bg-bg-soft lift border p-4 text-left",
+              // An outline for the chosen card, not a shadow and not a ring.
+              //
+              // `.lift:hover` sets `box-shadow`, and a class beats a utility of lower specificity,
+              // so hovering the selected agent replaced its accent edge with the ordinary hover
+              // shadow and the selection vanished under the pointer. Swapping to `ring-1` did not
+              // help — Tailwind v4 implements a ring *as* a box-shadow, which the browser confirmed
+              // by reporting the same two shadows and no accent at all. `outline` is a separate
+              // property and survives both.
               each.slug === chosen
-                ? "border-accent shadow-[0_0_0_1px_var(--color-accent)]"
+                ? "border-accent outline-accent outline-1"
                 : "border-line hover:border-fg-faint",
             )}
           >

@@ -91,8 +91,8 @@ describe("colour utilities", () => {
   const defined = new Set([...css.matchAll(/--color-([a-z0-9-]+):/g)].map((m) => m[1]!));
 
   /**
-   * The four prefixes that are colours often enough to be worth checking, and the values they take
-   * that are *not* colours.
+   * The prefixes that are colours often enough to be worth checking, and the values they take that
+   * are *not* colours.
    *
    * Tailwind overloads these: `text-sm` is a size, `bg-cover` is a fit, `border-b` is an edge. The
    * list is static, it is Tailwind's rather than ours, and a false positive costs one line here —
@@ -109,8 +109,8 @@ describe("colour utilities", () => {
     // border-
     ...["0", "2", "4", "8", "x", "y", "s", "e", "t", "r", "b", "l"],
     ...["solid", "dashed", "dotted", "double", "hidden", "collapse", "separate"],
-    // ring-
-    ...["1", "3", "inset", "offset"],
+    // ring- and outline-
+    ...["1", "3", "inset", "offset", "dashed-2"],
     // Tailwind's own palette, used directly in a few places where a literal is honest.
     ...["white", "black", "transparent", "current", "inherit"],
   ]);
@@ -127,7 +127,7 @@ describe("colour utilities", () => {
     return out;
   }
 
-  it("has a value behind every text-, bg-, border- and ring- colour the interface names", () => {
+  it("has a value behind every text-, bg-, border-, ring- and outline- colour it names", () => {
     const files = sources("../");
     expect(files.length, "no sources found — this test is checking nothing").toBeGreaterThan(20);
 
@@ -160,7 +160,7 @@ describe("colour utilities", () => {
       // The name only, without the opacity suffix: `text-accent/60` is `accent`. The lookbehind is
       // what stops `--avatar-text-c` and `--color-bg-elevated` reading as utilities.
       for (const [, name] of source.matchAll(
-        /(?<![\w-])(?:text|bg|border|ring)-([a-z][a-z0-9]*(?:-[a-z0-9]+)*)(?:\/\d+)?/g,
+        /(?<![\w-])(?:text|bg|border|ring|outline)-([a-z][a-z0-9]*(?:-[a-z0-9]+)*)(?:\/\d+)?/g,
       )) {
         if (resolves(name!)) continue;
         if (!missing.has(name!)) missing.set(name!, file);

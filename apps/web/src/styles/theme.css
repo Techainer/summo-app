@@ -360,23 +360,31 @@ body {
  * that jumps under the pointer is a card that moves out from under a click. */
 .lift {
   transition:
-    transform 0.18s var(--ease-out),
+    translate 0.18s var(--ease-out),
     box-shadow 0.18s var(--ease-out),
     border-color 0.18s var(--ease-out);
 }
 .lift:hover {
-  transform: translateY(-2px);
+  /* `translate`, not `transform`.
+   *
+   * Both cards this is on are Motion elements, and Motion animates by writing `transform` into the
+   * inline style — which no class can outrank. A `transform: translateY(-2px)` here did nothing at
+   * all on either of them, and the `transition: transform` beside it was worse than nothing: it
+   * applied to the inline transform Motion rewrites every frame, so the library's entrance
+   * animation had a 180ms lag chasing it. `translate` is its own property, composes with whatever
+   * `transform` holds, and Motion never touches it. */
+  translate: 0 -2px;
   box-shadow: var(--shadow-pop);
   border-color: var(--color-line-strong);
 }
 .lift:active {
-  transform: translateY(0);
+  translate: 0 0;
   transition-duration: 0.08s;
 }
 @media (prefers-reduced-motion: reduce) {
   .lift:hover,
   .lift:active {
-    transform: none;
+    translate: none;
   }
 }
 

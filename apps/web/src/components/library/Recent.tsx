@@ -8,7 +8,7 @@ import { cn } from "../../lib/cn";
 import { formatDuration } from "../../lib/duration";
 import { useEngine } from "../../lib/engine-context";
 import { LibraryClient, dayLabel, localDay, type MeetingSummary } from "../../lib/library";
-import { GENTLE, listItem, stagger } from "../../lib/motion";
+import { listItem, stagger } from "../../lib/motion";
 
 /**
  * The last few things in the vault, as cards.
@@ -84,11 +84,14 @@ export function Recent({
     >
       {entries.map((entry) => (
         <motion.li key={entry.id} variants={listItem}>
-          <motion.button
+          {/* A plain button. The lift used to be `whileHover={{ y: -2 }}`, which is Motion running a
+              spring on one hover — a rAF loop and an inline transform per card, to move something
+              two pixels. `.lift` is the same movement as a CSS transition, it is the same rule every
+              other card on every other screen uses, and it costs nothing while the pointer is
+              elsewhere. */}
+          <button
             type="button"
             onClick={() => onOpen(entry)}
-            whileHover={{ y: -2 }}
-            transition={GENTLE}
             className="border-line bg-bg-soft lift flex w-full items-center gap-3 rounded-[var(--radius-card)] border p-2.5 text-left"
           >
             {/* A note has no waveform because it was typed; it gets the pen instead, at the same
@@ -129,7 +132,7 @@ export function Recent({
                 ))}
               </span>
             )}
-          </motion.button>
+          </button>
         </motion.li>
       ))}
     </motion.ul>
