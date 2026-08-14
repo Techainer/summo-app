@@ -124,7 +124,9 @@ if (!/speech model/i.test(shell)) fail("nothing warned that recognition is unava
 // an app that reads and never writes — which is exactly what shipped once.
 await nav.getByRole("button", { name: "Notes" }).click();
 await page.waitForTimeout(500);
-await page.getByRole("button", { name: "New" }).click();
+// `exact`, because the sidebar now offers "New page" as well: a page and a note are the same
+// thing, and the tree can make one too. Without it this matches both and Playwright refuses.
+await page.getByRole("button", { name: "New", exact: true }).click();
 await page.waitForTimeout(700);
 
 const box = page.getByRole("textbox", { name: "Note body" });
