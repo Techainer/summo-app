@@ -519,7 +519,15 @@
     "task_count_one": "{count} việc treo",
     "task_count_other": "{count} việc treo",
     "dangling": "{from} có thể giao việc cho “{to}”, nhưng không có agent nào tên đó.",
-    "unreadable": "Không đọc được {path}: {reason}"
+    "unreadable": "Không đọc được {path}: {reason}",
+    "dream": "Ngủ & ôn lại",
+    "dream_nightly": "Mỗi đêm, sau {hour} giờ",
+    "dream_now": "Ôn ngay",
+    "dream_working": "Đang ôn…",
+    "dream_hint": "Agent đọc lại trí nhớ của nó rồi viết gọn: gộp trùng, giữ bản sửa mới nhất, bỏ việc đã xong. Không thêm điều gì mới. Bản cũ vẫn nằm trong DREAMS.md.",
+    "dream_refused": "bỏ qua — {why}",
+    "dream_shrank": "{before} → {after} dòng",
+    "dream_none": "Chưa ôn lần nào."
   },
   "finder": {
     "title": "Tìm",

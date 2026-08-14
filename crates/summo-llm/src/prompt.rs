@@ -275,6 +275,42 @@ pub fn answer(question: &str, context: &str, language: &str) -> Vec<Message> {
     ]
 }
 
+/// Ask a model to shorten what an agent knows, without changing what it knows.
+///
+/// The instruction is almost entirely a list of things not to do, and that is the right shape for
+/// it. This runs unattended, overnight, on the file that steers every later answer — so the failure
+/// worth preventing is not a mediocre summary, it is a model that helpfully adds "the user prefers
+/// short answers" to a memory nobody said that in.
+///
+/// Habits are shown but never merged into the output. They are a different file with a different
+/// owner: memory is what the agent was told, habits are what it was asked, and a night that folded
+/// one into the other would make both unreadable.
+#[must_use]
+pub fn consolidate(memory: &str, habits: &str, agent: &str) -> Vec<Message> {
+    let context = if habits.trim().is_empty() {
+        String::new()
+    } else {
+        format!("\n\nFor context only — do NOT copy these into your answer:\n{habits}")
+    };
+    vec![
+        Message::system(format!(
+            "You are tidying the memory of an assistant called {agent}. You will be given its \
+             memory as a list of lines.\n\nReturn the same knowledge in fewer lines:\n\
+             - Merge lines that say the same thing, keeping the clearest wording.\n\
+             - When two lines contradict, keep only the later one — it is a correction.\n\
+             - Drop what is plainly finished or was only true of one past day.\n\n\
+             Hard rules. Breaking any of them makes the answer useless:\n\
+             - Add NOTHING. Every line you return must be supported by a line you were given. Do \
+               not infer preferences, personality, or conclusions about anyone.\n\
+             - Keep every fact that is still true, even if it seems minor.\n\
+             - Never return fewer than half the lines you were given.\n\
+             - Answer with the list and nothing else: one line each, no headings, no numbering, no \
+               explanation of what you changed."
+        )),
+        Message::user(format!("Memory:\n\n{memory}{context}")),
+    ]
+}
+
 /// Rewrite one selected passage, and nothing else.
 ///
 /// The model is given the whole section for context but asked to return **only** the replacement

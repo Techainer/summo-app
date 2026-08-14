@@ -23,6 +23,7 @@ pub mod board;
 pub mod calsync;
 pub mod collaborate;
 pub mod draft;
+pub mod dream;
 pub mod embedded;
 pub mod errand;
 pub mod imports;

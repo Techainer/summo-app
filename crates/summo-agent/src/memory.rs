@@ -124,6 +124,26 @@ pub fn remember(path: &Path, today: &str, text: &str) -> Result<bool> {
     Ok(true)
 }
 
+/// Replace the whole list, keeping the file's shape.
+///
+/// For consolidation — see `summo_engine::dream`, the one caller. Deliberately not exposed as a
+/// tool: an agent that could rewrite its own memory wholesale mid-run could erase a correction it
+/// had just been given, and the value of memory is that the user can rely on what they put in it.
+/// A night's consolidation is a different act, and it archives what it replaces before it writes.
+pub fn replace(path: &Path, facts: &[String], today: &str) -> Result<()> {
+    let mut out = String::from("# Memory\n\n");
+    for text in facts.iter().take(MAX_LINES) {
+        let text = text.trim();
+        if !text.is_empty() {
+            out.push_str(&format!("- {today} — {text}\n"));
+        }
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+    }
+    std::fs::write(path, out).map_err(|e| Error::io(path, e))
+}
+
 /// Forget one fact, by exact text. What makes the memory the user's rather than the agent's.
 pub fn forget(path: &Path, text: &str) -> Result<bool> {
     let facts = load(path);

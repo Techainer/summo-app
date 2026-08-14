@@ -519,7 +519,15 @@
     "task_count_one": "未完了{count}件",
     "task_count_other": "未完了{count}件",
     "dangling": "{from}は「{to}」に仕事を渡せますが、その名前のエージェントは存在しません。",
-    "unreadable": "{path}を読めませんでした：{reason}"
+    "unreadable": "{path}を読めませんでした：{reason}",
+    "dream": "寝かせて整理",
+    "dream_nightly": "毎晩 {hour} 時以降",
+    "dream_now": "今すぐ整理",
+    "dream_working": "整理中…",
+    "dream_hint": "エージェントが自分の記憶を読み直して短くします：重複をまとめ、最新の訂正を残し、終わったことを落とす。新しいことは足しません。元の版は DREAMS.md に残ります。",
+    "dream_refused": "見送り — {why}",
+    "dream_shrank": "{before} → {after} 行",
+    "dream_none": "まだ一度もありません。"
   },
   "finder": {
     "title": "絞り込み",
