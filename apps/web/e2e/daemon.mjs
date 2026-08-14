@@ -128,7 +128,7 @@ Họ muốn bản dùng thử.
  * `port: 0` asks the operating system for a free one, so two suites running at once cannot collide
  * — which is what a fixed port did the first time this was tried in parallel.
  */
-export /**
+/**
  * Where the native libraries are, when the build did not leave them beside the binary.
  *
  * A build with `--features models` links sherpa-onnx, and the binary is linked with an `$ORIGIN`
@@ -147,7 +147,7 @@ function libraries() {
   };
 }
 
-async function boot({ name = "e2e", seed = true, registry = REGISTRY } = {}) {
+export async function boot({ name = "e2e", seed = true, registry = REGISTRY } = {}) {
   const home = join("/tmp", `summo-${name}-${process.pid}`);
   rmSync(home, { recursive: true, force: true });
   mkdirSync(home, { recursive: true });
