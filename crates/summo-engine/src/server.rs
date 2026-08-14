@@ -217,6 +217,14 @@ impl Server {
             // single-page app's own routes reach it. Registering it earlier would shadow the API.
             .fallback(interface)
             .layer(middleware::from_fn_with_state(state.clone(), cors))
+            .with_state(state.clone());
+
+        // Added after the chain rather than inside it: the handler exists only in a build with
+        // recognition, and a `#[cfg]` on one line of a long builder chain is a line every future
+        // edit has to remember. A daemon without models simply does not have this path.
+        #[cfg(feature = "models")]
+        let app = app
+            .route("/models/warm", post(warm_model))
             .with_state(state);
 
         // Loopback only. Binding 0.0.0.0 would expose a user's microphone to their network.
@@ -393,6 +401,29 @@ async fn status(
     if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
+    #[cfg(feature = "models")]
+    {
+        // `ready` is added *beside* the status fields, not wrapped around them. Every client reads
+        // `state` and `live_model` at the top level, and moving them under a key would have been a
+        // breaking change to save one line here.
+        let mut body = serde_json::to_value(state.engine.status()).unwrap_or_default();
+        if let Some(object) = body.as_object_mut() {
+            // What is loaded and instant right now. `null` means the next recording pays about
+            // three and a half seconds to build a decoder — worth saying rather than leaving as an
+            // unexplained pause after pressing record.
+            object.insert(
+                "ready".into(),
+                match state.engine.warm().ready() {
+                    Some(key) => {
+                        serde_json::json!({ "model": key.model, "language": key.language })
+                    }
+                    None => serde_json::Value::Null,
+                },
+            );
+        }
+        return Json(body).into_response();
+    }
+    #[cfg(not(feature = "models"))]
     Json(state.engine.status()).into_response()
 }
 
@@ -717,6 +748,11 @@ async fn remove_model(
                 "`{id}` is in use as the {role} model; choose another one first"
             )));
         }
+
+        // Before the blobs go: a warm decoder holding a removed model is a crash waiting for the
+        // next recording.
+        #[cfg(feature = "models")]
+        state.engine.warm().clear();
 
         let freed = state.engine.store().remove(&model_id)?;
         Ok(serde_json::json!({ "removed": id, "freed_bytes": freed }))
@@ -2059,6 +2095,67 @@ async fn set_language(
     })())
 }
 
+/// Build a decoder now, so the next recording does not wait for one.
+///
+/// Over HTTP rather than only as the `model_load` socket command, because the socket exists only
+/// while a session does — and the whole point of warming is to happen when nothing is recording.
+/// The interface calls this when it opens and after a meeting ends.
+///
+/// Synchronous: it answers when the model is ready, which is what lets the caller show "ready"
+/// rather than "asked for". Around three and a half seconds.
+#[cfg(feature = "models")]
+async fn warm_model(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    // Not while recording: the session owns the decoder it is using, and building a second one
+    // would double resident memory in the middle of the meeting it would be trying to protect.
+    if state.engine.status().is_recording() {
+        return as_response(Ok::<_, summo_core::Error>(
+            serde_json::json!({ "ready": null, "skipped": "recording" }),
+        ));
+    }
+
+    let spec = resolve_models(&crate::protocol::SessionSpec::new(""), &state.engine);
+
+    // Nothing installed yet, so nothing to warm. Not an error: warming is a nudge the interface
+    // sends whenever it opens the record card, and answering 400 to it made a first run log a
+    // failed request on a screen where nothing is wrong — the browser suites caught exactly that.
+    if spec.live_model.trim().is_empty() {
+        return as_response(Ok::<_, summo_core::Error>(
+            serde_json::json!({ "ready": null, "skipped": "no model installed" }),
+        ));
+    }
+
+    let engine = state.engine.clone();
+
+    // On a blocking thread: building a decoder is seconds of CPU inside ONNX Runtime, and holding
+    // an async worker for that long starves every other request the daemon is serving.
+    let built = tokio::task::spawn_blocking(move || {
+        crate::warm::build(&spec, &engine.store(), engine.hardware()).map(|(key, decoder)| {
+            let described = serde_json::json!({ "model": key.model, "language": key.language });
+            engine.warm().put(key, decoder);
+            described
+        })
+    })
+    .await;
+
+    match built {
+        Ok(Ok(ready)) => as_response(Ok::<_, summo_core::Error>(
+            serde_json::json!({ "ready": ready }),
+        )),
+        Ok(Err(e)) => as_response(Err::<serde_json::Value, _>(e)),
+        Err(e) => as_response(Err::<serde_json::Value, _>(summo_core::Error::Other(
+            format!("warming panicked: {e}"),
+        ))),
+    }
+}
+
 /// Every language this registry can recognise, and what would serve each one.
 ///
 /// The screen this feeds replaces a guess. Setup used to recommend a model for whatever language
@@ -3252,6 +3349,9 @@ fn handle_command_with_models(
         }
         Command::SessionStop => {
             let mut events = Vec::new();
+            // Kept before the session is consumed, so the slot can be refilled for whatever the
+            // *next* meeting will most likely be: the same model and language as this one.
+            let finished = session.as_ref().map(|active| active.spec.clone());
             if let Some(mut active) = session {
                 match active.runner.flush() {
                     Ok(flushed) => {
@@ -3294,8 +3394,49 @@ fn handle_command_with_models(
             }
             engine.end();
             events.push(Event::info("session stopped"));
+
+            // Refill the slot for the next meeting, off the socket. Rebuilding takes about three
+            // and a half seconds and this thread is the one carrying audio and events; doing it
+            // here would stall the stop the user just asked for.
+            if let Some(spec) = finished {
+                let engine = engine.clone();
+                std::thread::spawn(move || {
+                    match crate::warm::build(&spec, &engine.store(), engine.hardware()) {
+                        Ok((key, decoder)) => engine.warm().put(key, decoder),
+                        // Nothing broken: the next recording loads its own decoder exactly as it
+                        // did before this optimisation existed.
+                        Err(e) => {
+                            tracing::debug!(error = %e, "could not pre-load the next decoder")
+                        }
+                    }
+                });
+            }
             (events, None)
         }
+        // Build a decoder now, so the next recording does not wait for one.
+        //
+        // Answered with an error in every build until today: this arm fell through to the handler
+        // for daemons compiled *without* recognition, which says "rebuild with --features models"
+        // — in a build that has them. The comment on the command has promised this since it was
+        // written: "so the first recording is not delayed by it".
+        Command::ModelLoad { id } => {
+            let mut spec = crate::protocol::SessionSpec::new(id.trim());
+            spec.language = None;
+            let spec = resolve_models(&spec, engine);
+            match crate::warm::build(&spec, &engine.store(), engine.hardware()) {
+                Ok((key, decoder)) => {
+                    let said = key.language.clone().unwrap_or_else(|| "auto".into());
+                    let model = key.model.clone();
+                    engine.warm().put(key, decoder);
+                    (
+                        vec![Event::info(format!("{model} ready ({said})"))],
+                        session,
+                    )
+                }
+                Err(e) => (vec![Event::error(&e)], session),
+            }
+        }
+
         // Change the language, or the model, without ending the meeting.
         //
         // The file, the utterances already committed and the audio archive all continue; only the
@@ -3327,7 +3468,12 @@ fn handle_command_with_models(
             // language and lets the daemon pick what hears it.
             let spec = resolve_models(&spec, engine);
 
-            match crate::runner::SessionRunner::new(&spec, &engine.store(), engine.hardware()) {
+            match crate::runner::SessionRunner::with_warm(
+                &spec,
+                &engine.store(),
+                engine.hardware(),
+                Some(engine.warm()),
+            ) {
                 Ok(runner) => {
                     let said = spec.language.clone().unwrap_or_else(|| "auto".into());
                     active.runner = runner;
@@ -3363,7 +3509,12 @@ fn start_session(
 ) -> summo_core::Result<ActiveSession> {
     use time::OffsetDateTime;
 
-    let runner = crate::runner::SessionRunner::new(spec, &engine.store(), engine.hardware())?;
+    let runner = crate::runner::SessionRunner::with_warm(
+        spec,
+        &engine.store(),
+        engine.hardware(),
+        Some(engine.warm()),
+    )?;
 
     // Local time rather than UTC: a meeting belongs to the day it happened on where the user was.
     let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());

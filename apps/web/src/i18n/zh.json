@@ -65,7 +65,8 @@
     "listening_in": "正在以{language}聆听",
     "listening_change": "更改",
     "listening_note": "立即生效，已录制的内容不会丢失。",
-    "spoken_multi": "多种语言（自动识别）"
+    "spoken_multi": "多种语言（自动识别）",
+    "warm_ready": "可立即录音——已加载 {model}。"
   },
   "import": {
     "title": "导入录音",

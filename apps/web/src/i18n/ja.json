@@ -65,7 +65,8 @@
     "listening_in": "{language} で聞き取り中",
     "listening_change": "変更",
     "listening_note": "その場で切り替わります。録音済みの内容は失われません。",
-    "spoken_multi": "複数言語（自動判定）"
+    "spoken_multi": "複数言語（自動判定）",
+    "warm_ready": "すぐ録音できます — {model} を読み込み済み。"
   },
   "import": {
     "title": "録音ファイルを取り込む",

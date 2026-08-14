@@ -75,16 +75,38 @@ impl SessionRunner {
     /// inference state — so each lane loads its own. That doubles resident memory for a two-lane
     /// session, which is the price of transcribing both sides of a call independently.
     pub fn new(spec: &SessionSpec, store: &ModelStore, hw: &HwProfile) -> Result<Self> {
+        Self::with_warm(spec, store, hw, None)
+    }
+
+    /// The same, but allowed to take an already-built decoder out of the warm slot.
+    ///
+    /// Only the first lane can use it — a decoder holds mutable inference state, so two lanes
+    /// cannot share one — which is why this is a parameter rather than something `new` reaches for
+    /// on its own: the caller owns the slot and decides.
+    pub fn with_warm(
+        spec: &SessionSpec,
+        store: &ModelStore,
+        hw: &HwProfile,
+        warm: Option<&crate::warm::Warm>,
+    ) -> Result<Self> {
         spec.validate()?;
 
         let vad_model = resolve_vad(store)?;
         let threads = hw.recommended_threads();
 
+        let key = crate::warm::Key::new(&spec.live_model, spec.language.clone(), threads);
+        // Taken, not borrowed: whoever gets it owns it, and the slot is refilled afterwards. That
+        // keeps every question about a killed recording holding a borrowed decoder from existing.
+        let mut ready = warm.and_then(|warm| warm.take(&key));
+
         let mut lanes = HashMap::new();
         for &lane in &spec.lanes {
             let vad: Box<dyn Vad> = Box::new(SileroVad::load(&vad_model, 1)?);
             let width = vad.frame_len();
-            let decoder = load_decoder(&spec.live_model, spec.language.as_deref(), store, threads)?;
+            let decoder = match ready.take() {
+                Some(decoder) => decoder,
+                None => load_decoder(&spec.live_model, spec.language.as_deref(), store, threads)?,
+            };
 
             let cfg = SessionConfig {
                 lane,
@@ -330,7 +352,7 @@ fn task_words(task: summo_models::Task) -> &'static str {
 }
 
 /// Load the speech model named by the session, choosing a runtime from its manifest.
-fn load_decoder(
+pub(crate) fn load_decoder(
     id: &str,
     language: Option<&str>,
     store: &ModelStore,

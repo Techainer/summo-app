@@ -65,7 +65,8 @@
     "listening_in": "Đang nghe bằng {language}",
     "listening_change": "Đổi",
     "listening_note": "Đổi ngay giữa buổi, không mất phần đã ghi.",
-    "spoken_multi": "Nhiều ngôn ngữ (tự động)"
+    "spoken_multi": "Nhiều ngôn ngữ (tự động)",
+    "warm_ready": "Sẵn sàng ghi ngay — {model} đã nạp."
   },
   "import": {
     "title": "Nhập bản ghi có sẵn",
