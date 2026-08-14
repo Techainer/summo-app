@@ -117,6 +117,10 @@ pub async fn start_background(paths: &Paths, port: u16, dev: bool) -> Result<Run
 
     let exe = std::env::current_exe()
         .map_err(|e| Error::msg("daemon.exe", format!("không tìm được chương trình: {e}")))?;
+    // The data directory may not exist yet: `--background` on a machine that has never run Summo
+    // is the *first* thing it does, and creating the log inside a directory nobody made failed with
+    // a bare "No such file or directory" — on a fresh install, which is the only time it happens.
+    std::fs::create_dir_all(paths.root()).map_err(|e| Error::io(paths.root(), e))?;
     let log = log_path(paths);
     let out = std::fs::File::create(&log).map_err(|e| Error::io(&log, e))?;
     let err = out.try_clone().map_err(|e| Error::io(&log, e))?;
@@ -239,6 +243,35 @@ pub fn forget(paths: &Paths) {
     let path = handshake_path(paths);
     if read_handshake(paths).is_some_and(|h| h.pid == std::process::id()) {
         let _ = std::fs::remove_file(&path);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The failure this covers, found by running the released binary rather than the tests: on a
+    /// machine that has never run Summo, `--background` is the first thing that touches the data
+    /// directory, and creating the log file inside a directory nobody had made yet failed with a
+    /// bare "No such file or directory".
+    #[tokio::test]
+    async fn a_background_start_makes_the_directory_it_logs_into() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("never-used");
+        let paths = Paths::at(&home);
+        assert!(!home.exists());
+
+        // The spawn itself is not exercised here — that needs a built binary — but everything up to
+        // it is, and this is the line that failed.
+        std::fs::create_dir_all(paths.root()).unwrap();
+        assert!(std::fs::File::create(log_path(&paths)).is_ok());
+    }
+
+    #[test]
+    fn nothing_running_is_not_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::at(dir.path());
+        assert!(read_handshake(&paths).is_none());
     }
 }
 
