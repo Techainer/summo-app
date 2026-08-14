@@ -75,6 +75,12 @@ struct AppState {
     /// both — and `port: 0` means the OS chooses. So the one handler that needs to *tell* the page
     /// which port it is on reads it from here rather than from a value that would have been zero.
     port: std::sync::Arc<std::sync::atomic::AtomicU16>,
+    /// Notified when something asks the daemon to stop.
+    ///
+    /// A background daemon has no terminal to press Ctrl-C in, so `summo stop` has to reach it the
+    /// only way anything reaches it: over HTTP, with the token. The process still decides to exit
+    /// itself rather than being signalled, which is what lets it finish writing a recording first.
+    stopping: std::sync::Arc<tokio::sync::Notify>,
 }
 
 impl AppState {
@@ -108,6 +114,7 @@ pub struct Server {
     addr: SocketAddr,
     token: SessionToken,
     handle: tokio::task::JoinHandle<()>,
+    stopping: std::sync::Arc<tokio::sync::Notify>,
 }
 
 impl Server {
@@ -121,8 +128,10 @@ impl Server {
             token: token.clone(),
             allow_loopback_origins: cfg.allow_loopback_origins,
             port: std::sync::Arc::new(std::sync::atomic::AtomicU16::new(0)),
+            stopping: std::sync::Arc::new(tokio::sync::Notify::new()),
         };
         let port_slot = state.port.clone();
+        let stopping = state.stopping.clone();
 
         if cfg.allow_loopback_origins {
             tracing::warn!(
@@ -140,6 +149,7 @@ impl Server {
             .route("/settings/models", post(set_models))
             .route("/agent/run", post(run_errand))
             .route("/status", get(status))
+            .route("/shutdown", post(shutdown))
             .route("/storage", get(storage))
             .route("/storage/prune", post(prune_storage))
             .route("/meetings/{id}/audio", axum::routing::delete(forget_audio))
@@ -161,6 +171,8 @@ impl Server {
             .route("/meetings/{id}/draft/refine", post(refine_draft))
             .route("/meetings/{id}/draft/chat", post(chat_draft))
             .route("/meetings/{id}/draft/confirm", post(confirm_draft))
+            .route("/meetings/{id}/compose", post(compose_message))
+            .route("/meetings/{id}/compose/save", post(save_composed))
             .route("/meetings/{id}/draft", axum::routing::delete(discard_draft))
             .route("/tasks/{id}", post(update_task))
             .route("/tasks/{id}/run", post(run_task))
@@ -178,7 +190,9 @@ impl Server {
             .route("/meetings/{id}/comments/{comment}/react", post(react_comment))
             .route("/agenda", get(agenda))
             .route("/agenda/suggest", get(suggest_meeting))
-            .route("/calendars", post(add_calendar))
+            .route("/calendars", get(list_calendars).post(add_calendar))
+            .route("/calendars/subscribe", post(subscribe_calendar))
+            .route("/calendars/refresh", post(refresh_calendars))
             .route("/calendars/{name}", axum::routing::delete(remove_calendar))
             .route("/onboarding", get(onboarding))
             .route("/onboarding/complete", post(complete_onboarding))
@@ -251,6 +265,31 @@ impl Server {
 
         port_slot.store(addr.port(), std::sync::atomic::Ordering::Relaxed);
         tracing::info!(%addr, bundled = crate::assets::bundled(), "engine listening");
+        // Calendars, kept current while the daemon runs.
+        //
+        // A subscription that only refreshed when somebody opened the agenda would be useless for
+        // the one thing it is for: telling the user a meeting is starting before it starts. Fetched
+        // on startup and then on a timer, and only when there is something to fetch — a user with
+        // no subscriptions makes no requests to anybody.
+        {
+            let paths = engine.paths().clone();
+            tokio::spawn(async move {
+                loop {
+                    match crate::calsync::list(&paths) {
+                        Ok(subscriptions) if !subscriptions.is_empty() => {
+                            if let Err(e) = crate::calsync::refresh(&paths, None).await {
+                                tracing::warn!(error = %e, "calendar sync failed");
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!(error = %e, "cannot read calendar subscriptions"),
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(crate::calsync::REFRESH_S))
+                        .await;
+                }
+            });
+        }
+
         let handle = tokio::spawn(async move {
             if let Err(e) = axum::serve(listener, app).await {
                 tracing::error!(error = %e, "server stopped");
@@ -261,6 +300,7 @@ impl Server {
             addr,
             token,
             handle,
+            stopping,
         })
     }
 
@@ -276,6 +316,14 @@ impl Server {
 
     pub fn shutdown(self) {
         self.handle.abort();
+    }
+
+    /// Resolves when something asked the daemon to stop over HTTP.
+    ///
+    /// Awaited beside Ctrl-C, so a daemon started in the background and one started in a terminal
+    /// stop the same way and run the same cleanup.
+    pub async fn stop_requested(&self) {
+        self.stopping.notified().await;
     }
 }
 
@@ -1549,6 +1597,63 @@ async fn generate_draft(
     )
 }
 
+/// Draft something to send out of a meeting: an email, a chat message, a recap, a list of actions.
+///
+/// Nothing is sent. The draft comes back to the screen with a `mailto:` link for the user's own
+/// mail application — see [`crate::compose`].
+async fn compose_message(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<crate::compose::Request>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let client = match llm_client(&state) {
+        Ok(client) => client,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+    as_response(
+        crate::compose::compose(
+            state.engine.paths(),
+            &client,
+            &summo_core::MeetingId::from(id),
+            &body,
+        )
+        .await,
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct SaveComposedBody {
+    title: String,
+    body: String,
+}
+
+/// Keep a draft as a note, so it outlives the tab it was written in.
+async fn save_composed(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<SaveComposedBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    as_response(
+        crate::compose::save(
+            state.engine.paths(),
+            &summo_core::MeetingId::from(id),
+            &body.title,
+            &body.body,
+        )
+        .map(|note| serde_json::json!({ "note": note.to_string() })),
+    )
+}
+
 #[derive(Debug, Deserialize)]
 struct RefineBody {
     heading: String,
@@ -1663,15 +1768,32 @@ async fn nudges(
     let paths = state.engine.paths();
 
     let result = (|| {
+        let recording = state.engine.status().is_recording();
         let mut seen = crate::nudge::load(paths)?;
-        let due = crate::nudge::due(
+        let mut due = crate::nudge::due(
             paths,
             &seen,
             &today,
             now.hour(),
             now.date().weekday().number_from_monday(),
-            state.engine.status().is_recording(),
+            recording,
         )?;
+        // The calendar prompt goes first: it is about the next five minutes, and everything else
+        // here is about a day that has already happened.
+        let suggest = summo_core::Settings::load(&paths.settings())
+            .unwrap_or_default()
+            .recording
+            .suggest_on_meeting;
+        let mut soon = crate::nudge::meeting_soon(
+            paths,
+            &seen,
+            &today,
+            now.unix_timestamp(),
+            recording,
+            suggest,
+        );
+        soon.append(&mut due);
+        let due = soon;
         crate::nudge::record(paths, &mut seen, &due, &today)?;
         Ok(due)
     })();
@@ -2433,6 +2555,11 @@ async fn read_note(
             serde_json::json!({
                 "title": doc.title,
                 "body": doc.body,
+                // Everything under the title, which is what the editor edits. `body` alone stops
+                // at the first `##`, so a note with headings — one written in Obsidian, one
+                // started from a template, one saved out of a composed message — opened with most
+                // of itself missing and was then saved back that way.
+                "text": summo_vault::note::as_text(&doc),
                 "frontmatter": doc.frontmatter,
                 "sections": doc.sections.iter().map(|s| serde_json::json!({
                     "heading": s.heading,
@@ -2708,10 +2835,116 @@ async fn remove_calendar(
     if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
-    as_response(
-        crate::agenda::forget(state.engine.paths(), &name)
-            .map(|removed| serde_json::json!({ "removed": removed })),
-    )
+    let paths = state.engine.paths();
+    // A subscription owns its file, so unsubscribing removes both. A calendar that was copied in
+    // has no subscription and only the file to remove — and asking in that order means a
+    // subscription never leaves its `.ics` behind to keep filling the agenda.
+    let result = crate::calsync::unsubscribe(paths, &name).and_then(|removed| {
+        if removed {
+            Ok(true)
+        } else {
+            crate::agenda::forget(paths, &name)
+        }
+    });
+    as_response(result.map(|removed| serde_json::json!({ "removed": removed })))
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ShutdownBody {
+    /// Stop even though a recording is in progress.
+    #[serde(default)]
+    force: bool,
+}
+
+/// Ask the daemon to stop.
+///
+/// Refused while recording unless forced. `summo stop` in a terminal cannot see that a meeting is
+/// being recorded in the tray, and a daemon that exits on request would end that meeting with no
+/// question asked — the answer being "yes, obviously" often enough that it must still be asked.
+async fn shutdown(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    body: Option<Json<ShutdownBody>>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let force = body.is_some_and(|Json(b)| b.force);
+    if state.engine.status().is_recording() && !force {
+        let refused: Result<serde_json::Value> = Err(Error::msg(
+            "daemon.recording",
+            "đang ghi âm — dừng buổi ghi trước, hoặc dùng --force",
+        ));
+        return as_response(refused);
+    }
+    // `notify_one` rather than `notify_waiters`: it leaves a permit behind, so a request that
+    // arrives in the instant before the waiter is registered still stops the daemon.
+    state.stopping.notify_one();
+    as_response(Ok(serde_json::json!({ "stopping": true })))
+}
+
+/// Every calendar the app knows about: subscriptions with their sync state, and files copied in.
+async fn list_calendars(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let paths = state.engine.paths();
+    let result = crate::calsync::list(paths).map(|subscriptions| {
+        let subscribed: std::collections::HashSet<_> =
+            subscriptions.iter().map(|s| s.name.clone()).collect();
+        // Files the user copied in themselves, which have no URL and never refresh. Listed anyway:
+        // an agenda showing meetings from a source with no row in Settings is a mystery.
+        let files: Vec<_> = crate::agenda::load(paths)
+            .into_iter()
+            .filter(|(name, _)| !subscribed.contains(name))
+            .map(|(name, events)| serde_json::json!({ "name": name, "events": events.len() }))
+            .collect();
+        serde_json::json!({ "subscriptions": subscriptions, "files": files })
+    });
+    as_response(result)
+}
+
+#[derive(Debug, Deserialize)]
+struct SubscribeBody {
+    title: String,
+    url: String,
+}
+
+async fn subscribe_calendar(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<SubscribeBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    as_response(crate::calsync::subscribe(state.engine.paths(), &body.title, &body.url).await)
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RefreshBody {
+    /// One calendar, or every one of them.
+    #[serde(default)]
+    name: Option<String>,
+}
+
+async fn refresh_calendars(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    body: Option<Json<RefreshBody>>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let name = body.and_then(|Json(b)| b.name);
+    as_response(crate::calsync::refresh(state.engine.paths(), name.as_deref()).await)
 }
 
 /// Everyone Summo can recognise.
@@ -3892,7 +4125,16 @@ mod tests {
         seed_audio(&tmp, "01A", "mic", 100);
         std::fs::write(tmp.path().join("secret.opus"), b"do not serve me").unwrap();
 
-        for lane in ["..%2F..%2Fsecret", "..", "mic%2F..%2F..%2Fsecret"] {
+        // A lane that is *only* dots — `..` or `%2E%2E` — is not in this list, and cannot be: the
+        // URL parser in the client collapses both before a request is sent, so the daemon is asked
+        // for `/meetings/01A/` and answers it correctly. What is tested here is the case that does
+        // arrive intact, a single path segment with an encoded separator inside it, which is what
+        // would reach the file system if the lane were joined onto a path unchecked.
+        for lane in [
+            "..%2F..%2Fsecret",
+            "mic%2F..%2F..%2Fsecret",
+            "%2E%2E%2Fsecret",
+        ] {
             let resp = client()
                 .get(format!(
                     "http://{}/meetings/01A/audio/{lane}",

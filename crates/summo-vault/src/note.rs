@@ -116,9 +116,74 @@ pub fn set_body(paths: &Paths, id: &MeetingId, body: &str, title: Option<&str>) 
     {
         doc.title = title.trim().to_string();
     }
-    doc.body = body.trim().to_string();
+    // Headings in the text are headings in the document, not four literal characters at the start
+    // of a line. Assigning the whole editor buffer to `body` and leaving `sections` as they were —
+    // which is what this did — wrote the file with the new text *and* the old sections still under
+    // it, so a note with any `##` in it grew a duplicate of itself on every save. It went unnoticed
+    // because the editor only ever displayed `body`, so the duplicate was invisible in the one
+    // place somebody would have seen it.
+    let (lead, sections) = split_sections(body);
+    doc.body = lead;
+    doc.sections = sections;
     crate::write::write_atomically(&path, doc.to_markdown()?.as_bytes())?;
     Ok(path)
+}
+
+/// Split editor text into the free part and the `##` sections under it.
+///
+/// The transcript heading is *not* special-cased here: notes have no transcript, and a note whose
+/// user typed a heading with that name has typed a heading.
+#[must_use]
+pub fn split_sections(text: &str) -> (String, Vec<crate::meeting::Section>) {
+    let mut lead = String::new();
+    let mut sections: Vec<crate::meeting::Section> = Vec::new();
+
+    for line in text.lines() {
+        if let Some(heading) = line.strip_prefix("## ") {
+            sections.push(crate::meeting::Section {
+                heading: heading.trim().to_string(),
+                body: String::new(),
+            });
+            continue;
+        }
+        match sections.last_mut() {
+            Some(section) => {
+                section.body.push_str(line);
+                section.body.push('\n');
+            }
+            None => {
+                lead.push_str(line);
+                lead.push('\n');
+            }
+        }
+    }
+
+    for section in &mut sections {
+        section.body = section.body.trim_end().to_string();
+    }
+    (lead.trim().to_string(), sections)
+}
+
+/// The whole note as one piece of text, the way the editor shows it: everything under the title.
+///
+/// The document keeps body and sections apart, which is right for a *meeting* — the summary's
+/// sections are addressable, and the draft machinery rewrites one of them at a time. A note is one
+/// document a person is typing in, and handing the editor only `body` is what made a note written
+/// in Obsidian open with most of itself missing.
+#[must_use]
+pub fn as_text(doc: &crate::meeting::MeetingDoc) -> String {
+    let mut text = doc.body.trim().to_string();
+    for section in &doc.sections {
+        if !text.is_empty() {
+            text.push_str("\n\n");
+        }
+        text.push_str(&format!(
+            "## {}\n{}",
+            section.heading,
+            section.body.trim_end()
+        ));
+    }
+    text
 }
 
 /// Delete a note. `false` when there was nothing there.
@@ -150,6 +215,50 @@ fn unique(dir: &Path, stem: &str) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    /// The bug this pair of functions exists for: a note with headings used to open with everything
+    /// below the first `##` missing, and saving it back wrote the file with the visible part *and*
+    /// the invisible sections still underneath — a duplicate of the note, growing on every save.
+    #[test]
+    fn a_note_with_headings_survives_a_round_trip_through_the_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::at(dir.path());
+        let seed = "## Quyết định\nChốt giá 12 triệu.\n\n## Bối cảnh\nACME muốn thử hai tuần.";
+        let (id, path) = create(&paths, "Chốt giá", "2026-08-14", seed).unwrap();
+
+        let shown = as_text(&read(&paths, &id).unwrap());
+        assert!(
+            shown.contains("## Quyết định"),
+            "the editor sees the headings: {shown}"
+        );
+        assert!(shown.contains("## Bối cảnh"));
+        assert!(shown.contains("ACME muốn thử hai tuần."));
+
+        set_body(
+            &paths,
+            &id,
+            &format!("{shown}\n\nNgọc chốt."),
+            Some("Chốt giá"),
+        )
+        .unwrap();
+
+        let on_disk = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            on_disk.matches("## Quyết định").count(),
+            1,
+            "saving must not duplicate the sections:\n{on_disk}"
+        );
+        assert!(on_disk.contains("Ngọc chốt."));
+        let again = as_text(&read(&paths, &id).unwrap());
+        assert!(again.contains("## Bối cảnh") && again.contains("Ngọc chốt."));
+    }
+
+    #[test]
+    fn text_with_no_headings_is_left_exactly_as_it_is() {
+        let (lead, sections) = split_sections("một dòng\nhai dòng");
+        assert_eq!(lead, "một dòng\nhai dòng");
+        assert!(sections.is_empty());
+    }
+
     use super::*;
 
     fn vault() -> (tempfile::TempDir, Paths) {

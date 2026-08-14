@@ -334,7 +334,8 @@
   },
   "nudge": {
     "dismiss": "Dismiss: {title}",
-    "view": "View"
+    "view": "View",
+    "record": "Record"
   },
   "time": {
     "today": "Today",
@@ -429,11 +430,21 @@
     "saved": "Saved",
     "saving": "Saving…",
     "body": "Note body",
-    "placeholder": "The first line is the title.\n\nWrite anything. For a task, write `- [ ] @name …`."
+    "placeholder": "The first line is the title.\n\nWrite anything. For a task, write `- [ ] @name …`.",
+    "kind": "Kind of note",
+    "kind_blank": "Blank",
+    "kind_idea": "Idea",
+    "kind_decision": "Decision",
+    "kind_todo": "To do",
+    "kind_journal": "Journal",
+    "seed_idea": "## The idea\n\n## Why it is worth doing\n\n## Next step\n- [ ] ",
+    "seed_decision": "## Decision\n\n## Context\n\n## Who decided, and when\n",
+    "seed_todo": "- [ ] \n- [ ] \n",
+    "seed_journal": "## Today\n\n## In the way\n\n## Tomorrow\n"
   },
   "agenda": {
     "title": "Calendar",
-    "hint": "Read from .ics files you add. Summo never records on a schedule — this only helps title a meeting note.",
+    "hint": "Subscribe with a calendar address to keep it current, or add an .ics file. Summo never records on a schedule — it only prompts, and titles the notes.",
     "path_placeholder": "/path/to/calendar.ics",
     "path_label": "Calendar file path",
     "name_placeholder": "calendar name",
@@ -442,7 +453,20 @@
     "empty": "No calendars yet. Export an .ics from Google Calendar or Fastmail and add it here.",
     "attendees": "{count} people",
     "repeats": "repeats",
-    "remove_calendar": "Remove calendar {name}"
+    "remove_calendar": "Remove calendar {name}",
+    "subscribe_label": "Calendar address (URL)",
+    "subscribe_placeholder": "https://… .ics or webcal://…",
+    "subscribe": "Subscribe",
+    "add_file": "Add a file",
+    "how": "Where do I find the address?",
+    "how_google": "Google Calendar: calendar settings → Secret address in iCal format.",
+    "how_apple": "Apple Calendar / iCloud: right-click the calendar → Share → Public Calendar.",
+    "how_outlook": "Outlook / Microsoft 365: Settings → Shared calendars → publish → ICS link.",
+    "events": "{count} events",
+    "synced": "Synced {when}",
+    "never_synced": "Never synced",
+    "refresh_one": "Sync {name} now",
+    "from_file": "from a file, never refreshes"
   },
   "comments": {
     "title": "Comments",
@@ -628,5 +652,32 @@
     "notify_linux": "Linux: check your desktop's Do Not Disturb setting, and note that a Flatpak browser needs access to the D-Bus notification service.",
     "notify_unsupported": "This browser has no notification API — Summo will remind you inside the app instead.",
     "mic_title": "Microphone"
+  },
+  "compose": {
+    "title": "Write the follow-up",
+    "open": "Open",
+    "hint": "Written from what the meeting contained. Nothing is sent — you read it and send it yourself.",
+    "kind": "What to write",
+    "kind_email": "Email",
+    "kind_message": "Message",
+    "kind_recap": "Recap",
+    "kind_actions": "Actions",
+    "tone": "Tone",
+    "tone_neutral": "Neutral",
+    "tone_friendly": "Friendly",
+    "tone_formal": "Formal",
+    "audience": "Who reads it",
+    "audience_placeholder": "the ACME team, our engineers…",
+    "write": "Write it",
+    "again": "Write again",
+    "working": "Writing…",
+    "subject": "Subject",
+    "body": "Message",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copy_failed": "Could not copy — select the text and copy it by hand.",
+    "open_mail": "Open in mail app",
+    "keep": "Keep as a note",
+    "kept": "Saved"
   }
 }

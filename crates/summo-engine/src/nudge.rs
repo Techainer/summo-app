@@ -37,6 +37,8 @@ pub enum Reason {
     DraftWaiting,
     /// A task passed its due date.
     Overdue,
+    /// A meeting on the calendar is starting, and nothing is recording it.
+    MeetingSoon,
 }
 
 impl Reason {
@@ -47,6 +49,7 @@ impl Reason {
             Self::WeeklyRollup => "weekly-rollup",
             Self::DraftWaiting => "draft-waiting",
             Self::Overdue => "overdue",
+            Self::MeetingSoon => "meeting-soon",
         }
     }
 }
@@ -209,6 +212,65 @@ pub fn due(
     Ok(out)
 }
 
+/// How early a meeting is worth mentioning, and how late it is still worth mentioning it.
+///
+/// Five minutes before, because the useful moment is while the person is opening the call, not
+/// while they are already in it. Ten minutes after, because the far more common failure is
+/// remembering to record at minute eight — and a prompt then still saves the rest of the meeting.
+const BEFORE_S: i64 = 300;
+const AFTER_S: i64 = 600;
+
+/// Ask whether to take notes, because a meeting on the calendar is starting.
+///
+/// Separate from [`due`] because it is a different question asked on a different clock: `due` looks
+/// back over a day at what the vault holds, this looks at the next few minutes of somebody else's
+/// calendar. Folding them together would mean either running the calendar check hourly or running
+/// the vault scan every minute.
+///
+/// **It only ever asks.** `suggest` is `Recording::suggest_on_meeting` and this returns nothing when
+/// it is off. Nothing here starts a recording, and nothing here should ever be changed to: a
+/// calendar entry is not consent, and the therapy appointment in a work calendar is the reason.
+pub fn meeting_soon(
+    paths: &Paths,
+    seen: &Seen,
+    today: &str,
+    now_epoch: i64,
+    recording: bool,
+    suggest: bool,
+) -> Vec<Nudge> {
+    if !suggest || recording {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    for entry in crate::agenda::agenda(paths) {
+        let until = entry.start_epoch - now_epoch;
+        if until > BEFORE_S || -until > AFTER_S {
+            continue;
+        }
+        // Keyed by the occurrence, not by the event: a daily standup is a different meeting every
+        // morning, and one that fired on Monday must still fire on Tuesday.
+        let key = format!("meeting:{}:{}", entry.uid, entry.start_epoch);
+        if seen.already_today(&key, today) {
+            continue;
+        }
+        out.push(Nudge {
+            reason: Reason::MeetingSoon,
+            title: if until > 0 {
+                format!("{} sắp bắt đầu", entry.summary)
+            } else {
+                format!("{} đang diễn ra", entry.summary)
+            },
+            body: "Ghi chú buổi này không?".into(),
+            route: "/".into(),
+            key,
+        });
+    }
+    // One prompt, even when two calendars hold the same meeting or two meetings collide.
+    out.truncate(1);
+    out
+}
+
 /// Mark nudges as said, so they do not fire again today.
 pub fn record(paths: &Paths, seen: &mut Seen, nudges: &[Nudge], today: &str) -> Result<()> {
     for nudge in nudges {
@@ -268,6 +330,84 @@ fn shift(day: &str, days: i64) -> String {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    /// A calendar with one meeting in it, starting at `start_epoch`.
+    fn calendar(paths: &Paths, start_epoch: i64) {
+        let dir = paths.calendars();
+        std::fs::create_dir_all(&dir).unwrap();
+        let stamp = |epoch: i64| {
+            time::OffsetDateTime::from_unix_timestamp(epoch)
+                .unwrap()
+                .format(
+                    &time::format_description::parse_borrowed::<2>(
+                        "[year][month][day]T[hour][minute][second]Z",
+                    )
+                    .unwrap(),
+                )
+                .unwrap()
+        };
+        std::fs::write(
+            dir.join("work.ics"),
+            format!(
+                "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:standup-1\r\nSUMMARY:Họp đầu tuần\r\n\
+                 DTSTART:{}\r\nDTEND:{}\r\nATTENDEE:mailto:a@x.vn\r\nATTENDEE:mailto:b@x.vn\r\n\
+                 END:VEVENT\r\nEND:VCALENDAR\r\n",
+                stamp(start_epoch),
+                stamp(start_epoch + 1800),
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn a_meeting_about_to_start_is_worth_asking_about() {
+        let (_dir, paths) = vault(&[]);
+        let now = 1_800_000_000;
+        calendar(&paths, now + 120);
+
+        let due = meeting_soon(&paths, &Seen::default(), "2027-01-15", now, false, true);
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].reason, Reason::MeetingSoon);
+        assert!(due[0].title.contains("Họp đầu tuần"));
+    }
+
+    /// The switch is `Recording::suggest_on_meeting`, and off means silent — not quieter.
+    #[test]
+    fn nothing_is_said_when_the_suggestion_is_turned_off() {
+        let (_dir, paths) = vault(&[]);
+        let now = 1_800_000_000;
+        calendar(&paths, now + 120);
+
+        assert!(meeting_soon(&paths, &Seen::default(), "2027-01-15", now, false, false).is_empty());
+        // Nor during a meeting that is already being recorded, which is the worst moment for a
+        // notification and the one where a screen is most likely shared.
+        assert!(meeting_soon(&paths, &Seen::default(), "2027-01-15", now, true, true).is_empty());
+    }
+
+    #[test]
+    fn a_meeting_that_is_not_close_is_left_alone() {
+        let (_dir, paths) = vault(&[]);
+        let now = 1_800_000_000;
+        calendar(&paths, now + 3_600);
+        assert!(meeting_soon(&paths, &Seen::default(), "2027-01-15", now, false, true).is_empty());
+
+        // And one that has been running for half an hour: whoever is in it is in it.
+        let (_dir2, later) = vault(&[]);
+        calendar(&later, now - 1_800);
+        assert!(meeting_soon(&later, &Seen::default(), "2027-01-15", now, false, true).is_empty());
+    }
+
+    #[test]
+    fn the_same_meeting_is_only_asked_about_once() {
+        let (_dir, paths) = vault(&[]);
+        let now = 1_800_000_000;
+        calendar(&paths, now + 120);
+
+        let mut seen = Seen::default();
+        let due = meeting_soon(&paths, &seen, "2027-01-15", now, false, true);
+        record(&paths, &mut seen, &due, "2027-01-15").unwrap();
+        assert!(meeting_soon(&paths, &seen, "2027-01-15", now, false, true).is_empty());
+    }
 
     fn vault(meetings: &[(&str, &str, &str)]) -> (TempDir, Paths) {
         let dir = TempDir::new().unwrap();

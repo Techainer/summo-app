@@ -32,7 +32,8 @@ cơ sở dữ liệu của ai khác. Ba nguyên tắc sau đây theo từ đó, 
 một bản tóm tắt do agent soạn để bạn duyệt, việc cần làm trên bảng kanban, hỏi đáp trả lời từ kho dữ
 liệu kèm trích dẫn, dịch trực tiếp nội dung đang phát, lồng tiếng (dubbing), ghi chú, lịch, bình
 luận, một dàn agent bạn chỉnh sửa như file, và đồng bộ mã hoá giữa các máy qua bất kỳ thư mục dùng
-chung nào.
+chung nào. Đăng ký lịch bằng URL thì lịch luôn cập nhật, sắp tới giờ họp app hỏi có ghi chú không —
+không bao giờ tự ghi âm — và họp xong thì soạn sẵn thư gửi đi để bạn tự gửi.
 
 **Chưa xong:** phần mobile mới ở dạng khung sườn và chưa từng biên dịch được, và relay đồng bộ trên
 cloud (hosted sync relay) chưa được xây — hiện tại đồng bộ vẫn chạy qua một thư mục dùng chung.
@@ -41,13 +42,13 @@ Các con số dưới đây đều đo trên chính codebase này, không phải
 bằng đúng lệnh ghi kèm; xem đầy đủ phương pháp và các lưu ý ở
 [`docs/benchmarks.md`](docs/benchmarks.md) và [`docs/translation.md`](docs/translation.md).
 
-| Nhận định | Đo được | Nguồn |
-|---|---|---|
-| Độ chính xác nhận dạng tiếng Việt | 8,5 % WER, 6,7 % CER (`gipformer-65M`, 100 clip FLEURS VI, 21,3 phút; còn 5,3 % nếu bỏ các clip mà bản tham chiếu viết số bằng chữ số) | `cargo run --release -p summo-bench --features asr -- asr` |
-| Tốc độ pipeline chạy live | RTF 0,107, tức nhanh hơn thời gian thực khoảng 9 lần (ghi bằng mic thô) | `docs/benchmarks.md`, mục pipeline đầu-cuối — mới đo trên hai đoạn ghi ngắn từ một mic, chưa tính WER |
-| Voice activity detection (VAD) | Silero v5, F1 0,940 (precision 0,925, recall 0,956) | `cargo run --release -p summo-bench --features silero -- vad --sweep` |
-| Tìm một cuộc họp mà không cần index | ~30 ms trên 1.000 cuộc họp (scan 8 luồng) — đây cũng là lý do không có database | `cargo run --release -p summo-bench -- vault --sizes 100,1000,5000` |
-| Dịch một dòng | ~244 ms/dòng, 8 luồng, với model mặc định `small100` nặng 583 MB — chạy ngay trong binary phát hành, không cần dựng model server | `cargo run -p summo-mt --features local,onnx --example compare` |
+| Nhận định                           | Đo được                                                                                                                                | Nguồn                                                                                                 |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Độ chính xác nhận dạng tiếng Việt   | 8,5 % WER, 6,7 % CER (`gipformer-65M`, 100 clip FLEURS VI, 21,3 phút; còn 5,3 % nếu bỏ các clip mà bản tham chiếu viết số bằng chữ số) | `cargo run --release -p summo-bench --features asr -- asr`                                            |
+| Tốc độ pipeline chạy live           | RTF 0,107, tức nhanh hơn thời gian thực khoảng 9 lần (ghi bằng mic thô)                                                                | `docs/benchmarks.md`, mục pipeline đầu-cuối — mới đo trên hai đoạn ghi ngắn từ một mic, chưa tính WER |
+| Voice activity detection (VAD)      | Silero v5, F1 0,940 (precision 0,925, recall 0,956)                                                                                    | `cargo run --release -p summo-bench --features silero -- vad --sweep`                                 |
+| Tìm một cuộc họp mà không cần index | ~30 ms trên 1.000 cuộc họp (scan 8 luồng) — đây cũng là lý do không có database                                                        | `cargo run --release -p summo-bench -- vault --sizes 100,1000,5000`                                   |
+| Dịch một dòng                       | ~244 ms/dòng, 8 luồng, với model mặc định `small100` nặng 583 MB — chạy ngay trong binary phát hành, không cần dựng model server       | `cargo run -p summo-mt --features local,onnx --example compare`                                       |
 
 ## Cài đặt và chạy
 
@@ -78,6 +79,7 @@ gì được ghi lại cho tới khi bạn bấm nút ghi.
 
 ```bash
 summo serve --port 8710      # cố định một port, khi có thứ khác cần tìm tới nó
+summo serve --background     # chạy nền; `summo status` để xem, `summo stop` để dừng
 summo serve --no-open        # chạy server, khi không có trình duyệt nào để mở
 summo import ~/Downloads/zoom-recording.mp4
 summo mcp                    # đưa kho dữ liệu ra qua MCP, cho Claude Code hay Cursor
@@ -109,7 +111,7 @@ không có quyền phân phối lại.
 
 Ngắt kết nối mạng của máy, rồi chạy `./summo serve` và ghi một cuộc họp. Nhận dạng giọng nói, VAD và
 tách người nói vẫn chạy bình thường, vì chúng chưa bao giờ gọi ra ngoài — không có đường lùi nào sang
-ASR trên cloud để mà thất bại. Điều bạn *sẽ không* làm được khi offline là lấy một bản tóm tắt hay
+ASR trên cloud để mà thất bại. Điều bạn _sẽ không_ làm được khi offline là lấy một bản tóm tắt hay
 bản dịch từ model từ xa mà bạn đã cấu hình — đó là ngoại lệ duy nhất, có chủ đích, của lời hứa "không
 gì rời khỏi máy".
 

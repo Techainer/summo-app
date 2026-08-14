@@ -23,7 +23,15 @@ export interface NoteSummary {
 
 export interface Note {
   title: string;
+  /** Free text before the first `##`. Kept for callers that want only that part. */
   body: string;
+  /**
+   * Everything under the title, headings included — what the editor shows.
+   *
+   * `body` stops at the first `##`, which meant a note written in Obsidian, or started from one of
+   * the shapes in the New menu, opened with most of itself missing.
+   */
+  text: string;
   frontmatter: { id: string; date: string; tags?: string[] };
   sections: { heading: string; body: string }[];
 }
@@ -88,6 +96,24 @@ export interface AgendaEntry {
   calendar: string;
 }
 
+/** A calendar the daemon fetches for itself. */
+export interface Subscription {
+  name: string;
+  title: string;
+  url: string;
+  /** Seconds since the epoch, or null if it has never worked. */
+  last_sync: number | null;
+  /** Why the last attempt failed. Shown, because a broken subscription looks like a free week. */
+  last_error: string | null;
+  events: number;
+}
+
+export interface Calendars {
+  subscriptions: Subscription[];
+  /** Calendars copied in as files, which have no URL and never refresh. */
+  files: { name: string; events: number }[];
+}
+
 export class AgendaClient {
   constructor(private readonly handshake: Handshake) {}
 
@@ -101,6 +127,39 @@ export class AgendaClient {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ path, name }),
+      }),
+    );
+  }
+
+  /**
+   * Subscribe to a calendar the daemon fetches for itself.
+   *
+   * The difference from `addCalendar` is the whole point: that one copies a file, which is a
+   * snapshot, so the agenda describes last Tuesday until somebody exports again. A subscription is
+   * a URL — Google's "secret address in iCal format", Apple's public calendar link — and the daemon
+   * re-fetches it while it runs.
+   */
+  async subscribe(title: string, url_: string): Promise<Subscription> {
+    return readJson<Subscription>(
+      await fetch(url(this.handshake, "/calendars/subscribe"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title, url: url_ }),
+      }),
+    );
+  }
+
+  async calendars(): Promise<Calendars> {
+    return readJson<Calendars>(await fetch(url(this.handshake, "/calendars")));
+  }
+
+  /** Fetch now, rather than waiting for the daemon's own timer. */
+  async refreshCalendars(name?: string): Promise<Subscription[]> {
+    return readJson<Subscription[]>(
+      await fetch(url(this.handshake, "/calendars/refresh"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name ?? null }),
       }),
     );
   }

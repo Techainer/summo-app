@@ -275,6 +275,133 @@ pub fn answer(question: &str, context: &str, language: &str) -> Vec<Message> {
     ]
 }
 
+/// What to write out of a meeting.
+///
+/// Not a free-text "style" field: each of these wants a different *shape*, and a shape is what the
+/// model gets wrong when asked politely. An email needs a subject line and a greeting; a chat
+/// message must fit in a glance or nobody reads it; a recap is for people who were not there and
+/// therefore cannot be told "as discussed".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Compose {
+    /// An email: subject line, greeting, body, sign-off.
+    Email,
+    /// A short message for a chat app — Slack, Teams, Zalo.
+    Message,
+    /// A recap for people who were not in the meeting.
+    Recap,
+    /// The decisions and who owes what, as a list.
+    Actions,
+}
+
+impl Compose {
+    fn shape(self) -> &'static str {
+        match self {
+            Self::Email => {
+                "Write an email. First line: `Subject: …` and nothing else on it. Then a blank \
+                 line, then a greeting, the body in short paragraphs, and a sign-off. Do not sign a \
+                 name — leave the sign-off as a greeting the sender completes."
+            }
+            Self::Message => {
+                "Write a chat message for Slack or Teams: under 80 words, no subject line, no \
+                 greeting, no sign-off. Lead with the outcome. Bullets only if there is genuinely \
+                 a list."
+            }
+            Self::Recap => {
+                "Write a recap for people who were not at the meeting. No subject line. Say what \
+                 was decided and what happens next. Never write \"as discussed\" or \"as you \
+                 know\" — the reader was not there."
+            }
+            Self::Actions => {
+                "List the decisions, then the actions as `- [ ] @person — what — when`. One line \
+                 each. Only people who actually took something on. No preamble and no closing \
+                 paragraph."
+            }
+        }
+    }
+}
+
+/// How it should sound.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Tone {
+    #[default]
+    Neutral,
+    Friendly,
+    Formal,
+}
+
+impl Tone {
+    fn describe(self) -> &'static str {
+        match self {
+            Self::Neutral => "Plain and direct. No enthusiasm the facts do not support.",
+            Self::Friendly => "Warm and colloquial, the way a colleague writes. Still brief.",
+            Self::Formal => "Formal and precise, for a client or an executive. No contractions.",
+        }
+    }
+}
+
+/// Draft something to send, out of what a meeting contained.
+///
+/// The hardest rule to get a model to keep here is the one that matters most: **invent nothing**. A
+/// model asked to write a follow-up email will cheerfully add a deadline nobody agreed to, and the
+/// user sends it, because a fluent email does not look like a wrong one. So the instruction is not
+/// "be accurate" — it is to leave a marker where it wanted a fact it does not have, which is
+/// visible in the draft and impossible to send by accident.
+#[must_use]
+pub fn compose(
+    kind: Compose,
+    tone: Tone,
+    audience: Option<&str>,
+    notes: &str,
+    language: &str,
+) -> Vec<Message> {
+    let audience = match audience.map(str::trim).filter(|a| !a.is_empty()) {
+        Some(who) => format!("The reader is: {who}. Write for them.\n\n"),
+        None => String::new(),
+    };
+    // Deliberately not [`GROUND_RULES`]. Those end with "cite the timestamp in the form [t=MM:SS]",
+    // which is right for a summary of a recording and absurd in an email to a customer — the first
+    // draft this produced was a perfectly polite message with `[t=03:12]` in the middle of it. What
+    // carries over is the part that matters everywhere: invent nothing.
+    vec![
+        Message::system(format!(
+            "You are writing a message on behalf of somebody who was at a meeting. Its notes are \
+             below. Never invent a fact, a name, a number, a date or a commitment that is not in \
+             them. If something is needed and missing, write `[…]` in its place rather than \
+             guessing, so the sender can see what to fill in. Never write a timestamp or a \
+             citation — this is a message to a person, not a summary of a recording.\n\nWrite in \
+             {language}.\n\n{}\n\n{}\n\n{audience}Return only the message itself — no \
+             explanation of what you wrote and no Markdown code fence around it.",
+            kind.shape(),
+            tone.describe(),
+        )),
+        Message::user(format!("Notes from the meeting:\n\n{notes}")),
+    ]
+}
+
+/// Pull `Subject: …` off the front of a composed email.
+///
+/// Returns `(subject, body)`, and `None` for the subject when the model did not write one — which
+/// is correct for every kind but [`Compose::Email`], and which must not turn the first line of a
+/// chat message into a subject line.
+#[must_use]
+pub fn split_subject(text: &str) -> (Option<String>, String) {
+    let text = text.trim();
+    let Some((first, rest)) = text.split_once('\n') else {
+        return (None, text.to_string());
+    };
+    for prefix in ["Subject:", "Tiêu đề:", "Chủ đề:", "件名:", "主题:"] {
+        if let Some(subject) = first.trim().strip_prefix(prefix) {
+            return (
+                Some(subject.trim().to_string()),
+                rest.trim_start().to_string(),
+            );
+        }
+    }
+    (None, text.to_string())
+}
+
 /// Rewrite one selected passage, and nothing else.
 ///
 /// The model is given the whole section for context but asked to return **only** the replacement

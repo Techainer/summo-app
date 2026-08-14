@@ -334,7 +334,8 @@
   },
   "nudge": {
     "dismiss": "閉じる：{title}",
-    "view": "見る"
+    "view": "見る",
+    "record": "録音"
   },
   "time": {
     "today": "今日",
@@ -429,11 +430,21 @@
     "saved": "保存しました",
     "saving": "保存中…",
     "body": "ノート本文",
-    "placeholder": "1行目がタイトルになります。\n\n何でも書けます。タスクにするには `- [ ] @名前 …` と書いてください。"
+    "placeholder": "1行目がタイトルになります。\n\n何でも書けます。タスクにするには `- [ ] @名前 …` と書いてください。",
+    "kind": "メモの種類",
+    "kind_blank": "空白",
+    "kind_idea": "アイデア",
+    "kind_decision": "決定事項",
+    "kind_todo": "タスク",
+    "kind_journal": "日誌",
+    "seed_idea": "## アイデア\n\n## なぜやる価値があるか\n\n## 次の一歩\n- [ ] ",
+    "seed_decision": "## 決定\n\n## 背景\n\n## 誰がいつ決めたか\n",
+    "seed_todo": "- [ ] \n- [ ] \n",
+    "seed_journal": "## 今日\n\n## 詰まっていること\n\n## 明日\n"
   },
   "agenda": {
     "title": "カレンダー",
-    "hint": "追加した .ics ファイルから読み込みます。Summoが予定に合わせて勝手に録音することはありません。会議ノートに名前を付けるためだけに使います。",
+    "hint": "カレンダーのアドレスを購読すると自動で最新になります。.ics ファイルの追加も可能です。予定に従って自動録音はしません — 声をかけ、議事録に名前を付けるだけです。",
     "path_placeholder": "/path/to/calendar.ics",
     "path_label": "カレンダーファイルのパス",
     "name_placeholder": "カレンダー名",
@@ -442,7 +453,20 @@
     "empty": "カレンダーはまだありません。GoogleカレンダーやFastmailから .ics を書き出して、ここに追加してください。",
     "attendees": "{count}人",
     "repeats": "繰り返し",
-    "remove_calendar": "カレンダー{name}を削除"
+    "remove_calendar": "カレンダー{name}を削除",
+    "subscribe_label": "カレンダーのアドレス（URL）",
+    "subscribe_placeholder": "https://… .ics または webcal://…",
+    "subscribe": "購読する",
+    "add_file": "ファイルから追加",
+    "how": "アドレスはどこにありますか？",
+    "how_google": "Google カレンダー：カレンダーの設定 → iCal 形式の非公開 URL。",
+    "how_apple": "Apple カレンダー / iCloud：カレンダーを右クリック → 共有 → 公開カレンダー。",
+    "how_outlook": "Outlook / Microsoft 365：設定 → 共有カレンダー → 公開 → ICS リンク。",
+    "events": "{count} 件の予定",
+    "synced": "{when}に同期",
+    "never_synced": "まだ同期できていません",
+    "refresh_one": "{name} を今すぐ同期",
+    "from_file": "ファイル。自動更新はされません"
   },
   "comments": {
     "title": "コメント",
@@ -628,5 +652,32 @@
     "notify_linux": "Linux: デスクトップ環境の「通知を停止」設定を確認してください。Flatpak のブラウザーは D-Bus 通知サービスへのアクセスが必要です。",
     "notify_unsupported": "このブラウザーには通知 API がありません。Summo はアプリ内でお知らせします。",
     "mic_title": "マイク"
+  },
+  "compose": {
+    "title": "送る文面を書く",
+    "open": "開く",
+    "hint": "会議の内容から書き起こします。送信はしません — 確認してご自身で送ってください。",
+    "kind": "書くもの",
+    "kind_email": "メール",
+    "kind_message": "チャット",
+    "kind_recap": "要約共有",
+    "kind_actions": "タスク",
+    "tone": "文調",
+    "tone_neutral": "中立",
+    "tone_friendly": "カジュアル",
+    "tone_formal": "フォーマル",
+    "audience": "読む人",
+    "audience_placeholder": "ACME 社の担当者、開発チーム…",
+    "write": "書く",
+    "again": "書き直す",
+    "working": "作成中…",
+    "subject": "件名",
+    "body": "本文",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "copy_failed": "コピーできません — 選択して手動でコピーしてください。",
+    "open_mail": "メールアプリで開く",
+    "keep": "メモとして保存",
+    "kept": "保存しました"
   }
 }
