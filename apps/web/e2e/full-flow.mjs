@@ -5,11 +5,55 @@
  * getUserMedia → the capture worklet's resampling → the WebSocket → the daemon → voice detection →
  * decoding → events → React → the file on disk. Every piece is unit-tested; only this catches them
  * being wired together wrongly.
+ *
+ * It used to take a URL, a token and a WAV path on the command line, which meant it ran when
+ * somebody remembered to run it — and it is the one suite that would notice recognition being
+ * broken altogether. Now it boots its own daemon, installs a speech model from the local mirror the
+ * other suites already use, and records `fixtures/vi-fleurs.wav`, so it belongs in `pnpm e2e` with
+ * everything else.
+ *
+ * What it asserts is that *text arrives*, never which words. Asserting the words would turn every
+ * model change into a broken test, and the model is allowed to change.
  */
-import { chromium } from "playwright";
-import fs from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const [, , appUrl, port, token, wav] = process.argv;
+import { chromium } from "playwright";
+
+import { daemon as boot } from "./daemon.mjs";
+import { mirror } from "./mirror.mjs";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const wav = join(HERE, "fixtures/vi-fleurs.wav");
+
+// The models this needs, served from this machine: a recogniser and a voice detector. Without the
+// detector there are no utterance boundaries and nothing is ever committed to the transcript.
+const local = await mirror(["gipformer-65m", "silero-vad-v5"], { name: "full-flow" });
+const engine = await boot(process.argv, { name: "full-flow", registry: local });
+const { url: appUrl, port, token } = engine;
+
+/** Install a model through the daemon, and wait for it. */
+async function install(id) {
+  const at = (path) => `${appUrl}${path}${path.includes("?") ? "&" : "?"}token=${token}`;
+  await fetch(at("/installs"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  for (let i = 0; i < 300; i++) {
+    const jobs = await (await fetch(at("/installs"))).json();
+    const job = jobs.find((candidate) => candidate.model === id);
+    if (job?.state === "done") return;
+    if (job?.state === "failed") throw new Error(`${id}: ${job.error ?? "install failed"}`);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`${id}: still installing after 150s`);
+}
+
+for (const id of ["silero-vad-v5", "gipformer-65m"]) {
+  console.log(`installing ${id}…`);
+  await install(id);
+}
 
 const browser = await chromium.launch({
   args: [
@@ -39,24 +83,47 @@ page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 await page.goto(`${appUrl}?port=${port}&token=${token}`, { waitUntil: "networkidle" });
 
 console.log("clicking record…");
-await page.getByRole("button", { name: /Bắt đầu ghi/ }).click();
+// The header carries a record button as well as the home card, and both are the real control.
+// This drives the one on the screen a person is looking at.
+await page
+  .getByTestId("home")
+  .getByRole("button", { name: /Bắt đầu ghi/ })
+  .click();
 
 // Wait for the first committed line rather than a fixed sleep: the assertion is that text arrives,
 // and a timeout here is the failure worth reporting.
-await page.locator('[data-testid="transcript-line"]').first().waitFor({ timeout: 60000 });
+// Two minutes, not one: this runs against a debug build of the daemon, where the first decode also
+// pays for loading the model, and a flake here would be read as "recognition is broken".
+await page
+  .locator('[data-testid="transcript-line"]')
+  .first()
+  .waitFor({ timeout: 120000 })
+  .catch((error) => {
+    console.log("--- daemon log ---\n" + engine.log().slice(-4000));
+    throw error;
+  });
 await page.waitForTimeout(12000);
 
 const lines = await page.locator('[data-testid="transcript-line"]').allInnerTexts();
 await page.screenshot({ path: "/tmp/shots/recording.png" });
 
 // The compact window is what sits on top of a call, so check it renders while recording.
-await page.getByRole("button", { name: /Thu gọn/ }).click();
+await page
+  .getByRole("button", { name: /Thu gọn/ })
+  .first()
+  .click();
 await page.waitForTimeout(300);
 await page.screenshot({ path: "/tmp/shots/compact.png" });
-await page.getByRole("button", { name: /Mở rộng/ }).click();
+await page
+  .getByRole("button", { name: /Mở rộng/ })
+  .first()
+  .click();
 
 console.log("clicking stop…");
-await page.getByRole("button", { name: /Dừng ghi/ }).click();
+await page
+  .getByRole("button", { name: /Dừng ghi/ })
+  .first()
+  .click();
 await page.waitForTimeout(3000);
 const notice = await page
   .locator(".notice")
@@ -65,6 +132,7 @@ const notice = await page
 await page.screenshot({ path: "/tmp/shots/stopped.png" });
 
 await browser.close();
+await engine.stop();
 
 console.log(`\ntranscript lines on screen: ${lines.length}`);
 for (const line of lines.slice(0, 8)) console.log(`  ${line}`);

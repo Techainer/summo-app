@@ -179,6 +179,9 @@ export async function boot({ name = "e2e", seed = true, registry = REGISTRY } = 
           home,
           port: handshake.port,
           token: handshake.token,
+          /// Everything the daemon has printed, for a suite whose failure is on that side of the
+          /// socket rather than in the browser.
+          log: () => log.join(""),
           url: `http://127.0.0.1:${handshake.port}`,
           stop() {
             child.kill();

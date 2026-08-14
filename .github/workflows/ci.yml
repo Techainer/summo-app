@@ -363,3 +363,18 @@ jobs:
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
 
+      # The whole product, once, with recognition actually compiled in.
+      #
+      # Every suite above runs against `--features bundled`, which has no speech model support at
+      # all — so for months the one test that drives audio → text → file was the one test nobody
+      # ran. It took a WAV path and a token on the command line; now it boots its own daemon,
+      # installs a model from the local mirror and records a committed fixture, which is what makes
+      # it runnable here.
+      #
+      # `bundled,models` is a heavier build — it links sherpa-onnx — so it is a second step rather
+      # than a change to the one above: the ten fast suites should not wait for it to fail.
+      - run: cargo build --bin summo-engine --features bundled,models
+      - run: pnpm -C apps/web e2e:full-flow
+        env:
+          SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+

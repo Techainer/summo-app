@@ -186,6 +186,11 @@ export function HomeScreen() {
                   {recent.map((segment) => (
                     <li
                       key={`${segment.lane}-${segment.seq}`}
+                      // The same marker the transcript screen uses. A line is a line wherever it is
+                      // drawn, and a test that asks "did speech reach the screen" was failing here
+                      // against a working recogniser purely because this list had no name.
+                      data-testid="transcript-line"
+                      data-source={segment.source}
                       className={cn(
                         "text-body truncate",
                         segment.source === "partial" ? "text-fg-dim" : "text-fg",
