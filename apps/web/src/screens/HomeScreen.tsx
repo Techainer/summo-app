@@ -4,7 +4,17 @@ import { ArrowRight, CircleAlert, FileUp, PencilLine, Sparkles } from "lucide-re
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Recent } from "../components/library/Recent";
-import { Avatar, Button, Card, CardBody, CardHeader, Page, PageGlow, Wave } from "../components/ui";
+import {
+  Avatar,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Page,
+  PageGlow,
+  Ticker,
+  Wave,
+} from "../components/ui";
 import { useI18n, useT } from "../i18n/context";
 import { clock } from "../lib/clock";
 import { cn } from "../lib/cn";
@@ -206,12 +216,19 @@ export function HomeScreen() {
                 className={cn(
                   "transition-colors duration-300",
                   session.recording && recent.length > 0 ? "h-10" : "min-h-16 flex-1",
-                  session.recording ? "text-rec" : "text-fg-faint/35",
+                  session.recording ? "text-rec" : "text-accent/30",
                 )}
               >
                 {/* Its own silhouette rather than a flat line: equal bars read as a dotted rule
-                    somebody left in, not as sound. */}
-                <Wave seed="capture" bars={40} live={session.recording} />
+                    somebody left in, not as sound. Idle it breathes, because forty motionless grey
+                    bars across a third of the home screen read as a meter that has stopped
+                    working. */}
+                <Wave
+                  seed="capture"
+                  bars={40}
+                  live={session.recording}
+                  breathe={!session.recording}
+                />
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -330,7 +347,9 @@ function Stat({ value, label }: { value: string; label: string }) {
   return (
     <div className="text-end">
       <dt className="text-fg-faint text-micro">{label}</dt>
-      <dd className="tabular text-title mt-0.5 font-semibold">{value}</dd>
+      <dd className="nums text-title mt-0.5 font-semibold">
+        <Ticker value={value} />
+      </dd>
     </div>
   );
 }

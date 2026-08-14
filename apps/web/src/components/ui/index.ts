@@ -11,3 +11,4 @@ export { Page, PageGlow } from "./Page";
 export { Skeleton } from "./Skeleton";
 export { Input, TextArea, Labelled } from "./Field";
 export { Chip, SectionTitle } from "./Chip";
+export { Ticker } from "./Ticker";

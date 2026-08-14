@@ -141,7 +141,7 @@ export function ModelsScreen() {
       <PageGlow />
       {/* What they cost, which is why somebody opens this screen a second time. */}
       {installedBytes(models) > 0 && (
-        <p className="text-fg-dim tabular text-micro -mt-4">
+        <p className="text-fg-dim nums text-micro -mt-4">
           {t("models.on_disk", { size: size(installedBytes(models)) })}
         </p>
       )}
@@ -329,7 +329,7 @@ function Card({
               style={{ width: `${done ?? 0}%` }}
             />
           </div>
-          <p className="text-fg-faint tabular text-micro mt-1">
+          <p className="text-fg-faint nums text-micro mt-1">
             {done === null ? t("models.starting") : `${done}%`}
           </p>
         </div>

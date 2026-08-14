@@ -57,9 +57,15 @@
   --color-ai-soft: #b49bff1f;
   --color-ai-fg: #120a26;
 
-  /* Recording is the one state that must never be mistaken for anything else. */
-  --color-rec: #f2585b;
-  --color-rec-soft: #f2585b1a;
+  /* Recording is the one state that must never be mistaken for anything else.
+   *
+   * Lighter than the obvious red, because this hue is also *text* — on the refused-permission chip,
+   * on an overdue date, on the timer. At `#f2585b` that text measured 4.35:1 against its own
+   * `-soft` tint, which is a real failure the screenshot audit reported on every run and nobody
+   * acted on. Raised until it clears 4.5:1 with room to spare, which also puts it in the same
+   * pastel family as the accent and the assistant violet rather than beside them. */
+  --color-rec: #fb6b70;
+  --color-rec-soft: #fb6b701a;
 
   /* Task and job states. Semantic, not decorative. */
   --color-done: #64e3a1;
@@ -276,6 +282,8 @@
   --color-ai: #b49bff;
   --color-ai-soft: #b49bff1f;
   --color-ai-fg: #120a26;
+  --color-rec: #fb6b70;
+  --color-rec-soft: #fb6b701a;
   --avatar-fill-l: 0.72;
   --avatar-fill-c: 0.11;
   --avatar-fill-a: 0.22;
@@ -302,10 +310,54 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Timestamps, durations and counters never reflow as their digits change. */
+/* Two ways to hold a number still, and the difference between them was most of what made this
+ * interface look unfinished.
+ *
+ * `.tabular` is the monospaced one, for a *column of digits and nothing else*: a clock beside a
+ * transcript line, a playhead, a date on its own. There the mono face is doing real work — the
+ * digits are one width, so the column does not shudder as the seconds tick.
+ *
+ * `.nums` is for a number inside a sentence: "1 giờ 12 phút", "hạn 2026-08-20", "3 công cụ". These
+ * were all `.tabular`, which set the *family* as well as the figures, so every stat on the home
+ * screen, the analytics cards and the task rows rendered their Vietnamese in JetBrains Mono next to
+ * Inter everywhere else. Tone marks in a monospaced face sit badly and the words looked like a
+ * fallback font that had failed to load. Same steady digits, without changing the typeface under
+ * the words that surround them. */
 .tabular {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+.nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A card that can be clicked, and says so before it is.
+ *
+ * The interface had elevation tokens and used exactly one of them, so every surface sat at the same
+ * height and nothing on screen looked reachable. This is the whole hover vocabulary in one place:
+ * rise a little, cast further, and let the hairline strengthen. One pixel of travel, because a card
+ * that jumps under the pointer is a card that moves out from under a click. */
+.lift {
+  transition:
+    transform 0.18s var(--ease-out),
+    box-shadow 0.18s var(--ease-out),
+    border-color 0.18s var(--ease-out);
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-pop);
+  border-color: var(--color-line-strong);
+}
+.lift:active {
+  transform: translateY(0);
+  transition-duration: 0.08s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lift:hover,
+  .lift:active {
+    transform: none;
+  }
 }
 
 /* Tauri draws no title bar, so the header doubles as the drag region. */
@@ -343,6 +395,19 @@ body {
   0%,
   100% {
     transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* The same meter, at rest. A tenth of the amplitude of `wave` and four times the period: it has to
+ * be findable only if you look for it. Stopped by `prefers-reduced-motion` along with everything
+ * else, which is why it may never be the only sign that capture is available. */
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scaleY(0.82);
   }
   50% {
     transform: scaleY(1);

@@ -22,6 +22,7 @@ export function Wave({
   bars = 28,
   className,
   live = false,
+  breathe = false,
   levels,
 }: {
   /** Anything stable per recording — the id. Same seed, same silhouette. */
@@ -30,10 +31,23 @@ export function Wave({
   className?: string;
   /** Animate, for something being recorded right now. */
   live?: boolean;
+  /**
+   * Breathe slowly while nothing is happening.
+   *
+   * Only for the one large waveform on the capture card. Idle, it was forty static grey bars filling
+   * a third of the home screen, which reads as a picture of a broken meter rather than as an
+   * invitation. Four seconds and a shallow amplitude is slow enough that it is never the thing you
+   * are looking at, and alive enough that the card is not a dead rectangle.
+   *
+   * Never set on a list: a page of library rows each animating forty bars is forty rows of
+   * compositor work for an ornament nobody is watching.
+   */
+  breathe?: boolean;
   /** Real levels in [0,1], when there are some. Overrides the seeded shape. */
   levels?: number[];
 }) {
   const heights = levels ?? shape(seed, bars);
+  const moving = live || breathe;
 
   return (
     <span
@@ -52,11 +66,14 @@ export function Wave({
             // any width, and `justify-between` spreads them.
             "w-[3px] shrink-0 rounded-[2px] bg-current opacity-70",
             live && "animate-[wave_1.1s_ease-in-out_infinite]",
+            breathe && !live && "animate-[breathe_4s_ease-in-out_infinite]",
           )}
           style={{
             height: `${Math.max(8, height * 100)}%`,
             // Neighbouring bars must not rise together or the whole thing pulses like a heartbeat.
-            animationDelay: live ? `${(at % 7) * 90}ms` : undefined,
+            // Idle, the offsets are spread much wider so the movement travels along the bar rather
+            // than flickering in place.
+            animationDelay: moving ? `${(at % (live ? 7 : bars)) * (live ? 90 : 70)}ms` : undefined,
           }}
         />
       ))}

@@ -89,7 +89,7 @@ export function Recent({
             onClick={() => onOpen(entry)}
             whileHover={{ y: -2 }}
             transition={GENTLE}
-            className="border-line bg-bg-soft hover:border-line-strong flex w-full items-center gap-3 rounded-[var(--radius-card)] border p-2.5 text-left transition-colors"
+            className="border-line bg-bg-soft lift flex w-full items-center gap-3 rounded-[var(--radius-card)] border p-2.5 text-left"
           >
             {/* A note has no waveform because it was typed; it gets the pen instead, at the same
                 size, so the rows still line up. */}

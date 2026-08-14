@@ -11,6 +11,7 @@ import {
   Page,
   PageGlow,
   SegmentedControl,
+  Ticker,
 } from "../components/ui";
 import { GENTLE } from "../lib/motion";
 import { useLoad } from "../lib/use-load";
@@ -117,7 +118,7 @@ export function AnalyticsScreen() {
                         }}
                       />
                     </span>
-                    <span className="tabular text-fg-dim text-meta w-28 shrink-0 text-right text-balance">
+                    <span className="nums text-fg-dim text-meta w-28 shrink-0 text-right text-balance">
                       {formatDuration(person.seconds, locale, "short")}
                     </span>
                   </div>
@@ -172,7 +173,9 @@ function Metric({ label, value }: { label: string; value: string }) {
           "1 giờ 27 phút" broke as "1 giờ 27" / "phút", which reads as two facts. Vietnamese has no
           abbreviation for `giờ` or `phút`, so `Intl`'s short form does nothing here and the fix has
           to be the wrap rather than the wording. */}
-      <p className="tabular mt-1 text-xl font-semibold text-balance">{value}</p>
+      <p className="nums mt-1 text-xl font-semibold text-balance">
+        <Ticker value={value} />
+      </p>
     </Card>
   );
 }
