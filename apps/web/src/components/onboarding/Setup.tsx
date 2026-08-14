@@ -302,7 +302,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
           </Button>
         </section>
       ) : (
-        <section className="border-ok/30 bg-ok-soft mt-8 rounded-xl border p-4">
+        <section className="border-accent/30 bg-accent-soft mt-8 rounded-xl border p-4">
           <p className="font-medium">{t("setup.ready")}</p>
           <p className="text-fg-dim mt-1 text-sm">{t("setup.ready_hint")}</p>
         </section>

@@ -55,6 +55,12 @@ export function Empty({
       transition={GENTLE}
       className={cn(
         "flex flex-col items-center justify-center gap-3 px-6 text-center",
+        // Uncapped on purpose, and it was tried the other way. Bounding this so it would sit closer
+        // to a form above it made every screen where the empty state *is* the content fail
+        // `e2e/density.mjs` — four hundred pixels of background under a message that had been
+        // centred. The gap-after-a-form problem is real but it belongs to the caller: `full` means
+        // "this is the whole screen", and the screen with a subscribe form above it should not be
+        // asking for it. See `AgendaScreen`.
         full ? "h-full py-10" : "py-14",
         className,
       )}

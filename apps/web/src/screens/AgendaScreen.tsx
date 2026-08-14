@@ -56,9 +56,11 @@ export function AgendaScreen() {
       <CalendarSources onChange={() => void refresh()} />
 
       {entries.length === 0 ? (
-        // `full`, so an empty calendar centres itself in what is left of the pane instead of
-        // hanging in the upper third with a screen-height of background under it.
-        <Empty full icon={CalendarDays} title={t("empty.agenda")} hint={t("empty.agenda_hint")} />
+        // Not `full`. This screen has a subscribe form above it, and centring in what is left put
+        // the explanation of *why there is nothing* three hundred pixels below the box that fixes
+        // it — two halves of one sentence with a void between them. `full` is for a screen whose
+        // only content is the empty state, which this is not.
+        <Empty icon={CalendarDays} title={t("empty.agenda")} hint={t("empty.agenda_hint")} />
       ) : (
         <div className="mt-8 min-h-0 flex-1 space-y-6 overflow-y-auto">
           {grouped.map(([day, items]) => (
