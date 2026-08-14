@@ -25,9 +25,24 @@ pub struct Settings {
     pub llm: Llm,
     pub storage: Storage,
     pub interface: Interface,
+    pub agents: Agents,
     /// Fields this build does not know about, kept so a downgrade does not erase them.
     #[serde(flatten)]
     pub unknown: BTreeMap<String, serde_json::Value>,
+}
+
+/// What the agents do when nobody is asking.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Agents {
+    /// Once a day, let each agent re-read and shorten its own memory.
+    ///
+    /// Off by default. It costs a language-model call per agent per day, and on the first day
+    /// there is nothing to consolidate — a memory of four lines is already as short as it gets.
+    pub dream: bool,
+    /// Hour, local, after which it may happen. Late, because it is unattended work on a file that
+    /// steers every later answer, and the user should be asleep rather than mid-sentence.
+    pub dream_hour: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -168,6 +183,15 @@ pub struct Interface {
     pub show_performance: bool,
 }
 
+impl Default for Agents {
+    fn default() -> Self {
+        Self {
+            dream: false,
+            dream_hour: 3,
+        }
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -177,6 +201,7 @@ impl Default for Settings {
             llm: Llm::default(),
             storage: Storage::default(),
             interface: Interface::default(),
+            agents: Agents::default(),
             unknown: BTreeMap::new(),
         }
     }

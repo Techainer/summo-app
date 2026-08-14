@@ -1,3 +1,4 @@
+import { DreamPanel } from "../components/agents/Dream";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
@@ -151,6 +152,7 @@ export function AgentsScreen() {
   return (
     <Page title={t("agents.title")} subtitle={t("agents.subtitle")}>
       <PageGlow />
+      <DreamPanel />
 
       {error && (
         <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">

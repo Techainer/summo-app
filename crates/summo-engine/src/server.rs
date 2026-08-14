@@ -149,6 +149,7 @@ impl Server {
             .route("/settings/models", post(set_models))
             .route("/agent/run", post(run_errand))
             .route("/agent/habits", get(habits))
+            .route("/agent/dream", get(dream_state).post(dream_now))
             .route("/status", get(status))
             .route("/shutdown", post(shutdown))
             .route("/storage", get(storage))
@@ -285,6 +286,50 @@ impl Server {
                     }
                     tokio::time::sleep(std::time::Duration::from_secs(crate::calsync::REFRESH_S))
                         .await;
+                }
+            });
+        }
+
+        // A night's sleep, if the user asked for one.
+        //
+        // Checked on a timer rather than scheduled for the hour: a laptop is asleep at three in the
+        // morning, and a cron-shaped design would mean the feature works only for people who leave
+        // a desktop running. This runs on the first check after the hour, which for most machines
+        // is the moment the lid opens.
+        {
+            let engine = engine.clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(1800)).await;
+                    let paths = engine.paths();
+                    let settings =
+                        summo_core::Settings::load(&paths.settings()).unwrap_or_default();
+                    if !settings.agents.dream {
+                        continue;
+                    }
+                    let now = time::OffsetDateTime::now_local()
+                        .unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+                    let today = now.date().to_string();
+                    if !crate::dream::due(
+                        paths,
+                        &today,
+                        now.hour(),
+                        settings.agents.dream_hour,
+                        engine.status().is_recording(),
+                    ) {
+                        continue;
+                    }
+                    let Ok(client) = llm_for_engine(&engine) else {
+                        // No model configured is not an error to report at three in the morning.
+                        continue;
+                    };
+                    match crate::dream::run(paths, &client, None, &today).await {
+                        Ok(dreamt) => {
+                            tracing::info!(?dreamt, "agents slept on it");
+                            crate::dream::mark(paths, &today, &dreamt);
+                        }
+                        Err(e) => tracing::warn!(error = %e, "a night's consolidation failed"),
+                    }
                 }
             });
         }
@@ -598,6 +643,90 @@ async fn habits(
     }
     let asks = summo_agent::habits::load(&state.engine.paths().agents());
     as_response(Ok(summo_agent::habits::habits(&asks)))
+}
+
+/// Whether the agents sleep on it, and what the last night did.
+async fn dream_state(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let paths = state.engine.paths();
+    let settings = summo_core::Settings::load(&paths.settings()).unwrap_or_default();
+    as_response(Ok(serde_json::json!({
+        "dream": settings.agents.dream,
+        "hour": settings.agents.dream_hour,
+        "last": crate::dream::last(paths),
+    })))
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct DreamBody {
+    /// One agent, or all of them.
+    #[serde(default)]
+    agent: Option<String>,
+    /// Turn the nightly pass on or off. Absent leaves the setting alone, so "do it now" and
+    /// "do it every night" are separate decisions.
+    #[serde(default)]
+    dream: Option<bool>,
+    #[serde(default)]
+    hour: Option<u8>,
+    /// Run one now. Off by default: this endpoint is also how the switch is set.
+    #[serde(default)]
+    now: bool,
+}
+
+/// Change the setting, run a night by hand, or both.
+async fn dream_now(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    body: Option<Json<DreamBody>>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let body = body.map(|Json(b)| b).unwrap_or_default();
+    let paths = state.engine.paths();
+
+    if body.dream.is_some() || body.hour.is_some() {
+        let path = paths.settings();
+        let result = summo_core::Settings::load(&path).and_then(|mut settings| {
+            if let Some(dream) = body.dream {
+                settings.agents.dream = dream;
+            }
+            if let Some(hour) = body.hour {
+                settings.agents.dream_hour = hour.min(23);
+            }
+            settings.save(&path)
+        });
+        if let Err(e) = result {
+            return as_response(Err::<serde_json::Value, _>(e));
+        }
+    }
+
+    if !body.now {
+        return as_response(Ok(serde_json::json!({ "dreamt": [] })));
+    }
+    // Never during a meeting: it is a language-model call and a rewrite of a file the live pipeline
+    // reads, at the one moment the machine is busiest.
+    if state.engine.status().is_recording() {
+        return as_response(Ok(
+            serde_json::json!({ "dreamt": [], "skipped": "đang ghi âm" }),
+        ));
+    }
+    let client = match llm_client(&state) {
+        Ok(client) => client,
+        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
+    };
+    let done = crate::dream::run(paths, &client, body.agent.as_deref(), &summo_core::today()).await;
+    as_response(done.map(|dreamt| {
+        crate::dream::mark(paths, &summo_core::today(), &dreamt);
+        serde_json::json!({ "dreamt": dreamt })
+    }))
 }
 
 /// Hand an agent a sentence.

@@ -519,7 +519,15 @@
     "task_count_one": "{count}项未完成",
     "task_count_other": "{count}项未完成",
     "dangling": "{from}可以把活交给“{to}”，但没有叫这个名字的智能体。",
-    "unreadable": "读不了{path}：{reason}"
+    "unreadable": "读不了{path}：{reason}",
+    "dream": "睡一觉再整理",
+    "dream_nightly": "每晚 {hour} 点后",
+    "dream_now": "立即整理",
+    "dream_working": "整理中…",
+    "dream_hint": "助理重读自己的记忆并写得更短：合并重复、保留最新的更正、去掉已完成的。不会新增任何内容。旧版本保留在 DREAMS.md。",
+    "dream_refused": "跳过 — {why}",
+    "dream_shrank": "{before} → {after} 行",
+    "dream_none": "还没有整理过。"
   },
   "finder": {
     "title": "筛选",

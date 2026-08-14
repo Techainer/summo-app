@@ -519,7 +519,15 @@
     "task_count_one": "{count} open task",
     "task_count_other": "{count} open tasks",
     "dangling": "{from} can hand work to “{to}”, but no agent by that name exists.",
-    "unreadable": "Could not read {path}: {reason}"
+    "unreadable": "Could not read {path}: {reason}",
+    "dream": "Sleep on it",
+    "dream_nightly": "Every night, after {hour}:00",
+    "dream_now": "Do it now",
+    "dream_working": "Thinking…",
+    "dream_hint": "The agent re-reads its own memory and writes it shorter: merge duplicates, keep the latest correction, drop what is finished. It adds nothing. The old version stays in DREAMS.md.",
+    "dream_refused": "skipped — {why}",
+    "dream_shrank": "{before} → {after} lines",
+    "dream_none": "No night yet."
   },
   "finder": {
     "title": "Find",
