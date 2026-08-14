@@ -128,7 +128,26 @@ Họ muốn bản dùng thử.
  * `port: 0` asks the operating system for a free one, so two suites running at once cannot collide
  * — which is what a fixed port did the first time this was tried in parallel.
  */
-export async function boot({ name = "e2e", seed = true, registry = REGISTRY } = {}) {
+export /**
+ * Where the native libraries are, when the build did not leave them beside the binary.
+ *
+ * A build with `--features models` links sherpa-onnx, and the binary is linked with an `$ORIGIN`
+ * rpath — right for the shipped bundle, where the libraries sit beside the executable. Out of
+ * `target/debug` that only works because Cargo copies them there while the build script *runs*; on
+ * a machine with a warm cache it does not run, the copy never happens, and the daemon dies with
+ * "libsherpa-onnx-c-api.so: cannot open shared object file". Cargo's own `deps/` always has them,
+ * so the harness points at it: the failure has nothing to do with whatever is being tested, which
+ * is the worst kind of red build.
+ */
+function libraries() {
+  const beside = dirname(BINARY);
+  const key = process.platform === "darwin" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH";
+  return {
+    [key]: [beside, join(beside, "deps"), process.env[key]].filter(Boolean).join(":"),
+  };
+}
+
+async function boot({ name = "e2e", seed = true, registry = REGISTRY } = {}) {
   const home = join("/tmp", `summo-${name}-${process.pid}`);
   rmSync(home, { recursive: true, force: true });
   mkdirSync(home, { recursive: true });
@@ -141,7 +160,7 @@ export async function boot({ name = "e2e", seed = true, registry = REGISTRY } = 
     // tests a real registry without depending on a deployed CDN — and so it keeps passing when the
     // network is not there. A caller can substitute one: `models.mjs` builds a registry whose file
     // URLs point at a local server, so installing does not reach the public internet either.
-    env: { ...process.env, SUMMO_REGISTRY: registry },
+    env: { ...process.env, SUMMO_REGISTRY: registry, ...libraries() },
   });
   // Detached from Node's own exit accounting. A suite that forgets `stop()` should end with a
   // failed assertion, not hang until whatever is running it gives up — which is how a passing
