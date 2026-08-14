@@ -17,6 +17,6 @@ transcript, so the test would pass against a broken recogniser; synthesising spe
 would mean a text-to-speech model in CI, which is a larger download than this file and one more
 thing to be flaky.
 
-230 KB, and it is the only binary in the repository. It is a *test* input, not a benchmark: the
+230 KB, and it is the only binary in the repository. It is a _test_ input, not a benchmark: the
 suite checks that lines arrive, never which words they contain, because asserting the words would
 turn every model change into a broken test.

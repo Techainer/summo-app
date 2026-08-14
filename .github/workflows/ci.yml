@@ -342,8 +342,13 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      # ALSA for cpal, and Opus for the recorder — the `bundled,models` build below links both.
+      # The release bundle sets `OPUS_STATIC=1` and builds Opus from source instead, which is why
+      # this job never needed it until the whole-product suite arrived: without the package the
+      # daemon starts and dies with `libopus.so.0: cannot open shared object file`, and the harness
+      # reports it as "the daemon did not come up".
       - name: System dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libopus-dev
       - run: pnpm install --frozen-lockfile
       # Chromium is ~130 MB, downloaded on every run of this job. Keyed on the Playwright version,
       # because a cached browser from an older Playwright is a browser it refuses to launch.
