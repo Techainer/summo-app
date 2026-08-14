@@ -104,6 +104,11 @@ const notesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/notes",
   component: NotesScreen,
+  // `?open=` so a note is a link. Without it the sidebar could list every page and open none of
+  // them, which is a table of contents for a book with no page numbers.
+  validateSearch: (search: Record<string, unknown>) => ({
+    open: typeof search.open === "string" && search.open ? search.open : undefined,
+  }),
 });
 
 const agendaRoute = createRoute({

@@ -22,7 +22,6 @@ pub mod auth;
 pub mod board;
 pub mod calsync;
 pub mod collaborate;
-pub mod compose;
 pub mod draft;
 pub mod embedded;
 pub mod errand;

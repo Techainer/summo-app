@@ -111,7 +111,7 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       if (result.kind === "place") {
         void navigate({ to: result.to });
       } else if (result.entry === "note") {
-        void navigate({ to: "/notes" });
+        void navigate({ to: "/notes", search: { open: undefined } });
       } else {
         void navigate({ to: "/meetings/$meetingId", params: { meetingId: result.id } });
       }

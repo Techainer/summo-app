@@ -29,7 +29,9 @@
     "collapse": "收起{name}",
     "models": "模型",
     "setup": "工作区",
-    "home": "主页"
+    "home": "主页",
+    "new_page": "新建页面",
+    "new_page_in": "在 {name} 新建页面"
   },
   "record": {
     "source": "来源",
@@ -653,31 +655,16 @@
     "notify_unsupported": "此浏览器没有通知 API——Summo 将在应用内提醒你。",
     "mic_title": "麦克风"
   },
-  "compose": {
-    "title": "写后续消息",
-    "open": "打开",
-    "hint": "根据会议内容撰写。不会替你发送 — 你自己确认后再发。",
-    "kind": "写什么",
-    "kind_email": "邮件",
-    "kind_message": "消息",
-    "kind_recap": "会议简报",
-    "kind_actions": "待办",
-    "tone": "语气",
-    "tone_neutral": "中性",
-    "tone_friendly": "亲切",
-    "tone_formal": "正式",
-    "audience": "写给谁",
-    "audience_placeholder": "ACME 客户、技术团队…",
-    "write": "撰写",
-    "again": "重写",
-    "working": "撰写中…",
-    "subject": "主题",
-    "body": "正文",
-    "copy": "复制",
-    "copied": "已复制",
-    "copy_failed": "无法复制 — 请选中文本手动复制。",
-    "open_mail": "在邮件应用中打开",
-    "keep": "保存为笔记",
-    "kept": "已保存"
+  "ask": {
+    "title": "交给助理",
+    "hint": "什么都行：写报告、拟邮件、列出待办。返回的是仓库里的一条笔记。",
+    "placeholder": "写一份给主管的报告…",
+    "run": "交办",
+    "working": "处理中…",
+    "again": "再来一次",
+    "usual": "你常交办",
+    "times": "{count} 次",
+    "done": "完成 — 在待办里查看",
+    "open": "打开"
   }
 }

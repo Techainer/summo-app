@@ -246,6 +246,16 @@ pub fn forget(paths: &Paths) {
     }
 }
 
+/// A human-readable line about a log file that may not exist yet.
+#[must_use]
+pub fn log_hint(path: &Path) -> String {
+    if path.exists() {
+        format!("Nhật ký: {}", path.display())
+    } else {
+        String::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,15 +282,5 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let paths = Paths::at(dir.path());
         assert!(read_handshake(&paths).is_none());
-    }
-}
-
-/// A human-readable line about a log file that may not exist yet.
-#[must_use]
-pub fn log_hint(path: &Path) -> String {
-    if path.exists() {
-        format!("Nhật ký: {}", path.display())
-    } else {
-        String::new()
     }
 }

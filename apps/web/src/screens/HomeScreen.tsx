@@ -71,7 +71,7 @@ export function HomeScreen() {
     (entry: MeetingSummary) => {
       void navigate(
         entry.kind === "note"
-          ? { to: "/notes" }
+          ? { to: "/notes", search: { open: undefined } }
           : { to: "/meetings/$meetingId", params: { meetingId: entry.id } },
       );
     },
@@ -222,7 +222,7 @@ export function HomeScreen() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => void navigate({ to: "/notes" })}
+                  onClick={() => void navigate({ to: "/notes", search: { open: undefined } })}
                 >
                   <PencilLine aria-hidden="true" className="me-1 size-3.5" />
                   {t("home.write")}

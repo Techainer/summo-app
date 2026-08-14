@@ -255,12 +255,27 @@ pub async fn run_as(paths: &Paths, task: &Task, slug: Option<&str>) -> Result<Ra
     let chosen = chosen_provider(paths, agent.as_ref());
 
     // The agent's own brief and memory, or the built-in prompt when there is no roster.
+    //
+    // Habits go in beside memory, and they answer a different question. Memory is what the agent
+    // was told; habits are what it noticed — that this is the fourth time somebody has asked for
+    // the write-up after a customer call. Without them the fourth report looks nothing like the
+    // first three, which is the actual complaint people have about assistants.
+    let learned = crate::habits::render(&crate::habits::habits(&crate::habits::load(
+        &paths.agents(),
+    )));
     let system_prompt = match &agent {
         Some(agent) => {
-            let memory = crate::memory::render(&crate::memory::load(&agent.memory_path()));
+            let mut memory = crate::memory::render(&crate::memory::load(&agent.memory_path()));
+            if !learned.is_empty() {
+                if !memory.is_empty() {
+                    memory.push_str("\n\n");
+                }
+                memory.push_str(&learned);
+            }
             agent.system_prompt(roster.base(), &memory)
         }
-        None => SYSTEM_PROMPT.to_string(),
+        None if learned.is_empty() => SYSTEM_PROMPT.to_string(),
+        None => format!("{SYSTEM_PROMPT}\n\n{learned}"),
     };
     let max_turns = agent
         .as_ref()

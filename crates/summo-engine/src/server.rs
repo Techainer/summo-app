@@ -148,6 +148,7 @@ impl Server {
             .route("/models/{id}", axum::routing::delete(remove_model))
             .route("/settings/models", post(set_models))
             .route("/agent/run", post(run_errand))
+            .route("/agent/habits", get(habits))
             .route("/status", get(status))
             .route("/shutdown", post(shutdown))
             .route("/storage", get(storage))
@@ -171,8 +172,6 @@ impl Server {
             .route("/meetings/{id}/draft/refine", post(refine_draft))
             .route("/meetings/{id}/draft/chat", post(chat_draft))
             .route("/meetings/{id}/draft/confirm", post(confirm_draft))
-            .route("/meetings/{id}/compose", post(compose_message))
-            .route("/meetings/{id}/compose/save", post(save_composed))
             .route("/meetings/{id}/draft", axum::routing::delete(discard_draft))
             .route("/tasks/{id}", post(update_task))
             .route("/tasks/{id}/run", post(run_task))
@@ -584,6 +583,23 @@ async fn catalogue(
     .into_response()
 }
 
+/// What this person keeps asking for.
+///
+/// Not a recommendation engine: it is the list of instructions they have typed more than once,
+/// counted, so the interface can offer the words back instead of making them type them again. See
+/// [`summo_agent::habits`] — the file is Markdown in the vault and deleting a line forgets it.
+async fn habits(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let asks = summo_agent::habits::load(&state.engine.paths().agents());
+    as_response(Ok(summo_agent::habits::habits(&asks)))
+}
+
 /// Hand an agent a sentence.
 ///
 /// The instruction becomes a `- [ ] @agent …` checkbox in the day's scratch note and runs through
@@ -607,6 +623,7 @@ async fn run_errand(
             state.engine.paths(),
             &body.instruction,
             body.agent.as_deref(),
+            body.meeting.as_deref(),
         )
         .await
         .map(crate::errand::Errand::from),
@@ -619,6 +636,9 @@ struct ErrandBody {
     /// A slug from `vault/agents/`. Absent uses the coordinator, which is what the roster is for.
     #[serde(default)]
     agent: Option<String>,
+    /// The note this was asked from, so a habit knows what it is usually asked *about*.
+    #[serde(default)]
+    meeting: Option<String>,
 }
 
 /// Choose which installed model a role uses.
@@ -1594,63 +1614,6 @@ async fn generate_draft(
             body.template.as_deref(),
         )
         .await,
-    )
-}
-
-/// Draft something to send out of a meeting: an email, a chat message, a recap, a list of actions.
-///
-/// Nothing is sent. The draft comes back to the screen with a `mailto:` link for the user's own
-/// mail application — see [`crate::compose`].
-async fn compose_message(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(id): Path<String>,
-    Query(q): Query<TokenQuery>,
-    Json(body): Json<crate::compose::Request>,
-) -> impl IntoResponse {
-    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
-        return rejection.into_response();
-    }
-    let client = match llm_client(&state) {
-        Ok(client) => client,
-        Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
-    };
-    as_response(
-        crate::compose::compose(
-            state.engine.paths(),
-            &client,
-            &summo_core::MeetingId::from(id),
-            &body,
-        )
-        .await,
-    )
-}
-
-#[derive(Debug, Deserialize)]
-struct SaveComposedBody {
-    title: String,
-    body: String,
-}
-
-/// Keep a draft as a note, so it outlives the tab it was written in.
-async fn save_composed(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(id): Path<String>,
-    Query(q): Query<TokenQuery>,
-    Json(body): Json<SaveComposedBody>,
-) -> impl IntoResponse {
-    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
-        return rejection.into_response();
-    }
-    as_response(
-        crate::compose::save(
-            state.engine.paths(),
-            &summo_core::MeetingId::from(id),
-            &body.title,
-            &body.body,
-        )
-        .map(|note| serde_json::json!({ "note": note.to_string() })),
     )
 }
 
