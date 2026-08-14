@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button, Empty } from "../components/ui";
 import { useErrorText } from "../lib/errors";
+import { useSearch } from "@tanstack/react-router";
+
 import { useI18n } from "../i18n/context";
 import { Dot } from "../components/library/Finder";
 import { useEngine } from "../lib/engine-context";
 import { NoteClient, SAVE_DEBOUNCE_MS, byDay, titleFrom, type NoteSummary } from "../lib/notes";
-import { useRefresh } from "../lib/use-load";
+import { useLoad, useRefresh } from "../lib/use-load";
 
 /**
  * Notes: a list on the left, the note on the right.
@@ -83,6 +85,24 @@ export function NotesScreen() {
       }
     },
     [client, say],
+  );
+
+  // Opened from the sidebar, or from a link somebody kept. The tree lists every page in the vault,
+  // so a note it cannot open would be a table of contents with no page numbers.
+  //
+  // Through `useLoad` rather than a bare effect: it is the one place in this app allowed to write
+  // state from a load, and the editor's contents are exactly that — a read that lands after the
+  // render which asked for it.
+  const wanted = useSearch({ from: "/notes" }).open;
+  const showing = useRef<string | null>(null);
+  useLoad(
+    useCallback(async () => {
+      if (!wanted || showing.current === wanted) return null;
+      showing.current = wanted;
+      await open(wanted);
+      return wanted;
+    }, [wanted, open]),
+    [wanted, open],
   );
 
   const persist = useCallback(async () => {

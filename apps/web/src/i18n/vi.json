@@ -29,7 +29,9 @@
     "collapse": "Thu gọn {name}",
     "models": "Mô hình",
     "setup": "Không gian",
-    "home": "Trang chính"
+    "home": "Trang chính",
+    "new_page": "Trang mới",
+    "new_page_in": "Trang mới trong {name}"
   },
   "record": {
     "source": "Nguồn",
@@ -653,31 +655,16 @@
     "notify_unsupported": "Trình duyệt này không có API thông báo — Summo sẽ nhắc trong ứng dụng thay vì gửi thông báo hệ thống.",
     "mic_title": "Micro"
   },
-  "compose": {
-    "title": "Soạn gửi đi",
-    "open": "Mở",
-    "hint": "Viết từ nội dung buổi họp. Không gửi gì cả — bạn xem lại rồi tự gửi.",
-    "kind": "Kiểu nội dung",
-    "kind_email": "Email",
-    "kind_message": "Tin nhắn",
-    "kind_recap": "Tóm lược",
-    "kind_actions": "Việc cần làm",
-    "tone": "Giọng văn",
-    "tone_neutral": "Trung tính",
-    "tone_friendly": "Thân mật",
-    "tone_formal": "Trang trọng",
-    "audience": "Người nhận",
-    "audience_placeholder": "khách hàng ACME, team kỹ thuật…",
-    "write": "Soạn",
-    "again": "Soạn lại",
-    "working": "Đang soạn…",
-    "subject": "Tiêu đề",
-    "body": "Nội dung",
-    "copy": "Sao chép",
-    "copied": "Đã chép",
-    "copy_failed": "Không sao chép được — hãy bôi đen rồi copy tay.",
-    "open_mail": "Mở app email",
-    "keep": "Lưu thành ghi chú",
-    "kept": "Đã lưu"
+  "ask": {
+    "title": "Nhờ agent",
+    "hint": "Việc gì cũng được: viết báo cáo, soạn email, liệt kê việc cần làm. Kết quả là một note trong kho.",
+    "placeholder": "viết báo cáo gửi sếp sau buổi này…",
+    "run": "Nhờ",
+    "working": "Đang làm…",
+    "again": "Nhờ lại",
+    "usual": "Bạn hay nhờ",
+    "times": "{count} lần",
+    "done": "Xong — xem trong Việc",
+    "open": "Mở"
   }
 }

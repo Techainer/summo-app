@@ -16,6 +16,7 @@
 //! ```
 
 pub mod delegate;
+pub mod habits;
 pub mod memory;
 pub mod roster;
 pub mod run;

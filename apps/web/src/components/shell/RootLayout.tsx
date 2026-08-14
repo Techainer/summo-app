@@ -24,6 +24,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { cn } from "../../lib/cn";
 
 import { useT } from "../../i18n/context";
+import { NoteClient } from "../../lib/notes";
+import type { Page } from "./Sidebar";
 import { useIsNarrow } from "../../lib/breakpoint";
 import { useEngine } from "../../lib/engine-context";
 import { deviceWarning } from "../../lib/session";
@@ -108,24 +110,75 @@ export function RootLayout({ children }: { children: ReactNode }) {
   usePaletteShortcut(useCallback(() => setPaletteOpen(true), []));
   const [compact, setCompact] = useState(false);
   const [folders, setFolders] = useState<string[]>([]);
+  const [pages, setPages] = useState<Page[]>([]);
+  // Bumped after making a page, so the tree shows it without a reload.
+  const [vaultGeneration, setVaultGeneration] = useState(0);
   const say = useErrorText();
 
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const search = useRouterState({ select: (s) => s.location.search }) as {
     folder?: string;
+    open?: string;
   };
 
-  // Folders come from the library view and drive the sidebar tree.
+  // The tree comes from the library view: folders, and the pages in them. One request for both,
+  // because they are one structure — a folder with no pages under it is a filing cabinet drawn on
+  // the wall.
   useEffect(() => {
     let cancelled = false;
     engine.library
       .view({})
-      .then((view) => !cancelled && setFolders(view.folders))
+      .then((view) => {
+        if (cancelled) return;
+        setFolders(view.folders);
+        setPages(
+          view.groups
+            .flatMap((group) => group.meetings)
+            .map((entry) => ({
+              id: entry.id,
+              title: entry.title,
+              folder: entry.folder ?? "",
+              kind: entry.kind,
+            })),
+        );
+      })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [engine.library]);
+  }, [engine.library, vaultGeneration]);
+
+  const openPage = useCallback(
+    (page: Page) => {
+      // A meeting and a note are the same object in the vault and open in different screens, which
+      // is the one place the difference still shows. Until they share a screen, the tree at least
+      // does not make the user care which they are looking for.
+      if (page.kind === "meeting") {
+        void navigate({ to: `/meetings/${page.id}` });
+      } else {
+        void navigate({ to: "/notes", search: { open: page.id } });
+      }
+    },
+    [navigate],
+  );
+
+  const newPage = useCallback(
+    (folder: string | null) => {
+      void (async () => {
+        try {
+          const { id } = await new NoteClient(engine.handshake).create(t("notes.untitled"));
+          if (folder) await engine.library.moveTo(id, folder);
+          setVaultGeneration((n) => n + 1);
+          void navigate({ to: "/notes", search: { open: id } });
+        } catch (e) {
+          // Nothing to show it in up here; the tree simply does not gain a row, and the notes
+          // screen is one click away.
+          console.warn(say(e));
+        }
+      })();
+    },
+    [engine, navigate, say, t],
+  );
 
   const selectFolder = useCallback(
     (folder: string | null) => {
@@ -287,6 +340,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
           active={active}
           onNavigate={(key) => void navigate({ to: key })}
           folders={folders}
+          pages={pages}
+          onOpenPage={openPage}
+          activePage={activePageId(pathname, search)}
+          onNewPage={newPage}
           activeFolder={search.folder ?? null}
           onSelectFolder={selectFolder}
           navOpen={navOpen}
@@ -358,4 +415,16 @@ function speakersOf(segments: { speaker?: string | null }[]): string[] {
   const seen = new Set<string>();
   for (const segment of segments) if (segment.speaker) seen.add(segment.speaker);
   return [...seen];
+}
+
+/**
+ * Which page the tree should show as open.
+ *
+ * A meeting is in the path, a note is in a query parameter, because they still open in different
+ * screens. The tree does not care which — it highlights whichever one is on screen.
+ */
+function activePageId(pathname: string, search: { folder?: string; open?: string }): string | null {
+  const meeting = pathname.match(/^\/meetings\/([^/]+)/);
+  if (meeting) return meeting[1] ?? null;
+  return search.open ?? null;
 }

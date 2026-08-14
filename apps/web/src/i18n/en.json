@@ -29,7 +29,9 @@
     "collapse": "Collapse {name}",
     "models": "Models",
     "setup": "Workspace",
-    "home": "Home"
+    "home": "Home",
+    "new_page": "New page",
+    "new_page_in": "New page in {name}"
   },
   "record": {
     "source": "Source",
@@ -653,31 +655,16 @@
     "notify_unsupported": "This browser has no notification API — Summo will remind you inside the app instead.",
     "mic_title": "Microphone"
   },
-  "compose": {
-    "title": "Write the follow-up",
-    "open": "Open",
-    "hint": "Written from what the meeting contained. Nothing is sent — you read it and send it yourself.",
-    "kind": "What to write",
-    "kind_email": "Email",
-    "kind_message": "Message",
-    "kind_recap": "Recap",
-    "kind_actions": "Actions",
-    "tone": "Tone",
-    "tone_neutral": "Neutral",
-    "tone_friendly": "Friendly",
-    "tone_formal": "Formal",
-    "audience": "Who reads it",
-    "audience_placeholder": "the ACME team, our engineers…",
-    "write": "Write it",
-    "again": "Write again",
-    "working": "Writing…",
-    "subject": "Subject",
-    "body": "Message",
-    "copy": "Copy",
-    "copied": "Copied",
-    "copy_failed": "Could not copy — select the text and copy it by hand.",
-    "open_mail": "Open in mail app",
-    "keep": "Keep as a note",
-    "kept": "Saved"
+  "ask": {
+    "title": "Ask an agent",
+    "hint": "Anything: write the report, draft the email, list what needs doing. What comes back is a note in the vault.",
+    "placeholder": "write the report for my manager…",
+    "run": "Ask",
+    "working": "Working…",
+    "again": "Ask again",
+    "usual": "You usually ask",
+    "times": "{count} times",
+    "done": "Done — see it under Tasks",
+    "open": "Open"
   }
 }

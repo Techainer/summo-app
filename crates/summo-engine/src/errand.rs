@@ -30,10 +30,18 @@ pub async fn run(
     paths: &Paths,
     instruction: &str,
     agent: Option<&str>,
+    meeting: Option<&str>,
 ) -> Result<summo_agent::run::Ran> {
     let instruction = instruction.trim();
     if instruction.is_empty() {
         return Err(Error::msg("errand.empty", "muốn agent làm gì?"));
+    }
+
+    // Written down before the run, not after: an ask that failed is still what the person wanted,
+    // and learning only from the ones that happened to work means the habit forms late or never.
+    // A failure here costs a habit, never the errand.
+    if let Err(e) = summo_agent::habits::record(&paths.agents(), &today(), instruction, meeting) {
+        tracing::warn!(error = %e, "could not write down what was asked");
     }
 
     let note = scratch(paths, &today())?;
@@ -152,7 +160,7 @@ mod tests {
     #[tokio::test]
     async fn an_empty_instruction_is_refused_before_a_note_is_touched() {
         let (_dir, paths) = vault();
-        assert!(run(&paths, "   ", None).await.is_err());
+        assert!(run(&paths, "   ", None, None).await.is_err());
         assert!(
             summo_vault::note::list(&paths).unwrap().is_empty(),
             "refusing must not leave a scratch note behind"

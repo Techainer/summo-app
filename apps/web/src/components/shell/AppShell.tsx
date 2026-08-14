@@ -13,6 +13,10 @@ interface Props {
   active: string;
   onNavigate: (key: string) => void;
   folders: string[];
+  pages: import("./Sidebar").Page[];
+  onOpenPage: (page: import("./Sidebar").Page) => void;
+  activePage?: string | null;
+  onNewPage: (folder: string | null) => void;
   activeFolder: string | null;
   onSelectFolder: (folder: string | null) => void;
   /** Open state of the sidebar: a column on wide screens, a sheet on narrow ones. */
@@ -39,6 +43,10 @@ export function AppShell({
   active,
   onNavigate,
   folders,
+  pages,
+  onOpenPage,
+  activePage,
+  onNewPage,
   activeFolder,
   onSelectFolder,
   navOpen,
@@ -69,6 +77,14 @@ export function AppShell({
       active={active}
       onNavigate={navigate}
       folders={folders}
+      pages={pages}
+      onOpenPage={(page) => {
+        onOpenPage(page);
+        // Opening a page is finishing navigating, same as choosing a screen.
+        if (narrow) onNavOpenChange(false);
+      }}
+      activePage={activePage}
+      onNewPage={onNewPage}
       activeFolder={activeFolder}
       onSelectFolder={selectFolder}
       footer={narrow ? undefined : sidebarFooter}

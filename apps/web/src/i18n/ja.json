@@ -29,7 +29,9 @@
     "collapse": "{name}をたたむ",
     "models": "モデル",
     "setup": "ワークスペース",
-    "home": "ホーム"
+    "home": "ホーム",
+    "new_page": "新しいページ",
+    "new_page_in": "{name} に新しいページ"
   },
   "record": {
     "source": "入力",
@@ -653,31 +655,16 @@
     "notify_unsupported": "このブラウザーには通知 API がありません。Summo はアプリ内でお知らせします。",
     "mic_title": "マイク"
   },
-  "compose": {
-    "title": "送る文面を書く",
-    "open": "開く",
-    "hint": "会議の内容から書き起こします。送信はしません — 確認してご自身で送ってください。",
-    "kind": "書くもの",
-    "kind_email": "メール",
-    "kind_message": "チャット",
-    "kind_recap": "要約共有",
-    "kind_actions": "タスク",
-    "tone": "文調",
-    "tone_neutral": "中立",
-    "tone_friendly": "カジュアル",
-    "tone_formal": "フォーマル",
-    "audience": "読む人",
-    "audience_placeholder": "ACME 社の担当者、開発チーム…",
-    "write": "書く",
-    "again": "書き直す",
-    "working": "作成中…",
-    "subject": "件名",
-    "body": "本文",
-    "copy": "コピー",
-    "copied": "コピーしました",
-    "copy_failed": "コピーできません — 選択して手動でコピーしてください。",
-    "open_mail": "メールアプリで開く",
-    "keep": "メモとして保存",
-    "kept": "保存しました"
+  "ask": {
+    "title": "エージェントに頼む",
+    "hint": "何でもどうぞ：報告書、メールの下書き、やることの整理。返ってくるのは保管庫の中のメモです。",
+    "placeholder": "上司向けの報告書を書いて…",
+    "run": "頼む",
+    "working": "作業中…",
+    "again": "もう一度頼む",
+    "usual": "よく頼むこと",
+    "times": "{count} 回",
+    "done": "完了 — タスクで確認できます",
+    "open": "開く"
   }
 }

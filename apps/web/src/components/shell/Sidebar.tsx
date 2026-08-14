@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ChevronRight, Folder, FolderOpen } from "lucide-react";
+import { ChevronRight, FileText, Folder, FolderOpen, Mic, Plus } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 
@@ -40,6 +40,20 @@ interface Props {
   folders: string[];
   activeFolder: string | null;
   onSelectFolder: (folder: string | null) => void;
+  /**
+   * Every page in the vault, of both kinds.
+   *
+   * A recording and a typed note are the same object here, and the sidebar is where that has to be
+   * visible: the tree is the user's own structure, and splitting it into "meetings over there,
+   * notes over here" would put the app's idea of a document above theirs.
+   */
+  pages: Page[];
+  /** Open a page — the id is all the caller needs; the kind decides which screen. */
+  onOpenPage: (page: Page) => void;
+  /** The page being read, so the tree shows where you are. */
+  activePage?: string | null;
+  /** Make a new page, in this folder. `null` is the vault root. */
+  onNewPage: (folder: string | null) => void;
   /** Rendered at the bottom: recording controls on desktop, nothing on a sheet. */
   footer?: React.ReactNode;
 }
@@ -58,6 +72,10 @@ export function Sidebar({
   folders,
   activeFolder,
   onSelectFolder,
+  pages,
+  onOpenPage,
+  activePage,
+  onNewPage,
   footer,
 }: Props) {
   const t = useT();
@@ -130,27 +148,113 @@ export function Sidebar({
               onSelect={() => onSelectFolder(null)}
             />
           </li>
+          {/* Pages filed nowhere sit at the top level, the way an unfiled page does in Notion.
+              Hiding them until somebody files them would hide the ones just recorded. */}
+          {pagesIn(pages, "").map((page) => (
+            <li key={page.id}>
+              <PageRow
+                page={page}
+                depth={1}
+                selected={activePage === page.id}
+                onOpen={() => onOpenPage(page)}
+              />
+            </li>
+          ))}
           {rows.map((node) => (
             <li key={node.path}>
               <FolderRow
                 label={node.name}
                 depth={node.depth}
                 selected={activeFolder === node.path}
-                expandable={node.children.length > 0}
+                expandable={node.children.length > 0 || pagesIn(pages, node.path).length > 0}
                 expanded={open.has(node.path)}
                 onToggle={() => toggle(node.path)}
                 onSelect={() => onSelectFolder(node.path)}
+                onAdd={() => onNewPage(node.path)}
               />
+              {open.has(node.path) && (
+                <ul className="space-y-0.5">
+                  {pagesIn(pages, node.path).map((page) => (
+                    <li key={page.id}>
+                      <PageRow
+                        page={page}
+                        depth={node.depth + 1}
+                        selected={activePage === page.id}
+                        onOpen={() => onOpenPage(page)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
-          {rows.length === 0 && (
+          {rows.length === 0 && pages.length === 0 && (
             <li className="text-fg-faint text-meta px-2 py-1">{t("nav.no_folders")}</li>
           )}
+          <li>
+            <button
+              type="button"
+              onClick={() => onNewPage(activeFolder)}
+              className="text-fg-faint hover:bg-bg-soft hover:text-fg mt-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-sm"
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+              {t("nav.new_page")}
+            </button>
+          </li>
         </ul>
       </nav>
 
       {footer && <div className="border-line border-t p-3">{footer}</div>}
     </div>
+  );
+}
+
+/**
+ * One page in the vault.
+ *
+ * A recording and a typed note differ by one field. That is the whole model: a meeting is a note
+ * that happens to have audio and a transcript attached, which is why they live in one tree and are
+ * counted, searched and filed by the same code.
+ */
+export interface Page {
+  id: string;
+  title: string;
+  folder: string;
+  kind: "meeting" | "note";
+}
+
+/** Pages filed directly in a folder — not in its children, which have their own rows. */
+function pagesIn(pages: Page[], folder: string): Page[] {
+  return pages.filter((page) => (page.folder ?? "") === folder);
+}
+
+function PageRow({
+  page,
+  depth,
+  selected,
+  onOpen,
+}: {
+  page: Page;
+  depth: number;
+  selected: boolean;
+  onOpen: () => void;
+}) {
+  const Glyph = page.kind === "meeting" ? Mic : FileText;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      style={{ paddingLeft: `${depth * 12 + 8}px` }}
+      className={cn(
+        "flex w-full items-center gap-1.5 rounded-lg py-1 pe-2 text-start text-sm transition-colors",
+        selected ? "bg-bg-soft text-fg font-medium" : "text-fg-dim hover:bg-bg-soft",
+      )}
+    >
+      {/* The icon is the only thing that says which kind this is, and that is enough: the
+          difference matters when you are looking for a recording, and never otherwise. */}
+      <Glyph className="text-fg-faint size-3.5 shrink-0" aria-hidden="true" />
+      <span className="truncate">{page.title}</span>
+    </button>
   );
 }
 
@@ -168,6 +272,7 @@ function FolderRow({
   expanded = false,
   onToggle,
   onSelect,
+  onAdd,
 }: {
   label: string;
   depth: number;
@@ -176,6 +281,8 @@ function FolderRow({
   expanded?: boolean;
   onToggle?: () => void;
   onSelect: () => void;
+  /** Make a page here. Absent on the "all folders" row, which is not a place. */
+  onAdd?: () => void;
 }) {
   const t = useT();
   return (
@@ -223,6 +330,16 @@ function FolderRow({
       >
         {label}
       </button>
+      {onAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          aria-label={t("nav.new_page_in", { name: label })}
+          className="text-fg-faint hover:text-fg flex size-6 shrink-0 items-center justify-center"
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }
