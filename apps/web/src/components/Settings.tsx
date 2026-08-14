@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useI18n, useT } from "../i18n/context";
 import { About } from "./About";
 import { Permissions } from "./onboarding/Permissions";
+import { SpokenLanguage } from "./record/SpokenLanguage";
+import { load as loadCapture, save as saveCapture } from "../lib/capture";
 import { url } from "../lib/library";
 import type { Handshake } from "../lib/engine";
 
@@ -177,6 +179,8 @@ export function Settings({ handshake }: { handshake: Handshake }) {
       <div className="my-6">
         <Permissions />
       </div>
+
+      <SpokenLanguageSetting />
 
       <h2 className="text-xl font-semibold tracking-tight">{t("settings.llm_heading")}</h2>
       <p className="text-fg-faint text-meta my-4 leading-normal">
@@ -435,5 +439,35 @@ function LanguagePicker() {
       </label>
       <p className="text-fg-faint text-meta my-4 leading-normal">{t("settings.language_hint")}</p>
     </>
+  );
+}
+
+/**
+ * The language being spoken, as a standing preference.
+ *
+ * The same control the record bar carries, because it is the same decision — but it belongs here
+ * too: the record bar is where you change it for *this* meeting, and this is where you change what
+ * every meeting starts from. Somebody who records in one language and has to reselect it every
+ * time is being asked a question that was already answered.
+ *
+ * `SpokenLanguage` writes through to the daemon itself; this only has to keep the browser's own
+ * copy in step, so the record bar opens on the same answer.
+ */
+function SpokenLanguageSetting() {
+  const t = useT();
+  const [spoken, setSpoken] = useState(() => loadCapture().spoken);
+
+  return (
+    <section className="border-line bg-bg-raised my-6 rounded-2xl border p-5">
+      <h2 className="font-medium">{t("settings.spoken_heading")}</h2>
+      <p className="text-fg-dim text-meta mt-1 mb-3">{t("settings.spoken_hint")}</p>
+      <SpokenLanguage
+        value={spoken}
+        onChange={(code) => {
+          setSpoken(code);
+          saveCapture({ ...loadCapture(), spoken: code });
+        }}
+      />
+    </section>
   );
 }
