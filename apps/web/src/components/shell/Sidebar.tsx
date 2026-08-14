@@ -365,7 +365,11 @@ function NavButton({
       onClick={() => onNavigate(item.key)}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "relative flex w-full items-center gap-2.5 rounded-[var(--radius-pill)] px-2.5 py-2 text-sm transition-colors",
+        // `isolate` is load-bearing. The highlight below is `-z-10` so the label paints over it,
+        // but without a stacking context here that negative index escapes the button entirely and
+        // the pill painted *behind the sidebar's own background* — invisible on every screen. The
+        // selected row had been nothing but green text for as long as this component has existed.
+        "relative isolate flex w-full items-center gap-2.5 rounded-[var(--radius-pill)] px-2.5 py-2 text-sm transition-colors",
         active ? "text-accent font-medium" : "text-fg-dim hover:bg-bg-raised hover:text-fg",
       )}
     >
@@ -387,7 +391,7 @@ function NavButton({
       <item.icon aria-hidden="true" className="size-4 shrink-0 stroke-[1.75]" />
       {item.label}
       {item.badge ? (
-        <span className="tabular bg-rec text-micro ml-auto rounded-full px-1.5 py-0.5 font-semibold text-white">
+        <span className="nums bg-rec text-micro ml-auto rounded-full px-1.5 py-0.5 font-semibold text-white">
           {item.badge}
         </span>
       ) : null}

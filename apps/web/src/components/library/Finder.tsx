@@ -121,7 +121,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
                 )}
               >
                 #{each.name}
-                <span className="tabular text-fg-faint ms-1">{each.count}</span>
+                <span className="nums text-fg-faint ms-1">{each.count}</span>
               </button>
             );
           })}
@@ -151,7 +151,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
                     degrades to for anyone who cannot tell two of these colours apart, which is
                     around one man in twelve. */}
                 {t(`colour.${each.name}`)}
-                <span className="tabular text-fg-faint">{each.count}</span>
+                <span className="nums text-fg-faint">{each.count}</span>
               </button>
             );
           })}

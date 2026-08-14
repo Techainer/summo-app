@@ -193,8 +193,7 @@ export function AgentsScreen() {
             type="button"
             onClick={() => void open(each.slug)}
             className={cn(
-              "rounded-card bg-bg-soft border p-4 text-left",
-              "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]",
+              "rounded-card bg-bg-soft lift border p-4 text-left",
               each.slug === chosen
                 ? "border-accent shadow-[0_0_0_1px_var(--color-accent)]"
                 : "border-line hover:border-fg-faint",
@@ -216,12 +215,12 @@ export function AgentsScreen() {
             </p>
 
             <p className="text-fg-faint text-micro mt-2.5 flex flex-wrap items-center gap-1.5">
-              <span className="tabular">{n("agents.tool_count", each.tools.length)}</span>
+              <span className="nums">{n("agents.tool_count", each.tools.length)}</span>
               {each.memory.length > 0 && (
-                <span className="tabular">· {n("agents.memory_count", each.memory.length)}</span>
+                <span className="nums">· {n("agents.memory_count", each.memory.length)}</span>
               )}
               {each.open_tasks > 0 && (
-                <span className="tabular">· {n("agents.task_count", each.open_tasks)}</span>
+                <span className="nums">· {n("agents.task_count", each.open_tasks)}</span>
               )}
               {each.model && <span className="tabular">· {each.model}</span>}
             </p>

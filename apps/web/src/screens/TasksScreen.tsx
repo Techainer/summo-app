@@ -277,7 +277,7 @@ function Column({
     >
       <h2 className="text-fg-faint text-micro px-1 pb-2 font-semibold tracking-wider uppercase">
         {label}
-        <span className="tabular ml-1.5 font-normal">{count}</span>
+        <span className="nums ml-1.5 font-normal">{count}</span>
       </h2>
       {/* An empty column says so rather than being a bordered rectangle of nothing. Four of those
           side by side is what made a board with no work on it look like a board that failed to
@@ -338,7 +338,7 @@ function PersonCard({
           </span>
         )}
         {task.due && (
-          <span className={cn("tabular", overdue ? "text-rec" : "text-fg-faint")}>
+          <span className={cn("nums", overdue ? "text-rec" : "text-fg-faint")}>
             {((d) => t(d.key, d.params))(dueLabel(task.due, now))}
           </span>
         )}

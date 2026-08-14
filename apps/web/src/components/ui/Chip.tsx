@@ -48,7 +48,7 @@ export function Chip({
   const inner = (
     <>
       {children}
-      {count !== undefined && <span className="tabular text-fg-faint">{count}</span>}
+      {count !== undefined && <span className="nums text-fg-faint">{count}</span>}
     </>
   );
 
@@ -95,7 +95,7 @@ export function SectionTitle({
       className={cn("text-fg-faint text-micro font-semibold tracking-wider uppercase", className)}
     >
       {children}
-      {count !== undefined && <span className="tabular ms-1.5 font-normal">{count}</span>}
+      {count !== undefined && <span className="nums ms-1.5 font-normal">{count}</span>}
     </h3>
   );
 }

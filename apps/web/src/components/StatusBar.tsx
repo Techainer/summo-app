@@ -33,19 +33,19 @@ export function StatusBar({
       <span className="flex-1" />
       {disconnected && (
         <span
-          className="border-line tabular border-rec text-rec text-micro inline-flex items-center rounded-full border px-2 py-0.5"
+          className="border-line nums border-rec text-rec text-micro inline-flex items-center rounded-full border px-2 py-0.5"
           data-testid="connection"
         >
           {connection === "reconnecting" ? t("status.reconnecting") : t("status.connecting")}
         </span>
       )}
       {device && (
-        <span className="border-line tabular text-micro inline-flex items-center rounded-full border px-2 py-0.5">
+        <span className="border-line nums text-micro inline-flex items-center rounded-full border px-2 py-0.5">
           {device}
         </span>
       )}
       {speakers.length > 0 && (
-        <span className="border-line tabular text-micro inline-flex items-center rounded-full border px-2 py-0.5">
+        <span className="border-line nums text-micro inline-flex items-center rounded-full border px-2 py-0.5">
           {n("status.speakers", speakers.length)}
         </span>
       )}
@@ -63,7 +63,7 @@ export function StatusBar({
             {stat.rss_mb} MB
           </span>
           {behind && (
-            <span className="border-line tabular border-rec text-rec text-micro inline-flex items-center rounded-full border px-2 py-0.5">
+            <span className="border-line nums border-rec text-rec text-micro inline-flex items-center rounded-full border px-2 py-0.5">
               {t("status.behind")}
             </span>
           )}
