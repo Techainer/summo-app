@@ -129,3 +129,43 @@ export async function rememberLanguage(handshake: Handshake, code: string): Prom
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 }
+
+/** What the daemon has loaded and ready right now. */
+export interface Ready {
+  model: string;
+  language: string | null;
+}
+
+/**
+ * Ask the daemon to build a decoder now.
+ *
+ * Answers when it is ready — about three and a half seconds — which is what lets the caller say
+ * "sẵn sàng" rather than "asked for". Called when the app opens and after a meeting ends; the
+ * daemon refills its own slot after a session too, so this is a nudge, never a requirement.
+ */
+export async function warmUp(handshake: Handshake): Promise<Ready | null> {
+  const response = await fetch(url(handshake, "/models/warm"), { method: "POST" });
+  // A daemon built without recognition has no such route, and the interface is the same interface:
+  // the `-nomodels` build browses a vault and cannot record, so there is nothing to warm and
+  // nothing wrong. Anything else is a real failure worth surfacing.
+  if (response.status === 404 || response.status === 405) return null;
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const body = (await response.json()) as { ready: Ready | null };
+  return body.ready;
+}
+
+/**
+ * What is loaded, from the status endpoint the recording banner already reads.
+ *
+ * Three answers, and the third is the point. `undefined` means this daemon has no warming at all —
+ * a build without recognition does not carry the field — and asking it to warm would be a request
+ * the browser logs as a failed one on a screen where nothing is wrong. Handling the error is not
+ * enough: the console entry appears whatever the code does with the response, and the shell suite
+ * treats console errors as failures because they usually are.
+ */
+export async function readyNow(handshake: Handshake): Promise<Ready | null | undefined> {
+  const response = await fetch(url(handshake, "/status"));
+  if (!response.ok) return undefined;
+  const body = (await response.json()) as { ready?: Ready | null };
+  return "ready" in body ? (body.ready ?? null) : undefined;
+}

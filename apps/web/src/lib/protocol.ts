@@ -62,7 +62,8 @@ export interface SessionSpec {
 export type Command =
   | ({ cmd: "session_start" } & SessionSpec)
   | { cmd: "session_stop" }
-  | { cmd: "model_load"; id: string }
+  // Empty `id` means "whatever the settings resolve to", the same as `session_start`.
+  | { cmd: "model_load"; id?: string }
   | { cmd: "model_pull"; id: string }
   // Both fields optional on purpose: the interface changes a language and lets the daemon pick the
   // model that hears it, while a client comparing two models names one and keeps the language.

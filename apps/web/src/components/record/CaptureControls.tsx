@@ -6,6 +6,7 @@ import { useEngine } from "../../lib/engine-context";
 import { TARGETS, hearsOthers, load, save, translating, type Capture } from "../../lib/capture";
 import type { Lane } from "../../lib/protocol";
 import { ListeningIn } from "./ListeningIn";
+import { WarmUp } from "./WarmUp";
 import { SpokenLanguage } from "./SpokenLanguage";
 
 /**
@@ -50,6 +51,7 @@ export function CaptureControls() {
           controls, because those are disabled mid-session and this one is the only thing on the
           card that can still be acted on. */}
       <ListeningIn />
+      <WarmUp />
 
       <fieldset disabled={busy} className="mt-2 disabled:opacity-60">
         <legend className="sr-only">{t("record.audio_source")}</legend>

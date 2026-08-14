@@ -54,6 +54,9 @@ struct Inner {
     status: RwLock<SessionStatus>,
     imports: crate::imports::Imports,
     installs: crate::install::Installs,
+    /// One speech model kept loaded, so pressing record does not wait 3.4 seconds for one.
+    #[cfg(feature = "models")]
+    warm: crate::warm::Warm,
 }
 
 impl EngineState {
@@ -66,8 +69,21 @@ impl EngineState {
                 status: RwLock::new(SessionStatus::Idle),
                 imports: crate::imports::Imports::new(),
                 installs: crate::install::Installs::new(),
+                #[cfg(feature = "models")]
+                warm: crate::warm::Warm::default(),
             }),
         })
+    }
+
+    /// The speech model kept loaded between recordings.
+    ///
+    /// On the state rather than inside the session, because its whole purpose is to exist when no
+    /// session does — a decoder built while nothing is recording is what makes the next recording
+    /// start immediately.
+    #[cfg(feature = "models")]
+    #[must_use]
+    pub fn warm(&self) -> &crate::warm::Warm {
+        &self.inner.warm
     }
 
     /// Imports running in this daemon. Shared, so a job started from one window is visible in

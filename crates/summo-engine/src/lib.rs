@@ -45,6 +45,8 @@ pub mod state;
 pub mod summarize;
 pub mod translate;
 pub mod voicebook;
+#[cfg(feature = "models")]
+pub mod warm;
 
 pub use auth::SessionToken;
 pub use protocol::{Command, SessionSpec, decode_frame, encode_frame};

@@ -65,7 +65,8 @@
     "listening_in": "Listening in {language}",
     "listening_change": "Change",
     "listening_note": "Changes take effect immediately; nothing already recorded is lost.",
-    "spoken_multi": "Several languages (detected)"
+    "spoken_multi": "Several languages (detected)",
+    "warm_ready": "Ready to record — {model} is loaded."
   },
   "import": {
     "title": "Import a recording",
