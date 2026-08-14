@@ -644,22 +644,44 @@ fn resolve_models(
     }
 
     let settings = summo_core::Settings::load(&engine.paths().settings()).unwrap_or_default();
-    if let Some(chosen) = settings.models.live.filter(|m| !m.trim().is_empty()) {
-        spec.live_model = chosen;
-    } else {
-        let speech: Vec<_> = engine
-            .store()
-            .list()
-            .into_iter()
-            .filter(|m| m.task == summo_models::Task::Asr)
-            .collect();
-        if let [only] = speech.as_slice() {
-            spec.live_model = only.id.to_string();
-        }
+    if spec.language.is_none() {
+        spec.language = settings.models.language.clone();
     }
 
-    if spec.language.is_none() {
-        spec.language = settings.models.language;
+    if let Some(chosen) = settings.models.live.filter(|m| !m.trim().is_empty()) {
+        spec.live_model = chosen;
+        return spec;
+    }
+
+    let speech: Vec<_> = engine
+        .store()
+        .list()
+        .into_iter()
+        .filter(|m| m.task == summo_models::Task::Asr)
+        .collect();
+
+    // One model is not a choice.
+    if let [only] = speech.as_slice() {
+        spec.live_model = only.id.to_string();
+        return spec;
+    }
+
+    // More than one, and nothing in the settings says which. This used to give up — and giving up
+    // means `session needs a live model`, so installing a *second* speech model broke recording
+    // until the user went and picked one. The language is the thing that decides, and by now the
+    // app knows it: rank the installed models for it and take the best, which is the same answer
+    // the model picker would give.
+    //
+    // With no language either, the multilingual models are the honest default: a model that only
+    // speaks Vietnamese is the wrong guess for a meeting nobody has described.
+    let language = spec.language.clone().unwrap_or_else(|| "*".into());
+    let ranked = summo_models::recommend(&speech, engine.hardware(), &language);
+    if let Some(best) = ranked.best() {
+        spec.live_model = best.id.clone();
+    } else if let Some(first) = speech.first() {
+        // Nothing covers the language. Recording in the wrong language beats refusing to record:
+        // the transcript is visibly wrong and fixable, and the meeting is not repeatable.
+        spec.live_model = first.id.to_string();
     }
     spec
 }
@@ -3156,7 +3178,7 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
                 transient: false,
             }]
         }
-        Command::ModelLoad { id } | Command::ModelSwap { id } => vec![Event::Error {
+        Command::ModelLoad { id } | Command::ModelSwap { id, .. } => vec![Event::Error {
             message: format!(
                 "cannot load `{id}`: this binary was built without recognition support. \
                  Rebuild with `--features models`."
@@ -3169,6 +3191,9 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
 /// A running recording: the pipeline, the file it is being written into, and when it started.
 #[cfg(feature = "models")]
 struct ActiveSession {
+    /// What this session was started with, so a mid-meeting change is an edit of it rather than a
+    /// new set of assumptions.
+    spec: crate::protocol::SessionSpec,
     runner: crate::runner::SessionRunner,
     recorder: crate::recorder::Recorder,
     archive: crate::archive::AudioArchive,
@@ -3271,6 +3296,58 @@ fn handle_command_with_models(
             events.push(Event::info("session stopped"));
             (events, None)
         }
+        // Change the language, or the model, without ending the meeting.
+        //
+        // The file, the utterances already committed and the audio archive all continue; only the
+        // decoder is rebuilt, so the next utterance is heard by the new one. The open utterance is
+        // lost rather than re-decoded — its audio lives inside the pipeline being replaced, and
+        // half a sentence transcribed twice is worse than half a sentence missing.
+        Command::ModelSwap { id, language } => {
+            let Some(mut active) = session else {
+                // Not an error worth failing on: a client that swaps before recording is asking for
+                // the setting, and the setting is an HTTP call away.
+                return (
+                    vec![Event::error(&summo_core::Error::Config(
+                        "no recording to change; set the model or language in settings instead"
+                            .into(),
+                    ))],
+                    None,
+                );
+            };
+
+            let mut spec = active.spec.clone();
+            if !id.trim().is_empty() {
+                spec.live_model = id.trim().to_string();
+            }
+            if let Some(language) = language {
+                let language = language.trim().to_lowercase();
+                spec.language = (!language.is_empty()).then_some(language);
+            }
+            // An empty model with a new language is the common case — the interface names a
+            // language and lets the daemon pick what hears it.
+            let spec = resolve_models(&spec, engine);
+
+            match crate::runner::SessionRunner::new(&spec, &engine.store(), engine.hardware()) {
+                Ok(runner) => {
+                    let said = spec.language.clone().unwrap_or_else(|| "auto".into());
+                    active.runner = runner;
+                    active.spec = spec.clone();
+                    // So `/status` — and the banner reading it — says what is true now.
+                    engine.retuned(&spec);
+                    (
+                        vec![Event::info(format!(
+                            "now listening with {} in {said}",
+                            spec.live_model
+                        ))],
+                        Some(active),
+                    )
+                }
+                // The old pipeline is still in `active` and still working, so a failed swap leaves
+                // the meeting recording rather than ending it. Losing a meeting because a model
+                // would not load is the worst possible answer to "change the language".
+                Err(e) => (vec![Event::error(&e)], Some(active)),
+            }
+        }
         other => {
             let events = handle_command(&serde_json::to_string(&other).unwrap_or_default(), engine);
             (events, session)
@@ -3338,6 +3415,7 @@ fn start_session(
     };
 
     Ok(ActiveSession {
+        spec: spec.clone(),
         runner,
         recorder,
         archive,
@@ -3464,6 +3542,45 @@ mod resolve_tests {
         settings.save(&path).unwrap();
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
         assert_eq!(resolved.language, None);
+    }
+
+    /// Installing a second speech model used to break recording. With nothing named in the
+    /// settings the resolver only handled "exactly one", so the moment a user added a model for
+    /// another language, every recording failed with `session needs a live model` — and the
+    /// interface, which deliberately names none, could not start one at all.
+    #[test]
+    fn a_second_installed_model_does_not_break_recording() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+
+        // Two speech models on disk. `list()` reads the manifest directory, so writing manifests is
+        // what "installed" means here — no blobs are needed to choose between them.
+        std::fs::create_dir_all(engine.paths().manifests()).unwrap();
+        for (id, langs) in [("gipformer-65m", r#"["vi"]"#), ("whisper-tiny", r#"["*"]"#)] {
+            std::fs::write(
+                engine.paths().manifests().join(format!("{id}.json")),
+                format!(
+                    r#"{{"schema":1,"id":"{id}","name":"{id}","task":"asr","mode":"live",
+                        "runtime":"test","langs":{langs},"license":"MIT","size_bytes":1,
+                        "profile":{{"rtf":{{"cpu_x86_avx512vnni_8t":0.02}},
+                                   "quality":{{"wer_fleurs_vi":0.09}}}},
+                        "files":[{{"name":"m.onnx","sha256":"{sha}","size":1,
+                                  "url":"https://example.invalid/m"}}]}}"#,
+                    sha = "a".repeat(64)
+                ),
+            )
+            .unwrap();
+        }
+
+        let mut settings = summo_core::Settings::default();
+        settings.models.language = Some("vi".into());
+        settings.save(&engine.paths().settings()).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(
+            resolved.live_model, "gipformer-65m",
+            "the language decides between them"
+        );
     }
 
     /// A client that knows which model it wants keeps it. The import job names one on purpose.
@@ -5200,6 +5317,44 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
                 transient: false,
                 ..
             }
+        ));
+    }
+
+    /// Changing the language mid-meeting is only useful if the meeting survives it. Without a
+    /// session there is nothing to change, and saying so beats loading a model nobody asked for.
+    #[cfg(feature = "models")]
+    #[test]
+    fn a_swap_with_no_recording_says_where_the_setting_lives() {
+        let (_tmp, engine) = engine();
+        let swap = serde_json::to_string(&Command::ModelSwap {
+            id: String::new(),
+            language: Some("en".into()),
+        })
+        .unwrap();
+        // `handle_command_with_models` and not `handle_command`: the swap belongs to the half of
+        // the protocol that owns a pipeline, and the other half answers "built without recognition
+        // support" for every model command, which is true of that build and not of this one.
+        let (events, session) = handle_command_with_models(&swap, &engine, None);
+        assert!(
+            matches!(&events[0], Event::Error { message, .. } if message.contains("settings")),
+            "{events:?}"
+        );
+        assert!(
+            session.is_none(),
+            "a failed swap must not invent a recording"
+        );
+    }
+
+    /// The wire form matters as much as the behaviour: the interface sends a language and no model,
+    /// and a `serde` default that made `id` mandatory would reject exactly that message.
+    #[test]
+    fn a_swap_may_name_a_language_without_naming_a_model() {
+        let parsed: Command =
+            serde_json::from_str(r#"{"cmd":"model_swap","language":"en"}"#).expect("parses");
+        assert!(matches!(
+            parsed,
+            Command::ModelSwap { ref id, ref language }
+                if id.is_empty() && language.as_deref() == Some("en")
         ));
     }
 

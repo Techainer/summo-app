@@ -61,7 +61,11 @@
     "spoken_installing": "ダウンロード中… {pct}%",
     "spoken_wait": "完了したらすぐ録音できます。",
     "spoken_missing": "この言語のモデルはまだありません。",
-    "spoken_default": "設定に従う"
+    "spoken_default": "設定に従う",
+    "listening_in": "{language} で聞き取り中",
+    "listening_change": "変更",
+    "listening_note": "その場で切り替わります。録音済みの内容は失われません。",
+    "spoken_multi": "複数言語（自動判定）"
   },
   "import": {
     "title": "録音ファイルを取り込む",
@@ -361,7 +365,8 @@
     "close": "閉じる",
     "retry": "やり直す",
     "loading": "読み込み中…",
-    "saving": "保存中…"
+    "saving": "保存中…",
+    "dismiss": "閉じる"
   },
   "setup": {
     "title": "Summoへようこそ",

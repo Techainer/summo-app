@@ -23,8 +23,22 @@ pub enum Command {
     ModelLoad { id: String },
     /// Fetch and install a model from the registry.
     ModelPull { id: String },
-    /// Swap the live model mid-recording. The open utterance is re-decoded by the new model.
-    ModelSwap { id: String },
+    /// Change what is listening, without ending the meeting.
+    ///
+    /// Both fields are optional and mean "leave this as it is": a user who realises the call is in
+    /// English changes the language, and the model follows from it; a user comparing two models
+    /// changes the model and keeps the language. The recording, the file and everything already
+    /// transcribed are untouched — only the next utterance is decoded differently.
+    ///
+    /// This exists because the alternative is stopping and starting again, which costs the part of
+    /// the meeting where somebody noticed. A meeting is not always in the language its owner's
+    /// settings say, and finding that out is something that happens *during* it.
+    ModelSwap {
+        #[serde(default)]
+        id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        language: Option<String>,
+    },
     /// Keepalive. Some proxies drop an idle WebSocket, and a dropped socket mid-meeting is data loss.
     Ping,
 }
@@ -161,7 +175,14 @@ mod tests {
             Command::SessionStop,
             Command::ModelLoad { id: "x".into() },
             Command::ModelPull { id: "x".into() },
-            Command::ModelSwap { id: "x".into() },
+            Command::ModelSwap {
+                id: "x".into(),
+                language: None,
+            },
+            Command::ModelSwap {
+                id: String::new(),
+                language: Some("en".into()),
+            },
             Command::Ping,
         ];
         for cmd in cases {

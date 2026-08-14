@@ -64,7 +64,9 @@ export type Command =
   | { cmd: "session_stop" }
   | { cmd: "model_load"; id: string }
   | { cmd: "model_pull"; id: string }
-  | { cmd: "model_swap"; id: string }
+  // Both fields optional on purpose: the interface changes a language and lets the daemon pick the
+  // model that hears it, while a client comparing two models names one and keeps the language.
+  | { cmd: "model_swap"; id?: string; language?: string }
   | { cmd: "ping" };
 
 /** Whether an event carries transcript text. */

@@ -5,6 +5,7 @@ import { useI18n } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { TARGETS, hearsOthers, load, save, translating, type Capture } from "../../lib/capture";
 import type { Lane } from "../../lib/protocol";
+import { ListeningIn } from "./ListeningIn";
 import { SpokenLanguage } from "./SpokenLanguage";
 
 /**
@@ -45,7 +46,12 @@ export function CaptureControls() {
     // puts it there. It used to centre itself in a `max-w-xl`, which is why the record screen had
     // its controls floating in the middle of a pane and its button somewhere else entirely.
     <div className="w-full">
-      <fieldset disabled={busy} className="disabled:opacity-60">
+      {/* While recording, what it is hearing — and a way to correct it without stopping. Above the
+          controls, because those are disabled mid-session and this one is the only thing on the
+          card that can still be acted on. */}
+      <ListeningIn />
+
+      <fieldset disabled={busy} className="mt-2 disabled:opacity-60">
         <legend className="sr-only">{t("record.audio_source")}</legend>
 
         <div className="flex flex-wrap items-center gap-2">

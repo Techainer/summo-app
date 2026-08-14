@@ -61,7 +61,11 @@
     "spoken_installing": "Downloading… {pct}%",
     "spoken_wait": "Recording works as soon as it finishes.",
     "spoken_missing": "No model for this language yet.",
-    "spoken_default": "As configured"
+    "spoken_default": "As configured",
+    "listening_in": "Listening in {language}",
+    "listening_change": "Change",
+    "listening_note": "Changes take effect immediately; nothing already recorded is lost.",
+    "spoken_multi": "Several languages (detected)"
   },
   "import": {
     "title": "Import a recording",
@@ -361,7 +365,8 @@
     "close": "Close",
     "retry": "Retry",
     "loading": "Loading…",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "dismiss": "Dismiss"
   },
   "setup": {
     "title": "Welcome to Summo",

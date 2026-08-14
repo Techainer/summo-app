@@ -119,6 +119,38 @@ await page
   .first()
   .click();
 
+// ---- changing the language mid-meeting -----------------------------------
+//
+// The part a default cannot do. A preference is right most of the time and wrong exactly when it
+// matters — the call that turned out to be in English — and the old answer was to stop, change a
+// setting and start again, which costs the part of the meeting where somebody noticed.
+{
+  const at = (path) => `${appUrl}${path}${path.includes("?") ? "&" : "?"}token=${token}`;
+  const before = await (await fetch(at("/status"))).json();
+  if (before.state !== "recording")
+    problems.push(`not recording before the change: ${before.state}`);
+
+  await page.getByRole("button", { name: "Đổi", exact: true }).click();
+  await page.getByLabel("Ngôn ngữ nói").selectOption("vi");
+  await page.waitForTimeout(3000);
+
+  const after = await (await fetch(at("/status"))).json();
+  console.log(
+    `language mid-meeting: ${before.language ?? "(model's own)"} → ${after.language}, ` +
+      `segments ${before.segments} → ${after.segments}, still ${after.state}`,
+  );
+  if (after.state !== "recording") {
+    problems.push(`the meeting ended when the language changed: ${JSON.stringify(after)}`);
+  }
+  if (after.language !== "vi") {
+    problems.push(`the daemon did not take the new language: ${JSON.stringify(after)}`);
+  }
+  // Nothing already transcribed may be lost: the count only ever goes up.
+  if (after.segments < before.segments) {
+    problems.push(`segments went backwards: ${before.segments} → ${after.segments}`);
+  }
+}
+
 console.log("clicking stop…");
 await page
   .getByRole("button", { name: /Dừng ghi/ })

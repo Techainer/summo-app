@@ -36,6 +36,8 @@ export interface EngineValue {
   start: () => Promise<void>;
   stop: () => void;
   toggle: () => void;
+  /** Change the language mid-meeting, without ending it. */
+  retune: (language: string) => void;
 }
 
 export const EngineContext = createContext<EngineValue | null>(null);
