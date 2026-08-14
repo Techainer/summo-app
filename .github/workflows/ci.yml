@@ -379,6 +379,22 @@ jobs:
       # `bundled,models` is a heavier build — it links sherpa-onnx — so it is a second step rather
       # than a change to the one above: the ten fast suites should not wait for it to fail.
       - run: cargo build --bin summo-engine --features bundled,models
+      # sherpa-onnx ships as a shared library, and it is the crate's *build script* that puts it
+      # beside the binary — so a cache hit, which skips the build script, produces a binary linked
+      # with an `$ORIGIN` rpath and nothing at `$ORIGIN` to find. The daemon then dies with
+      # "libsherpa-onnx-c-api.so: cannot open shared object file" and the harness reports it as
+      # "the daemon did not come up", which is a long way from the cause.
+      #
+      # Rebuilding just that crate is the cheapest way to make the copy happen again, and it only
+      # costs anything on the runs where it was missing.
+      - name: The speech libraries, beside the binary
+        run: |
+          ls -l target/debug/libsherpa* 2>/dev/null || echo "not beside the binary"
+          if [ ! -e target/debug/libsherpa-onnx-c-api.so ]; then
+            cargo clean -p sherpa-rs-sys
+            cargo build --bin summo-engine --features bundled,models
+            ls -l target/debug/libsherpa*
+          fi
       - run: pnpm -C apps/web e2e:full-flow
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
