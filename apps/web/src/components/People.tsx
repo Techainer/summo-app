@@ -212,9 +212,17 @@ export function People({ client, meeting }: Props) {
         </>
       )}
 
-      <SectionTitle>{t("people.known")}</SectionTitle>
-      {space && (
-        <p className="text-fg-dim text-micro -mt-2">{t("people.identified_by", { space })}</p>
+      {/* Only over a list. A heading above nothing is a heading that promises content the screen
+          does not have, and on a new vault this one sat alone at the top of an empty pane with the
+          "no voices yet" message four hundred pixels below it — two separate answers to the same
+          question, neither next to the other. */}
+      {people.length > 0 && (
+        <>
+          <SectionTitle>{t("people.known")}</SectionTitle>
+          {space && (
+            <p className="text-fg-dim text-micro -mt-2">{t("people.identified_by", { space })}</p>
+          )}
+        </>
       )}
 
       {people.length === 0 ? (

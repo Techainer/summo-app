@@ -67,6 +67,22 @@
   --color-rec: #fb6b70;
   --color-rec-soft: #fb6b701a;
 
+  /* Something went wrong.
+   *
+   * This token did not exist. Seventeen places said `text-danger` or `bg-danger-soft` — the failed
+   * import, the calendar that would not fetch, the model that would not download, the agent that
+   * refused, every `role="alert"` in onboarding — and Tailwind v4 emits only the utilities whose
+   * variable it can find, so `.text-danger` was never in the bundle at all. Every error message in
+   * this app has been rendering in ordinary body colour, which is exactly as loud as the sentence
+   * above it.
+   *
+   * The same red as recording, deliberately. Two reds would be two things to learn, and the
+   * contexts never meet: recording is a disc and a chip in the header, an error is a sentence
+   * announced to a screen reader. Kept as its own name so a future change to one does not silently
+   * move the other. */
+  --color-danger: #fb6b70;
+  --color-danger-soft: #fb6b701a;
+
   /* Task and job states. Semantic, not decorative. */
   --color-done: #64e3a1;
   --color-running: #7aa2f7;
@@ -190,6 +206,8 @@
     --color-ai-fg: #ffffff;
     --color-rec: #c62f32;
     --color-rec-soft: #c62f3214;
+    --color-danger: #c62f32;
+    --color-danger-soft: #c62f3214;
     --color-done: #0f7350;
     --color-running: #2f5fc0;
     --color-running-soft: #2f5fc014;
@@ -284,6 +302,8 @@
   --color-ai-fg: #120a26;
   --color-rec: #fb6b70;
   --color-rec-soft: #fb6b701a;
+  --color-danger: #fb6b70;
+  --color-danger-soft: #fb6b701a;
   --avatar-fill-l: 0.72;
   --avatar-fill-c: 0.11;
   --avatar-fill-a: 0.22;

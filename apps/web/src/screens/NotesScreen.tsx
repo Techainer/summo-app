@@ -267,7 +267,19 @@ export function NotesScreen() {
           // Centred in the pane rather than pinned a fixed distance from the top: `mt-24` puts a
           // grey sentence in the upper third of a tall empty column, which is what the whole
           // interface used to look like.
-          <Empty full icon={NotebookPen} title={t("notes.pick")} />
+          // With a way out. An empty state that only describes the emptiness is a dead end, and
+          // this one is the largest surface on the screen for anybody who has not written a note
+          // yet — the button they need is a 288px column away in the corner of another pane.
+          <Empty
+            full
+            icon={NotebookPen}
+            title={t("notes.pick")}
+            action={
+              <Button size="sm" variant="secondary" onClick={() => void create("blank")}>
+                {t("notes.new")}
+              </Button>
+            }
+          />
         ) : (
           <>
             <div className="border-line flex items-center gap-3 border-b px-4 py-2">
