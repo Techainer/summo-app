@@ -69,7 +69,21 @@ export class Session {
     this.update({ error: null });
 
     this.client = new EngineClient(this.handshake, {
-      onEvent: this.callbacks.onEvent,
+      onEvent: (event) => {
+        // A refusal from the daemon ends the recording *here* too. Without this the app kept its
+        // timer running, its button red and its banner up while the daemon sat idle — and the
+        // failure was only visible to somebody who read the transcript that never appeared. A
+        // transient error is different: the pipeline is still running and will catch up.
+        if (event.kind === "error" && !event.transient && this.state.recording) {
+          this.microphone?.stop();
+          this.microphone = null;
+          this.update({
+            recording: false,
+            error: { code: "session_refused", error: event.message },
+          });
+        }
+        this.callbacks.onEvent(event);
+      },
       onState: (connection) => this.update({ connection }),
     });
     this.client.connect();
@@ -112,6 +126,19 @@ export class Session {
       deviceLabel: this.microphone.deviceLabel,
       sampleRate: this.microphone.sampleRate,
     });
+  }
+
+  /**
+   * Change what is listening, without ending the meeting.
+   *
+   * A meeting is not always in the language the settings say, and that is discovered *during* it —
+   * usually in the first sentence. Stopping and starting again costs exactly the part where
+   * somebody noticed, so this leaves the recording, the file and everything transcribed alone and
+   * rebuilds only the decoder.
+   */
+  retune(language: string): void {
+    if (!this.state.recording) return;
+    this.client?.send({ cmd: "model_swap", language });
   }
 
   stop(): void {

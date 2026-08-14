@@ -61,7 +61,11 @@
     "spoken_installing": "下载中… {pct}%",
     "spoken_wait": "下载完成即可开始录音。",
     "spoken_missing": "还没有适用于此语言的模型。",
-    "spoken_default": "按设置"
+    "spoken_default": "按设置",
+    "listening_in": "正在以{language}聆听",
+    "listening_change": "更改",
+    "listening_note": "立即生效，已录制的内容不会丢失。",
+    "spoken_multi": "多种语言（自动识别）"
   },
   "import": {
     "title": "导入录音",
@@ -361,7 +365,8 @@
     "close": "关闭",
     "retry": "重试",
     "loading": "加载中…",
-    "saving": "保存中…"
+    "saving": "保存中…",
+    "dismiss": "关闭"
   },
   "setup": {
     "title": "欢迎使用 Summo",

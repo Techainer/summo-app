@@ -29,6 +29,7 @@ import { useEngine } from "../../lib/engine-context";
 import { deviceWarning } from "../../lib/session";
 import { useErrorText } from "../../lib/errors";
 import { RecordButton } from "../RecordButton";
+import { ListeningIn } from "../record/ListeningIn";
 import { StatusBar } from "../StatusBar";
 import { Waveform } from "../Waveform";
 import { motion } from "motion/react";
@@ -245,6 +246,13 @@ export function RootLayout({ children }: { children: ReactNode }) {
       </header>
 
       <NudgeBar />
+
+      {/* What the running recording is hearing, on every screen — because a recording survives
+          navigation, and "this is in English actually" is realised while looking at something
+          else. Renders nothing when idle. */}
+      <div className="px-4 empty:hidden [&:has(>*)]:py-2">
+        <ListeningIn />
+      </div>
 
       {/* A refused microphone is the one failure with a repair path, so it gets a link to the
           panel that repairs it. Every other failure gets the sentence alone: a button that leads

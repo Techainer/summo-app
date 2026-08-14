@@ -40,6 +40,14 @@ import { Button } from "../ui";
  * multilingual model on disk; it also costs accuracy and can flip mid-meeting, so it is never the
  * default.
  */
+/**
+ * The value of the "several languages" entry.
+ *
+ * Not a language code, and not the empty string it resolves to: a `<select>` needs a value that is
+ * distinct from every option beside it, and the empty string is already taken by "as configured".
+ */
+const MULTI = "__multi__";
+
 export function SpokenLanguage({
   value,
   onChange,
@@ -94,6 +102,12 @@ export function SpokenLanguage({
   // which is right for a wire format and wrong for a list a person scrolls: in Vietnamese, `af`
   // renders as "Tiếng Hà Lan (Nam Phi)" and sits between English and Vietnamese for no reason a
   // reader can see.
+  // The multilingual entry: one model that covers everything, detecting per utterance. Offered
+  // whether or not it is installed, because "this meeting is in two languages" is a thing a user
+  // knows before they own a model for it — and choosing it should start the download, exactly as
+  // choosing a language does.
+  const multilingual = languages.find((language) => language.multilingual_only && language.model);
+
   const options = languages
     .filter((language) => language.model)
     .sort((a, b) => {
@@ -110,7 +124,12 @@ export function SpokenLanguage({
           value={value}
           aria-label={t("record.spoken")}
           onChange={(event) => {
-            const code = event.target.value;
+            const raw = event.target.value;
+            // `MULTI` is not a language, it is a request for one model and no language. It resolves
+            // to the same empty code the daemon and sherpa-onnx already mean by "detect".
+            const code = raw === MULTI ? AUTO : raw;
+            if (raw === MULTI && multilingual && !multilingual.installed)
+              void install(multilingual);
             onChange(code);
             // Written through to the daemon so the choice survives this browser. A failure here is
             // deliberately swallowed: the recording still has the language, and a preference that
@@ -121,13 +140,26 @@ export function SpokenLanguage({
         >
           {/* Detection first when it is possible, because somebody who does not know what will be
               spoken is exactly who needs it. */}
-          {auto && <option value={AUTO}>{t("record.spoken_auto")}</option>}
+          {/* First, always, whichever it is: the option that describes what the control is doing
+              *now*. With detection available that is "automatic"; without it, "as configured" —
+              and without either the browser would show the first language in the list, so a
+              control meaning "whatever the settings say" silently claimed to be recording English,
+              the one wrong answer that never announces itself. */}
+          {auto ? (
+            <option value={AUTO}>{t("record.spoken_auto")}</option>
+          ) : (
+            value === AUTO && <option value={AUTO}>{t("record.spoken_default")}</option>
+          )}
 
-          {/* When nothing has been chosen and detection is not available, the empty value has to be
-              an option of its own. Without it the browser shows the first entry in the list, so a
-              control that means "whatever the settings say" silently claimed to be recording
-              English — the one wrong answer that never announces itself. */}
-          {!auto && value === AUTO && <option value={AUTO}>{t("record.spoken_default")}</option>}
+          {/* Then the multilingual entry: one model that hears everything, detecting per utterance.
+              Offered whether or not it is installed, because "this meeting is in two languages" is
+              something a user knows before they own a model for it. */}
+          {!auto && multilingual && (
+            <option value={MULTI}>
+              {t("record.spoken_multi")}
+              {multilingual.installed ? "" : ` · ${megabytes(multilingual.size_bytes)}`}
+            </option>
+          )}
           {options.map((language) => (
             <option key={language.code} value={language.code}>
               {languageName(language.code, locale)}

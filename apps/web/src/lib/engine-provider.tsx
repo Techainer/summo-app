@@ -11,7 +11,7 @@ import { DEV_HANDSHAKE, EngineContext, IDLE, type EngineValue, type Stat } from 
 import { LibraryClient } from "./library";
 import { PeopleClient } from "./people";
 import type { Event } from "./protocol";
-import { load as loadCapture } from "./capture";
+import { load as loadCapture, save as saveCapture } from "./capture";
 import { Session, handshakeFromLocation, type SessionState } from "./session";
 import { apply, empty, type TranscriptState } from "./transcript";
 
@@ -86,6 +86,14 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Mid-meeting, and it also updates what the *next* meeting starts from: somebody who corrects
+  // the language during a call has told us the setting was wrong, not only this recording.
+  const retune = useCallback((language: string) => {
+    const current = loadCapture();
+    saveCapture({ ...current, spoken: language });
+    controller.current?.retune(language);
+  }, []);
+
   const stop = useCallback(() => {
     if (timer.current !== null) window.clearInterval(timer.current);
     timer.current = null;
@@ -130,6 +138,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       start,
       stop,
       toggle,
+      retune,
     }),
     [
       library,
@@ -144,6 +153,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       start,
       stop,
       toggle,
+      retune,
     ],
   );
 

@@ -20,6 +20,14 @@ pub enum SessionStatus {
         live_model: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         refine_model: Option<String>,
+        /// The language this session resolved to, or `None` for the model's own detection.
+        ///
+        /// Here because the interface has to be able to *say* what it is hearing, and its own copy
+        /// of the preference is not that: a session started with no language named resolves to the
+        /// daemon's setting, and a banner reading it from the browser would announce "detecting"
+        /// while the daemon confidently decoded Vietnamese.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        language: Option<String>,
         /// Utterances committed so far.
         segments: u64,
     },
@@ -109,9 +117,29 @@ impl EngineState {
             elapsed_s: 0.0,
             live_model: spec.live_model.clone(),
             refine_model: spec.refine_model.clone(),
+            language: spec.language.clone(),
             segments: 0,
         };
         Ok(())
+    }
+
+    /// Say what a running session is listening with now, after a mid-meeting change.
+    ///
+    /// Silently ignored when nothing is recording: a swap that arrives as the meeting ends is a
+    /// race, not a mistake, and there is no state left to correct.
+    pub fn retuned(&self, spec: &SessionSpec) {
+        let mut status = self.inner.status.write();
+        if let SessionStatus::Recording {
+            live_model,
+            refine_model,
+            language,
+            ..
+        } = &mut *status
+        {
+            live_model.clone_from(&spec.live_model);
+            refine_model.clone_from(&spec.refine_model);
+            language.clone_from(&spec.language);
+        }
     }
 
     /// Record progress, for the status endpoint and the performance HUD.
