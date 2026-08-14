@@ -28,7 +28,8 @@ await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/notes`
 });
 
 // ---- the kinds on offer ---------------------------------------------------
-await page.getByRole("button", { name: "Mới", exact: true }).click();
+// The New button itself makes a blank note; the caret beside it offers the shapes.
+await page.getByRole("button", { name: "Loại ghi chú" }).click();
 const menu = page.getByTestId("note-kinds");
 await menu.waitFor({ timeout: 10000 }).catch(() => problems.push("no kinds were offered"));
 

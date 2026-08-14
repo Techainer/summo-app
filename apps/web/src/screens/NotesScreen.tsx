@@ -160,10 +160,22 @@ export function NotesScreen() {
       <aside className="border-line flex w-72 shrink-0 flex-col border-r">
         <div className="border-line flex items-center justify-between gap-2 border-b px-3 py-2">
           <h1 className="text-sm font-semibold">{t("notes.title")}</h1>
-          <div className="relative">
-            <Button size="sm" onClick={() => setPicking((p) => !p)}>
+          <div className="relative flex items-center gap-1">
+            {/* The common action stays one click. Putting the shapes *behind* the New button made
+                every blank note cost a menu, which is the wrong trade: most notes are blank, and
+                the release check that drives a first install caught it immediately. */}
+            <Button size="sm" onClick={() => void create("blank")}>
               {t("notes.new")}
             </Button>
+            <button
+              type="button"
+              aria-label={t("notes.kind")}
+              aria-expanded={picking}
+              onClick={() => setPicking((p) => !p)}
+              className="border-line text-fg-dim hover:text-fg h-8 rounded-[var(--radius-card)] border px-1.5 text-xs"
+            >
+              ▾
+            </button>
             {picking && (
               <ul
                 className="border-line bg-bg-raised absolute end-0 z-10 mt-1 w-40 rounded-[var(--radius-card)] border py-1 shadow-[var(--shadow-pop)]"
