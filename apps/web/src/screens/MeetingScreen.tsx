@@ -5,6 +5,7 @@ import { Comments } from "../components/meeting/Comments";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { DraftPanel } from "../components/meeting/DraftPanel";
+import { ComposePanel } from "../components/meeting/Compose";
 import { Player, type PlayerHandle } from "../components/meeting/Player";
 import { TranscriptChips } from "../components/meeting/TranscriptChips";
 import { Button, Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
@@ -175,6 +176,11 @@ export function MeetingScreen() {
               }
             />
           )}
+
+          {/* After the summary, not beside it: the follow-up is written *from* what the meeting
+              concluded, and offering to draft an email above the draft of the notes puts the two
+              in the wrong order. */}
+          <ComposePanel meeting={meetingId} title={summary.title} />
 
           {sections.length === 0 ? (
             <Card>

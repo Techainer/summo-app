@@ -2,11 +2,11 @@ import { CalendarDays } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useMemo, useState } from "react";
 
-import { Avatar, Button, Empty, Page, PageGlow } from "../components/ui";
+import { Avatar, Empty, Page, PageGlow } from "../components/ui";
+import { CalendarSources } from "../components/agenda/Calendars";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
-import { pickFile } from "../lib/imports";
 import { GENTLE, listItem } from "../lib/motion";
 import { AgendaClient, byDay, clock, length, service, type AgendaEntry } from "../lib/notes";
 import { useRefresh } from "../lib/use-load";
@@ -30,8 +30,6 @@ export function AgendaScreen() {
 
   const [entries, setEntries] = useState<AgendaEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [path, setPath] = useState("");
-  const [name, setName] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -43,32 +41,6 @@ export function AgendaScreen() {
 
   useRefresh(refresh);
 
-  const add = async (from: string) => {
-    const file = from.trim();
-    if (!file) return;
-    setError(null);
-    try {
-      // The name defaults to the file's own, so adding one calendar takes one action.
-      const fallback = (file.split(/[/\\]/).pop() ?? "calendar").replace(/\.ics$/i, "");
-      await client.addCalendar(file, name.trim() || fallback);
-      setPath("");
-      setName("");
-      await refresh();
-    } catch (e) {
-      setError(say(e));
-    }
-  };
-
-  const browse = async () => {
-    const chosen = await pickFile("iCalendar");
-    if (chosen === null) {
-      setError(t("import.no_dialog"));
-      return;
-    }
-    await add(chosen);
-  };
-
-  const calendars = [...new Set(entries.map((e) => e.calendar))].sort();
   const grouped = byDay(entries).reverse();
 
   return (
@@ -81,52 +53,7 @@ export function AgendaScreen() {
         </p>
       )}
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        <input
-          value={path}
-          onChange={(e) => setPath(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void add(path);
-          }}
-          placeholder={t("agenda.path_placeholder")}
-          aria-label={t("agenda.path_label")}
-          className="border-line bg-bg-soft focus:border-accent min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
-        />
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={t("agenda.name_placeholder")}
-          aria-label={t("agenda.name_label")}
-          className="border-line bg-bg-soft focus:border-accent w-36 rounded-xl border px-3 py-2 text-sm outline-none"
-        />
-        <Button variant="ghost" onClick={() => void browse()}>
-          {t("import.browse")}
-        </Button>
-        <Button onClick={() => void add(path)} disabled={!path.trim()}>
-          {t("agenda.add")}
-        </Button>
-      </div>
-
-      {calendars.length > 0 && (
-        <ul className="mt-3 flex flex-wrap gap-2">
-          {calendars.map((calendar) => (
-            <li
-              key={calendar}
-              className="border-line bg-bg-soft text-meta flex items-center gap-1.5 rounded-full border px-2.5 py-1"
-            >
-              {calendar}
-              <button
-                type="button"
-                aria-label={t("agenda.remove_calendar", { name: calendar })}
-                onClick={() => void client.removeCalendar(calendar).then(refresh)}
-                className="text-fg-faint hover:text-danger"
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <CalendarSources onChange={() => void refresh()} />
 
       {entries.length === 0 ? (
         // `full`, so an empty calendar centres itself in what is left of the pane instead of

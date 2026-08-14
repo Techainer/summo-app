@@ -66,6 +66,9 @@ summo-pipeline.workspace = true
 hound.workspace = true
 
 anyhow.workspace = true
+# Fetching calendar subscriptions. Already in the dependency tree through `summo-models`, so this
+# adds a name rather than a download.
+reqwest.workspace = true
 axum.workspace = true
 clap.workspace = true
 futures.workspace = true

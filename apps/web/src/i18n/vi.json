@@ -334,7 +334,8 @@
   },
   "nudge": {
     "dismiss": "Bỏ qua: {title}",
-    "view": "Xem"
+    "view": "Xem",
+    "record": "Ghi"
   },
   "time": {
     "today": "Hôm nay",
@@ -429,11 +430,21 @@
     "saved": "Đã lưu",
     "saving": "Đang lưu…",
     "body": "Nội dung ghi chú",
-    "placeholder": "Dòng đầu là tiêu đề.\n\nViết gì cũng được. Việc thì viết `- [ ] @tên …`."
+    "placeholder": "Dòng đầu là tiêu đề.\n\nViết gì cũng được. Việc thì viết `- [ ] @tên …`.",
+    "kind": "Loại ghi chú",
+    "kind_blank": "Trống",
+    "kind_idea": "Ý tưởng",
+    "kind_decision": "Quyết định",
+    "kind_todo": "Việc cần làm",
+    "kind_journal": "Nhật ký",
+    "seed_idea": "## Ý tưởng\n\n## Vì sao đáng làm\n\n## Bước tiếp theo\n- [ ] ",
+    "seed_decision": "## Quyết định\n\n## Bối cảnh\n\n## Ai chốt / khi nào\n",
+    "seed_todo": "- [ ] \n- [ ] \n",
+    "seed_journal": "## Hôm nay\n\n## Vướng mắc\n\n## Mai làm gì\n"
   },
   "agenda": {
     "title": "Lịch",
-    "hint": "Đọc từ file .ics bạn thêm vào. Summo không tự ghi âm theo lịch — chỉ dùng để đặt tên cho biên bản.",
+    "hint": "Đăng ký bằng địa chỉ lịch để tự cập nhật, hoặc thêm file .ics. Summo không tự ghi âm theo lịch — chỉ nhắc và đặt tên cho biên bản.",
     "path_placeholder": "/duong/dan/toi/lich.ics",
     "path_label": "Đường dẫn file lịch",
     "name_placeholder": "tên lịch",
@@ -442,7 +453,20 @@
     "empty": "Chưa có lịch nào. Xuất .ics từ Google Calendar hay Fastmail rồi thêm vào đây.",
     "attendees": "{count} người",
     "repeats": "lặp lại",
-    "remove_calendar": "Xoá lịch {name}"
+    "remove_calendar": "Xoá lịch {name}",
+    "subscribe_label": "Địa chỉ lịch (URL)",
+    "subscribe_placeholder": "https://… .ics hoặc webcal://…",
+    "subscribe": "Đăng ký",
+    "add_file": "Thêm từ file",
+    "how": "Lấy địa chỉ lịch ở đâu?",
+    "how_google": "Google Lịch: Cài đặt cho lịch → Địa chỉ bí mật ở định dạng iCal.",
+    "how_apple": "Lịch trên Mac/iCloud: chuột phải vào lịch → Chia sẻ → Lịch công khai.",
+    "how_outlook": "Outlook / Microsoft 365: Cài đặt → Lịch chia sẻ → Xuất bản → lấy liên kết ICS.",
+    "events": "{count} sự kiện",
+    "synced": "Đồng bộ {when}",
+    "never_synced": "Chưa đồng bộ được lần nào",
+    "refresh_one": "Đồng bộ lại {name}",
+    "from_file": "từ file, không tự cập nhật"
   },
   "comments": {
     "title": "Bình luận",
@@ -628,5 +652,32 @@
     "notify_linux": "Linux: kiểm tra chế độ “Do Not Disturb” của môi trường desktop, và trình duyệt trong Flatpak cần quyền truy cập D-Bus notifications.",
     "notify_unsupported": "Trình duyệt này không có API thông báo — Summo sẽ nhắc trong ứng dụng thay vì gửi thông báo hệ thống.",
     "mic_title": "Micro"
+  },
+  "compose": {
+    "title": "Soạn gửi đi",
+    "open": "Mở",
+    "hint": "Viết từ nội dung buổi họp. Không gửi gì cả — bạn xem lại rồi tự gửi.",
+    "kind": "Kiểu nội dung",
+    "kind_email": "Email",
+    "kind_message": "Tin nhắn",
+    "kind_recap": "Tóm lược",
+    "kind_actions": "Việc cần làm",
+    "tone": "Giọng văn",
+    "tone_neutral": "Trung tính",
+    "tone_friendly": "Thân mật",
+    "tone_formal": "Trang trọng",
+    "audience": "Người nhận",
+    "audience_placeholder": "khách hàng ACME, team kỹ thuật…",
+    "write": "Soạn",
+    "again": "Soạn lại",
+    "working": "Đang soạn…",
+    "subject": "Tiêu đề",
+    "body": "Nội dung",
+    "copy": "Sao chép",
+    "copied": "Đã chép",
+    "copy_failed": "Không sao chép được — hãy bôi đen rồi copy tay.",
+    "open_mail": "Mở app email",
+    "keep": "Lưu thành ghi chú",
+    "kept": "Đã lưu"
   }
 }

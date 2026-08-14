@@ -13,7 +13,8 @@ import { url } from "./library";
  * delivered once even if two windows are open.
  */
 
-export type Reason = "daily-report" | "weekly-rollup" | "draft-waiting" | "overdue";
+export type Reason =
+  "daily-report" | "weekly-rollup" | "draft-waiting" | "overdue" | "meeting-soon";
 
 export interface Nudge {
   reason: Reason;
@@ -33,11 +34,14 @@ export class NudgeClient {
 }
 
 /**
- * How often to ask. Fifteen minutes is a compromise between two failure modes: polling every minute
- * wakes a laptop for nothing, and polling hourly means "your summary is waiting" arrives when the
- * user has moved on.
+ * How often to ask.
+ *
+ * Five minutes. It was fifteen, which was a fine compromise while every nudge was about a day that
+ * had already happened — but "your meeting starts in five minutes" is only worth saying inside a
+ * window about that wide, and a fifteen-minute timer lands inside it barely more often than not.
+ * A request to a daemon on the same machine is not what wakes a laptop.
  */
-export const POLL_MS = 15 * 60 * 1000;
+export const POLL_MS = 5 * 60 * 1000;
 
 /**
  * Show a nudge as an OS notification, if the user has allowed it.
@@ -84,6 +88,8 @@ export function iconFor(reason: Reason): string {
       return "!";
     case "weekly-rollup":
       return "◷";
+    case "meeting-soon":
+      return "◎";
     default:
       return "◔";
   }

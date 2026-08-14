@@ -9,6 +9,8 @@ use summo_core::{ModelId, paths::Paths};
 use summo_models::{Downloader, Manifest, ModelStore, Registry, RegistrySource, hw::HwProfile};
 
 mod ai;
+#[cfg(feature = "serve")]
+mod daemon;
 #[cfg(feature = "dub")]
 mod dub;
 mod importer;
@@ -84,6 +86,24 @@ enum Command {
         /// the one that stops a web page reaching the microphone.
         #[arg(long)]
         dev: bool,
+        /// Run in the background and give the terminal back.
+        ///
+        /// The daemon keeps running after this shell closes, so the calendar keeps syncing and the
+        /// prompt before a meeting can arrive. `summo stop` ends it.
+        #[arg(long)]
+        background: bool,
+    },
+
+    /// Is a daemon running, and what is it doing.
+    #[cfg(feature = "serve")]
+    Status,
+
+    /// Stop the running daemon.
+    #[cfg(feature = "serve")]
+    Stop {
+        /// Stop even if a meeting is being recorded.
+        #[arg(long)]
+        force: bool,
     },
 
     /// Serve the vault to an MCP client — Claude Code, Cursor — over stdio.
@@ -298,7 +318,22 @@ async fn main() -> Result<()> {
             detach,
         } => import(&paths, &path, dry_run, lang.as_deref(), detach).await,
         #[cfg(feature = "serve")]
-        Command::Serve { port, no_open, dev } => serve(&paths, port, no_open, dev).await,
+        Command::Serve {
+            port,
+            no_open,
+            dev,
+            background,
+        } => {
+            if background {
+                start_background(&paths, port, dev).await
+            } else {
+                serve(&paths, port, no_open, dev).await
+            }
+        }
+        #[cfg(feature = "serve")]
+        Command::Status => status(&paths).await,
+        #[cfg(feature = "serve")]
+        Command::Stop { force } => stop(&paths, force).await,
         #[cfg(feature = "mcp")]
         Command::Mcp => mcp(&paths),
         #[cfg(feature = "dub")]
@@ -1103,11 +1138,69 @@ async fn serve(paths: &Paths, port: u16, no_open: bool, dev: bool) -> Result<()>
         open_browser(&url);
     }
 
-    // Ctrl-C rather than running forever: a recording in progress is flushed on its own interval,
-    // so stopping here costs seconds of audio at worst.
-    tokio::signal::ctrl_c().await.ok();
-    println!("\nDừng.");
+    // Ctrl-C, or `summo stop` reaching the daemon over HTTP. Both, because a daemon started with
+    // `--background` has no terminal to press Ctrl-C in, and one started in a terminal should still
+    // answer `summo stop` from another.
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => println!("\nDừng."),
+        () = server.stop_requested() => println!("Nhận lệnh dừng."),
+    }
     server.shutdown();
+    // Written by this process on the way in, removed on the way out: a handshake file left behind
+    // makes every later command spend three seconds asking a port nobody is listening on.
+    daemon::forget(paths);
+    Ok(())
+}
+
+/// Start a daemon that outlives this command, and say where it went.
+#[cfg(feature = "serve")]
+async fn start_background(paths: &Paths, port: u16, dev: bool) -> Result<()> {
+    let running = daemon::start_background(paths, port, dev).await?;
+    println!("Summo đang chạy nền tại {}", running.url());
+    println!("`summo status` để xem, `summo stop` để dừng.");
+    let hint = daemon::log_hint(&daemon::log_path(paths));
+    if !hint.is_empty() {
+        println!("{hint}");
+    }
+    Ok(())
+}
+
+/// What the running daemon is doing, or that there is not one.
+#[cfg(feature = "serve")]
+async fn status(paths: &Paths) -> Result<()> {
+    match daemon::running(paths).await {
+        Some(running) => {
+            println!("Đang chạy tại {}", running.url());
+            println!(
+                "pid {} · phiên bản {} · {}",
+                running.handshake.pid,
+                if running.handshake.version.is_empty() {
+                    "?"
+                } else {
+                    &running.handshake.version
+                },
+                if running.recording {
+                    "đang ghi âm"
+                } else {
+                    &running.state
+                }
+            );
+        }
+        // Not an error: "is it running?" answered with "no" is a successful answer, and a non-zero
+        // exit code here would break every script that asks before starting one.
+        None => println!("Không có daemon nào đang chạy."),
+    }
+    Ok(())
+}
+
+/// Stop the running daemon.
+#[cfg(feature = "serve")]
+async fn stop(paths: &Paths, force: bool) -> Result<()> {
+    if daemon::stop(paths, force).await? {
+        println!("Đã dừng.");
+    } else {
+        println!("Không có daemon nào đang chạy.");
+    }
     Ok(())
 }
 

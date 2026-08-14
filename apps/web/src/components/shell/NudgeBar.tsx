@@ -18,7 +18,7 @@ import { NudgeClient, POLL_MS, iconFor, notify, type Nudge } from "../../lib/nud
  * an overdue task — is still there, and the daemon will not repeat itself today.
  */
 export function NudgeBar() {
-  const { handshake, session } = useEngine();
+  const { handshake, session, start } = useEngine();
   const client = useMemo(() => new NudgeClient(handshake), [handshake]);
   const navigate = useNavigate();
   const [queue, setQueue] = useState<Nudge[]>([]);
@@ -80,15 +80,22 @@ export function NudgeBar() {
               <strong className="font-medium">{nudge.title}</strong>
               <span className="text-fg-dim"> — {nudge.body}</span>
             </p>
+            {/* A meeting starting is the one nudge with an obvious next action, and making the
+                user navigate to the record button to take it would waste the minute the prompt
+                exists to save. Recording still begins because a person pressed something. */}
             <button
               type="button"
               onClick={() => {
-                go(nudge.route);
+                if (nudge.reason === "meeting-soon") {
+                  void start();
+                } else {
+                  go(nudge.route);
+                }
                 dismiss(nudge.key);
               }}
               className="text-accent hover:bg-accent/10 text-meta rounded-full px-2.5 py-1 font-medium"
             >
-              {t("nudge.view")}
+              {nudge.reason === "meeting-soon" ? t("nudge.record") : t("nudge.view")}
             </button>
             <button
               type="button"

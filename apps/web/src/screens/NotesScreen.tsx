@@ -28,6 +28,12 @@ import { useRefresh } from "../lib/use-load";
  * first time it round-tripped something it did not understand. Tasks work here because
  * `- [ ] @ngoc …` is parsed from the file, not from a widget.
  */
+/**
+ * The shapes a note can start in. `blank` first, because most notes are.
+ */
+const KINDS = ["blank", "idea", "decision", "todo", "journal"] as const;
+type NoteKind = (typeof KINDS)[number];
+
 export function NotesScreen() {
   const { handshake } = useEngine();
   const say = useErrorText();
@@ -39,6 +45,7 @@ export function NotesScreen() {
   const [text, setText] = useState("");
   const [saved, setSaved] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
 
   // Held in a ref as well as in state: the debounce fires from a timer that closed over an older
   // render, and saving the text from two seconds ago would undo the last two seconds of typing.
@@ -68,7 +75,8 @@ export function NotesScreen() {
         const note = await client.read(id);
         // The title is the first line, so it is shown as the first line — the file stores them
         // apart, and stitching them back together is what makes the editor feel like one document.
-        const body = note.body.trim();
+        // `text`, not `body`: the latter stops at the first heading.
+        const body = note.text.trim();
         setText(body ? `${note.title}\n\n${body}` : note.title);
       } catch (e) {
         setError(say(e));
@@ -107,10 +115,24 @@ export function NotesScreen() {
     [],
   );
 
-  const create = async () => {
+  /**
+   * A new note, optionally with a shape already in it.
+   *
+   * A blank page is the right default and a poor only option: "ý tưởng", "quyết định", "việc cần
+   * làm" and a day's journal are what people were typing headings for by hand, and each one has a
+   * different set of headings. Seeded rather than templated in the daemon — the seed is ordinary
+   * Markdown in the note from the first keystroke, so nothing about it can go stale or need
+   * migrating, and deleting the headings is how you opt out.
+   */
+  const create = async (kind: NoteKind = "blank") => {
     setError(null);
+    setPicking(false);
     try {
-      const { id } = await client.create(t("notes.untitled"));
+      const body = kind === "blank" ? "" : t(`notes.seed_${kind}`);
+      const { id } = await client.create(
+        kind === "blank" ? t("notes.untitled") : t(`notes.kind_${kind}`),
+        body,
+      );
       await refresh();
       await open(id);
     } catch (e) {
@@ -138,9 +160,30 @@ export function NotesScreen() {
       <aside className="border-line flex w-72 shrink-0 flex-col border-r">
         <div className="border-line flex items-center justify-between gap-2 border-b px-3 py-2">
           <h1 className="text-sm font-semibold">{t("notes.title")}</h1>
-          <Button size="sm" onClick={() => void create()}>
-            {t("notes.new")}
-          </Button>
+          <div className="relative">
+            <Button size="sm" onClick={() => setPicking((p) => !p)}>
+              {t("notes.new")}
+            </Button>
+            {picking && (
+              <ul
+                className="border-line bg-bg-raised absolute end-0 z-10 mt-1 w-40 rounded-[var(--radius-card)] border py-1 shadow-[var(--shadow-pop)]"
+                aria-label={t("notes.kind")}
+                data-testid="note-kinds"
+              >
+                {KINDS.map((kind) => (
+                  <li key={kind}>
+                    <button
+                      type="button"
+                      onClick={() => void create(kind)}
+                      className="hover:bg-bg-soft w-full px-3 py-1.5 text-start text-sm"
+                    >
+                      {t(`notes.kind_${kind}`)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">

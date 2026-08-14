@@ -31,6 +31,8 @@ Usable end to end: record or import a recording, get a transcript with speakers 
 agent-drafted summary you approve, tasks on a board, questions answered from the vault with
 citations, live translation of whatever is playing, dubbing, notes, calendars, comments, a roster of
 agents you edit as files, and encrypted sync between machines through any folder you both can reach.
+Subscribe to a calendar by URL and it stays current, prompts before a meeting starts — it never
+records on its own — and drafts the follow-up email afterwards, which you send yourself.
 
 **Not done:** mobile is scaffolded and has never been compiled, and the hosted sync relay is not
 built — sync works today through any shared folder instead.
@@ -39,13 +41,13 @@ The numbers below are measured on this codebase, not estimated. Each is reproduc
 command shown; see [`docs/benchmarks.md`](docs/benchmarks.md) and
 [`docs/translation.md`](docs/translation.md) for the full method and caveats.
 
-| Claim | Measured | Source |
-|---|---|---|
-| Vietnamese recognition accuracy | 8.5 % WER, 6.7 % CER (`gipformer-65M`, 100 FLEURS VI clips, 21.3 min; 5.3 % on the 84 clips whose reference contains no digits) | `cargo run --release -p summo-bench --features asr -- asr` |
-| Live pipeline speed | RTF 0.107, roughly 9× faster than realtime (raw mic capture) | `docs/benchmarks.md`, end-to-end pipeline section — two short single-mic captures, not yet WER-scored |
-| Voice activity detection | Silero v5, F1 0.940 (precision 0.925, recall 0.956) | `cargo run --release -p summo-bench --features silero -- vad --sweep` |
-| Finding a meeting without an index | ~30 ms across 1,000 meetings (8-thread scan), which is why there is no database | `cargo run --release -p summo-bench -- vault --sizes 100,1000,5000` |
-| Translating a line | ~244 ms/line, 8 threads, with the default 583 MB `small100` model — in the released binary, with no model server to run | `cargo run -p summo-mt --features local,onnx --example compare` |
+| Claim                              | Measured                                                                                                                        | Source                                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Vietnamese recognition accuracy    | 8.5 % WER, 6.7 % CER (`gipformer-65M`, 100 FLEURS VI clips, 21.3 min; 5.3 % on the 84 clips whose reference contains no digits) | `cargo run --release -p summo-bench --features asr -- asr`                                            |
+| Live pipeline speed                | RTF 0.107, roughly 9× faster than realtime (raw mic capture)                                                                    | `docs/benchmarks.md`, end-to-end pipeline section — two short single-mic captures, not yet WER-scored |
+| Voice activity detection           | Silero v5, F1 0.940 (precision 0.925, recall 0.956)                                                                             | `cargo run --release -p summo-bench --features silero -- vad --sweep`                                 |
+| Finding a meeting without an index | ~30 ms across 1,000 meetings (8-thread scan), which is why there is no database                                                 | `cargo run --release -p summo-bench -- vault --sizes 100,1000,5000`                                   |
+| Translating a line                 | ~244 ms/line, 8 threads, with the default 583 MB `small100` model — in the released binary, with no model server to run         | `cargo run -p summo-mt --features local,onnx --example compare`                                       |
 
 ## Install and run
 
@@ -76,6 +78,7 @@ real-time factor, licence — and you can disagree with it. Nothing is recorded 
 ```bash
 summo serve --port 8710      # a fixed port, when something else wants to find it
 summo serve --no-open        # a server, when there is no browser to open
+summo serve --background     # run detached; `summo status` and `summo stop` from anywhere
 summo import ~/Downloads/zoom-recording.mp4
 summo mcp                    # the vault over MCP, for Claude Code or Cursor
 ```
@@ -105,7 +108,7 @@ Summo is never the distributor of a licence it cannot redistribute under.
 
 Disconnect the machine from the network, then run `./summo serve` and record a meeting. Recognition,
 voice-activity detection and speaker attribution keep working, because they never called out — there
-is no cloud-ASR fallback to fail over to. What you should *not* be able to do offline is get a summary
+is no cloud-ASR fallback to fail over to. What you should _not_ be able to do offline is get a summary
 or a translation from a remote model you configured, since that is the one deliberate exception to
 "nothing leaves the machine".
 

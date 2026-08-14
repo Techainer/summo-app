@@ -334,7 +334,8 @@
   },
   "nudge": {
     "dismiss": "关闭：{title}",
-    "view": "查看"
+    "view": "查看",
+    "record": "录音"
   },
   "time": {
     "today": "今天",
@@ -429,11 +430,21 @@
     "saved": "已保存",
     "saving": "保存中…",
     "body": "笔记正文",
-    "placeholder": "第一行就是标题。\n\n随便写。要记一项任务，写 `- [ ] @名字 …`。"
+    "placeholder": "第一行就是标题。\n\n随便写。要记一项任务，写 `- [ ] @名字 …`。",
+    "kind": "笔记类型",
+    "kind_blank": "空白",
+    "kind_idea": "想法",
+    "kind_decision": "决定",
+    "kind_todo": "待办",
+    "kind_journal": "日志",
+    "seed_idea": "## 想法\n\n## 为什么值得做\n\n## 下一步\n- [ ] ",
+    "seed_decision": "## 决定\n\n## 背景\n\n## 谁定的、什么时候\n",
+    "seed_todo": "- [ ] \n- [ ] \n",
+    "seed_journal": "## 今天\n\n## 卡住的地方\n\n## 明天\n"
   },
   "agenda": {
     "title": "日历",
-    "hint": "从你添加的 .ics 文件读取。Summo 从不按日程自动录音——这只是用来给会议笔记起名。",
+    "hint": "用日历地址订阅即可自动更新，也可以添加 .ics 文件。Summo 不会按日程自动录音 — 只会提醒，并为记录取名。",
     "path_placeholder": "/path/to/calendar.ics",
     "path_label": "日历文件路径",
     "name_placeholder": "日历名称",
@@ -442,7 +453,20 @@
     "empty": "还没有日历。从 Google 日历或 Fastmail 导出 .ics，再添加到这里。",
     "attendees": "{count}人",
     "repeats": "重复",
-    "remove_calendar": "移除日历{name}"
+    "remove_calendar": "移除日历{name}",
+    "subscribe_label": "日历地址（URL）",
+    "subscribe_placeholder": "https://… .ics 或 webcal://…",
+    "subscribe": "订阅",
+    "add_file": "从文件添加",
+    "how": "在哪里找到日历地址？",
+    "how_google": "Google 日历：日历设置 → iCal 格式的私密地址。",
+    "how_apple": "Apple 日历 / iCloud：右键点击日历 → 共享 → 公开日历。",
+    "how_outlook": "Outlook / Microsoft 365：设置 → 共享日历 → 发布 → ICS 链接。",
+    "events": "{count} 个日程",
+    "synced": "{when}同步",
+    "never_synced": "尚未同步成功",
+    "refresh_one": "立即同步 {name}",
+    "from_file": "来自文件，不会自动更新"
   },
   "comments": {
     "title": "评论",
@@ -628,5 +652,32 @@
     "notify_linux": "Linux：检查桌面环境的「免打扰」设置；Flatpak 中的浏览器需要访问 D-Bus 通知服务。",
     "notify_unsupported": "此浏览器没有通知 API——Summo 将在应用内提醒你。",
     "mic_title": "麦克风"
+  },
+  "compose": {
+    "title": "写后续消息",
+    "open": "打开",
+    "hint": "根据会议内容撰写。不会替你发送 — 你自己确认后再发。",
+    "kind": "写什么",
+    "kind_email": "邮件",
+    "kind_message": "消息",
+    "kind_recap": "会议简报",
+    "kind_actions": "待办",
+    "tone": "语气",
+    "tone_neutral": "中性",
+    "tone_friendly": "亲切",
+    "tone_formal": "正式",
+    "audience": "写给谁",
+    "audience_placeholder": "ACME 客户、技术团队…",
+    "write": "撰写",
+    "again": "重写",
+    "working": "撰写中…",
+    "subject": "主题",
+    "body": "正文",
+    "copy": "复制",
+    "copied": "已复制",
+    "copy_failed": "无法复制 — 请选中文本手动复制。",
+    "open_mail": "在邮件应用中打开",
+    "keep": "保存为笔记",
+    "kept": "已保存"
   }
 }
