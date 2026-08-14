@@ -145,6 +145,10 @@ export interface Ready {
  */
 export async function warmUp(handshake: Handshake): Promise<Ready | null> {
   const response = await fetch(url(handshake, "/models/warm"), { method: "POST" });
+  // A daemon built without recognition has no such route, and the interface is the same interface:
+  // the `-nomodels` build browses a vault and cannot record, so there is nothing to warm and
+  // nothing wrong. Anything else is a real failure worth surfacing.
+  if (response.status === 404 || response.status === 405) return null;
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const body = (await response.json()) as { ready: Ready | null };
   return body.ready;
