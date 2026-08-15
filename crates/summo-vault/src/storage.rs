@@ -342,7 +342,10 @@ mod tests {
 
         let pruned = prune(&paths, 0, "2026-08-10", false).unwrap();
         assert_eq!(pruned.attachments, [dropped.clone()].as_slice());
-        assert!(crate::attachment::path_of(&paths, &kept).is_some(), "{kept}");
+        assert!(
+            crate::attachment::path_of(&paths, &kept).is_some(),
+            "{kept}"
+        );
         assert!(crate::attachment::path_of(&paths, &dropped).is_none());
     }
 
