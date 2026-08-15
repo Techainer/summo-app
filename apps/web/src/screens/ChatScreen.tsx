@@ -114,18 +114,13 @@ export function ChatScreen() {
                           key={source.meeting}
                           type="button"
                           onClick={() =>
-                            // A note is not a meeting and does not have a meeting's page. Every
-                            // citation used to go to `/meetings/<id>`, so citing a note opened a
-                            // screen that did not exist — for the one control whose whole job is
-                            // letting a reader check what the model claimed.
-                            void navigate(
-                              source.kind === "note"
-                                ? { to: "/notes" }
-                                : {
-                                    to: "/meetings/$meetingId",
-                                    params: { meetingId: source.meeting },
-                                  },
-                            )
+                            // Whichever kind it is. This used to send a cited note to `/notes` with
+                            // nothing open — the one control whose whole job is letting a reader
+                            // check what the model claimed, dropping the document on the way.
+                            void navigate({
+                              to: "/pages/$pageId",
+                              params: { pageId: source.meeting },
+                            })
                           }
                           className={cn(
                             "border-line text-micro rounded-full border px-2.5 py-1",

@@ -132,17 +132,13 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
                         type="button"
                         onClick={() => {
                           onClose();
-                          // A note is not a meeting and has no meeting page. Sending every citation
-                          // to `/meetings/<id>` is how the control whose job is checking a claim
-                          // becomes the one that breaks.
-                          void navigate(
-                            source.kind === "note"
-                              ? { to: "/notes" }
-                              : {
-                                  to: "/meetings/$meetingId",
-                                  params: { meetingId: source.meeting },
-                                },
-                          );
+                          // Whichever kind it is. A cited note used to open `/notes` with nothing
+                          // on it, so the control whose job is checking a claim was the one that
+                          // dropped the evidence.
+                          void navigate({
+                            to: "/pages/$pageId",
+                            params: { pageId: source.meeting },
+                          });
                         }}
                         className="border-line text-fg-dim hover:border-accent/40 hover:text-accent text-micro rounded-[var(--radius-pill)] border px-2.5 py-1"
                       >

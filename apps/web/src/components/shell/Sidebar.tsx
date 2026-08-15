@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ChevronRight, FileText, Folder, FolderOpen, Mic, Plus } from "lucide-react";
+import { ChevronRight, FileText, Folder, FolderOpen, FolderInput, Mic, Plus } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 
@@ -54,6 +54,13 @@ interface Props {
   activePage?: string | null;
   /** Make a new page, in this folder. `null` is the vault root. */
   onNewPage: (folder: string | null) => void;
+  /**
+   * File a page somewhere else. `""` is the vault root.
+   *
+   * The tree is the only place in the app where every page and every folder are visible at once,
+   * which makes it the only place filing can be done without first going to find the thing.
+   */
+  onMovePage: (page: Page, folder: string) => void;
   /** Rendered at the bottom: recording controls on desktop, nothing on a sheet. */
   footer?: React.ReactNode;
 }
@@ -76,6 +83,7 @@ export function Sidebar({
   onOpenPage,
   activePage,
   onNewPage,
+  onMovePage,
   footer,
 }: Props) {
   const t = useT();
@@ -86,12 +94,67 @@ export function Sidebar({
   );
   const rows = useMemo(() => visibleRows(tree, open), [tree, open]);
 
+  /**
+   * The page being dragged, and the folder the pointer is currently over.
+   *
+   * Held here rather than read out of `dataTransfer` because the drag data is deliberately
+   * unreadable during `dragover` — the browser only hands it over on drop, so a row cannot decide
+   * whether to highlight itself from the event alone.
+   */
+  const [dragging, setDragging] = useState<Page | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  /** Which page has its destination list open, for pointers that cannot drag. */
+  const [filing, setFiling] = useState<string | null>(null);
+
+  /**
+   * Every folder a page could go to, root included.
+   *
+   * The tree's own rows are not the answer: a collapsed folder is still somewhere you can file
+   * something, and a list that only offers what happens to be expanded would make filing depend on
+   * what the user last clicked.
+   */
+  const destinations = useMemo(() => {
+    const all = new Set<string>([""]);
+    for (const folder of folders) all.add(folder);
+    return [...all].sort();
+  }, [folders]);
+
   const toggle = (path: string) =>
     setOpen((previous) => {
       const next = new Set(previous);
       if (!next.delete(path)) next.add(path);
       return next;
     });
+
+  const file = (page: Page, folder: string) => {
+    setFiling(null);
+    setDragging(null);
+    setOver(null);
+    if ((page.folder ?? "") === folder) return;
+    onMovePage(page, folder);
+    // Open the folder it landed in, so the page is visible where it went rather than apparently
+    // deleted from where it was.
+    if (folder) setOpen((previous) => new Set([...previous, ...ancestorsOf(folder), folder]));
+  };
+
+  /** The handlers that make a row a place a page can be dropped. */
+  const dropzone = (folder: string) => ({
+    onDragOver: (event: React.DragEvent) => {
+      if (!dragging) return;
+      // Without this the browser refuses the drop and animates the row back to where it came
+      // from — the default for every element is "nothing may be dropped here".
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    },
+    onDragEnter: () => dragging && setOver(folder),
+    // Fires when the pointer crosses into a *child* element too, so the row is only cleared when
+    // the pointer has moved on to a different row.
+    onDragLeave: () => setOver((at) => (at === folder ? null : at)),
+    onDrop: (event: React.DragEvent) => {
+      event.preventDefault();
+      if (dragging) file(dragging, folder);
+    },
+  });
 
   return (
     <div className="flex h-full flex-col">
@@ -141,11 +204,17 @@ export function Sidebar({
         </p>
         <ul className="space-y-0.5">
           <li>
+            {/* Also where a page goes to stop being filed. The unfiled pages render directly under
+                this row, so it is the band the root already occupies; dropping onto it puts the
+                page back among them. */}
             <FolderRow
               label={t("nav.all_folders")}
               depth={0}
               selected={activeFolder === null}
               onSelect={() => onSelectFolder(null)}
+              dropping={over === ""}
+              dropHint={dragging ? t("nav.move_to_root") : undefined}
+              {...dropzone("")}
             />
           </li>
           {/* Pages filed nowhere sit at the top level, the way an unfiled page does in Notion.
@@ -157,6 +226,16 @@ export function Sidebar({
                 depth={1}
                 selected={activePage === page.id}
                 onOpen={() => onOpenPage(page)}
+                dragging={dragging?.id === page.id}
+                onDragStart={() => setDragging(page)}
+                onDragEnd={() => {
+                  setDragging(null);
+                  setOver(null);
+                }}
+                filing={filing === page.id}
+                onFile={() => setFiling((at) => (at === page.id ? null : page.id))}
+                destinations={destinations}
+                onMoveTo={(folder) => file(page, folder)}
               />
             </li>
           ))}
@@ -171,6 +250,9 @@ export function Sidebar({
                 onToggle={() => toggle(node.path)}
                 onSelect={() => onSelectFolder(node.path)}
                 onAdd={() => onNewPage(node.path)}
+                dropping={over === node.path}
+                dropHint={dragging ? t("nav.move_to", { name: node.name }) : undefined}
+                {...dropzone(node.path)}
               />
               {open.has(node.path) && (
                 <ul className="space-y-0.5">
@@ -181,6 +263,16 @@ export function Sidebar({
                         depth={node.depth + 1}
                         selected={activePage === page.id}
                         onOpen={() => onOpenPage(page)}
+                        dragging={dragging?.id === page.id}
+                        onDragStart={() => setDragging(page)}
+                        onDragEnd={() => {
+                          setDragging(null);
+                          setOver(null);
+                        }}
+                        filing={filing === page.id}
+                        onFile={() => setFiling((at) => (at === page.id ? null : page.id))}
+                        destinations={destinations}
+                        onMoveTo={(folder) => file(page, folder)}
                       />
                     </li>
                   ))}
@@ -195,7 +287,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={() => onNewPage(activeFolder)}
-              className="text-fg-faint hover:bg-bg-soft hover:text-fg mt-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-sm"
+              className="text-fg-faint hover:bg-bg-raised hover:text-fg mt-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-sm"
             >
               <Plus className="size-3.5" aria-hidden="true" />
               {t("nav.new_page")}
@@ -233,28 +325,114 @@ function PageRow({
   depth,
   selected,
   onOpen,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  filing,
+  onFile,
+  destinations,
+  onMoveTo,
 }: {
   page: Page;
   depth: number;
   selected: boolean;
   onOpen: () => void;
+  dragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  /** Whether this row's list of destinations is showing. */
+  filing: boolean;
+  onFile: () => void;
+  destinations: string[];
+  onMoveTo: (folder: string) => void;
 }) {
+  const t = useT();
   const Glyph = page.kind === "meeting" ? Mic : FileText;
+  const elsewhere = destinations.filter((folder) => folder !== (page.folder ?? ""));
+
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      style={{ paddingLeft: `${depth * 12 + 8}px` }}
-      className={cn(
-        "flex w-full items-center gap-1.5 rounded-lg py-1 pe-2 text-start text-sm transition-colors",
-        selected ? "bg-bg-soft text-fg font-medium" : "text-fg-dim hover:bg-bg-soft",
+    <div className={cn("group/page", dragging && "opacity-40")}>
+      <div
+        // The row is what gets dragged, not the button inside it: a `draggable` button in Chromium
+        // starts a drag on `mousedown` and then never fires `click`, so making the page itself
+        // draggable would have cost the ability to open it.
+        draggable
+        onDragStart={(event) => {
+          // Some payload is required — a drag with an empty `dataTransfer` is refused outright by
+          // Firefox. What it *says* is unused: the dragged page is held in state, because the data
+          // is deliberately unreadable until the drop.
+          event.dataTransfer.setData("text/plain", page.id);
+          event.dataTransfer.effectAllowed = "move";
+          onDragStart();
+        }}
+        onDragEnd={onDragEnd}
+        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        className={cn(
+          "flex w-full items-center gap-1.5 rounded-lg py-1 pe-1 text-sm transition-colors",
+          // Two different facts are marked in this column and they must not look alike: which
+          // *folder* is being browsed, and which *page* is open. The folder takes the neutral step
+          // up; the open page takes the accent, the same way the notes list and the screen nav mark
+          // the thing you are currently looking at.
+          //
+          // Both were `bg-soft` — and the sidebar's own surface *is* `bg-soft`, so neither the
+          // hover nor the selection painted anything at all. Nothing catches that but looking: the
+          // class is present, it resolves, and the computed style is exactly what was asked for.
+          selected ? "bg-accent-soft text-accent font-medium" : "text-fg-dim hover:bg-bg-raised",
+        )}
+      >
+        {/* The icon is the only thing that says which kind this is, and that is enough: the
+            difference matters when you are looking for a recording, and never otherwise. */}
+        <Glyph className="text-fg-faint size-3.5 shrink-0" aria-hidden="true" />
+        <button type="button" onClick={onOpen} className="min-w-0 flex-1 truncate text-start">
+          {page.title}
+        </button>
+        {/* Dragging is a pointer gesture and this app runs on phones, where HTML5 drag events are
+            not delivered at all. So this is not a fallback for the drag — it is the only way to
+            file anything on touch, and the only way with a keyboard. */}
+        {elsewhere.length > 0 && (
+          <button
+            type="button"
+            onClick={onFile}
+            aria-expanded={filing}
+            aria-label={t("nav.move_page", { name: page.title })}
+            className={cn(
+              "text-fg-faint hover:text-fg flex size-5 shrink-0 items-center justify-center rounded transition-opacity",
+              // Shown on hover and whenever it has focus, so tabbing to it does not tab to
+              // something invisible. `opacity` rather than `hidden`, because a row that changes
+              // width on hover makes the title reflow under the pointer.
+              filing
+                ? "text-fg opacity-100"
+                : "opacity-0 group-hover/page:opacity-100 focus-visible:opacity-100",
+            )}
+          >
+            <FolderInput className="size-3.5" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+
+      {/* In the flow rather than floating over it. The tree scrolls in both directions, so a
+          popup anchored to a row is a popup that gets clipped by the column it lives in. */}
+      {filing && (
+        <ul
+          data-testid="move-page"
+          aria-label={t("nav.move_page", { name: page.title })}
+          className="border-line bg-bg-raised my-0.5 ms-6 me-1 rounded-lg border py-1"
+        >
+          {elsewhere.map((folder) => (
+            <li key={folder || "/"}>
+              <button
+                type="button"
+                onClick={() => onMoveTo(folder)}
+                className="text-fg-dim hover:bg-bg-raised hover:text-fg text-meta flex w-full items-center gap-1.5 px-2 py-1 text-start"
+              >
+                <Folder className="text-fg-faint size-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">{folder || t("nav.move_to_root")}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-    >
-      {/* The icon is the only thing that says which kind this is, and that is enough: the
-          difference matters when you are looking for a recording, and never otherwise. */}
-      <Glyph className="text-fg-faint size-3.5 shrink-0" aria-hidden="true" />
-      <span className="truncate">{page.title}</span>
-    </button>
+    </div>
   );
 }
 
@@ -273,6 +451,9 @@ function FolderRow({
   onToggle,
   onSelect,
   onAdd,
+  dropping = false,
+  dropHint,
+  ...drag
 }: {
   label: string;
   depth: number;
@@ -283,13 +464,28 @@ function FolderRow({
   onSelect: () => void;
   /** Make a page here. Absent on the "all folders" row, which is not a place. */
   onAdd?: () => void;
+  /** Whether a page is being dragged over this row right now. */
+  dropping?: boolean;
+  /** What dropping here would do, for the pointer's tooltip. */
+  dropHint?: string;
+  onDragOver?: (event: React.DragEvent) => void;
+  onDragEnter?: () => void;
+  onDragLeave?: () => void;
+  onDrop?: (event: React.DragEvent) => void;
 }) {
   const t = useT();
   return (
     <div
+      {...drag}
+      title={dropHint}
       className={cn(
         "flex items-center rounded-lg text-sm transition-colors",
-        selected ? "bg-bg-soft text-fg font-medium" : "text-fg-dim hover:bg-bg-soft",
+        // `raised` for the same reason as the page rows: the sidebar is `bg-soft`, so a highlight
+        // of `bg-soft` is no highlight.
+        selected ? "bg-bg-raised text-fg font-medium" : "text-fg-dim hover:bg-bg-raised",
+        // An outline rather than a background: the selected folder already owns the background, and
+        // a drop target that only changed colour was indistinguishable from the row you came from.
+        dropping && "outline-accent bg-accent-soft outline-1",
       )}
       // Indent by nesting level. Padding rather than margin so the hover target stays full width.
       style={{ paddingLeft: `${depth * 12}px` }}

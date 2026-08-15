@@ -233,6 +233,20 @@ impl Library {
         self.paths.meetings()
     }
 
+    /// Which of the vault's two roots a file is filed under.
+    ///
+    /// Used when re-filing, so a document stays on the side of the vault it was already on. The
+    /// test is the path and only the path — what the document *is* is decided by its transcript,
+    /// and the two questions have different answers for a recording whose audio was pruned.
+    fn root_of(&self, path: &Path) -> PathBuf {
+        let notes = self.paths.notes();
+        if path.starts_with(&notes) {
+            notes
+        } else {
+            self.root()
+        }
+    }
+
     /// Scan the vault — recordings *and* typed notes.
     ///
     /// Both, because every question the library answers is a question about both: searching for
@@ -350,17 +364,27 @@ impl Library {
         })
     }
 
-    /// Move a meeting into a folder under `meetings/`, creating it if needed.
+    /// Move a document into a folder, creating it if needed.
     ///
     /// An empty folder means the root. The file keeps its name, so links and the audio directory —
     /// which is keyed by id, not by path — stay valid.
+    ///
+    /// The move happens *inside whichever root the document already lives in*. Recordings are under
+    /// `meetings/` and typed notes under `notes/`, and that split is a filing decision the vault
+    /// makes on the user's behalf: the library is organised by when a meeting happened, and a note
+    /// somebody typed on a Tuesday has no such day. This used to compute every target from
+    /// `meetings/`, so filing a note into a folder carried it out of `notes/` and into the
+    /// recordings tree — and nothing complained, because [`crate::index::Kind`] is derived from the
+    /// transcript rather than from the path. The note went on calling itself a note from inside the
+    /// wrong half of the vault, and moving it back "to the root" landed it somewhere it had never
+    /// been.
     pub fn move_to_folder(&self, id: &MeetingId, folder: &str) -> Result<PathBuf> {
         let index = self.scan()?;
         let entry = index
             .get(id)
             .ok_or_else(|| Error::Vault(format!("no meeting with id {}", id.as_str())))?;
 
-        let root = self.root();
+        let root = self.root_of(&entry.path);
         let dir = if folder.trim().is_empty() {
             root.clone()
         } else {
@@ -725,6 +749,33 @@ mod tests {
         assert_eq!(moved.folder, "khach-hang/acme");
         // Moving must not lose the document.
         assert_eq!(lib.detail(&id).unwrap().transcript.len(), 1);
+    }
+
+    /// Filing a typed note used to carry it out of `notes/` and into the recordings tree, because
+    /// every target was computed from `meetings/`. It went unnoticed because the kind is read from
+    /// the transcript rather than from the path, so the note kept listing itself correctly from the
+    /// wrong half of the vault — and "move it back to the root" then meant a directory it had never
+    /// been in.
+    #[test]
+    fn filing_a_note_keeps_it_among_the_notes() {
+        let (dir, lib) = library();
+        let paths = Paths::at(dir.path());
+        let (id, before) =
+            crate::note::create(&paths, "Ý tưởng", "2026-08-10", "vài dòng").unwrap();
+        assert!(before.starts_with(paths.notes()));
+
+        let after = lib.move_to_folder(&id, "khach-hang").unwrap();
+        assert!(
+            after.starts_with(paths.notes()),
+            "a note filed into a folder stays under notes/: {}",
+            after.display()
+        );
+        assert_eq!(lib.scan().unwrap().get(&id).unwrap().folder, "khach-hang");
+
+        // And back out again, to the root it actually came from.
+        let home = lib.move_to_folder(&id, "").unwrap();
+        assert_eq!(home, before);
+        assert_eq!(crate::note::list(&paths).unwrap().len(), 1);
     }
 
     #[test]

@@ -150,14 +150,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
 
   const openPage = useCallback(
     (page: Page) => {
-      // A meeting and a note are the same object in the vault and open in different screens, which
-      // is the one place the difference still shows. Until they share a screen, the tree at least
-      // does not make the user care which they are looking for.
-      if (page.kind === "meeting") {
-        void navigate({ to: `/meetings/${page.id}` });
-      } else {
-        void navigate({ to: "/notes", search: { open: page.id } });
-      }
+      // One address, both kinds. The tree lists a recording and a typed note as the same thing
+      // because the vault stores them as the same thing, and until now that promise ended at the
+      // click: the two opened different screens, and the caller had to know which.
+      void navigate({ to: "/pages/$pageId", params: { pageId: page.id } });
     },
     [navigate],
   );
@@ -169,7 +165,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           const { id } = await new NoteClient(engine.handshake).create(t("notes.untitled"));
           if (folder) await engine.library.moveTo(id, folder);
           setVaultGeneration((n) => n + 1);
-          void navigate({ to: "/notes", search: { open: id } });
+          void navigate({ to: "/pages/$pageId", params: { pageId: id } });
         } catch (e) {
           // Nothing to show it in up here; the tree simply does not gain a row, and the notes
           // screen is one click away.
@@ -178,6 +174,29 @@ export function RootLayout({ children }: { children: ReactNode }) {
       })();
     },
     [engine, navigate, say, t],
+  );
+
+  const movePage = useCallback(
+    (page: Page, folder: string) => {
+      // Optimistic. A move is a rename on disk and comes back in a few milliseconds, but the tree
+      // is the thing the user is looking at while they let go of the mouse — a row that stays put
+      // for a round trip reads as a drop that did not take.
+      setPages((current) =>
+        current.map((each) => (each.id === page.id ? { ...each, folder } : each)),
+      );
+      void (async () => {
+        try {
+          await engine.library.moveTo(page.id, folder);
+        } catch (e) {
+          console.warn(say(e));
+        } finally {
+          // Either way: on success this picks up a folder the vault created, and on failure it puts
+          // the row back where it really is rather than leaving a lie on screen.
+          setVaultGeneration((n) => n + 1);
+        }
+      })();
+    },
+    [engine.library, say],
   );
 
   const selectFolder = useCallback(
@@ -192,7 +211,9 @@ export function RootLayout({ children }: { children: ReactNode }) {
     [navigate],
   );
 
-  const active = matchRoute({ to: "/meetings/$meetingId", fuzzy: true }) ? "/library" : pathname;
+  // A page is filed in the vault, and `Kho` is the shelf. Neither kind gets its own destination
+  // highlighted, because the tree below is what says where the open page lives.
+  const active = matchRoute({ to: "/pages/$pageId", fuzzy: true }) ? "/library" : pathname;
   const warning = deviceWarning(engine.session);
   const latest = engine.transcript.segments.at(-1);
 
@@ -344,6 +365,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           onOpenPage={openPage}
           activePage={activePageId(pathname, search)}
           onNewPage={newPage}
+          onMovePage={movePage}
           activeFolder={search.folder ?? null}
           onSelectFolder={selectFolder}
           navOpen={navOpen}
@@ -420,11 +442,11 @@ function speakersOf(segments: { speaker?: string | null }[]): string[] {
 /**
  * Which page the tree should show as open.
  *
- * A meeting is in the path, a note is in a query parameter, because they still open in different
- * screens. The tree does not care which — it highlights whichever one is on screen.
+ * One pattern now that both kinds live at `/pages/<id>`. `?open=` is still read because the notes
+ * screen keeps it: it is in links people saved, and a URL that used to work should go on working.
  */
 function activePageId(pathname: string, search: { folder?: string; open?: string }): string | null {
-  const meeting = pathname.match(/^\/meetings\/([^/]+)/);
-  if (meeting) return meeting[1] ?? null;
+  const page = pathname.match(/^\/pages\/([^/]+)/);
+  if (page) return page[1] ?? null;
   return search.open ?? null;
 }

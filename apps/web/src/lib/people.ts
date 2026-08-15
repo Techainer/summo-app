@@ -45,6 +45,20 @@ export interface UnknownVoice {
   suggestions: Suggestion[];
 }
 
+/**
+ * One meeting's unnamed voices.
+ *
+ * The voice book asks about the whole vault rather than about one recording. It had to: the
+ * per-meeting question was only ever rendered by a component nothing passed a meeting to, so the
+ * naming interface — the entire point of the screen — has never been reachable.
+ */
+export interface MeetingUnknowns {
+  meeting: string;
+  title: string;
+  day: string;
+  voices: UnknownVoice[];
+}
+
 export interface MeetingChange {
   meeting: string;
   utterances: number;
@@ -76,6 +90,11 @@ export class PeopleClient {
     return readJson<UnknownVoice[]>(
       await fetch(url(this.handshake, `/meetings/${encodeURIComponent(meeting)}/voices`)),
     );
+  }
+
+  /** Everything still unnamed, anywhere in the vault, newest meeting first. */
+  async unnamed(): Promise<MeetingUnknowns[]> {
+    return readJson<MeetingUnknowns[]>(await fetch(url(this.handshake, "/voices/unknown")));
   }
 
   /** Name a voice. Fixes this meeting and every past one that guessed it wrong. */

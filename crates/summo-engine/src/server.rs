@@ -215,6 +215,7 @@ impl Server {
             .route("/people/{id}/merge", post(merge_person))
             .route("/people/{id}", axum::routing::delete(forget_person))
             .route("/meetings/{id}/audio/{lane}", get(meeting_audio))
+            .route("/voices/unknown", get(unknown_voices_everywhere))
             .route("/meetings/{id}/voices", get(unknown_voices))
             .route("/meetings/{id}/voices/{label}", post(name_voice))
             .route("/library", get(library))
@@ -3140,6 +3141,26 @@ async fn unknown_voices(
     ))
 }
 
+/// Every unnamed voice in the vault, so the voice book has the work on it.
+///
+/// The per-meeting route above answers "who is speaking in the thing I am looking at". This one
+/// answers "what is still unnamed anywhere", which is the question the voice book screen is for and
+/// the one it could not previously ask.
+async fn unknown_voices_everywhere(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    as_response(crate::people::unknowns_everywhere(
+        &state.book,
+        &state.engine.paths().voices(),
+        &state.library,
+    ))
+}
+
 /// Name a voice, and fix every meeting that guessed it wrong.
 async fn name_voice(
     State(state): State<AppState>,
@@ -4525,6 +4546,66 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(body["people"].as_array().unwrap().len(), 0);
+    }
+
+    /// The voice book screen is "the questions first, then the people already known", and the
+    /// questions half could only be reached from inside a meeting — so opening it from its own
+    /// destination showed the second half and nothing else. This is the route that gives it work.
+    #[tokio::test]
+    async fn the_voice_book_can_ask_about_every_unnamed_voice_in_the_vault() {
+        let (tmp, server) = running().await;
+        seed(&tmp, "01A", "2026-08-09T10:00:00+07:00", "Họp đầu tuần");
+        seed(&tmp, "01B", "2026-08-11T10:00:00+07:00", "Demo khách hàng");
+        seed_voice(&tmp, "01A", "S2", [0.0, 1.0, 0.0, 0.0]);
+        seed_voice(&tmp, "01B", "S4", [0.0, 0.0, 1.0, 0.0]);
+        let base = format!("http://{}", server.addr());
+
+        let asking: serde_json::Value = client()
+            .get(format!("{base}/voices/unknown"))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(asking.as_array().unwrap().len(), 2, "{asking}");
+        // Newest first: a voice from this morning is one the user can still place from memory, and
+        // one from last March is the one they will want the suggestions for. `ordering_key` negates
+        // the timestamp, so the obvious `b.cmp(a)` sorts these backwards.
+        assert_eq!(asking[0]["meeting"], "01B");
+        assert_eq!(asking[1]["meeting"], "01A");
+        // The meeting it came from, so the user knows which conversation they are naming somebody
+        // in — a label like `S2` on its own is not a question anybody can answer.
+        assert_eq!(asking[1]["title"], "Họp đầu tuần");
+        assert_eq!(asking[1]["voices"][0]["label"], "S2");
+
+        client()
+            .post(format!("{base}/meetings/01A/voices/S2"))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "name": "Bình" }))
+            .send()
+            .await
+            .unwrap();
+
+        // Answered questions leave the list, rather than the meeting staying on it with no voices
+        // under it.
+        let after: serde_json::Value = client()
+            .get(format!("{base}/voices/unknown"))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let left: Vec<&str> = after
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["meeting"].as_str().unwrap())
+            .collect();
+        assert_eq!(left, ["01B"], "{after}");
     }
 
     #[tokio::test]

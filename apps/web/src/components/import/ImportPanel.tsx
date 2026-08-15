@@ -199,8 +199,8 @@ export function ImportPanel() {
                     type="button"
                     onClick={() =>
                       void navigate({
-                        to: "/meetings/$meetingId",
-                        params: { meetingId: job.meeting as string },
+                        to: "/pages/$pageId",
+                        params: { pageId: job.meeting as string },
                       })
                     }
                     className="text-accent text-meta mt-2 font-medium hover:underline"

@@ -170,11 +170,7 @@ export function RecordScreen() {
             <Recent
               limit={3}
               onOpen={(entry) =>
-                void navigate(
-                  entry.kind === "note"
-                    ? { to: "/notes" }
-                    : { to: "/meetings/$meetingId", params: { meetingId: entry.id } },
-                )
+                void navigate({ to: "/pages/$pageId", params: { pageId: entry.id } })
               }
             />
           </section>
