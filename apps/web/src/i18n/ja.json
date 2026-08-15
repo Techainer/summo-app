@@ -201,6 +201,7 @@
     "by_folder": "フォルダ",
     "by_tag": "タグ",
     "filters": "絞り込み",
+    "more": "さらに{count}件を表示",
     "filter_folder": "フォルダで絞り込む",
     "filter_tag": "タグで絞り込む",
     "unfiled": "未整理",
