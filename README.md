@@ -36,9 +36,11 @@ file that is still Markdown, and that opens as plain text rather than lose anyth
 Subscribe to a calendar by URL and it stays current, prompts before a meeting starts — it never
 records on its own — and drafts the follow-up email afterwards, which you send yourself.
 
-**Not done:** the Android app builds, asks for the microphone and signs itself when the repository
-has a key, but nothing has yet run it on a physical phone — treat it as untested rather than
-finished. iOS needs a Mac and has never been built. The hosted sync relay is not built either —
+**Not done:** the Android app builds, records, signs itself when the repository has a key, and has
+now been run — on an emulator, which is where it was found that a release build could not reach its
+own engine at all. Recognition is compiled in for phones and has never decoded audio on one, because
+ONNX Runtime publishes no x86-64 Android build and an emulator cannot run the arm64 one. Treat the
+phone as untested. iOS needs a Mac and has never been built. The hosted sync relay is not built either —
 sync works today through any shared folder instead.
 
 The numbers below are measured on this codebase, not estimated. Each is reproducible with the
