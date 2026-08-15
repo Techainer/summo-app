@@ -436,6 +436,12 @@ export function RichNote({
   );
 
   return (
+    // The two rules disabled here are about a *control* made out of a `div`, and this is not one:
+    // it is the editor's scroll container, and the handler is delegation for links ProseMirror
+    // draws inside a `contenteditable`. There is no keyboard equivalent to add — a link in an
+    // editor is not in the tab order, because Tab there inserts a tab. The keyboard route to a
+    // sub-page is the slash menu and the sidebar, both of which are real controls.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <div
       className={cn("relative min-h-0 flex-1 overflow-y-auto px-6 py-5", className)}
       // A sub-page is a link, and a link inside an editor does nothing when you click it — the

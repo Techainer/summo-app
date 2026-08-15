@@ -75,6 +75,12 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
         {draft.sections.map((section) => (
           <section key={section.heading}>
             <h3 className="text-fg-dim text-meta font-semibold">{section.heading}</h3>
+            {/* Not a control, despite the handlers. What is being listened for is a *selection*
+                — the user dragging or shift-arrowing across a phrase to comment on it — and both
+                pointers and keyboards are covered, which is what the rule protects. Making this a
+                button would be a lie about what it does, and would take the text out of the
+                reading order it belongs in. */}
+            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
             <p
               // The tint is the whole signal: this text is in the note but nobody has agreed to it.
               className="bg-accent-soft selection:bg-accent selection:text-accent-fg mt-1 rounded-md px-2 py-1.5 leading-relaxed whitespace-pre-wrap"

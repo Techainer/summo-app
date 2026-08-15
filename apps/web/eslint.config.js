@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import globals from "globals";
@@ -45,9 +46,23 @@ export default tseslint.config(
     plugins: {
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
+      "jsx-a11y": jsxA11y,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      ...jsxA11y.flatConfigs.recommended.rules,
+
+      /*
+       * Off, and it is the one rule in that set this project disagrees with.
+       *
+       * `no-autofocus` is right about a form on a page: focus that moves without being asked for
+       * loses a screen reader user their place. It is wrong about the three places this codebase
+       * uses it — a command palette, a rename field, and an inline edit — which are all dialogs
+       * opened deliberately, where WAI-ARIA's own dialog pattern says focus *should* move to the
+       * first field. A palette that opens without its input focused is broken, and working around
+       * the rule with an effect and a ref is the same behaviour written less honestly.
+       */
+      "jsx-a11y/no-autofocus": "off",
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
 
       /*
