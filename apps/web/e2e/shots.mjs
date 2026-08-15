@@ -10,16 +10,25 @@
  * overflow, and text whose contrast against its own background is below the WCAG AA ratio. Those
  * two catch most of what a screenshot review would otherwise have to notice by eye.
  *
- *   node e2e/shots.mjs http://127.0.0.1:7788 <token> [locale]
+ * It boots a daemon of its own, like every other suite here, so it runs in CI rather than only on
+ * the machine of whoever remembers. That is the point of the change: contrast and overflow were the
+ * two things nothing enforced, checked by hand, on a good day.
+ *
+ *   node e2e/shots.mjs                                  # its own vault
+ *   node e2e/shots.mjs http://127.0.0.1:7788 7788 <tok> # a daemon you are already debugging
+ *
+ * `SUMMO_LOCALE` picks the language the screens are photographed in; the four-language pass runs
+ * inside this file either way.
  */
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 
-const [, , appUrl, token, locale = "en-US"] = process.argv;
-if (!appUrl || !token) {
-  console.error("usage: node e2e/shots.mjs <appUrl> <token> [locale]");
-  process.exit(2);
-}
+import { daemon } from "./daemon.mjs";
+
+const engine = await daemon(process.argv, { name: "shots" });
+const appUrl = engine.url;
+const token = engine.token;
+const locale = process.env.SUMMO_LOCALE ?? "vi-VN";
 
 const OUT = "/tmp/shots";
 mkdirSync(OUT, { recursive: true });
@@ -218,6 +227,7 @@ for (const scheme of ["light", "dark"]) {
 }
 
 await browser.close();
+await engine.stop();
 
 if (problems.length) {
   console.error(`\n${problems.length} problem(s):`);
