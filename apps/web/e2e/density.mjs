@@ -85,16 +85,21 @@ for (const label of SCREENS) {
       /**
        * A leaf that puts something on screen: text, an image, a control.
        *
-       * `toUpperCase`, and it matters. `SVG` was in this list from the first version and never once
-       * matched: an SVG element's `tagName` is lowercase `svg` in an HTML document, so every icon
-       * in the app has been invisible to this measurement. A screen whose only content was a
-       * drawing therefore measured as empty from the top of its text — which is what an illustrated
-       * empty state is, and what made one fail the moment its picture got bigger than its heading.
+       * `data-ink` is how a component says "this draws something" when nothing else here can tell.
+       * The list of tags below cannot see a drawing built out of `<span>`s and gradients, and the
+       * `SVG` in it has never matched anything either — a Lucide icon is an `<svg>` with `<path>`
+       * children, so it is not a leaf, and an SVG element's `tagName` is lowercase in an HTML
+       * document besides. Rather than teach this walker to recognise art, the art declares itself:
+       * see `components/ui/Spot.tsx`.
+       *
+       * It matters because an illustrated empty state is *mostly* drawing. Measured from the top of
+       * its text instead, the composition looks lopsided and the screen is reported as a hole.
        */
       const isInk = (el) =>
-        el.childElementCount === 0 &&
-        ((el.textContent ?? "").trim().length > 0 ||
-          ["IMG", "SVG", "CANVAS", "INPUT", "TEXTAREA"].includes(el.tagName.toUpperCase()));
+        el.dataset.ink !== undefined ||
+        (el.childElementCount === 0 &&
+          ((el.textContent ?? "").trim().length > 0 ||
+            ["IMG", "SVG", "CANVAS", "INPUT", "TEXTAREA"].includes(el.tagName)));
 
       /** The vertical extent of everything drawn inside `root`. */
       const inkBounds = (root) => {

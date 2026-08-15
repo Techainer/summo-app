@@ -44,6 +44,12 @@ export function Spot({
   return (
     <div
       aria-hidden="true"
+      // `data-ink` says "this draws something" to `e2e/density.mjs`, which decides whether a screen
+      // is a composition or a hole. Its walker looks for text and for a handful of tag names, and a
+      // drawing made of spans and gradients is neither — so an illustrated empty state measured as
+      // empty from the top of its *heading*, and the screen was reported lopsided the moment the
+      // picture grew. Declaring it is cheaper and more honest than teaching a test to recognise art.
+      data-ink=""
       className={cn("relative grid shrink-0 place-items-center", className)}
       style={{ width: size, height: size }}
     >
