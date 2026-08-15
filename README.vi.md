@@ -37,9 +37,11 @@ trang — trên một file vẫn là Markdown, và mở ở dạng văn bản th
 được. Đăng ký lịch bằng URL thì lịch luôn cập nhật, sắp tới giờ họp app hỏi có ghi chú không —
 không bao giờ tự ghi âm — và họp xong thì soạn sẵn thư gửi đi để bạn tự gửi.
 
-**Chưa xong:** bản Android đã build được, đã xin quyền micro trong manifest và tự ký khi kho mã có
-khoá — nhưng chưa từng chạy trên điện thoại thật, nên hãy coi là chưa kiểm chứng chứ không phải đã
-xong. iOS cần máy Mac nên chưa từng build. Relay đồng bộ trên cloud (hosted sync relay) cũng chưa
+**Chưa xong:** bản Android đã build, ghi âm được, tự ký khi kho mã có khoá, và đã chạy thật — trên
+máy ảo, và chính ở đó mới lòi ra rằng bản release không kết nối nổi tới engine của chính nó. Phần
+nhận dạng đã được biên dịch vào bản cho điện thoại nhưng chưa từng giải mã âm thanh trên máy thật:
+ONNX Runtime không phát hành bản x86-64 cho Android, mà máy ảo thì không chạy được bản arm64. Cứ coi
+như điện thoại vẫn chưa kiểm chứng. iOS cần máy Mac nên chưa từng build. Relay đồng bộ trên cloud (hosted sync relay) cũng chưa
 được xây — hiện tại đồng bộ vẫn chạy qua một thư mục dùng chung.
 
 Các con số dưới đây đều đo trên chính codebase này, không phải ước lượng. Mỗi con số tái lập được
