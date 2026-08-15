@@ -211,6 +211,39 @@ for (const label of SCREENS) {
   });
   if (overlaps) problems.push(`bottom bar: ${overlaps}`);
 
+  // The library's filters are folded on a phone.
+  //
+  // Folders, tags and colours are three lists as long as the vault is, and open they pushed the
+  // first meeting 380 px down a 844 px screen — half the window spent on ways to narrow a list the
+  // user cannot see yet. This asserts the first row of the list is on screen without scrolling,
+  // which is the thing that was false, and that the filters are still one tap away.
+  // The tour first. It opens over the app on a vault this browser has not seen before, and on a
+  // phone it covers the bottom bar entirely — a click on "Kho" lands on "Tiếp" instead.
+  const skip = small.getByRole("button", { name: "Bỏ qua" });
+  if ((await skip.count()) > 0) await skip.first().click();
+  await small.waitForTimeout(300);
+
+  await small.getByRole("button", { name: "Kho" }).click();
+  await small.waitForTimeout(600);
+  const fold = small.getByText("Lọc", { exact: true });
+  await fold.waitFor({ timeout: 10000 });
+
+  const firstRow = await small.evaluate(() => {
+    const list = document.querySelector('[data-testid="meeting-list"]');
+    const row = list?.querySelector("button, a");
+    return row ? row.getBoundingClientRect().top : null;
+  });
+  if (firstRow === null) problems.push("the library list has no rows on a phone");
+  else if (firstRow > 700) {
+    problems.push(`the first library row starts at ${Math.round(firstRow)}px, below the fold`);
+  } else console.log(`library: the first row is at ${Math.round(firstRow)}px`);
+
+  await fold.click();
+  await small.waitForTimeout(400);
+  if ((await small.getByText("khach-hang").count()) === 0) {
+    problems.push("opening the folded filters showed no folders");
+  }
+
   await narrow.close();
 }
 
