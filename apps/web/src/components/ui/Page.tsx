@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
@@ -75,7 +75,7 @@ export function Page({
         )}
       >
         {(title || actions || aside) && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={GENTLE}
@@ -92,20 +92,20 @@ export function Page({
             </div>
             {aside}
             {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
-          </motion.div>
+          </m.div>
         )}
 
         {/* The content gets its own fade so it arrives just after the heading rather than with it.
             Sixty milliseconds is below the threshold where anybody would call it a sequence, and
             above the one where the screen reads as a single flat image appearing. */}
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...GENTLE, delay: 0.06 }}
           className={cn("flex flex-col gap-6", fill && "min-h-0 flex-1")}
         >
           {children}
-        </motion.div>
+        </m.div>
       </div>
     </div>
   );

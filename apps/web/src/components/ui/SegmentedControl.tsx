@@ -1,5 +1,5 @@
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useId } from "react";
 
 import { SPRING } from "../../lib/motion";
@@ -65,7 +65,7 @@ export function SegmentedControl<T extends string>({
             )}
           >
             {selected && (
-              <motion.span
+              <m.span
                 layoutId={layoutId}
                 className="bg-accent absolute inset-0 rounded-full"
                 transition={SPRING}

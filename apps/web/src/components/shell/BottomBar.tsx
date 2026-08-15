@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 
 import { cn } from "../../lib/cn";
 import { SNAPPY } from "../../lib/motion";
@@ -55,7 +55,7 @@ export function BottomBar({
           Centre because it is the one action the app exists for, and raised because a target that
           sits in the row is a target the thumb has to aim at rather than land on. */}
       <div className="relative w-[76px] shrink-0">
-        <motion.button
+        <m.button
           type="button"
           onClick={onRecord}
           aria-pressed={recording}
@@ -73,7 +73,7 @@ export function BottomBar({
               recording ? "size-4 rounded-sm" : "size-6 rounded-full",
             )}
           />
-        </motion.button>
+        </m.button>
       </div>
 
       {right.map((item) => (

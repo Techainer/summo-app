@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { FileAudio } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useT } from "../../i18n/context";
@@ -148,7 +148,7 @@ export function ImportPanel() {
           {jobs.map((job) => {
             const pct = percent(job);
             return (
-              <motion.li
+              <m.li
                 key={job.id}
                 variants={listItem}
                 initial="hidden"
@@ -183,7 +183,7 @@ export function ImportPanel() {
                   >
                     {/* Length unknown: an indeterminate sweep, because a bar frozen at 0% is the
                         one thing a five-minute job must not look like. */}
-                    <motion.div
+                    <m.div
                       className="bg-accent h-full"
                       animate={pct === null ? { x: ["-100%", "100%"] } : { width: `${pct}%` }}
                       transition={
@@ -208,7 +208,7 @@ export function ImportPanel() {
                     {t("import.open_meeting")}
                   </button>
                 )}
-              </motion.li>
+              </m.li>
             );
           })}
         </AnimatePresence>

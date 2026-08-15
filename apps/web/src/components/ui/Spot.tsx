@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { m, useReducedMotion } from "motion/react";
 
 import { cn } from "../../lib/cn";
 
@@ -55,19 +55,19 @@ export function Spot({
     >
       {/* The blob. Two overlapping radial tints rather than one, so the colour has somewhere to
           move to — a single gradient that changes opacity reads as a light being switched. */}
-      <motion.span
+      <m.span
         className="from-accent/35 via-accent/10 absolute inset-0 rounded-[42%] bg-linear-to-br to-transparent"
         animate={still ? undefined : { rotate: 360, borderRadius: ["42%", "54%", "42%"] }}
         transition={{ duration: 22, repeat: Infinity, ease: "linear" }}
       />
-      <motion.span
+      <m.span
         className="from-ai/30 absolute inset-[8%] rounded-[48%] bg-linear-to-tl to-transparent"
         animate={still ? undefined : { rotate: -360 }}
         transition={{ duration: 17, repeat: Infinity, ease: "linear" }}
       />
 
       {/* The ring, breathing. It is what stops the blob from looking like a stain. */}
-      <motion.span
+      <m.span
         className="ring-line absolute inset-[18%] rounded-full ring-1"
         animate={still ? undefined : { scale: [1, 1.06, 1], opacity: [0.7, 1, 0.7] }}
         transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut" }}
@@ -78,7 +78,7 @@ export function Spot({
         { at: 0, seconds: 9, place: "top-[3%]", size: "size-2", tint: "bg-accent/70" },
         { at: 1, seconds: 11.5, place: "bottom-[8%]", size: "size-1.5", tint: "bg-ai/70" },
       ].map((mote) => (
-        <motion.span
+        <m.span
           key={mote.at}
           className="absolute inset-0"
           animate={still ? undefined : { rotate: 360 }}
@@ -94,7 +94,7 @@ export function Spot({
               mote.tint,
             )}
           />
-        </motion.span>
+        </m.span>
       ))}
 
       <span className="bg-bg-raised ring-line relative grid size-[46%] place-items-center rounded-full shadow-[var(--shadow-sm)] ring-1">

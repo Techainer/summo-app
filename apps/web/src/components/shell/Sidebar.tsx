@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight, FileText, Folder, FolderOpen, FolderInput, Mic, Plus } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useMemo, useState } from "react";
 
 import { useT } from "../../i18n/context";
@@ -798,7 +798,7 @@ function NavButton({
           selection travelling down the list — which is the thing that tells you the list is one
           list. */}
       {active && (
-        <motion.span
+        <m.span
           layoutId="nav-active"
           aria-hidden="true"
           transition={{ type: "spring", stiffness: 420, damping: 34 }}

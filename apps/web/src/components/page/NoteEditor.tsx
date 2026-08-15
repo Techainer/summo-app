@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "../ui";
@@ -202,7 +202,7 @@ export function NoteEditor({
 
       <div className="border-line flex items-center gap-3 border-b px-4 py-2">
         <AnimatePresence mode="wait">
-          <motion.span
+          <m.span
             key={saved ? "saved" : "editing"}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -210,7 +210,7 @@ export function NoteEditor({
             className="text-fg-faint text-micro"
           >
             {saved ? t("notes.saved") : t("notes.saving")}
-          </motion.span>
+          </m.span>
         </AnimatePresence>
         {/* Why this note looks different from the last one. An editor that silently degrades is one
             the user assumes is broken; saying so once, quietly, is the difference between a rule

@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useT } from "../../i18n/context";
@@ -63,7 +63,7 @@ export function NudgeBar() {
   return (
     <AnimatePresence initial={false}>
       {queue.map((nudge) => (
-        <motion.div
+        <m.div
           key={nudge.key}
           variants={collapse}
           initial="hidden"
@@ -106,7 +106,7 @@ export function NudgeBar() {
               ✕
             </button>
           </div>
-        </motion.div>
+        </m.div>
       ))}
     </AnimatePresence>
   );

@@ -19,8 +19,18 @@ import { gzipSync } from "node:zlib";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Kilobytes, gzipped, for everything needed before the first screen appears. */
-const BUDGET = 300;
+/**
+ * Kilobytes, gzipped, for everything needed before the first screen appears.
+ *
+ * 220 against a measured 208. It was 300 against a measured 277, which is a budget that had stopped
+ * saying anything: it left room for a screen and a half of growth nobody would have to justify.
+ * Splitting the screens out of the entry chunk and fetching the animation engine on the side freed
+ * 69 kB, and lowering the number in the same commit is what keeps that free rather than spent.
+ *
+ * Twelve kB of headroom is deliberate. A dependency bump moving a few kB should not fail a build
+ * that changed nothing; a new screen imported eagerly should.
+ */
+const BUDGET = 220;
 
 const dist = join(import.meta.dirname, "..", "dist");
 const html = readFileSync(join(dist, "index.html"), "utf8");

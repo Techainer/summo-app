@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { ArrowRight, CircleAlert, FileUp, PencilLine, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -120,7 +120,7 @@ export function HomeScreen() {
         </p>
       )}
 
-      <motion.div
+      <m.div
         initial="hidden"
         animate="shown"
         transition={stagger(4)}
@@ -128,7 +128,7 @@ export function HomeScreen() {
       >
         {/* Capture. Still the one irreversible action, so it keeps the largest target on the
               screen — but it now shows the state it is in rather than only offering to change it. */}
-        <motion.div variants={listItem}>
+        <m.div variants={listItem}>
           <Card
             className={cn(
               "relative h-full overflow-hidden transition-shadow duration-300",
@@ -246,10 +246,10 @@ export function HomeScreen() {
               </div>
             </CardBody>
           </Card>
-        </motion.div>
+        </m.div>
 
         {/* The queue. Everything the machine has done and is now waiting on a person for. */}
-        <motion.div variants={listItem}>
+        <m.div variants={listItem}>
           <Card className="h-full">
             <CardHeader
               title={
@@ -294,11 +294,11 @@ export function HomeScreen() {
               )}
             </CardBody>
           </Card>
-        </motion.div>
+        </m.div>
 
         {/* Recent, of every kind. The most common reason to open a notes app is to pick something
               back up, and until now that took two clicks through a screen called Thư viện. */}
-        <motion.div variants={listItem} className="lg:col-span-2">
+        <m.div variants={listItem} className="lg:col-span-2">
           <Card>
             <CardHeader
               title={t("home.recent")}
@@ -312,10 +312,10 @@ export function HomeScreen() {
               <Recent onOpen={open} />
             </CardBody>
           </Card>
-        </motion.div>
+        </m.div>
 
         {/* What the assistant is for, said once, where somebody opening the app will read it. */}
-        <motion.div variants={listItem} className="lg:col-span-2">
+        <m.div variants={listItem} className="lg:col-span-2">
           <Card className="border-ai/25 relative overflow-hidden">
             <div
               aria-hidden="true"
@@ -332,8 +332,8 @@ export function HomeScreen() {
               </Button>
             </CardBody>
           </Card>
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
     </Page>
   );
 }

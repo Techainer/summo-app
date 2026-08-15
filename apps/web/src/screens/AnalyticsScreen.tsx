@@ -1,5 +1,5 @@
 import { ChartNoAxesColumn, Square } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useMemo, useState } from "react";
 
 import {
@@ -108,7 +108,7 @@ export function AnalyticsScreen() {
                     <span className="bg-bg-soft h-2 flex-1 overflow-hidden rounded-full">
                       {/* Grown from the left rather than drawn at length. A bar chart that
                           animates in reads as measured; one that appears reads as decoration. */}
-                      <motion.span
+                      <m.span
                         initial={{ scaleX: 0 }}
                         animate={{ scaleX: 1 }}
                         transition={GENTLE}

@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Check, CornerDownLeft, Loader, Sparkles, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 
@@ -81,7 +81,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   }, [acting, busy, handshake, text]);
 
   return (
-    <motion.aside
+    <m.aside
       initial={{ x: 24, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={GENTLE}
@@ -155,14 +155,14 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
                 wrong knows what to blame. */}
             {turn.errand && (
               <div className="border-ai/25 bg-ai-soft rounded-[var(--radius-card)] border p-3">
-                <motion.ul
+                <m.ul
                   initial="hidden"
                   animate="shown"
                   transition={stagger(turn.errand.steps.length)}
                   className="space-y-1"
                 >
                   {turn.errand.steps.map((step, at) => (
-                    <motion.li
+                    <m.li
                       key={`${step.text}-${at}`}
                       variants={listItem}
                       className="text-meta flex items-baseline gap-2"
@@ -173,9 +173,9 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
                         <Loader aria-hidden="true" className="text-ai size-3.5 shrink-0" />
                       )}
                       <span className={step.done ? "text-fg-dim" : "text-fg"}>{step.text}</span>
-                    </motion.li>
+                    </m.li>
                   ))}
-                </motion.ul>
+                </m.ul>
                 {turn.errand.outcome && (
                   <p className="text-body border-ai/20 mt-2.5 border-t pt-2.5">
                     {turn.errand.outcome}
@@ -233,6 +233,6 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
       </div>
-    </motion.aside>
+    </m.aside>
   );
 }

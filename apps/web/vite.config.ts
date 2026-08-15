@@ -23,45 +23,31 @@ export default defineConfig({
     rollupOptions: {
       output: {
         /*
-         * Three chunks instead of one, and the warning about a 700 KB bundle goes with them.
+         * One name, and the rest left to the bundler.
          *
-         * Not for a network — this file is read off the local disk by a shell that already
-         * downloaded it. It is for the *browser*: one 700 KB module has to be parsed and compiled
-         * before anything renders, while three are compiled in parallel, and the two vendor chunks
-         * never change between releases so a re-render after an update reuses their compiled code.
+         * There used to be a `vendor` chunk holding every package that was not React, and it was
+         * costing what it was meant to save. `manualChunks` is a *forcing* function: naming a
+         * module puts it in that chunk no matter who imports it, so a dialog used only by the
+         * settings screen, a chart used only by analytics and the animation engine behind a lazy
+         * import all landed in a file the entry point preloads. It had to be kept honest with a
+         * growing list of exclusions — tiptap, its CRDT, the Tauri bridge — each added after
+         * somebody noticed a first load had grown, and each one a package that would have been
+         * placed correctly by leaving it alone.
          *
-         * Split by rate of change rather than by size. React and the router move once a quarter;
-         * the app moves every day.
+         * Rollup already does this: a module reachable only from a dynamic import goes into that
+         * import's chunk, and a module two chunks share is hoisted into one they both fetch. The
+         * screens are dynamic imports (see `src/router.tsx`), so what the entry preloads is now
+         * what the entry actually uses — 208 kB gzipped rather than 277.
+         *
+         * React keeps a name because it is the exception the rule is about: everything imports it,
+         * so it is hoisted anyway, and pinning it makes it one file that does not change between
+         * releases. Its scheduler and `react-dom` go with it — split from it, the renderer would
+         * wait for a second file before it could do anything at all.
          */
         manualChunks(id: string) {
           if (!id.includes("node_modules")) return undefined;
-          // React and its scheduler are one unit — splitting them means the renderer waits for a
-          // second file before it can do anything at all.
           if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "react";
-          // The editor is 170 kB gzipped and is only reached by opening a note, so it is left to
-          // the dynamic import that pulls it in. Naming it here would put it back in `vendor`,
-          // which every screen loads — including the one the app starts on.
-          //
-          // `yjs`, `y-protocols` and `lib0` are on this list for a reason worth writing down: the
-          // *drag handle* depends on `@tiptap/extension-collaboration`, which depends on a CRDT.
-          // Nothing in Summo is collaborative, and 28 kB gzipped of it arrived because a paragraph
-          // can now be picked up. Left in the editor's chunk rather than fought: it is fetched when
-          // a note is opened and never on the screen the app starts on. The first-load budget is
-          // what caught it — the package list here is easy to forget to extend, and a new
-          // transitive dependency lands in `vendor` silently by default.
-          if (
-            /[\\/]node_modules[\\/](@tiptap|@floating-ui|prosemirror-|orderedmap|rope-sequence|w3c-keyname|linkifyjs|yjs|y-protocols|lib0)/.test(
-              id,
-            )
-          )
-            return undefined;
-          // The bridge to the desktop and mobile shells, for the same reason. Every use of it is
-          // behind `inShell()` and behind a dynamic import, so in a browser — which is what the
-          // daemon serves, and what the browser suites run — it is never fetched at all. Naming it
-          // here put it in `vendor` and cost every browser user 5 kB of an API for an app they are
-          // not running.
-          if (/[\\/]node_modules[\\/]@tauri-apps[\\/]/.test(id)) return undefined;
-          return "vendor";
+          return undefined;
         },
       },
     },
