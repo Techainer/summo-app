@@ -36,9 +36,10 @@ file that is still Markdown, and that opens as plain text rather than lose anyth
 Subscribe to a calendar by URL and it stays current, prompts before a meeting starts — it never
 records on its own — and drafts the follow-up email afterwards, which you send yourself.
 
-**Not done:** the Android app assembles and installs but cannot record yet — it is unsigned and its
-manifest does not ask for the microphone; iOS needs a Mac and has never been built. The hosted sync
-relay is not built either — sync works today through any shared folder instead.
+**Not done:** the Android app builds, asks for the microphone and signs itself when the repository
+has a key, but nothing has yet run it on a physical phone — treat it as untested rather than
+finished. iOS needs a Mac and has never been built. The hosted sync relay is not built either —
+sync works today through any shared folder instead.
 
 The numbers below are measured on this codebase, not estimated. Each is reproducible with the
 command shown; see [`docs/benchmarks.md`](docs/benchmarks.md) and
@@ -154,12 +155,12 @@ crates/
 apps/
   web/            the application interface — React, compiled into the binary
   desktop/        the Tauri shell: window, tray, global shortcut
-  mobile/         Tauri iOS/Android                          [scaffolded, never compiled]
+  mobile/         Tauri iOS/Android — Android builds an .apk; iOS has never been built
 ```
 
-`summo-bench`, `summo-audio`, `summo-media`, `summo-calendar`, `summo-tts` and `summo-store` cover
-measurement, capture, ffmpeg, calendars, dubbing and semantic search respectively — see `crates/` for
-all seventeen.
+`summo-bench`, `summo-audio`, `summo-media`, `summo-calendar`, `summo-tts`, `summo-store`,
+`summo-mt` and `summo-pipeline` cover measurement, capture, ffmpeg, calendars, dubbing, semantic
+search, in-process translation and the capture stages respectively — see `crates/` for all twenty.
 
 ## Contributing
 

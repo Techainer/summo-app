@@ -31,8 +31,10 @@ cargo test --workspace
 pnpm -C apps/web check          # tsc, eslint, prettier, vitest — all four
 ```
 
-There are also two browser passes that are **not** in CI, because they need a browser and a built
-daemon. Both start their own daemon on a vault of their own, so there is nothing to set up:
+There are also the browser passes. They run in CI — in a job of their own, because they need a
+browser and a daemon with the interface compiled into it — and they are worth running locally before
+asking for review, because they are where the real failures are. Each starts its own daemon on a
+vault of its own, so there is nothing to set up:
 
 ```bash
 pnpm -C apps/web exec playwright install chromium
@@ -89,11 +91,11 @@ These are enforced by the commands above, not by taste:
   holds a key. There is a test that fails on Vietnamese in a source file, with one marked exception
   (a language listed in its own name).
 
-### Warnings are capped, not ignored
+### Warnings are not allowed
 
-`pnpm lint` runs with `--max-warnings 30`, which is the number there are today. Warnings cannot
-grow. If you find a way to remove some, lower the number in the same commit — that is how it gets to
-zero.
+`pnpm lint` runs with `--max-warnings 0`. It was 30 for a while — the number there happened to be,
+lowered in whatever commit removed some — and it reached zero, so the cap is now the only number
+that needs no maintaining. A warning fails the build exactly like an error.
 
 ## Comments
 
