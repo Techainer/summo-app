@@ -68,6 +68,20 @@ có macOS Intel, vì ONNX Runtime không còn phát hành bản build cho nền 
 Microsoft chỉ có `osx-arm64`. Build từ source trên máy Mac Intel cũng dừng ở đúng chỗ này, chỉ là
 báo lỗi rõ ràng hơn.
 
+### Bản app, thay vì dòng lệnh
+
+```bash
+pnpm -C apps/desktop exec tauri build     # .deb và .AppImage, .dmg, .msi
+```
+
+Một cửa sổ, một icon ở khay hệ thống, và `⌘⇧R` gọi được từ bất cứ đâu. Nó khởi động đúng cái daemon
+mà lệnh ở trên chạy — và nếu đã có một cái đang chạy thì dùng luôn thay vì tranh nhau — nên hai
+đường là cùng một sản phẩm, cùng một vault, dùng đường nào cũng được.
+
+Bản phát hành có kèm installer bên cạnh tarball. **Chúng chưa được ký số**: macOS sẽ báo không xác
+minh được nhà phát triển, Windows sẽ hiện cảnh báo SmartScreen — vì không có chứng chỉ Apple, cũng
+không có chứng chỉ Windows. Tarball không vướng chuyện này, và là thứ nên dùng nếu bạn ngại điều đó.
+
 Hoặc build từ source, không đóng gói:
 
 ```bash

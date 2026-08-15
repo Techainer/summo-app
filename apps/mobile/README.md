@@ -49,8 +49,8 @@ What has **not** happened:
 1. **An `.apk` is produced; no `.ipa` is.** The Android app builds — 42 MB, one 40 MB
    `libsummo_mobile.so` holding the engine, the vault, the agent, sherpa-onnx and ONNX Runtime —
    and CI assembles it on every push to `master` and on any pull request labelled `mobile`. It is
-   **unsigned**: there is no keystore in this repository and there should not be. Signing is what
-   is left before anybody can install it usefully.
+   **unsigned here**, because there is no keystore in this repository and there should not be — but
+   the build can now sign, given a key. See below.
 
    The manifest asks for what recording needs, and one of those permissions is not obvious.
    `getUserMedia` in an Android WebView reaches `WebChromeClient.onPermissionRequest`, and wry's
@@ -61,6 +61,13 @@ What has **not** happened:
 2. **iOS is unverified.** `aarch64-apple-ios` needs Xcode, which needs macOS. Nothing here suggests
    it will be worse than Android — the same crates, the same C++ libraries, and Apple's toolchain
    is the one those libraries are best tested against — but it has not been run.
+
+   Two declarations are in place for whoever runs it first, in `src-tauri/Info.ios.plist`, because
+   `gen/apple` is generated and cannot hold them: `NSMicrophoneUsageDescription`, without which iOS
+   does not refuse the microphone but kills the process, and `UIBackgroundModes: audio`, which is
+   what lets a recording survive the phone locking. `minimumSystemVersion` is **14.3**, not 14.0:
+   `getUserMedia` did not exist in `WKWebView` before that, so on 14.0–14.2 the app would install
+   and be unable to record.
 
 3. **Nothing has run on a phone.** Compiling says the code is well-formed for the platform. It says
    nothing about whether the microphone permission flow works, whether recognition is fast enough
@@ -107,3 +114,45 @@ never reached them, because it never reached this crate.
 `pnpm tauri …` with the working directory set to `src-tauri`, which has no `package.json` — so pnpm
 walked up, found no `tauri` binary, and failed with a message about a recursive exec. The CLI is a
 root dev dependency now, which is where a tool used by two apps belongs.
+
+## Signing
+
+The build signs when it is given a key, and produces the same unsigned `.apk` it always has when it
+is not. Nothing about the key lives in this repository.
+
+Two sources, in the order `app/build.gradle.kts` reads them:
+
+```properties
+# apps/mobile/src-tauri/gen/android/app/keystore.properties — git-ignored, for a local release
+storeFile=/absolute/path/to/summo.keystore
+storePassword=…
+keyAlias=summo
+keyPassword=…
+```
+
+```bash
+# or the environment, which is what CI uses — the keystore never becomes a file in the checkout
+export ANDROID_KEYSTORE=/path/to/summo.keystore ANDROID_KEYSTORE_PASSWORD=… \
+       ANDROID_KEY_ALIAS=summo ANDROID_KEY_PASSWORD=…
+pnpm -C apps/mobile exec tauri android build --apk --target aarch64
+```
+
+Gradle prints which of the two happened. An unsigned build says so in the same place, because an
+unsigned `.apk` is not a smaller problem than a failed build — it downloads, and then the phone
+refuses it, hours later, with a message about the package being corrupt.
+
+In CI the keystore comes from `ANDROID_KEYSTORE_BASE64` and is written to the runner's temp
+directory, never into the workspace. A fork has no secrets, so the step does nothing and the build
+carries on unsigned — which is what makes this repository still buildable by somebody who has no key
+and wants to fix a bug.
+
+Making one, for whoever does this first:
+
+```bash
+keytool -genkey -v -keystore summo.keystore -alias summo \
+        -keyalg RSA -keysize 4096 -validity 10000
+```
+
+**Keep it, and keep it backed up.** Android identifies an app by its signature: a Play listing
+updated with a different key is refused, and there is no recovery that does not involve a new
+listing and every user reinstalling.

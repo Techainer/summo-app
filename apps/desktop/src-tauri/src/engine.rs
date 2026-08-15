@@ -275,7 +275,7 @@ fn library_path(app: &AppHandle) -> Option<String> {
 /// `SUMMO_HOME` first: the sidecar inherits this process's environment, so a portable install or a
 /// test harness that sets it would otherwise have the app looking in `~/.summo` for a file the
 /// daemon wrote somewhere else.
-fn home(app: &AppHandle) -> Result<PathBuf, String> {
+pub fn home(app: &AppHandle) -> Result<PathBuf, String> {
     if let Some(dir) = std::env::var_os("SUMMO_HOME") {
         return Ok(PathBuf::from(dir));
     }

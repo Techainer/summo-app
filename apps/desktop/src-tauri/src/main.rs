@@ -106,14 +106,14 @@ fn tray_words(language: &str) -> [&'static str; 3] {
 /// no file, unreadable, not JSON, no such field — is the same answer: the default. The app has to
 /// start on a machine that has never run it.
 fn chosen_language(app: &tauri::AppHandle) -> String {
-    let settings = app
-        .path()
-        .home_dir()
-        .map(|home| home.join(".summo").join("settings.json"));
-    let Ok(path) = settings else {
+    // Through `engine::home`, so the tray reads the settings of the vault the daemon is actually
+    // using. These were two copies of the same rule and one of them had never heard of
+    // `SUMMO_HOME`: a portable install would have had the app on one vault and its own tray menu
+    // reading the language out of another.
+    let Ok(root) = engine::home(app) else {
         return "vi".into();
     };
-    std::fs::read_to_string(path)
+    std::fs::read_to_string(root.join("settings.json"))
         .ok()
         .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
         .and_then(|json| {
