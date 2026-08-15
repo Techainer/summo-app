@@ -120,6 +120,11 @@ const id = await (async () => {
 
   if ((await blocks.count()) > 0) {
     await blocks.getByRole("button", { name: "Việc cần làm" }).click();
+    // The menu leaves when the block has been applied, and applying it deletes the `/` that asked
+    // for it. Typing into the gap between those two costs the first few characters — which is what
+    // CI, being slower than this machine, found.
+    await blocks.waitFor({ state: "detached", timeout: 5000 });
+    await page.waitForTimeout(300);
     await page.keyboard.type("@ngoc Chốt giá");
     await page.waitForTimeout(3500);
 
