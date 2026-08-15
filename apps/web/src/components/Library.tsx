@@ -143,6 +143,9 @@ export function Library({
 
   const today = useMemo(() => localDay(), []);
 
+  /** How many filters are on, for the phone's folded version of them to say so. */
+  const active = (folder === undefined ? 0 : 1) + tags.length + (colour ? 1 : 0);
+
   // Derived, not stored. With no query there are no hits and with nothing selected there is no
   // detail — both are facts about the query and the selection, and keeping a second copy of them in
   // state meant every keystroke that emptied the box wrote `null` over a `null`.
@@ -304,8 +307,50 @@ export function Library({
         )}
 
         {/* Hidden while searching: a full-text query is its own way of narrowing, and leaving the
-            filters on screen invites the reading that they are still applied to the hits. */}
-        {view && hits === null && (
+            filters on screen invites the reading that they are still applied to the hits.
+
+            Folded away on a phone. Folders, tags and colours are three lists whose length is the
+            vault's, and on a 390 px screen they pushed the first meeting 380 px down — half the
+            window spent on ways to narrow a list the user cannot see yet. On a desktop the column
+            is 320 px of otherwise empty space and they stay open.
+
+            A `details`, not a state and a button: it keeps the keyboard behaviour, the screen
+            reader's "collapsed"/"expanded" and the ability to open it before the JavaScript that
+            would have managed it has decided anything. The count is on the summary because a
+            folded filter that is *applied* has to say so — otherwise the list is short and nothing
+            on screen explains why. */}
+        {view && hits === null && narrow && (
+          <details className="group border-line rounded-[var(--radius-card)] border">
+            <summary className="text-meta text-fg-dim flex cursor-pointer items-center gap-2 px-3 py-2 marker:content-none">
+              {/* A chevron, because without one this reads as an empty text field. Turned by the
+                  element's own `:open` state rather than by React holding a second copy of it. */}
+              <span
+                aria-hidden="true"
+                className="text-fg-faint transition-transform group-open:rotate-90"
+              >
+                ›
+              </span>
+              <span className="flex-1">{t("library.filters")}</span>
+              {active > 0 && (
+                <span className="bg-accent-soft text-accent text-micro rounded-full px-2 py-0.5">
+                  {active}
+                </span>
+              )}
+            </summary>
+            <div className="flex flex-col gap-2.5 px-3 pt-1 pb-3">
+              <Finder
+                view={view}
+                folder={folder}
+                tags={tags}
+                colour={colour}
+                onFolder={onFolder}
+                onTags={onTags}
+                onColour={onColour}
+              />
+            </div>
+          </details>
+        )}
+        {view && hits === null && !narrow && (
           <Finder
             view={view}
             folder={folder}

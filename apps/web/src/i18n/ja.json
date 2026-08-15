@@ -200,6 +200,7 @@
     "by_week": "週",
     "by_folder": "フォルダ",
     "by_tag": "タグ",
+    "filters": "絞り込み",
     "filter_folder": "フォルダで絞り込む",
     "filter_tag": "タグで絞り込む",
     "unfiled": "未整理",

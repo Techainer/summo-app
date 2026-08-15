@@ -200,6 +200,7 @@
     "by_week": "Week",
     "by_folder": "Folder",
     "by_tag": "Tag",
+    "filters": "Filters",
     "filter_folder": "Filter by folder",
     "filter_tag": "Filter by tag",
     "unfiled": "Unfiled",
