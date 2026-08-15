@@ -278,7 +278,8 @@
     "relabelled": "已在过去{meetings}场会议中更正{utterances}行",
     "unmerged": "已从另外{count}个人那里移除",
     "empty_title": "还没有声音",
-    "subtitle": "你的录音里有谁 — Summo 学习每个声音，下次自动标注。"
+    "subtitle": "你的录音里有谁 — Summo 学习每个声音，下次自动标注。",
+    "naming_note": "为一个声音命名，也会修正以前认错的记录。"
   },
   "settings": {
     "title": "设置",

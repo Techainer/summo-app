@@ -278,7 +278,8 @@
     "relabelled": "過去{meetings}件の会議で{utterances}行を修正しました",
     "unmerged": "他{count}人から外しました",
     "empty_title": "まだ声がありません",
-    "subtitle": "録音に登場する人。Summo は声を学習し、次回から自動で名前を付けます。"
+    "subtitle": "録音に登場する人。Summo は声を学習し、次回から自動で名前を付けます。",
+    "naming_note": "声に名前を付けると、過去に取り違えた記録もまとめて直ります。"
   },
   "settings": {
     "title": "設定",

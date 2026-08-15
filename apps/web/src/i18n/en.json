@@ -278,7 +278,8 @@
     "relabelled": "Corrected {utterances} lines across {meetings} earlier meetings",
     "unmerged": "removed from {count} other people",
     "empty_title": "No voices yet",
-    "subtitle": "Who speaks in your recordings — Summo learns each voice and names it next time."
+    "subtitle": "Who speaks in your recordings — Summo learns each voice and names it next time.",
+    "naming_note": "Naming a voice also fixes the past meetings Summo guessed wrong."
   },
   "settings": {
     "title": "Settings",

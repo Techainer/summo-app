@@ -120,6 +120,33 @@ Họ muốn bản dùng thử.
     join(notes, "y-tuong-gia.md"),
     "---\ntags: [sản-phẩm]\n---\n\n# Ý tưởng giá\n\nBán 3–4 đô một tháng.\n",
   );
+
+  // A voice nobody has named, so the voice book has its question on it.
+  //
+  // JSON rather than the binary `.vec` of ADR 0003: `VoiceLog::load` dispatches on the file's magic
+  // rather than on its extension — a half-finished migration leaves JSON in a `.vec` — so this is a
+  // supported shape and not a trick. Writing the binary one from here would mean a second
+  // implementation of that format in a language that does not have to have one.
+  const logs = join(home, "voices/meetings");
+  mkdirSync(logs, { recursive: true });
+  const log = (meeting, samples) =>
+    writeFileSync(
+      join(logs, `${meeting}.vec`),
+      JSON.stringify({
+        meeting,
+        schema: 1,
+        model: "campplus-sv",
+        samples: samples.map((sample, seq) => ({ seq, t0: 0, confirmed: false, ...sample })),
+      }),
+    );
+  // Both recordings, because both were recorded: a vault where only one meeting has vectors is a
+  // vault that could not have happened, and the screens that read them were being measured against
+  // it.
+  log("01E2E0", [
+    { duration: 96, label: "S2", embedding: [0, 1, 0, 0] },
+    { duration: 61, label: "S3", embedding: [0, 0, 1, 0] },
+  ]);
+  log("01E2E1", [{ duration: 42, label: "S2", embedding: [1, 0, 0, 0] }]);
 }
 
 /**

@@ -186,6 +186,54 @@ pub fn unknowns(
     Ok(out)
 }
 
+/// One meeting's worth of unnamed voices, for the screen that asks about all of them.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MeetingUnknowns {
+    pub meeting: String,
+    pub title: String,
+    pub day: String,
+    pub voices: Vec<UnknownVoice>,
+}
+
+/// Every unnamed voice in the vault, newest meeting first.
+///
+/// The voice book screen is documented as "the questions first — voices that still have no name —
+/// then the people already known", and until now the questions half could only be reached from
+/// *inside a meeting*. Opening the voice book from its own destination showed the second half and
+/// nothing else: the screen whose job is naming voices had no voices to name on it, and the work it
+/// exists for was reachable only by remembering which recording it was in.
+///
+/// One log read per recording. The library rescans the vault on every request anyway (ADR 0002),
+/// and a personal vault is hundreds of meetings, not millions; a cache here would be wrong in
+/// exactly the case that matters — right after somebody names a voice.
+pub fn unknowns_everywhere(
+    book: &SharedBook,
+    voices_dir: &Path,
+    library: &summo_vault::library::Library,
+) -> Result<Vec<MeetingUnknowns>> {
+    let index = library.scan()?;
+    let mut out = Vec::new();
+    // Newest first: a voice from this morning is one the user can still place from memory, and one
+    // from last March is one they will want the suggestions for.
+    //
+    // Taken from the index's own order rather than re-sorted here. `MeetingEntry::ordering_key`
+    // negates the timestamp, so *ascending* is already newest-first and the obvious `b.cmp(a)`
+    // reverses it into oldest-first — which is what this did, and what the screenshot showed.
+    for entry in index.meetings() {
+        let voices = unknowns(book, voices_dir, &entry.id)?;
+        if voices.is_empty() {
+            continue;
+        }
+        out.push(MeetingUnknowns {
+            meeting: entry.id.to_string(),
+            title: entry.title.clone(),
+            day: entry.day.clone(),
+            voices,
+        });
+    }
+    Ok(out)
+}
+
 /// Give a name to a voice in a meeting.
 ///
 /// `name` may be somebody already in the book or somebody new; the book decides by folded name, so

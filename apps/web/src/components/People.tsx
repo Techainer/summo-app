@@ -1,4 +1,5 @@
 import { AudioLines } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { useCallback, useState } from "react";
 
@@ -13,29 +14,33 @@ import {
   confidenceLabel,
   correctionSummary,
   nameOptions,
+  type MeetingUnknowns,
   type Person,
-  type UnknownVoice,
 } from "../lib/people";
 
 interface Props {
   client: PeopleClient;
-  /** The meeting whose unnamed voices to ask about, if the user is looking at one. */
-  meeting?: string;
 }
 
 /**
  * Who Summo can recognise, and naming the voices it could not.
  *
- * Two halves, in the order the work happens: the questions first — voices in this meeting that
- * still have no name — then the people already known. Putting the list first would bury the only
- * thing on the screen that needs the user to do something.
+ * Two halves, in the order the work happens: the questions first — voices that still have no name —
+ * then the people already known. Putting the list first would bury the only thing on the screen
+ * that needs the user to do something.
+ *
+ * The questions used to be about *one meeting*, passed in as a prop. Nothing ever passed it. So the
+ * half of this screen that does the work — the whole point of a voice book — has never rendered,
+ * and the screen has only ever been a read-only list of people it already knows. It now asks about
+ * the whole vault, which is also the right question: a voice you cannot place is a voice you go
+ * looking for, not one you happen to be looking at.
  */
-export function People({ client, meeting }: Props) {
+export function People({ client }: Props) {
   const { t, locale } = useI18n();
   const say = useErrorText();
   const [people, setPeople] = useState<Person[]>([]);
   const [space, setSpace] = useState<string | undefined>();
-  const [voices, setVoices] = useState<UnknownVoice[]>([]);
+  const [asking, setAsking] = useState<MeetingUnknowns[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -47,19 +52,19 @@ export function People({ client, meeting }: Props) {
       const view = await client.list();
       setPeople(view.people);
       setSpace(view.space);
-      setVoices(meeting ? await client.unknowns(meeting) : []);
+      setAsking(await client.unnamed());
       setError(null);
     } catch (e) {
       setError(say(e));
     }
-  }, [client, meeting, say]);
+  }, [client, say]);
 
   useRefresh(refresh);
 
   const name = useCallback(
-    async (label: string, personName: string) => {
-      if (!meeting || !personName.trim()) return;
-      setBusy(label);
+    async (meeting: string, label: string, personName: string) => {
+      if (!personName.trim()) return;
+      setBusy(`${meeting}/${label}`);
       try {
         const correction = await client.nameVoice(meeting, label, personName.trim());
         // The daemon may have rewritten past meetings. Saying so is not optional.
@@ -76,7 +81,7 @@ export function People({ client, meeting }: Props) {
         setBusy(null);
       }
     },
-    [client, meeting, refresh, say, t],
+    [client, refresh, say, t],
   );
 
   const commitRename = useCallback(
@@ -138,78 +143,105 @@ export function People({ client, meeting }: Props) {
         </p>
       )}
 
-      {voices.length > 0 && (
-        <>
+      {asking.length > 0 && (
+        <section data-testid="unnamed-voices" className="flex flex-col gap-2.5">
           <SectionTitle>{t("people.unknown")}</SectionTitle>
-          <ul className="space-y-2.5">
-            {voices.map((voice) => (
-              <li key={voice.label} className="rounded-card border-line bg-bg-soft border p-3.5">
-                <div className="flex items-baseline gap-2.5">
-                  <strong className="text-body">{voice.label}</strong>
-                  <span className="text-fg-dim text-micro">
-                    {formatDuration(voice.seconds, locale)} ·{" "}
-                    {t("people.utterances", { count: voice.utterances })}
-                  </span>
-                </div>
-
-                {voice.suggestions.length > 0 && (
-                  <p className="text-fg-dim text-micro mt-1.5 leading-normal">
-                    {t("people.maybe")}{" "}
-                    {voice.suggestions.map((s, i) => (
-                      <span key={s.id}>
-                        {i > 0 && ", "}
-                        <strong>{s.name}</strong> ({t(confidenceLabel(s.similarity))})
-                      </span>
-                    ))}
-                  </p>
-                )}
-
-                {/* Wraps rather than scrolls: the list of colleagues is short, and a hidden name is an
-                    unusable name. */}
-                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                  {nameOptions(voice, people).map((person) => (
-                    <button
-                      key={person.id}
-                      type="button"
-                      disabled={busy === voice.label}
-                      onClick={() => void name(voice.label, person.name)}
-                      className="border-line bg-bg hover:border-accent hover:text-accent text-meta rounded-full border px-2.5 py-1 transition-colors disabled:cursor-default disabled:opacity-50"
+          {/* Said before the user acts rather than only reported afterwards. A correction that
+              silently rewrites eleven old transcripts is alarming; one you were told about is the
+              reason you bothered. */}
+          <p className="text-fg-dim text-meta -mt-1.5">{t("people.naming_note")}</p>
+          {asking.map((group) => (
+            <div key={group.meeting} className="flex flex-col gap-1.5">
+              {/* Which conversation, and a way into it. `S2` on its own is not a question anybody
+                  can answer — the person naming a voice needs to know what was being talked about,
+                  and often needs to go and listen to a line of it. */}
+              <p className="text-fg-dim text-meta flex flex-wrap items-baseline gap-1.5">
+                <Link
+                  to="/pages/$pageId"
+                  params={{ pageId: group.meeting }}
+                  className="text-accent font-medium hover:underline"
+                >
+                  {group.title}
+                </Link>
+                <span className="text-fg-faint text-micro nums">{group.day}</span>
+              </p>
+              <ul className="flex flex-col gap-2.5">
+                {group.voices.map((voice) => {
+                  const working = busy === `${group.meeting}/${voice.label}`;
+                  return (
+                    <li
+                      key={voice.label}
+                      className="rounded-card border-line bg-bg-soft border p-3.5"
                     >
-                      {person.name}
-                    </button>
-                  ))}
-                  <form
-                    className="flex gap-1.5"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const input = new FormData(e.currentTarget).get("name");
-                      if (typeof input === "string") {
-                        void name(voice.label, input);
-                        e.currentTarget.reset();
-                      }
-                    }}
-                  >
-                    <input
-                      name="name"
-                      type="text"
-                      placeholder={t("people.new_name")}
-                      aria-label={t("people.name_this", { label: voice.label })}
-                      disabled={busy === voice.label}
-                      className="border-line bg-bg focus-visible:border-accent text-meta w-36 rounded-full border px-2.5 py-1 focus:outline-none"
-                    />
-                    <button
-                      type="submit"
-                      disabled={busy === voice.label}
-                      className="border-line bg-bg hover:border-accent hover:text-accent text-meta rounded-full border px-2.5 py-1 disabled:opacity-50"
-                    >
-                      {t("common.save")}
-                    </button>
-                  </form>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
+                      <div className="flex items-baseline gap-2.5">
+                        <strong className="text-body">{voice.label}</strong>
+                        <span className="text-fg-dim text-micro">
+                          {formatDuration(voice.seconds, locale)} ·{" "}
+                          {t("people.utterances", { count: voice.utterances })}
+                        </span>
+                      </div>
+
+                      {voice.suggestions.length > 0 && (
+                        <p className="text-fg-dim text-micro mt-1.5 leading-normal">
+                          {t("people.maybe")}{" "}
+                          {voice.suggestions.map((s, i) => (
+                            <span key={s.id}>
+                              {i > 0 && ", "}
+                              <strong>{s.name}</strong> ({t(confidenceLabel(s.similarity))})
+                            </span>
+                          ))}
+                        </p>
+                      )}
+
+                      {/* Wraps rather than scrolls: the list of colleagues is short, and a hidden
+                          name is an unusable name. */}
+                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                        {nameOptions(voice, people).map((person) => (
+                          <button
+                            key={person.id}
+                            type="button"
+                            disabled={working}
+                            onClick={() => void name(group.meeting, voice.label, person.name)}
+                            className="border-line bg-bg hover:border-accent hover:text-accent text-meta rounded-full border px-2.5 py-1 transition-colors disabled:cursor-default disabled:opacity-50"
+                          >
+                            {person.name}
+                          </button>
+                        ))}
+                        <form
+                          className="flex gap-1.5"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const input = new FormData(e.currentTarget).get("name");
+                            if (typeof input === "string") {
+                              void name(group.meeting, voice.label, input);
+                              e.currentTarget.reset();
+                            }
+                          }}
+                        >
+                          <input
+                            name="name"
+                            type="text"
+                            placeholder={t("people.new_name")}
+                            aria-label={t("people.name_this", { label: voice.label })}
+                            disabled={working}
+                            className="border-line bg-bg focus-visible:border-accent text-meta w-36 rounded-full border px-2.5 py-1 focus:outline-none"
+                          />
+                          <button
+                            type="submit"
+                            disabled={working}
+                            className="border-line bg-bg hover:border-accent hover:text-accent text-meta rounded-full border px-2.5 py-1 disabled:opacity-50"
+                          >
+                            {t("common.save")}
+                          </button>
+                        </form>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </section>
       )}
 
       {/* Only over a list. A heading above nothing is a heading that promises content the screen
@@ -226,7 +258,12 @@ export function People({ client, meeting }: Props) {
       )}
 
       {people.length === 0 ? (
-        <Empty full icon={AudioLines} title={t("people.empty_title")} hint={t("people.empty")} />
+        // Only when there is nothing on the screen at all. With voices waiting to be named there is
+        // work here, and `full` would centre "no voices yet" in the pane *below* it — a screen
+        // simultaneously asking a question and claiming to be empty.
+        asking.length === 0 && (
+          <Empty full icon={AudioLines} title={t("people.empty_title")} hint={t("people.empty")} />
+        )
       ) : (
         // A card each rather than rows separated by a hairline. The voice book is the one screen
         // where the unit of interest is a *person*, and a person is worth a surface.
