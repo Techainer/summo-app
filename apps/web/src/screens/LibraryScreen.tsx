@@ -52,7 +52,7 @@ export function LibraryScreen() {
         void navigate({ to: "/" });
         void start();
       }}
-      onOpen={(id) => void navigate({ to: "/meetings/$meetingId", params: { meetingId: id } })}
+      onOpen={(id) => void navigate({ to: "/pages/$pageId", params: { pageId: id } })}
     />
   );
 }

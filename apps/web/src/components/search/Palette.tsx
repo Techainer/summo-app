@@ -110,10 +110,10 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
       onClose();
       if (result.kind === "place") {
         void navigate({ to: result.to });
-      } else if (result.entry === "note") {
-        void navigate({ to: "/notes", search: { open: undefined } });
       } else {
-        void navigate({ to: "/meetings/$meetingId", params: { meetingId: result.id } });
+        // One address for both kinds. A note used to land on `/notes` with nothing open, which is
+        // a search result that finds the thing and then loses it.
+        void navigate({ to: "/pages/$pageId", params: { pageId: result.id } });
       }
     },
     [navigate, onClose],

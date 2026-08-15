@@ -65,8 +65,43 @@ await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/`, {
     await anyPage.click();
     await page.waitForTimeout(1200);
     const url = page.url();
-    if (!/#\/(meetings\/|notes\?)/.test(url)) {
+    // One address for both kinds. A note used to open `/notes?open=`, a recording `/meetings/<id>`,
+    // and every caller that could point at a document had to know which it was pointing at.
+    if (!/#\/pages\//.test(url)) {
       problems.push(`clicking a page went nowhere useful: ${url}`);
+    }
+
+    // And the tree says which page that is.
+    //
+    // Measured against the sidebar's own surface rather than asserted as a class name, because the
+    // bug this is here for was a class that was present, resolved, and computed to exactly the
+    // colour it already sat on: the tree used `bg-soft` for both selection and hover, and the
+    // sidebar *is* `bg-soft`. Every row in it had no pointer feedback and no selected state, and
+    // nothing but a person looking at it could tell.
+    const surfaces = await page.evaluate(() => {
+      const nav = document.querySelector('[aria-label="Thư mục"]');
+      const row = nav?.querySelector('[draggable="true"]');
+      const paint = (node) => {
+        for (let at = node; at; at = at.parentElement) {
+          const colour = getComputedStyle(at).backgroundColor;
+          if (colour && colour !== "rgba(0, 0, 0, 0)" && colour !== "transparent") return colour;
+        }
+        return null;
+      };
+      const chosen = [...(nav?.querySelectorAll('[draggable="true"]') ?? [])].find(
+        (node) => getComputedStyle(node).backgroundColor !== "rgba(0, 0, 0, 0)",
+      );
+      return {
+        column: row ? paint(row.parentElement) : null,
+        chosen: chosen ? getComputedStyle(chosen).backgroundColor : null,
+      };
+    });
+    if (!surfaces.chosen) {
+      problems.push("no page row in the tree is painted as the open one");
+    } else if (surfaces.chosen === surfaces.column) {
+      problems.push(
+        `the open page is highlighted in the sidebar's own colour (${surfaces.chosen})`,
+      );
     }
   }
 }
@@ -75,7 +110,7 @@ await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/`, {
 {
   await page.getByRole("button", { name: "Trang mới", exact: true }).click();
   await page.waitForTimeout(1500);
-  if (!/#\/notes\?open=/.test(page.url())) {
+  if (!/#\/pages\//.test(page.url())) {
     problems.push(`"new page" did not open the page it made: ${page.url()}`);
   }
 }
@@ -100,9 +135,7 @@ await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/`, {
     await page.waitForTimeout(1200);
 
     const listed = await (await fetch(`${engine.url}/library?token=${engine.token}`)).json();
-    const moved = listed.groups
-      .flatMap((g) => g.meetings)
-      .find((m) => m.title === "Ghi chú mới");
+    const moved = listed.groups.flatMap((g) => g.meetings).find((m) => m.title === "Ghi chú mới");
     if (!moved) {
       problems.push("the filed page vanished from the vault");
     } else if (moved.folder !== "khach-hang") {
@@ -125,9 +158,7 @@ await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/`, {
     await row.dragTo(tree.getByRole("button", { name: "Tất cả", exact: true }));
     await page.waitForTimeout(1200);
     const listed = await (await fetch(`${engine.url}/library?token=${engine.token}`)).json();
-    const moved = listed.groups
-      .flatMap((g) => g.meetings)
-      .find((m) => m.title === "Ghi chú mới");
+    const moved = listed.groups.flatMap((g) => g.meetings).find((m) => m.title === "Ghi chú mới");
     if (moved?.folder !== "") {
       problems.push(`dragging to the root left it in ${JSON.stringify(moved?.folder)}`);
     }

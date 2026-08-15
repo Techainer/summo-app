@@ -1,34 +1,26 @@
 import { NotebookPen } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Button, Empty } from "../components/ui";
+import { NoteEditor } from "../components/page/NoteEditor";
 import { useErrorText } from "../lib/errors";
 import { useSearch } from "@tanstack/react-router";
 
 import { useI18n } from "../i18n/context";
 import { Dot } from "../components/library/Finder";
 import { useEngine } from "../lib/engine-context";
-import { NoteClient, SAVE_DEBOUNCE_MS, byDay, titleFrom, type NoteSummary } from "../lib/notes";
-import { useLoad, useRefresh } from "../lib/use-load";
+import { NoteClient, byDay, type NoteSummary } from "../lib/notes";
+import { useRefresh } from "../lib/use-load";
 
 /**
  * Notes: a list on the left, the note on the right.
  *
- * Three decisions that shape how it feels.
+ * A workspace for the kind of writing that was never recorded — the notes only, by day, with their
+ * colours. The sidebar tree lists the same documents by *folder*, alongside the recordings, which
+ * is a different question about the same set and the reason both exist.
  *
- * **There is no Save button.** A note is a file, and a file that only exists once you remember to
- * press something is a file people lose. It autosaves two seconds after you stop typing, and says
- * so quietly rather than flashing a toast at every pause.
- *
- * **The first line is the title.** Asking for a title in its own field before you may start typing
- * is the step that makes people close a note app and open a text editor. What you type becomes the
- * heading; the file is named after it.
- *
- * **The whole thing is one textarea, not a rich editor.** The vault is Markdown that a user opens in
- * Obsidian, greps and backs up; an editor that stores its own shape would break that promise the
- * first time it round-tripped something it did not understand. Tasks work here because
- * `- [ ] @ngoc …` is parsed from the file, not from a widget.
+ * The editor itself is [`NoteEditor`], shared with the page screen, so a note opened from here and
+ * a note opened from the tree are the same editor rather than two that drift.
  */
 /**
  * The shapes a note can start in. `blank` first, because most notes are.
@@ -44,20 +36,8 @@ export function NotesScreen() {
 
   const [notes, setNotes] = useState<NoteSummary[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [text, setText] = useState("");
-  const [saved, setSaved] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
-
-  // Held in a ref as well as in state: the debounce fires from a timer that closed over an older
-  // render, and saving the text from two seconds ago would undo the last two seconds of typing.
-  const latest = useRef(text);
-  // In an effect rather than during render: mutating a ref while rendering is what React forbids,
-  // and it buys nothing here — the timer that reads this fires later than any effect.
-  useEffect(() => {
-    latest.current = text;
-  }, [text]);
-  const timer = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -69,71 +49,19 @@ export function NotesScreen() {
 
   useRefresh(refresh);
 
-  const open = useCallback(
-    async (id: string) => {
-      setOpenId(id);
-      setSaved(true);
-      try {
-        const note = await client.read(id);
-        // The title is the first line, so it is shown as the first line — the file stores them
-        // apart, and stitching them back together is what makes the editor feel like one document.
-        // `text`, not `body`: the latter stops at the first heading.
-        const body = note.text.trim();
-        setText(body ? `${note.title}\n\n${body}` : note.title);
-      } catch (e) {
-        setError(say(e));
-      }
-    },
-    [client, say],
-  );
-
-  // Opened from the sidebar, or from a link somebody kept. The tree lists every page in the vault,
-  // so a note it cannot open would be a table of contents with no page numbers.
+  // Opened from a link somebody kept. `?open=` predates the page screen, which is where the tree
+  // and every citation now go; it stays because a URL that used to work should go on working.
   //
-  // Through `useLoad` rather than a bare effect: it is the one place in this app allowed to write
-  // state from a load, and the editor's contents are exactly that — a read that lands after the
-  // render which asked for it.
+  // Adjusted during render rather than in an effect. An effect that sets state from a prop renders
+  // the screen once with the old note and once with the new one, and the first of those two frames
+  // shows the wrong document — which is precisely the frame somebody following a link is looking
+  // at. React sanctions this shape for exactly this case.
   const wanted = useSearch({ from: "/notes" }).open;
-  const showing = useRef<string | null>(null);
-  useLoad(
-    useCallback(async () => {
-      if (!wanted || showing.current === wanted) return null;
-      showing.current = wanted;
-      await open(wanted);
-      return wanted;
-    }, [wanted, open]),
-    [wanted, open],
-  );
-
-  const persist = useCallback(async () => {
-    if (!openId) return;
-    const { title, rest } = titleFrom(latest.current);
-    try {
-      await client.save(openId, rest, title);
-      setSaved(true);
-      // The list shows titles, and the one being edited has just changed.
-      void refresh();
-    } catch (e) {
-      // Left as unsaved on purpose: telling the user it saved when it did not is how a note is
-      // lost quietly rather than loudly.
-      setError(say(e));
-    }
-  }, [client, openId, refresh, say]);
-
-  const edit = (value: string) => {
-    setText(value);
-    setSaved(false);
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => void persist(), SAVE_DEBOUNCE_MS);
-  };
-
-  // A note half-typed when the screen closes must not be lost to a timer that never fired.
-  useEffect(
-    () => () => {
-      if (timer.current !== null) window.clearTimeout(timer.current);
-    },
-    [],
-  );
+  const [linked, setLinked] = useState(wanted);
+  if (wanted !== linked) {
+    setLinked(wanted);
+    if (wanted) setOpenId(wanted);
+  }
 
   /**
    * A new note, optionally with a shape already in it.
@@ -154,20 +82,7 @@ export function NotesScreen() {
         body,
       );
       await refresh();
-      await open(id);
-    } catch (e) {
-      setError(say(e));
-    }
-  };
-
-  const remove = async (id: string) => {
-    try {
-      await client.remove(id);
-      if (openId === id) {
-        setOpenId(null);
-        setText("");
-      }
-      await refresh();
+      setOpenId(id);
     } catch (e) {
       setError(say(e));
     }
@@ -232,7 +147,7 @@ export function NotesScreen() {
                   <li key={note.id}>
                     <button
                       type="button"
-                      onClick={() => void open(note.id)}
+                      onClick={() => setOpenId(note.id)}
                       aria-current={note.id === openId}
                       className={`flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm ${
                         note.id === openId
@@ -281,37 +196,18 @@ export function NotesScreen() {
             }
           />
         ) : (
-          <>
-            <div className="border-line flex items-center gap-3 border-b px-4 py-2">
-              <AnimatePresence mode="wait">
-                <motion.span
-                  key={saved ? "saved" : "editing"}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="text-fg-faint text-micro"
-                >
-                  {saved ? t("notes.saved") : t("notes.saving")}
-                </motion.span>
-              </AnimatePresence>
-              <span className="flex-1" />
-              <Button size="sm" variant="ghost" onClick={() => void remove(openId)}>
-                {t("common.delete")}
-              </Button>
-            </div>
-
-            <textarea
-              value={text}
-              onChange={(e) => edit(e.target.value)}
-              onBlur={() => void persist()}
-              aria-label={t("notes.body")}
-              spellCheck={false}
-              placeholder={t("notes.placeholder")}
-              // `font-reading` and a measure: a note is prose, and prose at full window width is
-              // prose nobody re-reads.
-              className="font-reading text-body min-h-0 flex-1 resize-none bg-transparent px-6 py-5 leading-relaxed outline-none"
-            />
-          </>
+          <NoteEditor
+            // Keyed, so switching notes remounts rather than reconciling: the editor holds a
+            // debounce timer and an unsaved buffer, and carrying either into a different document
+            // is how one note's sentence ends up in another.
+            key={openId}
+            id={openId}
+            onSaved={() => void refresh()}
+            onRemoved={() => {
+              setOpenId(null);
+              void refresh();
+            }}
+          />
         )}
       </section>
     </div>

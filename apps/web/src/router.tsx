@@ -4,6 +4,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  redirect,
 } from "@tanstack/react-router";
 
 import { claimHandshake } from "./lib/session";
@@ -14,7 +15,7 @@ import { AnalyticsScreen } from "./screens/AnalyticsScreen";
 import { AgentsScreen } from "./screens/AgentsScreen";
 import { ChatScreen } from "./screens/ChatScreen";
 import { LibraryScreen } from "./screens/LibraryScreen";
-import { MeetingScreen } from "./screens/MeetingScreen";
+import { PageScreen } from "./screens/PageScreen";
 import { NotesScreen } from "./screens/NotesScreen";
 import { PeopleScreen } from "./screens/PeopleScreen";
 import { RecordScreen } from "./screens/RecordScreen";
@@ -94,10 +95,30 @@ const libraryRoute = createRoute({
   },
 });
 
+/// One address for a document, whichever kind it is.
+///
+/// A note used to open at `/notes?open=<id>` and a recording at `/meetings/<id>`, so everything
+/// that can point at a document had to know which it was pointing at — and five call sites got it
+/// wrong the same way, sending notes to a screen with nothing open. The vault has only ever had one
+/// kind of document; this is its address.
+const pageRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/pages/$pageId",
+  component: PageScreen,
+});
+
+/// Kept, as a redirect. `/meetings/<id>` is in links people have saved, in the desktop shell's
+/// deep-link handling and in every citation written into the vault before today.
 const meetingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/meetings/$meetingId",
-  component: MeetingScreen,
+  beforeLoad: ({ params }) => {
+    // Throwing is how the router is told to redirect, and what it wants thrown is a plain
+    // descriptor rather than an `Error`. The rule is right about ordinary code and wrong about this
+    // one control-flow protocol.
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    throw redirect({ to: "/pages/$pageId", params: { pageId: params.meetingId } });
+  },
 });
 
 const notesRoute = createRoute({
@@ -163,6 +184,7 @@ const routeTree = rootRoute.addChildren([
   homeRoute,
   recordRoute,
   libraryRoute,
+  pageRoute,
   meetingRoute,
   notesRoute,
   agendaRoute,

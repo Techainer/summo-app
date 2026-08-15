@@ -71,7 +71,27 @@ try {
 
   await page.screenshot({ path: "/tmp/shots/palette.png" });
 
+  // And opening it opens the note.
+  //
+  // This is the half that was broken. The palette found the note and then sent the reader to
+  // `/notes` with nothing open — a search result that locates the thing and loses it on the way.
+  // Both kinds now live at `/pages/<id>`, so nothing pointing at a document has to know what kind
+  // it is first.
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1500);
+  if (!/#\/pages\/01NOTE/.test(page.url())) {
+    fail(`opening a note from the palette went to ${page.url()}`);
+  }
+  // `inputValue`, not `innerText`: a textarea's contents are its value, and `innerText` reports the
+  // empty string for one however much is typed in it.
+  const opened = await page.locator("main textarea").inputValue();
+  if (!opened.includes("khinhkhicau")) {
+    fail(`the note opened without its text: ${JSON.stringify(opened.slice(0, 200))}`);
+  }
+
   // Escape closes it, and closing it is not a navigation.
+  await page.keyboard.press("ControlOrMeta+k");
+  await palette.waitFor({ timeout: 5000 });
   const before = page.url();
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);

@@ -79,11 +79,7 @@ export function HomeScreen() {
 
   const open = useCallback(
     (entry: MeetingSummary) => {
-      void navigate(
-        entry.kind === "note"
-          ? { to: "/notes", search: { open: undefined } }
-          : { to: "/meetings/$meetingId", params: { meetingId: entry.id } },
-      );
+      void navigate({ to: "/pages/$pageId", params: { pageId: entry.id } });
     },
     [navigate],
   );

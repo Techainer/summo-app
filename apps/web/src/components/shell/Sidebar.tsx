@@ -287,7 +287,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={() => onNewPage(activeFolder)}
-              className="text-fg-faint hover:bg-bg-soft hover:text-fg mt-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-sm"
+              className="text-fg-faint hover:bg-bg-raised hover:text-fg mt-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-sm"
             >
               <Plus className="size-3.5" aria-hidden="true" />
               {t("nav.new_page")}
@@ -369,7 +369,15 @@ function PageRow({
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         className={cn(
           "flex w-full items-center gap-1.5 rounded-lg py-1 pe-1 text-sm transition-colors",
-          selected ? "bg-bg-soft text-fg font-medium" : "text-fg-dim hover:bg-bg-soft",
+          // Two different facts are marked in this column and they must not look alike: which
+          // *folder* is being browsed, and which *page* is open. The folder takes the neutral step
+          // up; the open page takes the accent, the same way the notes list and the screen nav mark
+          // the thing you are currently looking at.
+          //
+          // Both were `bg-soft` — and the sidebar's own surface *is* `bg-soft`, so neither the
+          // hover nor the selection painted anything at all. Nothing catches that but looking: the
+          // class is present, it resolves, and the computed style is exactly what was asked for.
+          selected ? "bg-accent-soft text-accent font-medium" : "text-fg-dim hover:bg-bg-raised",
         )}
       >
         {/* The icon is the only thing that says which kind this is, and that is enough: the
@@ -408,14 +416,14 @@ function PageRow({
         <ul
           data-testid="move-page"
           aria-label={t("nav.move_page", { name: page.title })}
-          className="border-line bg-bg my-0.5 ms-6 me-1 rounded-lg border py-1"
+          className="border-line bg-bg-raised my-0.5 ms-6 me-1 rounded-lg border py-1"
         >
           {elsewhere.map((folder) => (
             <li key={folder || "/"}>
               <button
                 type="button"
                 onClick={() => onMoveTo(folder)}
-                className="text-fg-dim hover:bg-bg-soft hover:text-fg text-meta flex w-full items-center gap-1.5 px-2 py-1 text-start"
+                className="text-fg-dim hover:bg-bg-raised hover:text-fg text-meta flex w-full items-center gap-1.5 px-2 py-1 text-start"
               >
                 <Folder className="text-fg-faint size-3 shrink-0" aria-hidden="true" />
                 <span className="truncate">{folder || t("nav.move_to_root")}</span>
@@ -472,7 +480,9 @@ function FolderRow({
       title={dropHint}
       className={cn(
         "flex items-center rounded-lg text-sm transition-colors",
-        selected ? "bg-bg-soft text-fg font-medium" : "text-fg-dim hover:bg-bg-soft",
+        // `raised` for the same reason as the page rows: the sidebar is `bg-soft`, so a highlight
+        // of `bg-soft` is no highlight.
+        selected ? "bg-bg-raised text-fg font-medium" : "text-fg-dim hover:bg-bg-raised",
         // An outline rather than a background: the selected folder already owns the background, and
         // a drop target that only changed colour was indistinguishable from the row you came from.
         dropping && "outline-accent bg-accent-soft outline-1",
