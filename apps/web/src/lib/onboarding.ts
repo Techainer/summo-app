@@ -35,6 +35,15 @@ export interface Status {
   needs_attention: boolean;
   checks: Check[];
   hardware: { cores: number; total_ram_mb: number; os: string; arch: string };
+  /**
+   * Whether this build can transcribe at all.
+   *
+   * A fact about the binary rather than the machine: recognition is a compile-time feature, and
+   * the small `--no-models` tarball does not have it. Without this the setup screen offers a
+   * catalogue of models the daemon cannot load — which is exactly what the Android app did, right
+   * up to failing the recording it had just said it was ready for.
+   */
+  recognition: boolean;
 }
 
 export interface Recommended {

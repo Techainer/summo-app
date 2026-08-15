@@ -214,7 +214,19 @@ export function Setup({ onDone }: { onDone: () => void }) {
         <p className="text-fg-dim text-meta mt-2">{t("setup.spoken_hint")}</p>
       </section>
 
-      {stuck ? (
+      {/* A build that cannot transcribe says so, instead of selling a catalogue.
+          
+          `--no-models` is a real shape — the small tarball, and any build on a platform ONNX
+          Runtime has no binaries for — and until this was here the screen offered models, took the
+          download, and left the user with hundreds of megabytes and a recording that refused to
+          start. There is nothing to choose on this screen in that build; the way out is a different
+          download, not a different model. */}
+      {stuck && !status.recognition ? (
+        <section className="mt-8">
+          <h2 className="text-base font-medium">{t("setup.no_recognition")}</h2>
+          <p className="text-fg-dim mt-1 text-sm">{t("setup.no_recognition_hint")}</p>
+        </section>
+      ) : stuck ? (
         <section className="mt-8">
           <h2 className="text-base font-medium">{t("setup.pick_model")}</h2>
           <p className="text-fg-dim mt-1 text-sm">
