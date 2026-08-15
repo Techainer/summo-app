@@ -233,11 +233,22 @@ impl MeetingDoc {
         out.push_str(&yaml);
         out.push_str("---\n\n");
         out.push_str(&format!("# {}\n", self.title));
+        out.push_str(&self.below_title());
+        Ok(out)
+    }
 
+    /// Everything under the title, in the form it is written to the file.
+    ///
+    /// This is what a note editor shows, and it is the same string the serializer puts on disk
+    /// rather than a second rendering of the same document. A second rendering is what the editor
+    /// used to get — `body` plus the `##` sections, with the transcript left out — and the parts it
+    /// did not know about were deleted by the next save.
+    #[must_use]
+    pub fn below_title(&self) -> String {
+        let mut out = String::with_capacity(1024);
         if !self.body.trim().is_empty() {
             out.push_str(&format!("\n{}\n", self.body.trim_end()));
         }
-
         for section in &self.sections {
             out.push_str(&format!(
                 "\n## {}\n{}\n",
@@ -245,14 +256,28 @@ impl MeetingDoc {
                 section.body.trim_end()
             ));
         }
-
         if !self.transcript.is_empty() {
             out.push_str(&format!("\n## {TRANSCRIPT_HEADING}\n"));
             for segment in &self.transcript {
                 out.push_str(&format!("{}\n", render_segment(segment)));
             }
         }
-        Ok(out)
+        out
+    }
+
+    /// Replace everything under the title with `text`, read by the same parser the file is.
+    ///
+    /// The title is left alone: a `# ` line inside `text` is content, because the title has already
+    /// been decided by whoever is calling. That is what makes an editor showing "everything below
+    /// the heading" round-trip — anything the parser understands survives, and anything it does not
+    /// was never going to be stored in the first place.
+    pub fn set_below_title(&mut self, text: &str) {
+        // Parsed with the real title in front of it, so `parse_body` has one already and treats a
+        // second `# ` as ordinary content rather than stealing it.
+        let parsed = parse_body(&format!("# {}\n{text}", self.title));
+        self.body = parsed.body;
+        self.sections = parsed.sections;
+        self.transcript = parsed.transcript;
     }
 
     /// Parse a Markdown document that Summo wrote.
@@ -304,59 +329,14 @@ impl MeetingDoc {
             )));
         }
 
-        let mut title = String::new();
-        let mut preamble = String::new();
-        let mut sections: Vec<Section> = Vec::new();
-        let mut transcript = Vec::new();
-        let mut current: Option<Section> = None;
-        let mut in_transcript = false;
-
-        for line in body.lines() {
-            // Only the first `# ` is the title; a later one belongs to whatever section it is in.
-            if let Some(rest) = line.strip_prefix("# ")
-                && title.is_empty()
-            {
-                title = rest.trim().to_string();
-                continue;
-            }
-            if let Some(rest) = line.strip_prefix("## ") {
-                if let Some(section) = current.take() {
-                    sections.push(trim_section(section));
-                }
-                let heading = rest.trim().to_string();
-                in_transcript = heading == TRANSCRIPT_HEADING;
-                if !in_transcript {
-                    current = Some(Section {
-                        heading,
-                        body: String::new(),
-                    });
-                }
-                continue;
-            }
-
-            if in_transcript {
-                if let Some(segment) = parse_segment(line, transcript.len() as u64) {
-                    transcript.push(segment);
-                }
-            } else if let Some(section) = current.as_mut() {
-                section.body.push_str(line);
-                section.body.push('\n');
-            } else {
-                // Before any `##`: the user's own preamble, kept rather than dropped.
-                preamble.push_str(line);
-                preamble.push('\n');
-            }
-        }
-        if let Some(section) = current.take() {
-            sections.push(trim_section(section));
-        }
+        let parsed = parse_body(body);
 
         Ok(Self {
             frontmatter,
-            title,
-            body: preamble.trim().to_string(),
-            sections,
-            transcript,
+            title: parsed.title,
+            body: parsed.body,
+            sections: parsed.sections,
+            transcript: parsed.transcript,
         })
     }
 }
@@ -390,6 +370,101 @@ fn split_frontmatter(markdown: &str) -> Option<(&str, &str)> {
 /// drifts a little further out of sync with every line.
 ///
 /// Both are HTML comments, so Obsidian and every other Markdown reader render the line unchanged.
+/// A document's contents, below its frontmatter.
+struct Parsed {
+    title: String,
+    body: String,
+    sections: Vec<Section>,
+    transcript: Vec<Segment>,
+}
+
+/// Read the Markdown under the frontmatter into the four things a document holds.
+///
+/// One function, used both for a file on disk and for what a person types into the editor, so the
+/// two can never disagree about what a heading means. They did: the editor was handed `body` plus
+/// the `##` sections and nothing else, so a *note* containing a heading called `Transcript` was
+/// shown without it — and the next autosave, two seconds after any keystroke, wrote the file
+/// without it too. Silent deletion of whatever the user had typed under that heading.
+fn parse_body(body: &str) -> Parsed {
+    let mut title = String::new();
+    let mut preamble = String::new();
+    let mut sections: Vec<Section> = Vec::new();
+    let mut transcript: Vec<Segment> = Vec::new();
+    let mut current: Option<Section> = None;
+    // The raw lines under a `## Transcript`, kept until it is known whether any of them are
+    // actually utterances — see `close_transcript`.
+    let mut verbatim: Option<String> = None;
+
+    /// A `## Transcript` block with content but no utterances in it is prose under a heading
+    /// somebody chose, not a recording. Keeping it as an ordinary section is what stops a note
+    /// about a meeting from losing the part it was written for.
+    fn close_transcript(verbatim: &mut Option<String>, found: bool, sections: &mut Vec<Section>) {
+        let Some(raw) = verbatim.take() else { return };
+        if found || raw.trim().is_empty() {
+            return;
+        }
+        sections.push(trim_section(Section {
+            heading: TRANSCRIPT_HEADING.to_string(),
+            body: raw,
+        }));
+    }
+
+    let mut found_here = false;
+    for line in body.lines() {
+        // Only the first `# ` is the title; a later one belongs to whatever section it is in.
+        if let Some(rest) = line.strip_prefix("# ")
+            && title.is_empty()
+        {
+            title = rest.trim().to_string();
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("## ") {
+            if let Some(section) = current.take() {
+                sections.push(trim_section(section));
+            }
+            close_transcript(&mut verbatim, found_here, &mut sections);
+            found_here = false;
+            let heading = rest.trim().to_string();
+            if heading == TRANSCRIPT_HEADING {
+                verbatim = Some(String::new());
+            } else {
+                current = Some(Section {
+                    heading,
+                    body: String::new(),
+                });
+            }
+            continue;
+        }
+
+        if let Some(raw) = verbatim.as_mut() {
+            raw.push_str(line);
+            raw.push('\n');
+            if let Some(segment) = parse_segment(line, transcript.len() as u64) {
+                transcript.push(segment);
+                found_here = true;
+            }
+        } else if let Some(section) = current.as_mut() {
+            section.body.push_str(line);
+            section.body.push('\n');
+        } else {
+            // Before any `##`: the user's own preamble, kept rather than dropped.
+            preamble.push_str(line);
+            preamble.push('\n');
+        }
+    }
+    if let Some(section) = current.take() {
+        sections.push(trim_section(section));
+    }
+    close_transcript(&mut verbatim, found_here, &mut sections);
+
+    Parsed {
+        title,
+        body: preamble.trim().to_string(),
+        sections,
+        transcript,
+    }
+}
+
 fn render_segment(segment: &Segment) -> String {
     let speaker = segment.speaker.as_ref().map_or("?", SpeakerId::as_str);
     format!(
