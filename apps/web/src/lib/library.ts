@@ -20,6 +20,14 @@ export interface MeetingSummary {
   id: string;
   title: string;
   folder: string;
+  /**
+   * The page this one lives inside, when it is a sub-page.
+   *
+   * A folder and a parent are two structures over the same set, and both are the user's: a folder
+   * is where the file *is*, a parent is what the page is *part of*. Nesting a page does not move
+   * its file — see `summo_vault::library::set_parent`.
+   */
+  parent: string | null;
   /** ISO-8601 with the offset the meeting happened in. */
   date: string;
   /** `YYYY-MM-DD`, in that same offset. */
@@ -185,6 +193,16 @@ export class LibraryClient {
 
   moveTo(id: string, folder: string) {
     return this.post<{ folder: string }>(id, "folder", { folder });
+  }
+
+  /**
+   * Put a page inside another, or `null` to take it back out to the top level.
+   *
+   * The daemon refuses a page nested under one of its own descendants, because a loop in this tree
+   * is not a wrong drawing but an infinite one.
+   */
+  nestUnder(id: string, parent: string | null) {
+    return this.post<{ parent: string | null }>(id, "parent", { parent });
   }
 
   setTags(id: string, tags: string[]) {

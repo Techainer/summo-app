@@ -34,7 +34,9 @@
     "new_page_in": "Trang mới trong {name}",
     "move_page": "Chuyển {name}",
     "move_to": "Chuyển vào {name}",
-    "move_to_root": "Ngoài thư mục"
+    "move_to_root": "Ngoài thư mục",
+    "nest_under": "Đưa vào trong {name}",
+    "unnest": "Đưa ra ngoài"
   },
   "record": {
     "source": "Nguồn",
@@ -465,7 +467,18 @@
     "mark_italic": "Nghiêng",
     "mark_strike": "Gạch ngang",
     "mark_code": "Mã",
-    "mark_link": "Liên kết"
+    "mark_link": "Liên kết",
+    "block_table": "Bảng",
+    "block_image": "Ảnh",
+    "block_subpage": "Trang con",
+    "uploading": "Đang lưu ảnh…",
+    "table_tools": "Công cụ bảng",
+    "table_row_after": "Thêm hàng",
+    "table_row_delete": "Xoá hàng",
+    "table_column_after": "Thêm cột",
+    "table_column_delete": "Xoá cột",
+    "table_header_row": "Hàng tiêu đề",
+    "table_delete": "Xoá bảng"
   },
   "agenda": {
     "title": "Lịch",

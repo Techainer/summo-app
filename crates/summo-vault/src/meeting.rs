@@ -68,6 +68,19 @@ pub struct Frontmatter {
     /// Which models produced this transcript, for reproducing or re-running it later.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub models: BTreeMap<String, String>,
+    /// The page this one lives inside, when it is a sub-page.
+    ///
+    /// An id rather than a path, and stored on the *child* rather than as a list on the parent, for
+    /// the same reason every other link in this vault is: a file that moves keeps its parent, and a
+    /// parent that is renamed does not orphan anything. A list on the parent would have to be
+    /// rewritten on every reparenting, and two writes that can disagree is a tree that eventually
+    /// does.
+    ///
+    /// Nothing enforces that the id names a document that exists. A parent whose file was deleted
+    /// leaves its children at the top level rather than hiding them, which is the behaviour a
+    /// person can recover from — see [`crate::index::MeetingIndex`], which resolves the tree.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<MeetingId>,
     /// Schema version, so a future format change can migrate rather than guess.
     #[serde(default = "default_schema")]
     pub schema: u32,
@@ -98,6 +111,7 @@ impl Frontmatter {
             tags: Vec::new(),
             color: None,
             models: BTreeMap::new(),
+            parent: None,
             schema: 1,
         }
     }

@@ -34,7 +34,9 @@
     "new_page_in": "New page in {name}",
     "move_page": "Move {name}",
     "move_to": "Move into {name}",
-    "move_to_root": "No folder"
+    "move_to_root": "No folder",
+    "nest_under": "Put inside {name}",
+    "unnest": "Move out"
   },
   "record": {
     "source": "Source",
@@ -465,7 +467,18 @@
     "mark_italic": "Italic",
     "mark_strike": "Strikethrough",
     "mark_code": "Code",
-    "mark_link": "Link"
+    "mark_link": "Link",
+    "block_table": "Table",
+    "block_image": "Image",
+    "block_subpage": "Sub-page",
+    "uploading": "Saving the picture…",
+    "table_tools": "Table tools",
+    "table_row_after": "Add row",
+    "table_row_delete": "Delete row",
+    "table_column_after": "Add column",
+    "table_column_delete": "Delete column",
+    "table_header_row": "Header row",
+    "table_delete": "Delete table"
   },
   "agenda": {
     "title": "Calendar",

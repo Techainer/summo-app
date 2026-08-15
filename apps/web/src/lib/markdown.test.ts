@@ -39,6 +39,23 @@ describe("round trip", () => {
     ["bold inside a link", "[**tài liệu**](https://summo.app)"],
     ["a list under a heading", "## Việc\n- [ ] một\n- [x] hai"],
     ["prose, a list and a quote together", "Mở đầu.\n\n- một\n- hai\n\n> kết"],
+    ["a table", "| Tên | Việc |\n| --- | --- |\n| Ngọc | API |\n| Vinh | UI |"],
+    ["a table with one column", "| Tên |\n| --- |\n| Ngọc |"],
+    ["a table with no body rows", "| Tên | Việc |\n| --- | --- |"],
+    [
+      "a table with every alignment",
+      "| trái | giữa | phải | không |\n| :--- | :---: | ---: | --- |\n| a | b | c | d |",
+    ],
+    ["marks inside a cell", "| Ai |\n| --- |\n| **Ngọc** và `api` |"],
+    ["a link inside a cell", "| Ở đâu |\n| --- |\n| [tài liệu](https://summo.app) |"],
+    ["an escaped pipe inside a cell", "| Lệnh |\n| --- |\n| a \\| b |"],
+    ["a break inside a cell", "| Ghi |\n| --- |\n| một<br>hai |"],
+    ["a table under a heading", "## Bảng\n| a |\n| --- |\n| 1 |"],
+    ["a table between paragraphs", "Trên.\n\n| a |\n| --- |\n| 1 |\n\nDưới."],
+    ["an image on its own line", "![sơ đồ](attachments/aaaa.png)"],
+    ["an image with no alt text", "![](attachments/aaaa.png)"],
+    ["an image inside a sentence", "xem ![sơ đồ](attachments/aaaa.png) nhé"],
+    ["an image and a link together", "![a](attachments/a.png) và [b](https://summo.app)"],
   ] as const;
 
   for (const [what, markdown] of survives) {
@@ -57,9 +74,7 @@ describe("what it does not model", () => {
    * invents is what would eat the file.
    */
   const literal = [
-    ["a table", "| a | b |\n|---|---|\n| 1 | 2 |"],
     ["a transcript line", "**[00:00:01] Ngọc** — xin chào <!-- seq:0 end:2.00 -->"],
-    ["an image", "![ảnh](a.png)"],
     ["raw HTML", "<div>gì đó</div>"],
     ["a heading deeper than three", "#### bốn"],
     ["a footnote", "câu[^1]\n\n[^1]: chú thích"],
@@ -117,5 +132,100 @@ describe("the document it builds", () => {
 
   it("reads an empty document as an empty document rather than a blank paragraph", () => {
     expect(toDoc("").content).toEqual([]);
+  });
+});
+
+describe("tables", () => {
+  /**
+   * Two rows of pipes with no divider between them are two paragraphs in every Markdown
+   * implementation there is. Rendering them as a table would mean this editor showed something no
+   * other tool does — and then wrote a divider into the user's file to make itself right.
+   */
+  it("needs a divider row, not just pipes", () => {
+    const doc = toDoc("| a | b |\n| 1 | 2 |");
+    expect(doc.content?.every((node) => node.type === "paragraph")).toBe(true);
+    expect(round("| a | b |\n| 1 | 2 |")).toBe("| a | b |\n| 1 | 2 |");
+  });
+
+  /**
+   * Almost every table anything else has touched has its pipes lined up into a grid. Treating that
+   * as a difference would send every one of those notes to the plain textarea.
+   */
+  it("does not mind how the pipes were lined up", () => {
+    expect(faithful("| Tên  | Việc |\n| ---- | ---- |\n| Ngọc | API  |")).toBe(true);
+    expect(faithful("|a|b|\n|-|-|\n|1|2|")).toBe(true);
+  });
+
+  it("puts the column's alignment on its cells, which is where ProseMirror keeps it", () => {
+    const table = toDoc("| a | b |\n| :---: | ---: |\n| 1 | 2 |").content?.[0];
+    const heads = table?.content?.[0]?.content;
+    expect(heads?.map((cell) => cell.attrs?.align as string)).toEqual(["center", "right"]);
+    // And on the body row too, so a cell always knows how it is drawn.
+    expect(table?.content?.[1]?.content?.[0]?.attrs?.align).toBe("center");
+  });
+
+  it("builds header cells for the first row and ordinary cells below it", () => {
+    const table = toDoc("| a |\n| --- |\n| 1 |").content?.[0];
+    expect(table?.content?.[0]?.content?.[0]?.type).toBe("tableHeader");
+    expect(table?.content?.[1]?.content?.[0]?.type).toBe("tableCell");
+  });
+
+  /**
+   * An unescaped pipe in a cell is a new column — corruption that looks like a typo. The editor
+   * cannot stop somebody typing one, so the serializer has to write it back escaped.
+   */
+  it("escapes a pipe somebody typed into a cell", () => {
+    const doc = toDoc("| a |\n| --- |\n| x |");
+    const cell = doc.content?.[0]?.content?.[1]?.content?.[0];
+    cell!.content = [{ type: "paragraph", content: [{ type: "text", text: "a | b" }] }];
+    expect(toMarkdown(doc)).toContain("| a \\| b |");
+  });
+
+  /**
+   * A cell holds one line in the file and more than one on screen. `<br>` is where the difference
+   * goes: it is what every Markdown renderer already shows as a break inside a cell, so the note
+   * still reads correctly in Obsidian.
+   */
+  it("writes a second paragraph in a cell as a break rather than losing it", () => {
+    const doc = toDoc("| a |\n| --- |\n| một |");
+    const cell = doc.content?.[0]?.content?.[1]?.content?.[0];
+    cell!.content = [
+      { type: "paragraph", content: [{ type: "text", text: "một" }] },
+      { type: "paragraph", content: [{ type: "text", text: "hai" }] },
+    ];
+    const written = toMarkdown(doc);
+    expect(written).toContain("| một<br>hai |");
+    // And it comes back as the break it became, so the file is stable from here on.
+    expect(round(written.trim())).toBe(written.trim());
+  });
+
+  /**
+   * A body row with fewer cells than the header comes back exactly as written — this converter does
+   * not square it up. Which is the point of the *second* check: ProseMirror will pad that row when
+   * it loads the document, and `RichNote` compares what the schema produced against the file, so
+   * the note opens as text and keeps its ragged table. Text-level fidelity is necessary here and
+   * not sufficient, and this is the case that shows the difference.
+   */
+  it("reproduces a ragged table rather than squaring it up", () => {
+    const ragged = "| a | b |\n| --- | --- |\n| 1 |";
+    expect(round(ragged)).toBe(ragged);
+    expect(toDoc(ragged).content?.[0]?.content?.[1]?.content?.length).toBe(1);
+  });
+});
+
+describe("images", () => {
+  it("reads a picture as a node rather than as the characters that spell it", () => {
+    const paragraph = toDoc("![sơ đồ](attachments/aa.png)").content?.[0];
+    const image = paragraph?.content?.[0];
+    expect(image?.type).toBe("image");
+    expect(image?.attrs?.src).toBe("attachments/aa.png");
+    expect(image?.attrs?.alt).toBe("sơ đồ");
+  });
+
+  /** `![alt](src)` contains `[alt](src)`; matching the link first leaves a stray `!` behind. */
+  it("is not mistaken for a link with an exclamation mark in front", () => {
+    const paragraph = toDoc("![a](x.png)").content?.[0];
+    expect(paragraph?.content?.length).toBe(1);
+    expect(paragraph?.content?.[0]?.type).toBe("image");
   });
 });

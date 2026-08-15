@@ -34,7 +34,9 @@
     "new_page_in": "{name} に新しいページ",
     "move_page": "{name} を移動",
     "move_to": "{name} へ移動",
-    "move_to_root": "フォルダなし"
+    "move_to_root": "フォルダなし",
+    "nest_under": "{name} の中に入れる",
+    "unnest": "外に出す"
   },
   "record": {
     "source": "入力",
@@ -465,7 +467,18 @@
     "mark_italic": "斜体",
     "mark_strike": "取り消し線",
     "mark_code": "コード",
-    "mark_link": "リンク"
+    "mark_link": "リンク",
+    "block_table": "表",
+    "block_image": "画像",
+    "block_subpage": "サブページ",
+    "uploading": "画像を保存中…",
+    "table_tools": "表の操作",
+    "table_row_after": "行を追加",
+    "table_row_delete": "行を削除",
+    "table_column_after": "列を追加",
+    "table_column_delete": "列を削除",
+    "table_header_row": "見出し行",
+    "table_delete": "表を削除"
   },
   "agenda": {
     "title": "カレンダー",

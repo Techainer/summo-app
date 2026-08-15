@@ -34,7 +34,9 @@
     "new_page_in": "在 {name} 新建页面",
     "move_page": "移动 {name}",
     "move_to": "移动到 {name}",
-    "move_to_root": "不在文件夹"
+    "move_to_root": "不在文件夹",
+    "nest_under": "放入 {name}",
+    "unnest": "移到外面"
   },
   "record": {
     "source": "来源",
@@ -465,7 +467,18 @@
     "mark_italic": "斜体",
     "mark_strike": "删除线",
     "mark_code": "代码",
-    "mark_link": "链接"
+    "mark_link": "链接",
+    "block_table": "表格",
+    "block_image": "图片",
+    "block_subpage": "子页面",
+    "uploading": "正在保存图片…",
+    "table_tools": "表格工具",
+    "table_row_after": "添加行",
+    "table_row_delete": "删除行",
+    "table_column_after": "添加列",
+    "table_column_delete": "删除列",
+    "table_header_row": "标题行",
+    "table_delete": "删除表格"
   },
   "agenda": {
     "title": "日历",

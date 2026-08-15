@@ -12,16 +12,16 @@ import type { JSONContent } from "@tiptap/react";
  * ## The rule
  *
  * The editor is offered only for a note that survives a round trip **unchanged**. Anything else —
- * a table, a footnote, raw HTML, a transcript full of `<!-- seq -->` comments — opens in the plain
- * textarea instead. Falling back is not a failure mode to be minimised away: it is the guarantee.
- * A converter that quietly did its best with a table would eat the table.
+ * a footnote, raw HTML, a transcript full of `<!-- seq -->` comments — opens in the plain textarea
+ * instead. Falling back is not a failure mode to be minimised away: it is the guarantee. A
+ * converter that quietly did its best with a footnote would eat the footnote.
  *
  * ## What is supported
  *
  * Headings 1–3, paragraphs, bullet and ordered lists with nesting, task lists (`- [ ] `, which is
  * the same line the task board parses, so ticking a box in a note is ticking it everywhere), fenced
- * code with a language, block quotes, thematic breaks. Inline: bold, italic, inline code, strike,
- * links.
+ * code with a language, block quotes, thematic breaks, GFM tables with column alignment. Inline:
+ * bold, italic, inline code, strike, links, images.
  */
 
 /** Two spaces per level, which is what the serializer emits and what the parser counts in. */
@@ -49,7 +49,30 @@ function tidy(markdown: string): string {
     .replace(/[ \t]+$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/^(#{1,3} .*)\n\n/gm, "$1\n")
+    .split("\n")
+    .map(evenly)
+    .join("\n")
     .trim();
+}
+
+/**
+ * A table row with its columns' padding removed.
+ *
+ * Almost every table written by hand — and every table any other editor has touched — has its pipes
+ * lined up into a grid. That padding is a picture of the table rather than part of it, and without
+ * this every such note would fail the round trip and open in the plain textarea, which is the
+ * opposite of the point.
+ *
+ * The consequence is worth stating plainly: once a person *edits* a note with a padded table, it is
+ * written back unpadded. The grid is not preserved. That is the cost of the editor managing the
+ * table at all, and it is paid only on a note somebody changed — opening one and leaving it alone
+ * writes nothing, because [`same`] compares through this.
+ */
+function evenly(line: string): string {
+  if (!/^\s*\|.*\|\s*$/.test(line)) return line;
+  const values = cells(line);
+  const rule = values.every((value) => DIVIDER.test(value));
+  return `| ${values.map((value) => (rule ? divider(alignOf(value)) : value)).join(" | ")} |`;
 }
 
 /**
@@ -141,6 +164,15 @@ function blocks(lines: string[], depth: number): Block[] {
       continue;
     }
 
+    // Before the paragraph fallback and after the rule, because `| --- |` is a table divider and
+    // `---` on its own is a thematic break.
+    const table = tableAt(lines, at, strip);
+    if (table) {
+      out.push(table.node);
+      at = table.at;
+      continue;
+    }
+
     if (line.startsWith("> ") || line === ">") {
       const quoted: string[] = [];
       while (at < lines.length) {
@@ -220,7 +252,8 @@ function blocks(lines: string[], depth: number): Block[] {
         /^[-*] /.test(here) ||
         /^\d+\. /.test(here) ||
         here.startsWith(">") ||
-        /^(-{3,}|\*{3,}|_{3,})\s*$/.test(here)
+        /^(-{3,}|\*{3,}|_{3,})\s*$/.test(here) ||
+        tableAt(lines, at, strip) !== null
       ) {
         if (para.length > 0) break;
       }
@@ -232,6 +265,119 @@ function blocks(lines: string[], depth: number): Block[] {
 
   return out;
 }
+
+/** A divider cell: `---`, `:---`, `---:` or `:---:`. One dash is enough, per GFM. */
+const DIVIDER = /^:?-+:?$/;
+
+/** Which way a column is aligned, from its divider cell. `null` is "however it renders". */
+function alignOf(cell: string): Align {
+  const start = cell.startsWith(":");
+  const end = cell.endsWith(":");
+  if (start && end) return "center";
+  if (end) return "right";
+  if (start) return "left";
+  return null;
+}
+
+/** The divider cell an alignment is written as. */
+function divider(align: Align): string {
+  if (align === "center") return ":---:";
+  if (align === "right") return "---:";
+  if (align === "left") return ":---";
+  return "---";
+}
+
+type Align = "left" | "center" | "right" | null;
+
+/**
+ * One row split into cells, `\|` surviving as a literal pipe.
+ *
+ * The leading and trailing pipes are dropped rather than producing empty cells at each end, which
+ * is what a naive `split("|")` does and is the reason a table written the ordinary way came out
+ * with a blank first column.
+ */
+function cells(line: string): string[] {
+  const body = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  const out: string[] = [];
+  let current = "";
+  for (let at = 0; at < body.length; at += 1) {
+    if (body[at] === "\\" && body[at + 1] === "|") {
+      current += "|";
+      at += 1;
+      continue;
+    }
+    if (body[at] === "|") {
+      out.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += body[at];
+  }
+  out.push(current.trim());
+  return out;
+}
+
+/**
+ * A table starting at this line, or `null` if one does not.
+ *
+ * The divider row is what makes a table a table: two rows of pipes with nothing between them are
+ * two paragraphs in every Markdown implementation there is, and treating them as a table here would
+ * mean this editor rendered something no other tool does.
+ *
+ * A body row with a different number of cells than the header is taken as written. ProseMirror will
+ * square it up when the document is loaded, the round-trip check will see that it did, and the note
+ * opens as text with its ragged table intact — which is the right outcome for a file this editor
+ * cannot hold without changing it.
+ */
+function tableAt(
+  lines: string[],
+  from: number,
+  strip: (line: string) => string,
+): { node: Block; at: number } | null {
+  const header = strip(lines[from] ?? "").trim();
+  const rule = strip(lines[from + 1] ?? "").trim();
+  if (!header.startsWith("|") || !rule.startsWith("|")) return null;
+
+  const heads = cells(header);
+  const dividers = cells(rule);
+  if (dividers.length !== heads.length || !dividers.every((cell) => DIVIDER.test(cell)))
+    return null;
+
+  const align = dividers.map(alignOf);
+  const rows: Block[] = [row(heads, align, true)];
+  let at = from + 2;
+  while (at < lines.length) {
+    const line = strip(lines[at] ?? "").trim();
+    if (!line.startsWith("|")) break;
+    rows.push(row(cells(line), align, false));
+    at += 1;
+  }
+  return { node: { type: "table", content: rows }, at };
+}
+
+/**
+ * One row of cells.
+ *
+ * The alignment is written onto every cell rather than held once for the column, because that is
+ * where ProseMirror keeps it — a table has no column objects, only rows of cells. The serializer
+ * reads it back off the header row, which is the only row GFM can express it from.
+ */
+function row(values: string[], align: Align[], head: boolean): Block {
+  return {
+    type: "tableRow",
+    content: values.map((value, at) => ({
+      type: head ? "tableHeader" : "tableCell",
+      attrs: { colspan: 1, rowspan: 1, colwidth: null, align: align[at] ?? null },
+      // `<br>` because a cell holds one line in GFM and more than one on screen. It is what every
+      // Markdown renderer already shows as a break inside a cell, and it is the only way a person
+      // who pressed Enter in a cell keeps what they typed.
+      content: [{ type: "paragraph", content: inline(value.split(BREAK).join("\n")) }],
+    })),
+  };
+}
+
+/** `<br>`, however it was written. */
+const BREAK = /<br\s*\/?>/i;
 
 /** Which kind of list a line starts, or `null` if it starts none. */
 function kindOf(line: string): "bulletList" | "orderedList" | "taskList" | null {
@@ -268,6 +414,18 @@ function inline(text: string): Block[] {
 
 function marked(text: string): Block[] {
   if (text === "") return [];
+
+  // Before links, because `![alt](src)` contains `[alt](src)` — matching the link first would leave
+  // a stray `!` in the text and an image nobody could see.
+  const picture = /!\[([^\]]*)\]\(([^)\s]+)\)/.exec(text);
+  if (picture) {
+    const [whole, alt, src] = picture;
+    return [
+      ...marked(text.slice(0, picture.index)),
+      { type: "image", attrs: { src: src!, alt: alt || null, title: null } },
+      ...marked(text.slice(picture.index + whole.length)),
+    ];
+  }
 
   // A link is handled first because its label can carry marks of its own.
   const link = /\[([^\]]+)\]\(([^)\s]+)\)/.exec(text);
@@ -342,6 +500,22 @@ function render(node: Block, depth: number): string {
         .split("\n")
         .map((line) => `${pad}> ${line}`.trimEnd())
         .join("\n");
+    case "table": {
+      const rows = node.content ?? [];
+      const head = rows[0];
+      if (!head) return "";
+      // Off the header row, because a column's alignment is one fact and GFM writes it once. Every
+      // cell carries it — see [`row`] — and any of them would do; the header is the row that is
+      // always there.
+      const align = (head.content ?? []).map((cell) => (cell.attrs?.align as Align) ?? null);
+      const line = (r: Block) =>
+        `${pad}| ${(r.content ?? []).map((cell) => inCell(cell)).join(" | ")} |`;
+      return [
+        line(head),
+        `${pad}| ${align.map(divider).join(" | ")} |`,
+        ...rows.slice(1).map(line),
+      ].join("\n");
+    }
     case "bulletList":
     case "orderedList":
     case "taskList": {
@@ -372,6 +546,26 @@ function item(marker: string, node: Block, depth: number): string {
   return [head, ...rest.map((child) => render(child, depth + INDENT))].join("\n");
 }
 
+/**
+ * What one cell says, on one line.
+ *
+ * A cell holds paragraphs on screen and a single line in the file, and the difference has to go
+ * somewhere. `<br>` is where: it is what every Markdown renderer already shows as a break inside a
+ * cell, so the file reads correctly in Obsidian and comes back here as the break it was.
+ *
+ * A pipe is escaped, because an unescaped one would silently become a new column — the kind of
+ * corruption that looks like a typo and is not.
+ */
+function inCell(cell: Block): string {
+  return (cell.content ?? [])
+    .map((block) => text(block.content))
+    .join("<br>")
+    .replace(/\|/g, "\\|")
+    .split("\n")
+    .join("<br>")
+    .trim();
+}
+
 /** The order marks are written in, so nesting is stable across a round trip. */
 const ORDER = ["link", "code", "bold", "italic", "strike"];
 
@@ -379,6 +573,11 @@ function text(nodes: Block[] | undefined): string {
   return (nodes ?? [])
     .map((node) => {
       if (node.type === "hardBreak") return "\n";
+      if (node.type === "image") {
+        const src = node.attrs?.src;
+        const alt = node.attrs?.alt;
+        return `![${typeof alt === "string" ? alt : ""}](${typeof src === "string" ? src : ""})`;
+      }
       let out = node.text ?? "";
       const marks = [...(node.marks ?? [])].sort(
         (a, b) => ORDER.indexOf(b.type) - ORDER.indexOf(a.type),

@@ -1,8 +1,13 @@
 # 0005 — A textarea, not a rich editor
 
-**Status:** accepted
+**Status:** superseded by [0008](0008-rich-editor-over-markdown.md)
 **Date:** 2026-08-11
 **Supersedes:** the plan's "Tiptap in `components/notes/Editor.tsx`"
+
+> **Superseded.** The escape hatch this document names below — "a rich editor whose document model
+> _is_ the Markdown … and can prove it with round-trip tests" — was built rather than found. See
+> [0008](0008-rich-editor-over-markdown.md). The reasoning here is still why it had to be built that
+> way, which is why it is kept rather than deleted.
 
 ## The decision
 

@@ -150,6 +150,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
               title: entry.title,
               folder: entry.folder ?? "",
               kind: entry.kind,
+              parent: entry.parent ?? null,
             })),
         );
       })
@@ -170,11 +171,18 @@ export function RootLayout({ children }: { children: ReactNode }) {
   );
 
   const newPage = useCallback(
-    (folder: string | null) => {
+    (where: { folder: string | null } | { parent: string }) => {
       void (async () => {
         try {
-          const { id } = await new NoteClient(engine.handshake).create(t("notes.untitled"));
-          if (folder) await engine.library.moveTo(id, folder);
+          const parent = "parent" in where ? where.parent : null;
+          const { id } = await new NoteClient(engine.handshake).create(
+            t("notes.untitled"),
+            "",
+            parent,
+          );
+          // A folder or a parent, never both. Filing a sub-page would be answering a question the
+          // user did not ask: they said which page it belongs to, not which directory.
+          if ("folder" in where && where.folder) await engine.library.moveTo(id, where.folder);
           setVaultGeneration((n) => n + 1);
           void navigate({ to: "/pages/$pageId", params: { pageId: id } });
         } catch (e) {
@@ -185,6 +193,29 @@ export function RootLayout({ children }: { children: ReactNode }) {
       })();
     },
     [engine, navigate, say, t],
+  );
+
+  const nestPage = useCallback(
+    (page: Page, parent: string | null) => {
+      // Optimistic, for the same reason a move is: the tree is what the user is looking at while
+      // they let go of the mouse, and a row that stays put for a round trip reads as a drop that
+      // did not take.
+      setPages((current) =>
+        current.map((each) => (each.id === page.id ? { ...each, parent } : each)),
+      );
+      void (async () => {
+        try {
+          await engine.library.nestUnder(page.id, parent);
+        } catch (e) {
+          console.warn(say(e));
+        } finally {
+          // Either way. On failure — a loop the daemon refused — this is what puts the row back
+          // where it really is rather than leaving a lie on screen.
+          setVaultGeneration((n) => n + 1);
+        }
+      })();
+    },
+    [engine.library, say],
   );
 
   const movePage = useCallback(
@@ -236,7 +267,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
         icon: NotebookPen,
         label: t("nav.new_page"),
         keywords: ["new", "note", "moi", "ghi chu", "trang"],
-        run: () => newPage(search.folder ?? null),
+        run: () => newPage({ folder: search.folder ?? null }),
       },
       {
         kind: "action",
@@ -466,6 +497,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           activePage={activePageId(pathname, search)}
           onNewPage={newPage}
           onMovePage={movePage}
+          onNestPage={nestPage}
           activeFolder={search.folder ?? null}
           onSelectFolder={selectFolder}
           navOpen={navOpen}

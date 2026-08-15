@@ -222,6 +222,19 @@ impl Server {
             .route("/library/search", get(search))
             .route("/meetings/{id}", get(meeting))
             .route("/meetings/{id}/folder", post(set_folder))
+            .route("/meetings/{id}/parent", post(set_parent))
+            .route("/attachments/{name}", get(attachment))
+            .route(
+                "/attachments",
+                // The default body limit is 2 MB, which is a screenshot and a half. Raised for this
+                // one route rather than globally: every other endpoint on this daemon takes JSON,
+                // and a limit that fits a photograph would let a malformed request hold that much
+                // memory on any of them.
+                post(upload_attachment)
+                    .layer(axum::extract::DefaultBodyLimit::max(
+                        summo_vault::attachment::MAX_BYTES,
+                    )),
+            )
             .route("/meetings/{id}/tags", post(set_tags))
             .route("/meetings/{id}/colour", post(set_colour))
             .route("/meetings/{id}/title", post(set_title))
@@ -1094,6 +1107,112 @@ async fn set_folder(
             .move_to_folder(&id, &body.folder)
             .map(|_| serde_json::json!({ "folder": body.folder })),
     )
+}
+
+#[derive(Debug, Deserialize)]
+struct ParentBody {
+    /// The page this one goes inside. `null` takes it back out to the top level.
+    #[serde(default)]
+    parent: Option<String>,
+}
+
+async fn set_parent(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<ParentBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let id = summo_core::MeetingId::from(id);
+    // An empty string and an absent field both mean the top level. The interface sends `null`; a
+    // form and a shell one-liner send `""`, and refusing one of them would be a difference nobody
+    // could see from the outside.
+    let parent = body
+        .parent
+        .as_deref()
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(|p| summo_core::MeetingId::from(p.to_string()));
+    as_response(
+        state
+            .library
+            .set_parent(&id, parent.as_ref())
+            .map(|()| serde_json::json!({ "parent": parent.map(|p| p.to_string()) })),
+    )
+}
+
+/// Store a picture and hand back the link a note should carry.
+///
+/// The raw bytes, not multipart. There is exactly one file and no fields, and multipart would mean
+/// a parser, a boundary and a dependency for the sake of a form nobody is filling in.
+///
+/// What the client says the file is has no effect: the format is read from the bytes themselves in
+/// [`summo_vault::attachment::store`], which is what stops a page served from this origin being an
+/// SVG somebody uploaded.
+async fn upload_attachment(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    body: axum::body::Bytes,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    as_response(
+        summo_vault::attachment::store(state.engine.paths(), &body)
+            .map(|link| serde_json::json!({ "link": link })),
+    )
+}
+
+/// Serve a stored picture.
+///
+/// The content type comes from the table in [`summo_vault::attachment`] rather than from the file
+/// name, and the name itself has to be one this daemon minted — see `locate`, which is where a path
+/// that tries to walk out of the directory stops.
+async fn attachment(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let Ok((path, content_type)) = summo_vault::attachment::locate(state.engine.paths(), &name)
+    else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": format!("không có tệp {name}") })),
+        )
+            .into_response();
+    };
+    let Ok(bytes) = std::fs::read(&path) else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": format!("không đọc được {name}") })),
+        )
+            .into_response();
+    };
+    (
+        [
+            (header::CONTENT_TYPE, content_type),
+            // The name is a hash of the content, so the bytes behind a URL can never change. A year
+            // is what that fact is worth to a reader scrolling back through their own notes.
+            (
+                header::CACHE_CONTROL,
+                "private, max-age=31536000, immutable",
+            ),
+            // Belt and braces beside the format check: even if something got in, the browser is
+            // told not to guess and not to render it as a document.
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+            (header::CONTENT_DISPOSITION, "inline"),
+        ],
+        bytes,
+    )
+        .into_response()
 }
 
 #[derive(Debug, Deserialize)]
@@ -2582,6 +2701,9 @@ struct NoteBody {
     /// `YYYY-MM-DD`. Defaults to today, in the user's own timezone.
     #[serde(default)]
     day: Option<String>,
+    /// The page this one is being made inside, when it is a sub-page.
+    #[serde(default)]
+    parent: Option<String>,
 }
 
 use summo_core::today;
@@ -2637,10 +2759,22 @@ async fn create_note(
         return rejection.into_response();
     }
     let day = body.day.unwrap_or_else(today);
-    let result = summo_vault::note::create(state.engine.paths(), &body.title, &day, &body.body)
-        .map(|(id, path)| {
-            serde_json::json!({ "id": id.to_string(), "file": path.display().to_string() })
-        });
+    let parent = body
+        .parent
+        .as_deref()
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(|p| summo_core::MeetingId::from(p.to_string()));
+    let result = summo_vault::note::create_under(
+        state.engine.paths(),
+        &body.title,
+        &day,
+        &body.body,
+        parent,
+    )
+    .map(|(id, path)| {
+        serde_json::json!({ "id": id.to_string(), "file": path.display().to_string() })
+    });
     as_response(result)
 }
 
@@ -5637,6 +5771,131 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
             .await
             .unwrap();
         assert_eq!(body["total"], 1);
+        server.shutdown();
+    }
+
+    /// A note made inside another, taken back out, and refused when it would make a loop.
+    #[tokio::test]
+    async fn a_page_can_be_nested_under_another_and_taken_back_out() {
+        let (_tmp, server) = running().await;
+        let token = server.token().as_str().to_string();
+        let base = format!("http://{}", server.addr());
+
+        let make = async |title: &str, parent: Option<&str>| -> String {
+            let body: serde_json::Value = client()
+                .post(format!("{base}/notes"))
+                .bearer_auth(&token)
+                .json(&serde_json::json!({ "title": title, "body": "", "parent": parent }))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            body["id"].as_str().unwrap().to_string()
+        };
+
+        let top = make("Dự án", None).await;
+        let child = make("Ghi chú", Some(&top)).await;
+
+        let parent_of = async |id: &str| -> serde_json::Value {
+            let body: serde_json::Value = client()
+                .get(format!("{base}/library"))
+                .bearer_auth(&token)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            body["groups"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|g| g["meetings"].as_array().unwrap())
+                .find(|m| m["id"] == id)
+                .unwrap()["parent"]
+                .clone()
+        };
+
+        assert_eq!(parent_of(&child).await, serde_json::json!(top));
+
+        // A loop is refused, and refusing changes nothing.
+        let resp = client()
+            .post(format!("{base}/meetings/{top}/parent"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "parent": child }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 400);
+        assert_eq!(parent_of(&top).await, serde_json::Value::Null);
+
+        // Out to the top level again.
+        client()
+            .post(format!("{base}/meetings/{child}/parent"))
+            .bearer_auth(&token)
+            .json(&serde_json::json!({ "parent": serde_json::Value::Null }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(parent_of(&child).await, serde_json::Value::Null);
+
+        server.shutdown();
+    }
+
+    /// The whole point of reading the format from the bytes: this interface is served from the same
+    /// origin, so an SVG accepted here is script running in the app.
+    #[tokio::test]
+    async fn a_picture_round_trips_and_a_script_dressed_as_one_does_not() {
+        let (_tmp, server) = running().await;
+        let token = server.token().as_str().to_string();
+        let base = format!("http://{}", server.addr());
+
+        let png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR-summo".to_vec();
+        let body: serde_json::Value = client()
+            .post(format!("{base}/attachments"))
+            .bearer_auth(&token)
+            .body(png.clone())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let link = body["link"].as_str().unwrap().to_string();
+        assert!(link.starts_with("attachments/"), "{link}");
+
+        let name = link.strip_prefix("attachments/").unwrap();
+        let resp = client()
+            .get(format!("{base}/attachments/{name}"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+        assert_eq!(resp.headers()["content-type"], "image/png");
+        assert_eq!(resp.headers()["x-content-type-options"], "nosniff");
+        assert_eq!(resp.bytes().await.unwrap().to_vec(), png);
+
+        let resp = client()
+            .post(format!("{base}/attachments"))
+            .bearer_auth(&token)
+            .body(br#"<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>"#.to_vec())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 400);
+
+        // And a name that tries to leave the folder is a 404 rather than a file.
+        let resp = client()
+            .get(format!("{base}/attachments/..%2F..%2Fsummo.toml"))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert!(resp.status().is_client_error(), "{}", resp.status());
+
         server.shutdown();
     }
 

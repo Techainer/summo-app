@@ -497,6 +497,7 @@ mod tests {
             id: MeetingId::from("01A".to_string()),
             title: title.to_string(),
             folder: String::new(),
+            parent: None,
             date: "2026-08-09T10:00:00+07:00".into(),
             day: "2026-08-09".into(),
             duration: 600,
