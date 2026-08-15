@@ -33,7 +33,7 @@ apps, and iOS 18.1's own call recording ships with no third-party API. Google Pl
 third-party call recording apps since May 2022 — only the OEM dialer may. This is policy and
 platform, not difficulty.
 
-## Status: the Android app assembles
+## Status: the Android app runs
 
 **The entire workspace type-checks for `aarch64-linux-android`** — the engine with its bundled
 interface, the vault, the agent, the model registry, and `summo-asr` with sherpa-onnx and ONNX
@@ -69,9 +69,11 @@ What has **not** happened:
    `getUserMedia` did not exist in `WKWebView` before that, so on 14.0–14.2 the app would install
    and be unable to record.
 
-3. **Nothing has run on a phone.** Compiling says the code is well-formed for the platform. It says
-   nothing about whether the microphone permission flow works, whether recognition is fast enough
-   on a mid-range Android, or what the battery cost is.
+3. **Nothing has run on a *phone*.** It has now run on an emulator — API 34, x86_64, a signed
+   release build — and that is where the bug below was found. What an emulator cannot answer is
+   whether recognition is fast enough on a mid-range Android, what the battery cost is, or how the
+   microphone behaves when a call comes in. CI runs the emulator on every push to `master` and on
+   any pull request labelled `mobile`; see `scripts/android-smoke.sh`.
 
 4. **Model size against phone memory.** `summo_models::recommend` already scores by available RAM,
    which is the right machinery. What it lacks is a measured RTF row for phone CPUs, so a ranking
@@ -93,6 +95,31 @@ cannot. `gen/schemas` and `gen/apple` are not: both are regenerated and machine-
 
 Running `init` again overwrites a template file if the template has changed, which is why CI checks
 the manifest still asks for a microphone between `init` and `build` rather than trusting it to.
+
+### What running it found
+
+The app opened, drew its interface, started its daemon — and said **"Failed to fetch"** where the
+vault should have been, over a socket it was listening on itself.
+
+A release build sets `usesCleartextTraffic="false"`, and the engine on mobile is reached at
+`http://127.0.0.1:<port>`. Android refused every one of those requests. The debug build sets the
+same placeholder to `"true"`, so the only configuration that worked was the one nobody ships — and
+the failure is invisible to every check that does not start the app.
+
+The fix is `res/xml/network_security_config.xml`: cleartext stays refused everywhere, with an
+exception for `127.0.0.1` and `localhost`. That is not a loosening of the rule. Loopback is the
+machine talking to itself, there is no network segment for anyone to sit on, and TLS there would
+mean shipping a private key inside every copy of the app.
+
+What the emulator confirmed after it:
+
+| | |
+| --- | --- |
+| The interface | Draws, navigates, bottom bar and all |
+| The engine | Starts in-process, listens on loopback, answers |
+| Setup | Ranks models against **the device's** cores and memory, which is a live call |
+| The microphone | "Allow Summo to record audio?" — granted, `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS` both |
+| Recording | Runs, times, stops cleanly. With no model installed it says so, which is correct |
 
 ### Three things that had to be fixed before any of that ran
 

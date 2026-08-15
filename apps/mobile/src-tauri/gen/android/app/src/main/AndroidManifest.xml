@@ -32,9 +32,16 @@
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
+    <!--
+      `networkSecurityConfig` is what makes a release build able to reach its own engine. The flag
+      below is false in release, which refuses every `http://127.0.0.1:<port>` request the webview
+      makes to the daemon running inside this same process; the config carves out loopback and
+      leaves the refusal in place for everywhere else. See `res/xml/network_security_config.xml`.
+    -->
     <application
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.summo_mobile"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
         <activity
