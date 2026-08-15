@@ -13,11 +13,10 @@
 //! and the whole track scaled once, rather than each sample clamped — clamping is distortion,
 //! scaling is a volume change.
 //!
-//! **Time-stretching here is resampling, not pitch-preserving.** Playing a line 15% fast raises its
-//! pitch by about two semitones, which is audible but not comical, and it is honest about being a
-//! placeholder: a proper phase-vocoder belongs in a DSP crate, and the plan already caps the speed
-//! at the point where the artefact would start to matter. Recorded in [`stretch`] so nobody
-//! mistakes it for finished work.
+//! **Time-stretching keeps the pitch.** A line that has to run 15% fast to fit its slot is fitted
+//! by overlapping and re-aligning windows of it, not by playing it faster — see [`stretch`]. It
+//! used to be plain resampling, which raised the pitch by up to four semitones at the plan's fastest
+//! speed and made a dubbed voice change register every time a line was tight.
 
 use std::path::Path;
 
@@ -69,7 +68,7 @@ pub fn assemble(plan: &Plan, takes: &[Take], under: &[f32], rate: u32, mix: Mix)
         let Some(slot) = plan.slots.iter().find(|s| s.seq == take.seq) else {
             continue;
         };
-        let stretched = stretch(&take.samples, slot.speed);
+        let stretched = stretch(&take.samples, slot.speed, rate);
         let start = (slot.at_s.max(0.0) * f64::from(rate)) as usize;
 
         for (i, sample) in stretched.iter().enumerate() {
@@ -95,18 +94,156 @@ fn track_len(plan: &Plan, rate: u32) -> usize {
         .unwrap_or(0)
 }
 
-/// Resample `samples` to play `speed` times faster.
+/// A window long enough to hold a pitch period, short enough to sit inside one phone.
 ///
-/// Linear interpolation, and it changes pitch — this is a placeholder for a phase vocoder, not a
-/// substitute for one. It is tolerable because [`crate::plan::MAX_SPEED`] caps the change at 1.3×,
-/// about four semitones, and because the alternative — leaving lines unfitted — is worse.
+/// 30 ms is the usual choice and the reasons pull in both directions. A window has to span at least
+/// two periods of the lowest voice it will meet — 75 Hz is 13 ms — or the alignment search below
+/// has nothing periodic to lock onto and the output warbles. Much longer and a window covers two
+/// different sounds, so re-aligning it smears the consonant at the join.
+const WINDOW_S: f64 = 0.030;
+
+/// How far the alignment search may move a window: ±10 ms, which is more than one period of any
+/// voice. Searching further finds better correlations that belong to the *previous* syllable.
+const SEARCH_S: f64 = 0.010;
+
+/// Fit `samples` into `speed` times less time, without moving the pitch.
+///
+/// WSOLA — waveform-similarity overlap-add. The signal is cut into overlapping windows, and the
+/// windows are laid back down closer together (to speed up) or further apart (to slow down) than
+/// they were taken. That alone would put waveforms down out of phase with each other, which cancels
+/// as much as it adds and sounds metallic; so before each window is taken, a short search moves it
+/// by up to [`SEARCH_S`] to wherever it best continues what has already been written. The pitch is
+/// whatever the waveform's own period says it is, and nothing here changes that period.
+///
+/// This replaced linear resampling, which is what the same function used to do: a line at
+/// [`crate::plan::MAX_SPEED`] came out about four semitones high, so the dubbed voice rose in pitch
+/// exactly on the lines that were hardest to follow anyway.
+///
+/// The output length is exact — `samples.len() / speed`, rounded — because [`assemble`] places the
+/// next line by the clock and not by where this one happened to end.
+///
+/// `rate` is needed because every constant here is a duration: at 8 kHz a 30 ms window is 240
+/// samples and at 48 kHz it is 1,440, and using one number for both gives the low rate a window
+/// with no periods in it.
 #[must_use]
-pub fn stretch(samples: &[f32], speed: f64) -> Vec<f32> {
+pub fn stretch(samples: &[f32], speed: f64, rate: u32) -> Vec<f32> {
     if samples.is_empty() || !(speed.is_finite() && speed > 0.0) || (speed - 1.0).abs() < 1e-6 {
         return samples.to_vec();
     }
 
     let out_len = ((samples.len() as f64) / speed).round().max(1.0) as usize;
+
+    // Even, because the synthesis hop is half of it and a Hann window at exactly half overlap sums
+    // to one — which is what lets the overlap-add below be a re-timing rather than a tremolo.
+    let window = ((WINDOW_S * f64::from(rate.max(1))) as usize).max(32) & !1;
+
+    // Nothing to overlap. A take this short is a word or a click, and a click has no pitch to
+    // preserve — resampling it is both cheaper and, at these speeds, inaudible.
+    if samples.len() < window * 2 {
+        return resample(samples, speed, out_len);
+    }
+
+    let synthesis_hop = window / 2;
+    let analysis_hop = ((synthesis_hop as f64) * speed).round().max(1.0) as usize;
+    let search = ((SEARCH_S * f64::from(rate)) as usize).clamp(1, synthesis_hop / 2);
+    let taper = hann(window);
+
+    // Summed with the weights that produced it, and divided at the end. The window sums to one in
+    // the middle of the track by construction; at the two ends, and wherever the alignment search
+    // has pulled two windows apart, it does not — and dividing by what was actually laid down is
+    // what keeps a fade-out from appearing in the last 15 ms of every line.
+    let mut out = vec![0.0f32; out_len + window];
+    let mut laid = vec![0.0f32; out_len + window];
+
+    let last_start = samples.len() - window;
+    let mut at = 0usize;
+    let mut writing = 0usize;
+
+    while writing + window <= out.len() {
+        for i in 0..window {
+            out[writing + i] += samples[at + i] * taper[i];
+            laid[writing + i] += taper[i];
+        }
+
+        // What the ear expects next: the input as it continues from the window just written.
+        let expected_from = at + synthesis_hop;
+        if expected_from + window > samples.len() {
+            break;
+        }
+        let expected = &samples[expected_from..expected_from + window];
+
+        // Where the next window would come from if the timeline were simply cut, and the small
+        // neighbourhood around it that is allowed instead.
+        let ideal = at + analysis_hop;
+        if ideal > last_start {
+            break;
+        }
+        at = best_match(samples, expected, ideal, search, last_start);
+        writing += synthesis_hop;
+    }
+
+    for (sample, weight) in out.iter_mut().zip(&laid) {
+        // Below this the window is only just opening and the sample is near silence anyway;
+        // dividing by it would turn the tail of the taper into amplified noise.
+        if *weight > 1e-3 {
+            *sample /= *weight;
+        }
+    }
+    out.truncate(out_len);
+    out
+}
+
+/// The offset near `ideal` whose window best continues `expected`.
+///
+/// Normalised by the candidate's own energy, so the search prefers the window that has the same
+/// *shape* rather than the one that is loudest — an unnormalised dot product walks towards the
+/// nearest vowel and leaves the consonants doubled.
+fn best_match(
+    samples: &[f32],
+    expected: &[f32],
+    ideal: usize,
+    search: usize,
+    last_start: usize,
+) -> usize {
+    let window = expected.len();
+    let from = ideal.saturating_sub(search);
+    let to = (ideal + search).min(last_start);
+
+    let mut best = ideal.min(last_start);
+    let mut best_score = f32::NEG_INFINITY;
+    for start in from..=to {
+        let candidate = &samples[start..start + window];
+        let mut dot = 0.0f32;
+        let mut energy = 0.0f32;
+        for (a, b) in expected.iter().zip(candidate) {
+            dot += a * b;
+            energy += b * b;
+        }
+        let score = dot / (energy.sqrt() + 1e-9);
+        if score > best_score {
+            best_score = score;
+            best = start;
+        }
+    }
+    best
+}
+
+/// A raised cosine. Two of them at half overlap add to exactly one.
+fn hann(len: usize) -> Vec<f32> {
+    (0..len)
+        .map(|i| {
+            let phase = std::f32::consts::TAU * (i as f32) / (len as f32);
+            0.5 - 0.5 * phase.cos()
+        })
+        .collect()
+}
+
+/// Linear resampling: the old behaviour, kept for takes too short to overlap-add.
+///
+/// This does move the pitch. It is reached only by a take shorter than two windows — 60 ms, which
+/// is less than a syllable — where there is no periodicity to protect and no time for a listener to
+/// hear a register change in.
+fn resample(samples: &[f32], speed: f64, out_len: usize) -> Vec<f32> {
     let mut out = Vec::with_capacity(out_len);
     for i in 0..out_len {
         let position = i as f64 * speed;
@@ -323,28 +460,101 @@ mod tests {
 
     #[test]
     fn speeding_a_line_up_makes_it_shorter_in_proportion() {
-        let samples = vec![0.5f32; 1_000];
-        assert_eq!(stretch(&samples, 2.0).len(), 500);
-        assert_eq!(stretch(&samples, 0.5).len(), 2_000);
+        let samples = tone(220.0, 16_000, 16_000);
+        assert_eq!(stretch(&samples, 2.0, 16_000).len(), 8_000);
+        assert_eq!(stretch(&samples, 0.5, 16_000).len(), 32_000);
     }
 
     #[test]
     fn a_speed_of_one_returns_the_samples_untouched() {
         let samples = vec![0.1, 0.2, 0.3];
-        assert_eq!(stretch(&samples, 1.0), samples);
+        assert_eq!(stretch(&samples, 1.0, 16_000), samples);
     }
 
     #[test]
     fn a_nonsense_speed_does_not_produce_a_zero_length_or_infinite_take() {
         let samples = vec![0.1, 0.2, 0.3];
-        assert_eq!(stretch(&samples, 0.0), samples);
-        assert_eq!(stretch(&samples, f64::NAN), samples);
-        assert_eq!(stretch(&samples, f64::INFINITY), samples);
+        assert_eq!(stretch(&samples, 0.0, 16_000), samples);
+        assert_eq!(stretch(&samples, f64::NAN, 16_000), samples);
+        assert_eq!(stretch(&samples, f64::INFINITY, 16_000), samples);
     }
 
     #[test]
     fn stretching_nothing_produces_nothing() {
-        assert!(stretch(&[], 1.5).is_empty());
+        assert!(stretch(&[], 1.5, 16_000).is_empty());
+    }
+
+    /// A sine at `hz`, which is the only input whose pitch can be measured without a pitch tracker.
+    fn tone(hz: f32, rate: u32, len: usize) -> Vec<f32> {
+        (0..len)
+            .map(|i| (std::f32::consts::TAU * hz * (i as f32) / (rate as f32)).sin() * 0.8)
+            .collect()
+    }
+
+    /// Cycles per second, counted from upward zero crossings over the steady middle of a signal.
+    ///
+    /// The ends are skipped: the first and last window of an overlap-add are the two the taper has
+    /// not finished with, and a half-amplitude edge crosses zero in the same places anyway — but a
+    /// take that starts mid-cycle would bias the count over so short a stretch.
+    fn frequency_of(samples: &[f32], rate: u32) -> f32 {
+        let from = samples.len() / 4;
+        let to = samples.len() * 3 / 4;
+        let middle = &samples[from..to];
+        let crossings = middle
+            .windows(2)
+            .filter(|pair| pair[0] <= 0.0 && pair[1] > 0.0)
+            .count();
+        (crossings as f32) * (rate as f32) / (middle.len() as f32)
+    }
+
+    /// The whole reason this is not linear resampling.
+    ///
+    /// At the plan's fastest speed, resampling raised a 220 Hz voice to 286 Hz — about four
+    /// semitones, which is a different person. This asserts the pitch is the pitch that went in.
+    #[test]
+    fn a_line_fitted_to_its_slot_comes_back_at_the_pitch_it_went_in_at() {
+        let rate = 16_000;
+        let source = tone(220.0, rate, rate as usize);
+
+        for speed in [crate::plan::MIN_SPEED, 1.15, crate::plan::MAX_SPEED] {
+            let fitted = stretch(&source, speed, rate);
+            let hz = frequency_of(&fitted, rate);
+            assert!(
+                (hz - 220.0).abs() < 8.0,
+                "at {speed}× the pitch came back as {hz} Hz, not 220 Hz"
+            );
+        }
+    }
+
+    /// Overlap-add cancels where it does not align, and the symptom is a track that fades in and
+    /// out at the window rate — audible as a tremolo before it is measurable as anything else.
+    #[test]
+    fn overlapping_the_windows_does_not_leave_a_tremolo_in_the_level() {
+        let rate = 16_000;
+        let source = tone(220.0, rate, rate as usize);
+        let fitted = stretch(&source, 1.25, rate);
+
+        // Every 10 ms of the steady middle, against the level that went in.
+        let block = (rate / 100) as usize;
+        let mut quietest = f32::INFINITY;
+        let mut loudest = 0.0f32;
+        for chunk in fitted[block * 10..fitted.len() - block * 10].chunks(block) {
+            let peak = chunk.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+            quietest = quietest.min(peak);
+            loudest = loudest.max(peak);
+        }
+        assert!(quietest > 0.55, "a window dropped to {quietest}, from 0.8");
+        assert!(
+            loudest < 1.0,
+            "a window summed to {loudest}, past full scale"
+        );
+    }
+
+    /// A take shorter than two windows takes the resampling path, which must still be well-behaved.
+    #[test]
+    fn a_take_too_short_to_overlap_is_still_fitted_to_the_right_length() {
+        let samples = vec![0.5f32; 200];
+        assert_eq!(stretch(&samples, 1.25, 16_000).len(), 160);
     }
 
     #[test]
