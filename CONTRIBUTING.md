@@ -44,16 +44,19 @@ pnpm -C apps/web e2e
 again after a test run. The harness checks and says so rather than letting every assertion fail on a
 missing header.
 
-The screenshot pass wants a daemon you have already started:
+The screenshot pass runs at the end of `pnpm e2e`, and on its own against a vault of its own:
 
 ```bash
-node apps/web/e2e/shots.mjs http://127.0.0.1:7788 "$(jq -r .token ~/.summo/engine.json)" vi-VN
+node apps/web/e2e/shots.mjs                                    # boots its own daemon
+node apps/web/e2e/shots.mjs http://127.0.0.1:7788 7788 "$tok"  # one you are already debugging
+SUMMO_LOCALE=en-US node apps/web/e2e/shots.mjs                 # in another language
 ```
 
 It photographs every screen at two widths in two colour schemes and fails on a console error, on
 sideways scroll, or on any text below the WCAG AA contrast ratio against the colour actually painted
-behind it. Run it if you have touched anything visual. It has caught more real bugs than any other
-check in the repository, and every one of them had passed the unit tests.
+behind it. It has caught more real bugs than any other check in the repository, and every one of
+them had passed the unit tests — which is why it stopped being a thing you run if you remember. The
+pictures land in `/tmp/shots`, and CI uploads them as an artifact when a browser job fails.
 
 ### The desktop shell
 

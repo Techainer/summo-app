@@ -25,9 +25,9 @@ import tseslint from "typescript-eslint";
  * four rules above are only possible with it, and they are the four worth having.
  */
 export default tseslint.config(
-  // `e2e` and the build configs are plain Node scripts outside the app's tsconfig, so the
-  // type-aware rules have no program to consult for them.
-  { ignores: ["dist", "src-tauri", "e2e", "*.config.ts", "*.config.js"] },
+  // `e2e`, `scripts` and the build configs are plain Node scripts outside the app's tsconfig, so
+  // the type-aware rules have no program to consult for them.
+  { ignores: ["dist", "src-tauri", "e2e", "scripts", "*.config.ts", "*.config.js"] },
   js.configs.recommended,
   {
     files: ["**/*.{ts,tsx}"],

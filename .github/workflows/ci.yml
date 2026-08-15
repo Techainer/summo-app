@@ -26,10 +26,18 @@ env:
   # policy, not a link setting, and applying it through the environment also applies it to every
   # dependency's build.
 
+# Every job carries a `timeout-minutes`.
+#
+# GitHub's default is six hours. A Playwright suite that waits for a locator that will never appear
+# does not fail — it holds a runner until somebody notices, and on a private repository that is six
+# hours of billed minutes for a test that was already broken in the first thirty seconds. The
+# numbers below are roughly three times the observed run, which is loose enough not to flake on a
+# slow morning and tight enough to be a report rather than a bill.
 jobs:
   check:
     name: fmt · clippy · test
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -52,6 +60,7 @@ jobs:
   web:
     name: types · lint · format · test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/web
@@ -69,6 +78,9 @@ jobs:
       - run: pnpm exec prettier --check .
       - run: pnpm test
       - run: pnpm build
+      # What the browser downloads before it can paint. A number that only gets looked at when
+      # somebody complains the app is slow to open is a number that has already grown for a year.
+      - run: pnpm budget
 
   # Which platforms this run links on.
   #
@@ -83,6 +95,7 @@ jobs:
   plan:
     name: which platforms
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       targets: ${{ steps.pick.outputs.targets }}
     steps:
@@ -103,6 +116,7 @@ jobs:
     name: build ${{ matrix.target }}
     needs: plan
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -146,6 +160,7 @@ jobs:
   mobile-portability:
     name: cross-compile ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -207,6 +222,7 @@ jobs:
   desktop-shell:
     name: the desktop shell compiles
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -249,6 +265,7 @@ jobs:
   registry:
     name: validate the published registry
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       # The catalogue is a separate repository. Checking it out here catches the case that matters:
@@ -283,6 +300,7 @@ jobs:
   translation:
     name: the in-process translator compiles and passes
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -309,6 +327,7 @@ jobs:
   browser:
     name: browser suites
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       # Inside the workspace, not beside it. `actions/checkout` refuses any path outside
@@ -363,6 +382,10 @@ jobs:
       # `--features bundled` is what puts the interface inside the binary. Without it every suite
       # fails on a missing header, which is a long way from the cause — `e2e/daemon.mjs` detects
       # that case and says so, and this is the line that prevents it.
+      # Linted here rather than in the `check` job, which has no `apps/web/dist` — `include_dir!`
+      # fails to *parse* the file without one. `bundled` is the shape that ships, so leaving it out
+      # of the lint means the arm every user runs is the one arm nobody checks.
+      - run: cargo clippy -p summo-engine --features bundled --all-targets -- -D warnings
       - run: cargo build --bin summo-engine --features bundled
       - run: pnpm -C apps/web e2e
         env:
@@ -398,4 +421,19 @@ jobs:
       - run: pnpm -C apps/web e2e:full-flow
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+
+      # The pictures, when something went wrong.
+      #
+      # These suites fail with a sentence — "the drop target was never highlighted", "contrast 3.1
+      # on Giọng nói" — and the sentence is the *conclusion*. What a person needs to act on it is
+      # the frame it was drawn from, and until now that only existed inside a runner that had
+      # already been deleted. `if: failure()` because a green run's screenshots are 44 files nobody
+      # opens.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens
+          path: /tmp/shots
+          retention-days: 7
+          if-no-files-found: ignore
 

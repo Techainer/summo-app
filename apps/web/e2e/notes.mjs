@@ -140,6 +140,133 @@ const id = await (async () => {
   }
 }
 
+// ---- the block menu narrows, and the keyboard drives it -------------------
+//
+// A menu of ten that cannot be narrowed is a menu you read every time, and one that only answers
+// to a mouse is one a person typing never uses. `/vi` finding `Việc cần làm` also has to work from
+// a keyboard with no Vietnamese layout, which is the normal case here.
+{
+  const made = await (
+    await fetch(`${engine.url}/notes?token=${engine.token}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Bàn phím", body: "" }),
+    })
+  ).json();
+
+  await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/pages/${made.id}`, {
+    waitUntil: "networkidle",
+  });
+  const editor = page.locator(".tiptap");
+  await editor.waitFor({ timeout: 10000 });
+  await page.waitForFunction(() => (document.querySelector(".tiptap")?.textContent ?? "x") === "", {
+    timeout: 10000,
+  });
+  await editor.click();
+
+  const menu = page.getByTestId("block-menu");
+
+  await page.keyboard.type("/vi");
+  await page.waitForTimeout(400);
+  const narrowed = await menu.innerText().catch(() => "");
+  if (narrowed.trim() !== "Việc cần làm") {
+    problems.push(`\`/vi\` narrowed to ${JSON.stringify(narrowed)}`);
+  }
+
+  // Enter picks it. Enter used to reach ProseMirror first and split the paragraph instead, leaving
+  // `/vi` in the document as text — the menu's `preventDefault` arrived after the editor's own
+  // handler, because at the target both phases fire in registration order.
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(300);
+  await page.keyboard.type("@ngoc Từ bàn phím");
+  await page.waitForTimeout(3500);
+  const doc = await (await fetch(`${engine.url}/notes/${made.id}?token=${engine.token}`)).json();
+  if (doc.text.trim() !== "- [ ] @ngoc Từ bàn phím") {
+    problems.push(`the keyboard did not insert a to-do: ${JSON.stringify(doc.text)}`);
+  }
+}
+
+// ---- and a query that names nothing is text ------------------------------
+{
+  const made = await (
+    await fetch(`${engine.url}/notes?token=${engine.token}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Không khớp", body: "" }),
+    })
+  ).json();
+
+  await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/pages/${made.id}`, {
+    waitUntil: "networkidle",
+  });
+  await page.locator(".tiptap").waitFor({ timeout: 10000 });
+  await page.waitForFunction(() => (document.querySelector(".tiptap")?.textContent ?? "x") === "", {
+    timeout: 10000,
+  });
+  await page.locator(".tiptap").click();
+
+  await page.keyboard.type("/etc/passwd");
+  await page.waitForTimeout(500);
+  if ((await page.getByTestId("block-menu").count()) > 0) {
+    problems.push("a path typed into a note left a block menu stuck open");
+  }
+
+  // Arrow keys move the highlight, and Escape puts the menu away without eating the `/`.
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type("/");
+  await page.waitForTimeout(400);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  const chosen = await page
+    .getByTestId("block-menu")
+    .locator('[aria-selected="true"]')
+    .innerText()
+    .catch(() => "");
+  if (chosen.trim() !== "Tiêu đề vừa") {
+    problems.push(`two presses of ArrowDown landed on ${JSON.stringify(chosen)}`);
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  if ((await page.getByTestId("block-menu").count()) > 0)
+    problems.push("Escape left the menu open");
+}
+
+// ---- formatting where the text is ----------------------------------------
+{
+  const made = await (
+    await fetch(`${engine.url}/notes?token=${engine.token}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Bôi đen", body: "chọn tôi" }),
+    })
+  ).json();
+
+  await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/pages/${made.id}`, {
+    waitUntil: "networkidle",
+  });
+  await page.locator(".tiptap").waitFor({ timeout: 10000 });
+  await page.waitForFunction(
+    () => document.querySelector(".tiptap")?.textContent?.includes("chọn tôi") ?? false,
+    { timeout: 10000 },
+  );
+  await page.locator(".tiptap").click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.waitForTimeout(600);
+
+  const bold = page.getByRole("button", { name: "Đậm" });
+  if ((await bold.count()) === 0) {
+    problems.push("selecting text offered no formatting");
+  } else {
+    await bold.click();
+    await page.waitForTimeout(3500);
+    const doc = await (await fetch(`${engine.url}/notes/${made.id}?token=${engine.token}`)).json();
+    if (!doc.text.includes("**chọn tôi**")) {
+      problems.push(`bold did not reach the file: ${JSON.stringify(doc.text)}`);
+    }
+  }
+}
+
 // ---- a note keeps what the editor cannot format ---------------------------
 //
 // The guarantee. A converter that did its best with a table would eat the table, and the note

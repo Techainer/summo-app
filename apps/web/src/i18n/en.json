@@ -460,7 +460,12 @@
     "block_quote": "Quote",
     "block_code": "Code",
     "block_divider": "Divider",
-    "plain_mode": "This note has something Summo cannot format, so it opens as plain text and nothing is lost."
+    "plain_mode": "This note has something Summo cannot format, so it opens as plain text and nothing is lost.",
+    "mark_bold": "Bold",
+    "mark_italic": "Italic",
+    "mark_strike": "Strikethrough",
+    "mark_code": "Code",
+    "mark_link": "Link"
   },
   "agenda": {
     "title": "Calendar",
