@@ -418,6 +418,24 @@ jobs:
           done
           echo "--- what is in it ---"
           awk '{print $NF}' /tmp/contents.txt | grep -E "summo|lib/" | head -40
+
+      # And then it is run.
+      #
+      # Everything above this line asks what is *in* the package. Every packaging bug this project
+      # has had looked the same from outside — an app that installs, opens a window and shows
+      # nothing, because the daemon it spawns died one line into its life on a library it could not
+      # find. A contents check cannot see that: the file is present, correct, and dead on arrival.
+      #
+      # So the AppImage is started under a virtual display and asked to prove it is alive. It is
+      # the format worth running of the two: the `.deb` bundles cleanly on machines where the
+      # AppImage does not, and the AppImage is the single file most Linux users will actually
+      # download.
+      - name: The app starts, and its daemon answers
+        run: |
+          sudo apt-get install -y xvfb
+          ./scripts/smoke-desktop.sh \
+            "$(find apps/desktop/src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -1)"
+
       - uses: actions/upload-artifact@v4
         with:
           name: summo-desktop-linux-x86_64

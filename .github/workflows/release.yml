@@ -189,6 +189,22 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: 1
         run: pnpm -C apps/desktop exec tauri build
 
+      # Started, before it is offered to anybody.
+      #
+      # Linux only, because that is the platform this can be done on without a signed build and a
+      # logged-in session: the AppImage runs under a virtual display, spawns its daemon and answers.
+      # It is the check that would have caught the version of this bundle whose daemon exited on a
+      # missing library — which was published, downloaded, and opened a window with nothing in it.
+      #
+      # macOS and Windows go out with the contents checked and nothing run. Saying which is which
+      # is better than implying both were tested.
+      - name: The app starts, and its daemon answers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y xvfb
+          ./scripts/smoke-desktop.sh \
+            "$(find apps/desktop/src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -1)"
+
       # Unsigned on every platform. There is no Apple certificate and no Windows one, so macOS will
       # show "cannot be opened because the developer cannot be verified" and Windows will show a
       # SmartScreen warning. Saying so in the release notes is the honest thing to do; shipping

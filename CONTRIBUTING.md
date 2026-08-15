@@ -71,6 +71,19 @@ cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
 pnpm -C apps/desktop dev                 # runs the sidecar script itself
 ```
 
+And to check that what comes out of the bundler actually runs:
+
+```bash
+pnpm -C apps/desktop exec tauri build --bundles appimage
+./scripts/smoke-desktop.sh apps/desktop/src-tauri/target/release/bundle/appimage/Summo_*.AppImage
+```
+
+It starts the app on a virtual display against a vault of its own and asserts that the daemon
+spawns, answers, serves the interface, and is still alive five seconds later. Every packaging bug
+here has looked identical from outside — a window that opens with nothing in it, because the daemon
+died on a library it could not find — and a check of what is *inside* the package cannot see it.
+CI runs it on the AppImage in `desktop-bundle` and again on the release build.
+
 Tauri looks for helper executables under a name ending in the target triple, which is not something
 `cargo build` produces. Nothing produced it, so the shell was unbuildable from a fresh clone and
 had quietly stopped compiling against Tauri v2. `tauri.conf.json` calls the script now, and CI
