@@ -183,15 +183,28 @@ Friday afternoon overrides.
 A release is a tag, and only a tag:
 
 ```bash
-git tag -a v0.1.0 -m "…"
-git push origin v0.1.0
+git tag -a v0.2.0 -m "…"
+git push origin v0.2.0
 ```
 
+Bump the version in one place per language first — `Cargo.toml`'s workspace version, the four
+`package.json` files, and both `tauri.conf.json` files — and let `cargo check` write the lockfiles.
+The tag and those numbers disagreeing is how a user ends up reporting a bug against a version that
+was never built.
+
 `release.yml` triggers on `v*` and on nothing else — which is why a repository with green CI and no
-tags has no releases. It builds a bundle per platform on that platform (cross-compiled ONNX Runtime
-and sherpa-onnx produce binaries that fail to load on the machine they were built for), publishes a
-**draft**, and waits for somebody to write what changed for a user rather than shipping a list of
-commit subjects.
+tags has no releases. It builds three things: a tarball per platform, the desktop installers, and an
+Android `.apk`. Each is built on the platform it targets (cross-compiled ONNX Runtime and
+sherpa-onnx produce binaries that fail to load on the machine they were built for), and all of it is
+published as a **draft**, waiting for somebody to write what changed for a user rather than shipping
+a list of commit subjects.
+
+The `.apk` is attached only when the repository has a signing key — see `apps/mobile/README.md`.
+Without one it is still built, and still uploaded as a workflow artefact, because an unsigned `.apk`
+on a release page is something a phone refuses hours after somebody downloads it.
+
+**Never move a tag that has been published.** Somebody has the old checksum. Cut the next version
+instead.
 
 Tag only what CI is green on. The workflow can also be started by hand from the Actions tab, which
 is how to find out whether the release job works without promising anybody a release.
