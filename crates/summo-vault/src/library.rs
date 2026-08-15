@@ -103,6 +103,8 @@ pub struct MeetingSummary {
     pub kind: crate::index::Kind,
     pub title: String,
     pub folder: String,
+    /// The page this one lives inside, when it is a sub-page. See [`crate::index::MeetingEntry`].
+    pub parent: Option<MeetingId>,
     pub date: String,
     pub day: String,
     pub duration: u64,
@@ -122,6 +124,7 @@ impl MeetingSummary {
             kind: entry.kind,
             title: entry.title.clone(),
             folder: entry.folder.clone(),
+            parent: entry.parent.clone(),
             date: entry.date.clone(),
             day: entry.day.clone(),
             duration: entry.duration,
@@ -410,6 +413,61 @@ impl Library {
         Ok(target)
     }
 
+    /// Put a page inside another page, or take it back out to the top level.
+    ///
+    /// The file does not move. A folder is where a document *is* and a parent is what it is *part
+    /// of*, and conflating them would mean that nesting a page under one filed somewhere else
+    /// silently refiled it — a decision the user never made, applied to a directory they browse in
+    /// Finder.
+    ///
+    /// ## The cycle
+    ///
+    /// Nesting a page under one of its own descendants would make a loop, and a loop here is not a
+    /// wrong drawing but an infinite one: the sidebar recurses, the breadcrumb never terminates and
+    /// the tab locks up. Refused here rather than defended against at every reader, because "every
+    /// reader remembers to check" is a rule that holds until the first one forgets.
+    ///
+    /// The walk is bounded by the number of entries as well as by reaching the root, so frontmatter
+    /// hand-edited into a loop that already exists on disk cannot hang the check meant to prevent
+    /// one.
+    pub fn set_parent(&self, id: &MeetingId, parent: Option<&MeetingId>) -> Result<()> {
+        let index = self.scan()?;
+        let entry = index
+            .get(id)
+            .ok_or_else(|| Error::Vault(format!("no meeting with id {}", id.as_str())))?;
+
+        if let Some(parent) = parent {
+            if parent == id {
+                return Err(Error::Vault("a page cannot be inside itself".into()));
+            }
+            if index.get(parent).is_none() {
+                return Err(Error::Vault(format!(
+                    "no meeting with id {}",
+                    parent.as_str()
+                )));
+            }
+            let mut at = Some(parent.clone());
+            for _ in 0..index.len() {
+                let Some(current) = at else { break };
+                if &current == id {
+                    return Err(Error::Vault(
+                        "a page cannot be inside one of its own sub-pages".into(),
+                    ));
+                }
+                at = index.get(&current).and_then(|e| e.parent.clone());
+            }
+        }
+
+        let path = entry.path.clone();
+        let mut doc = load(entry)?;
+        if doc.frontmatter.parent.as_ref() == parent {
+            return Ok(());
+        }
+        doc.frontmatter.parent = parent.cloned();
+        write_atomically(&path, doc.to_markdown()?.as_bytes())?;
+        Ok(())
+    }
+
     /// Put a name on particular utterances of a meeting.
     ///
     /// This is the half of a voice correction that touches what a person actually reads. Naming a
@@ -611,6 +669,84 @@ fn relative(path: &Path, root: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A page inside a page is a link in the child's frontmatter and nothing else. In particular it
+    /// is not a move: the user filed that note in that folder, and nesting it under another page is
+    /// not a request to refile it.
+    #[test]
+    fn nesting_a_page_writes_a_parent_and_leaves_the_file_where_it_is() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        let (parent, _) = crate::note::create(&paths, "Dự án", "2026-08-10", "").unwrap();
+        let (child, at) = crate::note::create(&paths, "Ghi chú", "2026-08-10", "").unwrap();
+
+        let library = Library::new(paths.clone());
+        library.set_parent(&child, Some(&parent)).unwrap();
+
+        assert!(at.is_file(), "the file did not move");
+        let index = library.scan().unwrap();
+        assert_eq!(index.get(&child).unwrap().parent.as_ref(), Some(&parent));
+        assert_eq!(index.get(&parent).unwrap().parent, None);
+    }
+
+    /// A loop here is not a wrong drawing but an infinite one: the sidebar recurses and the tab
+    /// locks up. It is refused where it is made rather than defended against at every reader.
+    #[test]
+    fn a_page_cannot_be_put_inside_one_of_its_own_sub_pages() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        let (top, _) = crate::note::create(&paths, "Trên", "2026-08-10", "").unwrap();
+        let (middle, _) = crate::note::create(&paths, "Giữa", "2026-08-10", "").unwrap();
+        let (bottom, _) = crate::note::create(&paths, "Dưới", "2026-08-10", "").unwrap();
+
+        let library = Library::new(paths);
+        library.set_parent(&middle, Some(&top)).unwrap();
+        library.set_parent(&bottom, Some(&middle)).unwrap();
+
+        let err = library.set_parent(&top, Some(&bottom)).unwrap_err();
+        assert!(err.to_string().contains("sub-pages"), "{err}");
+        assert!(library.set_parent(&top, Some(&top)).is_err());
+
+        // And the refusal changed nothing.
+        let index = library.scan().unwrap();
+        assert_eq!(index.get(&top).unwrap().parent, None);
+    }
+
+    #[test]
+    fn a_page_can_be_taken_back_out_to_the_top_level() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        let (parent, _) = crate::note::create(&paths, "Dự án", "2026-08-10", "").unwrap();
+        let (child, _) =
+            crate::note::create_under(&paths, "Con", "2026-08-10", "", Some(parent.clone()))
+                .unwrap();
+
+        let library = Library::new(paths);
+        assert_eq!(
+            library.scan().unwrap().get(&child).unwrap().parent.as_ref(),
+            Some(&parent)
+        );
+
+        library.set_parent(&child, None).unwrap();
+        assert_eq!(library.scan().unwrap().get(&child).unwrap().parent, None);
+    }
+
+    /// Frontmatter is a thing people edit by hand, and a file that names itself is a row that is its
+    /// own ancestor. Dropped when it is read, so no reader has to remember.
+    #[test]
+    fn a_document_that_names_itself_as_its_parent_has_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        std::fs::create_dir_all(paths.meetings()).unwrap();
+        std::fs::write(
+            paths.meetings().join("vong.md"),
+            "---\nid: 01A\ndate: 2026-08-10\nparent: 01A\n---\n\n# Vòng\n",
+        )
+        .unwrap();
+
+        let index = Library::new(paths).scan().unwrap();
+        assert_eq!(index.entries()[0].parent, None);
+    }
 
     /// The claim "Summo is a note app" is only true if searching finds notes. Before the index
     /// scanned both trees, a note somebody typed was invisible to every question they could ask.

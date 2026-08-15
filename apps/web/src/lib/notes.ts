@@ -47,14 +47,40 @@ export class NoteClient {
     return readJson<Note>(await fetch(url(this.handshake, `/notes/${encodeURIComponent(id)}`)));
   }
 
-  async create(title: string, body = ""): Promise<{ id: string }> {
+  /** A new note, optionally inside another page. */
+  async create(title: string, body = "", parent?: string | null): Promise<{ id: string }> {
     return readJson<{ id: string }>(
       await fetch(url(this.handshake, "/notes"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title, body }),
+        body: JSON.stringify({ title, body, ...(parent ? { parent } : {}) }),
       }),
     );
+  }
+
+  /**
+   * Store a picture and return the link a note should carry.
+   *
+   * The bytes, not a form. There is one file and no fields, and the daemon reads the format from
+   * the bytes rather than from anything said here — see `summo_vault::attachment`.
+   */
+  async upload(file: Blob): Promise<string> {
+    const body = await readJson<{ link: string }>(
+      await fetch(url(this.handshake, "/attachments"), { method: "POST", body: file }),
+    );
+    return body.link;
+  }
+
+  /**
+   * Where a stored picture can be fetched from.
+   *
+   * The vault holds `attachments/<name>` — a path relative to the vault root, which is what makes
+   * the note open in Obsidian too. A browser needs an address, and this is the one place that
+   * translation happens.
+   */
+  src(link: string): string {
+    const name = link.replace(/^attachments\//, "");
+    return url(this.handshake, `/attachments/${encodeURIComponent(name)}`);
   }
 
   /**

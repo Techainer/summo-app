@@ -267,11 +267,11 @@ const id = await (async () => {
   }
 }
 
-// ---- a note keeps what the editor cannot format ---------------------------
+// ---- a table is a table now, and it is still a table in the file ---------
 //
-// The guarantee. A converter that did its best with a table would eat the table, and the note
-// would still look like a note — which is why the editor is only offered for a document that
-// survives being written back, and why what is written back is what came off disk.
+// This block used to assert the opposite: that `| gói | giá |` stayed on screen as the characters
+// somebody typed, because the converter had no node for a table. It has one now, and the assertion
+// that matters did not change — what is written back has to be what a Markdown reader would show.
 {
   const table = "| gói | giá |\n|---|---|\n| pro | 4 |";
   const made = await (
@@ -287,10 +287,52 @@ const id = await (async () => {
   });
   await page.waitForTimeout(2500);
 
-  const shown = await page.locator("main").innerText();
-  if (!shown.includes("| pro | 4 |")) problems.push(`the table is not on screen: ${shown}`);
+  // Drawn as a table. The pipes were the old assertion and would now mean the note had fallen back
+  // to the plain textarea — which is a real failure and one that looks like nothing on screen.
+  const cells = await page.locator(".tiptap table td, .tiptap table th").allInnerTexts();
+  if (cells.join("|") !== "gói|giá|pro|4") {
+    problems.push(`the table did not render as a table: ${JSON.stringify(cells)}`);
+  }
 
-  // Touch it, so the autosave writes the whole document back, and check the table came through.
+  // Editing inside a cell: the table controls appear, a row is added, and the file keeps the shape.
+  await page.locator(".tiptap table td").first().click();
+  const tools = page.getByTestId("table-tools");
+  await tools.waitFor({ timeout: 5000 }).catch(() => problems.push("no table controls in a table"));
+  if ((await tools.count()) > 0) {
+    await tools.getByRole("button", { name: "Thêm hàng" }).click();
+    await page.waitForTimeout(3500);
+
+    const doc = await (await fetch(`${engine.url}/notes/${made.id}?token=${engine.token}`)).json();
+    const rows = doc.text.split("\n").filter((line) => line.startsWith("|"));
+    if (rows.length !== 4) {
+      problems.push(`adding a row did not reach the file: ${JSON.stringify(doc.text)}`);
+    }
+    if (!doc.text.includes("| pro | 4 |")) {
+      problems.push(`saving ate the table: ${JSON.stringify(doc.text)}`);
+    }
+  }
+}
+
+// ---- and a note keeps what the editor still cannot format -----------------
+//
+// The guarantee, on something there is no node for. A converter that did its best with a footnote
+// would eat the footnote, and the note would still look like a note — which is why the editor is
+// only offered for a document that survives being written back.
+{
+  const footnote = "Câu có chú thích[^1]\n\n[^1]: chú thích ở đây";
+  const made = await (
+    await fetch(`${engine.url}/notes?token=${engine.token}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Chú thích", body: footnote }),
+    })
+  ).json();
+
+  await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/pages/${made.id}`, {
+    waitUntil: "networkidle",
+  });
+  await page.waitForTimeout(2500);
+
   const editable = page.locator("main .tiptap, main textarea").first();
   await editable.click();
   await page.keyboard.press("ControlOrMeta+End");
@@ -300,8 +342,194 @@ const id = await (async () => {
   await page.waitForTimeout(3500);
 
   const doc = await (await fetch(`${engine.url}/notes/${made.id}?token=${engine.token}`)).json();
-  if (!doc.text.includes("| pro | 4 |")) {
-    problems.push(`saving ate the table: ${JSON.stringify(doc.text)}`);
+  if (!doc.text.includes("[^1]: chú thích ở đây")) {
+    problems.push(`saving ate the footnote: ${JSON.stringify(doc.text)}`);
+  }
+}
+
+// ---- a picture is a file in the vault, not base64 in the note -------------
+//
+// The link in the Markdown is `attachments/<name>` — relative to the vault root, so the note opens
+// in Obsidian too — and the browser is served the bytes by the daemon. Both halves are asserted,
+// because a link that is right and an image that does not load is the same broken note.
+{
+  // A one-pixel PNG. Enough for the sniffer, which reads the format out of the bytes and never out
+  // of what the client says it uploaded.
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const stored = await (
+    await fetch(`${engine.url}/attachments?token=${engine.token}`, {
+      method: "POST",
+      body: png,
+    })
+  ).json();
+  if (!/^attachments\/[0-9a-f]{32}\.png$/.test(stored.link ?? "")) {
+    problems.push(`an uploaded picture got a strange link: ${JSON.stringify(stored)}`);
+  }
+
+  const made = await (
+    await fetch(`${engine.url}/notes?token=${engine.token}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Có ảnh", body: `![sơ đồ](${stored.link})` }),
+    })
+  ).json();
+
+  await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/pages/${made.id}`, {
+    waitUntil: "networkidle",
+  });
+  await page.waitForTimeout(2000);
+
+  // Not `.tiptap img`: ProseMirror puts an empty `img.ProseMirror-separator` after an inline node
+  // at the end of a block, and two matches is a strict-mode failure rather than an assertion.
+  const shown = page.locator('.tiptap img[alt="sơ đồ"]');
+  await shown.waitFor({ timeout: 5000 }).catch(() => problems.push("the picture did not render"));
+  if ((await shown.count()) > 0) {
+    // Loaded, not merely present. A `src` the daemon refuses is a broken image icon, which is
+    // exactly what a token or a path this test got wrong would look like.
+    const width = await shown.evaluate((img) => img.naturalWidth);
+    if (width !== 1) problems.push(`the picture did not load: naturalWidth ${width}`);
+
+    // Touch the note so it is written back, and check the *link* survived rather than the URL the
+    // browser was given. A note that saved `http://127.0.0.1:54321/attachments/…` would look fine
+    // until the daemon next started on a different port.
+    await page.locator(".tiptap").click();
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.type("x");
+    await page.waitForTimeout(3500);
+    const doc = await (await fetch(`${engine.url}/notes/${made.id}?token=${engine.token}`)).json();
+    if (!doc.text.includes(`![sơ đồ](${stored.link})`)) {
+      problems.push(`the picture link did not survive a save: ${JSON.stringify(doc.text)}`);
+    }
+  }
+}
+
+// ---- a block can be picked up and put somewhere else ---------------------
+//
+// The feature is invisible until you hover, and what it changes is the *file* — so the assertion is
+// the file. `.drag-handle` is the class the extension names its own element; nothing in this app may
+// rename it, and a stylesheet that thought otherwise is why this test exists.
+{
+  const made = await (
+    await fetch(`${engine.url}/notes?token=${engine.token}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Ba đoạn", body: "Một.\n\nHai.\n\nBa." }),
+    })
+  ).json();
+
+  await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/pages/${made.id}`, {
+    waitUntil: "networkidle",
+  });
+  await page.locator(".tiptap").waitFor({ timeout: 10000 });
+  await page.waitForTimeout(1500);
+
+  await page.locator(".tiptap p").nth(1).hover();
+  const handle = page.locator(".drag-handle");
+  await handle
+    .waitFor({ state: "visible", timeout: 5000 })
+    .catch(() => problems.push("hovering a paragraph offered no handle to pick it up by"));
+
+  const grip = await handle.boundingBox().catch(() => null);
+  const onto = await page.locator(".tiptap p").nth(2).boundingBox();
+  if (grip && onto) {
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    // Two moves: one to cross into the target block, one to settle below its midpoint. A single
+    // jump is often read as a click, and a drop above the midpoint would be a no-op that looks
+    // exactly like a broken feature.
+    await page.mouse.move(onto.x + 40, onto.y + onto.height, { steps: 12 });
+    await page.mouse.move(onto.x + 40, onto.y + onto.height - 2, { steps: 4 });
+    await page.mouse.up();
+    await page.waitForTimeout(3500);
+
+    const doc = await (await fetch(`${engine.url}/notes/${made.id}?token=${engine.token}`)).json();
+    if (doc.text.trim() !== "Một.\n\nBa.\n\nHai.") {
+      problems.push(`dragging a paragraph did not reorder the file: ${JSON.stringify(doc.text)}`);
+    }
+  }
+}
+
+// ---- a page inside a page -------------------------------------------------
+//
+// Two things have to be true at once, and they are stored in two places on purpose: the *link* is
+// ordinary Markdown in the parent, so the note means something in any editor, and the *parent* is
+// in the child's frontmatter, so the tree survives the file being renamed or moved.
+{
+  const made = await (
+    await fetch(`${engine.url}/notes?token=${engine.token}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Dự án ACME", body: "" }),
+    })
+  ).json();
+
+  await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/pages/${made.id}`, {
+    waitUntil: "networkidle",
+  });
+  const editor = page.locator(".tiptap");
+  await editor.waitFor({ timeout: 10000 });
+  await page.waitForFunction(() => (document.querySelector(".tiptap")?.textContent ?? "x") === "", {
+    timeout: 10000,
+  });
+  await editor.click();
+  await page.keyboard.type("/trang");
+  await page.waitForTimeout(500);
+
+  const blocks = page.getByTestId("block-menu");
+  if ((await blocks.count()) === 0) {
+    problems.push("`/trang` offered no sub-page");
+  } else {
+    await blocks.getByRole("button", { name: "Trang con" }).click();
+    await page.waitForTimeout(3500);
+
+    const doc = await (await fetch(`${engine.url}/notes/${made.id}?token=${engine.token}`)).json();
+    const link = /\[([^\]]+)\]\(\/pages\/([^)]+)\)/.exec(doc.text ?? "");
+    if (!link) {
+      problems.push(`no link to a sub-page in the parent: ${JSON.stringify(doc.text)}`);
+    } else {
+      const child = await (
+        await fetch(`${engine.url}/notes/${link[2]}?token=${engine.token}`)
+      ).json();
+      if (child.frontmatter?.parent !== made.id) {
+        problems.push(
+          `the sub-page does not know its parent: ${JSON.stringify(child.frontmatter)}`,
+        );
+      }
+
+      // And the tree draws it inside. The row for the parent gains a chevron; opening it shows the
+      // child, which is the whole reason the parent is stored rather than only linked.
+      await page.reload({ waitUntil: "networkidle" });
+      await page.waitForTimeout(1500);
+      const expand = page.getByRole("button", { name: "Mở rộng Dự án ACME" });
+      if ((await expand.count()) === 0) {
+        problems.push("the tree offered no way to open a page that contains one");
+      } else {
+        await expand.first().click();
+        await page.waitForTimeout(500);
+        const tree = await page.getByLabel("Thư mục").innerText();
+        if (!tree.includes(link[1])) {
+          problems.push(`the sub-page is not drawn inside its parent: ${JSON.stringify(tree)}`);
+        }
+      }
+
+      // Taking it back out is the same page, one row up. It must not move the file.
+      const before = (await (await fetch(`${engine.url}/notes?token=${engine.token}`)).json()).find(
+        (note) => note.id === link[2],
+      )?.file;
+      await fetch(`${engine.url}/meetings/${link[2]}/parent?token=${engine.token}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ parent: null }),
+      });
+      const listed = await (await fetch(`${engine.url}/notes?token=${engine.token}`)).json();
+      const after = listed.find((note) => note.id === link[2]);
+      if (after?.file !== before) {
+        problems.push(`un-nesting moved the file: ${before} -> ${after?.file}`);
+      }
+    }
   }
 }
 

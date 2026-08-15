@@ -48,6 +48,13 @@ pub struct Recording {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 pub struct Pruned {
     pub removed: Vec<Recording>,
+    /// Pictures no document links to any more, by vault-relative path.
+    ///
+    /// Separate from `removed`, which is recordings, because they answer different questions: a
+    /// recording is deleted for being *old* and an attachment for being *unreferenced*, and a
+    /// person reading the result should be able to see which is which.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<String>,
     pub freed_bytes: u64,
     /// True when nothing was actually deleted.
     pub dry_run: bool,
@@ -128,6 +135,12 @@ pub fn usage(paths: &Paths) -> Result<Usage> {
 ///
 /// Orphaned audio is removed regardless of age: the meeting it belonged to is already in the trash,
 /// and its recording is the last thing holding the space.
+///
+/// Pictures nobody links to go the same way, and for the same reason. A note that loses its only
+/// screenshot leaves the file behind, and a folder somebody syncs that only ever grows is one they
+/// eventually delete wholesale. It happens *here* rather than on save because the question is a
+/// whole-vault one: the same picture can be linked from a note nobody has opened this year, and a
+/// sweep that only looked at the note being written would delete it.
 pub fn prune(paths: &Paths, retention_days: u32, today: &str, dry_run: bool) -> Result<Pruned> {
     let usage = usage(paths)?;
     let mut removed = Vec::new();
@@ -144,18 +157,61 @@ pub fn prune(paths: &Paths, retention_days: u32, today: &str, dry_run: bool) -> 
     }
     removed.extend(usage.orphaned);
 
-    let freed_bytes = removed.iter().map(|r| r.bytes).sum();
+    let orphans = crate::attachment::unreferenced(paths, &linked_pictures(paths)?)?;
+    let mut freed_bytes: u64 = removed.iter().map(|r| r.bytes).sum();
+    for orphan in &orphans {
+        freed_bytes += std::fs::metadata(orphan).map(|m| m.len()).unwrap_or(0);
+    }
+
     if !dry_run {
         for recording in &removed {
             std::fs::remove_dir_all(&recording.path).map_err(|e| Error::io(&recording.path, e))?;
+        }
+        for orphan in &orphans {
+            std::fs::remove_file(orphan).map_err(|e| Error::io(orphan, e))?;
         }
     }
 
     Ok(Pruned {
         removed,
+        attachments: orphans
+            .iter()
+            .filter_map(|path| path.file_name())
+            .map(|name| format!("attachments/{}", name.to_string_lossy()))
+            .collect(),
         freed_bytes,
         dry_run,
     })
+}
+
+/// Every picture any document in the vault points at.
+///
+/// Read from the Markdown rather than from a table of references, because the Markdown is the only
+/// thing that is true: a person can add `![x](attachments/y.png)` to a note in Obsidian, and a
+/// reference count Summo kept would not know. Whole files, not the listing's head — a picture in the
+/// last paragraph of a long meeting is exactly the one a truncated read would miss and delete.
+fn linked_pictures(paths: &Paths) -> Result<Vec<String>> {
+    let mut links = Vec::new();
+    for root in [paths.meetings(), paths.notes(), paths.people()] {
+        for entry in MeetingIndex::scan(&root)?.entries() {
+            let Ok(text) = std::fs::read_to_string(&entry.path) else {
+                continue;
+            };
+            links.extend(crate::attachment::links_in(&text));
+        }
+    }
+    // The voice book is JSON rather than Markdown and is where a person's photograph is named. Read
+    // as text for the same reason the notes are: what matters is that the path appears at all, not
+    // what shape of document it appears in. Nothing in here is Summo-named today — an avatar keeps
+    // whatever the user called it, and this sweep only ever deletes files it minted itself — but
+    // that is a fact about the avatar screen, not a promise, and one uploaded through the picture
+    // route would otherwise be deleted for looking unused.
+    if let Ok(book) = std::fs::read_to_string(paths.voices().join("book.json")) {
+        links.extend(crate::attachment::links_in(&book));
+    }
+    links.sort();
+    links.dedup();
+    Ok(links)
 }
 
 /// Delete one meeting's audio, keeping its transcript.
@@ -262,6 +318,47 @@ mod tests {
         // Largest first, so the thing worth deleting is the thing on screen.
         assert_eq!(usage.recordings[0].bytes, 5_000);
         assert_eq!(usage.recordings[0].title, "Họp 01A");
+    }
+
+    /// The sweep has to read the *whole* of every document. A reference count Summo kept would not
+    /// know about a picture somebody added to a note in Obsidian, and a truncated read would miss
+    /// one in the last paragraph of a long meeting — which is the picture it would then delete.
+    #[test]
+    fn pruning_deletes_a_picture_nothing_links_to_and_spares_one_something_does() {
+        let (_dir, paths) = vault();
+        let png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";
+        let jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF";
+
+        let kept = crate::attachment::store(&paths, png).unwrap();
+        let dropped = crate::attachment::store(&paths, jpeg).unwrap();
+        let padding = "x".repeat(5_000);
+        crate::note::create(
+            &paths,
+            "Có ảnh",
+            "2026-08-09",
+            &format!("{padding}\n\nCuối cùng ![sơ đồ]({kept})"),
+        )
+        .unwrap();
+
+        let pruned = prune(&paths, 0, "2026-08-10", false).unwrap();
+        assert_eq!(pruned.attachments, [dropped.clone()].as_slice());
+        assert!(
+            crate::attachment::path_of(&paths, &kept).is_some(),
+            "{kept}"
+        );
+        assert!(crate::attachment::path_of(&paths, &dropped).is_none());
+    }
+
+    /// A dry run says what it would do and does none of it. Losing a picture to a button labelled
+    /// "see what this would free" is the worst version of this feature.
+    #[test]
+    fn a_dry_run_names_the_pictures_it_would_delete_and_deletes_none() {
+        let (_dir, paths) = vault();
+        let orphan = crate::attachment::store(&paths, b"GIF89a....").unwrap();
+
+        let pruned = prune(&paths, 0, "2026-08-10", true).unwrap();
+        assert_eq!(pruned.attachments, [orphan.clone()].as_slice());
+        assert!(crate::attachment::path_of(&paths, &orphan).is_some());
     }
 
     #[test]

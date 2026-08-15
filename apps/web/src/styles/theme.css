@@ -608,3 +608,117 @@ body {
   height: 0;
   pointer-events: none;
 }
+
+/* A table.
+ *
+ * Fixed layout, because the alternative is a column that jumps as somebody types in it — the width
+ * would be decided by the longest cell, which is the cell being edited. `table-layout: fixed` makes
+ * a table's shape a property of the table rather than of its busiest moment. */
+.tiptap table {
+  border-collapse: collapse;
+  margin-block: 0.8em;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.tiptap :where(th, td) {
+  border: 1px solid var(--color-line);
+  padding: 0.4em 0.6em;
+  vertical-align: top;
+}
+
+.tiptap th {
+  background: var(--color-bg-soft);
+  font-weight: 600;
+  text-align: start;
+}
+
+/* A column's own alignment wins over the header cell's default, so `| ---: |` reads right-aligned.
+ * Two classes in the selector rather than one, because `.tiptap th` above is a class and an element
+ * and would otherwise win against a bare utility. */
+.tiptap :where(th, td).text-left {
+  text-align: start;
+}
+
+.tiptap :where(th, td).text-center {
+  text-align: center;
+}
+
+.tiptap :where(th, td).text-right {
+  text-align: end;
+}
+
+.tiptap :where(th, td) > p {
+  margin: 0;
+}
+
+/* The cells a selection covers. ProseMirror marks them and draws nothing; without this, dragging
+ * across three cells to delete them looks like nothing happened until they are gone. */
+.tiptap .selectedCell::after {
+  background: var(--color-accent-soft);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.tiptap :where(th, td) {
+  position: relative;
+}
+
+/* A picture, held inside the measure the prose is set in. A screenshot pasted at its own size is a
+ * screenshot that decides how wide the note is. */
+.tiptap img {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  display: inline-block;
+  height: auto;
+  margin-block: 0.4em;
+  max-width: 100%;
+}
+
+/* The selected picture. `outline` rather than `border`, so selecting one does not move it. */
+.tiptap img.ProseMirror-selectednode {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* A link to another page in this vault reads as a page, not as a URL: no underline, and a leading
+ * mark in the way Notion, Obsidian and every wiki since 1995 have drawn one. The href is still an
+ * ordinary Markdown link in the file — see `PageLink`. */
+.tiptap a[data-page] {
+  color: var(--color-fg);
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: none;
+  border-block-end: 1px solid var(--color-line-strong);
+}
+
+/* The mark is drawn rather than typed. A glyph like `▤` renders in whatever face the system falls
+ * back to, at whatever weight and baseline that face decided — the same lesson the sidebar's icons
+ * were rewritten for. A bordered rectangle is one rule, one colour and the same shape everywhere. */
+.tiptap a[data-page]::before {
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  content: "";
+  display: inline-block;
+  height: 0.72em;
+  inline-size: 0.58em;
+  margin-inline-end: 0.35em;
+  opacity: 0.5;
+  vertical-align: -0.05em;
+}
+
+/* The gutter handle, positioned by the extension and drawn by us.
+ *
+ * `.drag-handle` is the class the extension gives its own element; nothing here may rename it. It is
+ * placed absolutely just outside the text column, so it cannot reflow a paragraph by appearing —
+ * which is the whole reason it is positioned rather than in the flow. */
+.drag-handle {
+  cursor: grab;
+  z-index: 5;
+}
+
+.drag-handle[data-dragging="true"] {
+  cursor: grabbing;
+}

@@ -46,12 +46,20 @@ export function NoteEditor({
   id,
   onSaved,
   onRemoved,
+  onOpenPage,
   className,
 }: {
   id: string;
   /** The title may have changed, so whoever is listing notes should re-read them. */
   onSaved?: () => void;
   onRemoved?: () => void;
+  /**
+   * Open a page this one now contains.
+   *
+   * Given by whoever is showing the tree, because making a sub-page is only half the gesture: the
+   * other half is that the person wanted to write in it. Absent where there is nowhere to go.
+   */
+  onOpenPage?: (id: string) => void;
   className?: string;
 }) {
   const { handshake } = useEngine();
@@ -156,6 +164,31 @@ export function NoteEditor({
     }
   };
 
+  /**
+   * A page inside this one.
+   *
+   * Made before it is linked, and linked with the id it came back with, so the link in the file
+   * always points at something that exists. Doing it the other way round — write the link, create
+   * the page — leaves a dangling link in the note every time the daemon says no.
+   *
+   * Named `t("notes.untitled")` rather than asking. A sub-page is created mid-sentence; a dialog
+   * demanding a title first is the step that makes people stop making them.
+   */
+  const subpage = useCallback(async () => {
+    try {
+      const title = t("notes.untitled");
+      const { id: child } = await client.create(title, "", id);
+      onSaved?.();
+      return { id: child, title };
+    } catch (e) {
+      setError(say(e));
+      return null;
+    }
+  }, [client, id, onSaved, say, t]);
+
+  const upload = useCallback((file: File) => client.upload(file), [client]);
+  const resolve = useCallback((link: string) => client.src(link), [client]);
+
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
       {error && (
@@ -216,6 +249,10 @@ export function NoteEditor({
             markdown={rest}
             onChange={(next) => edit(`${title}\n\n${next}`)}
             onUnsupported={() => setMode("plain")}
+            onUpload={upload}
+            resolveImage={resolve}
+            onNewSubpage={subpage}
+            onOpenPage={onOpenPage}
           />
         </Suspense>
       ) : (

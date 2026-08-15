@@ -202,6 +202,7 @@ export function NotesScreen() {
             // is how one note's sentence ends up in another.
             key={openId}
             id={openId}
+            onOpenPage={setOpenId}
             onSaved={() => void refresh()}
             onRemoved={() => {
               setOpenId(null);

@@ -52,8 +52,20 @@ interface Props {
   onOpenPage: (page: Page) => void;
   /** The page being read, so the tree shows where you are. */
   activePage?: string | null;
-  /** Make a new page, in this folder. `null` is the vault root. */
-  onNewPage: (folder: string | null) => void;
+  /**
+   * Make a new page.
+   *
+   * A folder — `null` for the vault root — or a page to put it inside, never both: those are the
+   * two ways of saying where something goes and they are answered by two different gestures.
+   */
+  onNewPage: (where: { folder: string | null } | { parent: string }) => void;
+  /**
+   * Put a page inside another, or `null` to take it back out to the top level.
+   *
+   * The file does not move. The daemon refuses a page nested under one of its own descendants,
+   * because a loop in this tree is not a wrong drawing but an infinite one.
+   */
+  onNestPage: (page: Page, parent: string | null) => void;
   /**
    * File a page somewhere else. `""` is the vault root.
    *
@@ -84,6 +96,7 @@ export function Sidebar({
   activePage,
   onNewPage,
   onMovePage,
+  onNestPage,
   footer,
 }: Props) {
   const t = useT();
@@ -102,9 +115,18 @@ export function Sidebar({
    * whether to highlight itself from the event alone.
    */
   const [dragging, setDragging] = useState<Page | null>(null);
+  /**
+   * The row under the pointer, as `folder:<path>` or `page:<id>`.
+   *
+   * Namespaced because both are drop targets now and they mean different things — dropping on a
+   * folder files the page, dropping on a page nests it — and an id and a folder path share a
+   * namespace in which the vault root is `""`, which is also a perfectly good id to nobody.
+   */
   const [over, setOver] = useState<string | null>(null);
   /** Which page has its destination list open, for pointers that cannot drag. */
   const [filing, setFiling] = useState<string | null>(null);
+  /** Which pages are showing what is inside them. */
+  const [unfolded, setUnfolded] = useState<Set<string>>(new Set());
 
   /**
    * Every folder a page could go to, root included.
@@ -119,6 +141,24 @@ export function Sidebar({
     return [...all].sort();
   }, [folders]);
 
+  /**
+   * Pages by the page they are inside; `""` holds the ones that are inside nothing.
+   *
+   * A parent nobody has — a page whose file was deleted, or an id somebody typed into frontmatter
+   * by hand — puts its children back at the top level rather than hiding them. Losing a page
+   * because the row that would have contained it does not exist is not a failure a person can see
+   * their way out of.
+   */
+  const inside = useMemo(() => {
+    const known = new Set(pages.map((page) => page.id));
+    const map = new Map<string, Page[]>();
+    for (const page of pages) {
+      const under = page.parent && known.has(page.parent) ? page.parent : "";
+      map.set(under, [...(map.get(under) ?? []), page]);
+    }
+    return map;
+  }, [pages]);
+
   const toggle = (path: string) =>
     setOpen((previous) => {
       const next = new Set(previous);
@@ -126,10 +166,21 @@ export function Sidebar({
       return next;
     });
 
-  const file = (page: Page, folder: string) => {
+  const unfold = (id: string) =>
+    setUnfolded((previous) => {
+      const next = new Set(previous);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  const done = () => {
     setFiling(null);
     setDragging(null);
     setOver(null);
+  };
+
+  const file = (page: Page, folder: string) => {
+    done();
     if ((page.folder ?? "") === folder) return;
     onMovePage(page, folder);
     // Open the folder it landed in, so the page is visible where it went rather than apparently
@@ -137,8 +188,19 @@ export function Sidebar({
     if (folder) setOpen((previous) => new Set([...previous, ...ancestorsOf(folder), folder]));
   };
 
+  const nest = (page: Page, parent: string | null) => {
+    done();
+    if ((page.parent ?? null) === parent) return;
+    // Not into itself, and not into anything already inside it. The daemon refuses both — a loop
+    // here is not a wrong drawing but an infinite one — and refusing on this side as well is what
+    // stops the optimistic row moving somewhere it is about to be moved back from.
+    if (parent && (parent === page.id || descendants(inside, page.id).has(parent))) return;
+    onNestPage(page, parent);
+    if (parent) setUnfolded((previous) => new Set([...previous, parent]));
+  };
+
   /** The handlers that make a row a place a page can be dropped. */
-  const dropzone = (folder: string) => ({
+  const dropzone = (key: string, drop: (page: Page) => void) => ({
     onDragOver: (event: React.DragEvent) => {
       if (!dragging) return;
       // Without this the browser refuses the drop and animates the row back to where it came
@@ -146,15 +208,35 @@ export function Sidebar({
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
     },
-    onDragEnter: () => dragging && setOver(folder),
+    onDragEnter: () => dragging && setOver(key),
     // Fires when the pointer crosses into a *child* element too, so the row is only cleared when
     // the pointer has moved on to a different row.
-    onDragLeave: () => setOver((at) => (at === folder ? null : at)),
+    onDragLeave: () => setOver((at) => (at === key ? null : at)),
     onDrop: (event: React.DragEvent) => {
       event.preventDefault();
-      if (dragging) file(dragging, folder);
+      if (dragging) drop(dragging);
     },
   });
+
+  /** Everything one page row and the rows under it need. Bundled, because it recurses. */
+  const branch = {
+    activePage,
+    dragging,
+    over,
+    filing,
+    unfolded,
+    inside,
+    destinations,
+    onOpen: onOpenPage,
+    onUnfold: unfold,
+    onFiling: (id: string) => setFiling((at) => (at === id ? null : id)),
+    onDragStart: setDragging,
+    onDragEnd: done,
+    onFile: file,
+    onNest: nest,
+    onAddChild: (parent: string) => onNewPage({ parent }),
+    dropzone,
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -212,31 +294,16 @@ export function Sidebar({
               depth={0}
               selected={activeFolder === null}
               onSelect={() => onSelectFolder(null)}
-              dropping={over === ""}
+              dropping={over === "folder:"}
               dropHint={dragging ? t("nav.move_to_root") : undefined}
-              {...dropzone("")}
+              {...dropzone("folder:", (page) => file(page, ""))}
             />
           </li>
           {/* Pages filed nowhere sit at the top level, the way an unfiled page does in Notion.
               Hiding them until somebody files them would hide the ones just recorded. */}
-          {pagesIn(pages, "").map((page) => (
+          {topLevel(inside, "").map((page) => (
             <li key={page.id}>
-              <PageRow
-                page={page}
-                depth={1}
-                selected={activePage === page.id}
-                onOpen={() => onOpenPage(page)}
-                dragging={dragging?.id === page.id}
-                onDragStart={() => setDragging(page)}
-                onDragEnd={() => {
-                  setDragging(null);
-                  setOver(null);
-                }}
-                filing={filing === page.id}
-                onFile={() => setFiling((at) => (at === page.id ? null : page.id))}
-                destinations={destinations}
-                onMoveTo={(folder) => file(page, folder)}
-              />
+              <Branch page={page} depth={1} {...branch} />
             </li>
           ))}
           {rows.map((node) => (
@@ -245,35 +312,20 @@ export function Sidebar({
                 label={node.name}
                 depth={node.depth}
                 selected={activeFolder === node.path}
-                expandable={node.children.length > 0 || pagesIn(pages, node.path).length > 0}
+                expandable={node.children.length > 0 || topLevel(inside, node.path).length > 0}
                 expanded={open.has(node.path)}
                 onToggle={() => toggle(node.path)}
                 onSelect={() => onSelectFolder(node.path)}
-                onAdd={() => onNewPage(node.path)}
-                dropping={over === node.path}
+                onAdd={() => onNewPage({ folder: node.path })}
+                dropping={over === `folder:${node.path}`}
                 dropHint={dragging ? t("nav.move_to", { name: node.name }) : undefined}
-                {...dropzone(node.path)}
+                {...dropzone(`folder:${node.path}`, (page) => file(page, node.path))}
               />
               {open.has(node.path) && (
                 <ul className="space-y-0.5">
-                  {pagesIn(pages, node.path).map((page) => (
+                  {topLevel(inside, node.path).map((page) => (
                     <li key={page.id}>
-                      <PageRow
-                        page={page}
-                        depth={node.depth + 1}
-                        selected={activePage === page.id}
-                        onOpen={() => onOpenPage(page)}
-                        dragging={dragging?.id === page.id}
-                        onDragStart={() => setDragging(page)}
-                        onDragEnd={() => {
-                          setDragging(null);
-                          setOver(null);
-                        }}
-                        filing={filing === page.id}
-                        onFile={() => setFiling((at) => (at === page.id ? null : page.id))}
-                        destinations={destinations}
-                        onMoveTo={(folder) => file(page, folder)}
-                      />
+                      <Branch page={page} depth={node.depth + 1} {...branch} />
                     </li>
                   ))}
                 </ul>
@@ -286,7 +338,7 @@ export function Sidebar({
           <li>
             <button
               type="button"
-              onClick={() => onNewPage(activeFolder)}
+              onClick={() => onNewPage({ folder: activeFolder })}
               className="text-fg-faint hover:bg-bg-raised hover:text-fg mt-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-sm"
             >
               <Plus className="size-3.5" aria-hidden="true" />
@@ -313,11 +365,97 @@ export interface Page {
   title: string;
   folder: string;
   kind: "meeting" | "note";
+  /**
+   * The page this one is inside, if it is inside one.
+   *
+   * A folder and a parent are two structures over the same set and both belong to the user: a
+   * folder is where the file *is*, a parent is what the page is *part of*. A page with a parent is
+   * drawn under it and nowhere else — including when its file is filed somewhere else entirely,
+   * which is allowed and is why nesting does not move anything.
+   */
+  parent: string | null;
 }
 
-/** Pages filed directly in a folder — not in its children, which have their own rows. */
-function pagesIn(pages: Page[], folder: string): Page[] {
-  return pages.filter((page) => (page.folder ?? "") === folder);
+/** A page and everything inside it. */
+interface BranchProps {
+  page: Page;
+  depth: number;
+  activePage?: string | null;
+  dragging: Page | null;
+  over: string | null;
+  filing: string | null;
+  unfolded: Set<string>;
+  inside: Map<string, Page[]>;
+  destinations: string[];
+  onOpen: (page: Page) => void;
+  onUnfold: (id: string) => void;
+  onFiling: (id: string) => void;
+  onDragStart: (page: Page) => void;
+  onDragEnd: () => void;
+  onFile: (page: Page, folder: string) => void;
+  onNest: (page: Page, parent: string | null) => void;
+  onAddChild: (parent: string) => void;
+  dropzone: (key: string, drop: (page: Page) => void) => Record<string, unknown>;
+}
+
+/**
+ * One page row, and the pages inside it.
+ *
+ * Recursive, because the structure is. The alternative — flattening the tree into rows with a depth
+ * number, which is what the *folders* beside this do — works for folders because a folder path
+ * already spells out its ancestry. A page knows only its parent, so flattening would mean building
+ * the tree anyway and then walking it twice.
+ *
+ * `seen` is the guard on that recursion. The daemon refuses to create a cycle, but frontmatter is a
+ * thing people edit by hand, and a vault that already contains `a → b → a` must draw a tree with a
+ * missing row rather than lock the tab up.
+ */
+function Branch({ page, depth, seen = [], ...rest }: BranchProps & { seen?: string[] }) {
+  const t = useT();
+  const children = seen.includes(page.id) ? [] : (rest.inside.get(page.id) ?? []);
+  const open = rest.unfolded.has(page.id);
+
+  return (
+    <>
+      <PageRow
+        page={page}
+        depth={depth}
+        selected={rest.activePage === page.id}
+        onOpen={() => rest.onOpen(page)}
+        dragging={rest.dragging?.id === page.id}
+        onDragStart={() => rest.onDragStart(page)}
+        onDragEnd={rest.onDragEnd}
+        filing={rest.filing === page.id}
+        onFile={() => rest.onFiling(page.id)}
+        destinations={rest.destinations}
+        onMoveTo={(folder) => rest.onFile(page, folder)}
+        onUnnest={page.parent ? () => rest.onNest(page, null) : undefined}
+        children={children.length}
+        expanded={open}
+        onToggle={() => rest.onUnfold(page.id)}
+        onAdd={() => rest.onAddChild(page.id)}
+        // Dropping a page onto a page puts it inside — which is the gesture, and the reason the
+        // folder rows and these rows have to be told apart by their drop key rather than by a bare
+        // string that could be either.
+        dropping={rest.over === `page:${page.id}`}
+        dropHint={
+          rest.dragging && rest.dragging.id !== page.id
+            ? t("nav.nest_under", { name: page.title })
+            : undefined
+        }
+        {...rest.dropzone(`page:${page.id}`, (dragged) => rest.onNest(dragged, page.id))}
+      />
+      {open && children.length > 0 && (
+        <ul className="space-y-0.5">
+          {children.map((child) => (
+            <li key={child.id}>
+              <Branch page={child} depth={depth + 1} seen={[...seen, page.id]} {...rest} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
 }
 
 function PageRow({
@@ -332,6 +470,14 @@ function PageRow({
   onFile,
   destinations,
   onMoveTo,
+  onUnnest,
+  children,
+  expanded,
+  onToggle,
+  onAdd,
+  dropping = false,
+  dropHint,
+  ...drag
 }: {
   page: Page;
   depth: number;
@@ -345,6 +491,16 @@ function PageRow({
   onFile: () => void;
   destinations: string[];
   onMoveTo: (folder: string) => void;
+  /** Take this page back out of the one it is in. Absent when it is not in one. */
+  onUnnest?: () => void;
+  /** How many pages are inside this one. */
+  children: number;
+  expanded: boolean;
+  onToggle: () => void;
+  /** Make a page inside this one. */
+  onAdd: () => void;
+  dropping?: boolean;
+  dropHint?: string;
 }) {
   const t = useT();
   const Glyph = page.kind === "meeting" ? Mic : FileText;
@@ -353,6 +509,8 @@ function PageRow({
   return (
     <div className={cn("group/page", dragging && "opacity-40")}>
       <div
+        {...drag}
+        title={dropHint}
         // The row is what gets dragged, not the button inside it: a `draggable` button in Chromium
         // starts a drag on `mousedown` and then never fires `click`, so making the page itself
         // draggable would have cost the ability to open it.
@@ -366,9 +524,9 @@ function PageRow({
           onDragStart();
         }}
         onDragEnd={onDragEnd}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        style={{ paddingLeft: `${depth * 12}px` }}
         className={cn(
-          "flex w-full items-center gap-1.5 rounded-lg py-1 pe-1 text-sm transition-colors",
+          "flex w-full items-center gap-1 rounded-lg py-1 pe-1 text-sm transition-colors",
           // Two different facts are marked in this column and they must not look alike: which
           // *folder* is being browsed, and which *page* is open. The folder takes the neutral step
           // up; the open page takes the accent, the same way the notes list and the screen nav mark
@@ -378,18 +536,51 @@ function PageRow({
           // hover nor the selection painted anything at all. Nothing catches that but looking: the
           // class is present, it resolves, and the computed style is exactly what was asked for.
           selected ? "bg-accent-soft text-accent font-medium" : "text-fg-dim hover:bg-bg-raised",
+          dropping && "outline-accent bg-accent-soft outline-1",
         )}
       >
+        {/* The chevron occupies its space whether or not there is anything to expand, so a column
+            of titles stays a column rather than stepping in and out by six pixels. */}
+        {children > 0 ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            aria-label={t(expanded ? "nav.collapse" : "nav.expand", { name: page.title })}
+            className="text-fg-faint hover:text-fg flex size-4 shrink-0 items-center justify-center"
+          >
+            <ChevronRight
+              aria-hidden="true"
+              className={cn("size-3 transition-transform duration-150", expanded && "rotate-90")}
+            />
+          </button>
+        ) : (
+          <span className="size-4 shrink-0" aria-hidden="true" />
+        )}
         {/* The icon is the only thing that says which kind this is, and that is enough: the
             difference matters when you are looking for a recording, and never otherwise. */}
         <Glyph className="text-fg-faint size-3.5 shrink-0" aria-hidden="true" />
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 truncate text-start">
           {page.title}
         </button>
+        {/* A page inside this one, from the row it will be inside. This is how nearly every
+            sub-page gets made — the slash menu in the editor is for the one you think of while
+            writing, and this is for the one you think of while looking at the tree. */}
+        <button
+          type="button"
+          onClick={onAdd}
+          aria-label={t("nav.new_page_in", { name: page.title })}
+          className={cn(
+            "text-fg-faint hover:text-fg flex size-5 shrink-0 items-center justify-center rounded transition-opacity",
+            "opacity-0 group-hover/page:opacity-100 focus-visible:opacity-100",
+          )}
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+        </button>
         {/* Dragging is a pointer gesture and this app runs on phones, where HTML5 drag events are
             not delivered at all. So this is not a fallback for the drag — it is the only way to
             file anything on touch, and the only way with a keyboard. */}
-        {elsewhere.length > 0 && (
+        {(elsewhere.length > 0 || onUnnest) && (
           <button
             type="button"
             onClick={onFile}
@@ -418,6 +609,20 @@ function PageRow({
           aria-label={t("nav.move_page", { name: page.title })}
           className="border-line bg-bg-raised my-0.5 ms-6 me-1 rounded-lg border py-1"
         >
+          {/* First, because it is the one destination that is not a place: it undoes the nesting
+              rather than choosing a different one. Only offered when there is something to undo. */}
+          {onUnnest && (
+            <li>
+              <button
+                type="button"
+                onClick={onUnnest}
+                className="text-fg-dim hover:bg-bg-raised hover:text-fg text-meta flex w-full items-center gap-1.5 px-2 py-1 text-start"
+              >
+                <FileText className="text-fg-faint size-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">{t("nav.unnest")}</span>
+              </button>
+            </li>
+          )}
           {elsewhere.map((folder) => (
             <li key={folder || "/"}>
               <button
@@ -434,6 +639,25 @@ function PageRow({
       )}
     </div>
   );
+}
+
+/** Pages at the top of a folder: filed there, and inside no other page. */
+function topLevel(inside: Map<string, Page[]>, folder: string): Page[] {
+  return (inside.get("") ?? []).filter((page) => (page.folder ?? "") === folder);
+}
+
+/** Every page inside this one, however deep. Used to refuse a nesting that would make a loop. */
+function descendants(inside: Map<string, Page[]>, id: string): Set<string> {
+  const found = new Set<string>();
+  const queue = [id];
+  while (queue.length > 0) {
+    for (const child of inside.get(queue.pop()!) ?? []) {
+      if (found.has(child.id)) continue;
+      found.add(child.id);
+      queue.push(child.id);
+    }
+  }
+  return found;
 }
 
 /** `Folder` or `FolderOpen`, so the row says which one the list is showing. */

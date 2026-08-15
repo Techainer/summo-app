@@ -44,13 +44,33 @@ pub fn is_note(doc: &MeetingDoc) -> bool {
 /// and wrapping it in a section Summo invented would show up the first time they opened the file in
 /// any other editor.
 pub fn create(paths: &Paths, title: &str, day: &str, body: &str) -> Result<(MeetingId, PathBuf)> {
+    create_under(paths, title, day, body, None)
+}
+
+/// Create a note inside another page.
+///
+/// The parent is written into the child's frontmatter and nothing is written to the parent — see
+/// [`crate::meeting::Frontmatter::parent`] for why the link lives on that end.
+///
+/// The parent is not checked for existence here. This is the vault's *writer*, and a note whose
+/// parent has since been deleted is a note at the top level rather than a note that failed to be
+/// created; refusing would mean losing what somebody just typed to a filing detail.
+pub fn create_under(
+    paths: &Paths,
+    title: &str,
+    day: &str,
+    body: &str,
+    parent: Option<MeetingId>,
+) -> Result<(MeetingId, PathBuf)> {
     let title = title.trim();
     if title.is_empty() {
         return Err(Error::msg("note.no_title", "ghi chú cần có tiêu đề"));
     }
 
     let id = MeetingId::new();
-    let mut doc = MeetingDoc::new(Frontmatter::new(id.clone(), day), title);
+    let mut frontmatter = Frontmatter::new(id.clone(), day);
+    frontmatter.parent = parent.filter(|p| !p.as_str().is_empty() && p != &id);
+    let mut doc = MeetingDoc::new(frontmatter, title);
     if !body.trim().is_empty() {
         doc.body = body.trim().to_string();
     }

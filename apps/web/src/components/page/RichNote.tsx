@@ -1,7 +1,8 @@
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
+import { DragHandle } from "@tiptap/extension-drag-handle-react";
+import { TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
@@ -9,9 +10,12 @@ import {
   Bold,
   CheckSquare,
   Code,
+  FileText,
+  GripVertical,
   Heading1,
   Heading2,
   Heading3,
+  Image as ImageIcon,
   Italic,
   Link2,
   List,
@@ -19,6 +23,8 @@ import {
   Minus,
   Quote,
   Strikethrough,
+  Table as TableIcon,
+  Trash2,
   Type,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -27,6 +33,7 @@ import { cn } from "../../lib/cn";
 import { useT } from "../../i18n/context";
 import { faithful, same, toDoc, toMarkdown } from "../../lib/markdown";
 import { fold } from "../../lib/palette";
+import { PageLink, TABLE, VaultImage } from "./blocks";
 
 /**
  * A note you can format, over a file that is still Markdown.
@@ -46,8 +53,8 @@ import { fold } from "../../lib/palette";
  * compared to the text that was loaded. A mismatch means this note is not one this editor can hold
  * without changing it, and the caller is told so and shows the plain textarea instead.
  *
- * Falling back is the guarantee, not a failure to be minimised. A note with a table opens as text
- * and keeps its table.
+ * Falling back is the guarantee, not a failure to be minimised. A note with a footnote opens as
+ * text and keeps its footnote.
  *
  * ## Why the checkboxes matter
  *
@@ -59,6 +66,10 @@ export function RichNote({
   markdown,
   onChange,
   onUnsupported,
+  onUpload,
+  resolveImage,
+  onNewSubpage,
+  onOpenPage,
   className,
 }: {
   /** The note as it is on disk, below its title. */
@@ -66,6 +77,19 @@ export function RichNote({
   onChange: (markdown: string) => void;
   /** Called once if this note cannot be held without changing it. */
   onUnsupported: () => void;
+  /** Store a picture and answer with the vault link the note should carry. */
+  onUpload?: (file: File) => Promise<string>;
+  /** A vault link to something this browser can fetch. */
+  resolveImage?: (link: string) => string;
+  /**
+   * Make a page inside this one and answer with what to link to.
+   *
+   * Optional, because the editor is also mounted where there is nothing to be inside of — the
+   * absence removes the row from the menu rather than leaving one that does nothing.
+   */
+  onNewSubpage?: () => Promise<{ id: string; title: string } | null>;
+  /** Follow a link to another page in this vault. */
+  onOpenPage?: (id: string) => void;
   className?: string;
 }) {
   const t = useT();
@@ -80,9 +104,37 @@ export function RichNote({
   const [query, setQuery] = useState<string | null>(null);
   /** Which row the keyboard is on. Reset whenever the query changes the list under it. */
   const [at, setAt] = useState(0);
+  /** Where the cursor is, for the parts of the toolbar that only apply inside a table. */
+  const [inTable, setInTable] = useState(false);
+  const [busy, setBusy] = useState(false);
   // The last text handed out, so a change event that produces what we were given does not report
   // an edit — which would mark a note unsaved the moment it was opened.
   const written = useRef(markdown);
+  const editorRef = useRef<Editor | null>(null);
+
+  /**
+   * Put a picture in the note.
+   *
+   * One path for the file input, for a paste and for a drop, because three ways of adding a picture
+   * that each upload it slightly differently is three sets of the same bug.
+   */
+  const insert = useCallback(
+    async (live: Editor, file: File) => {
+      if (!onUpload) return;
+      setBusy(true);
+      try {
+        const link = await onUpload(file);
+        live.chain().focus().setImage({ src: link, alt: file.name }).run();
+      } catch {
+        // Deliberately silent here and reported by the caller's own error bar: this component has
+        // no place to put a message, and a picture that failed to upload is a picture that is not
+        // in the note — which the user can see.
+      } finally {
+        setBusy(false);
+      }
+    },
+    [onUpload],
+  );
 
   const editor = useEditor({
     extensions: useMemo(
@@ -96,10 +148,18 @@ export function RichNote({
         TaskList,
         // Nested, because a checklist that cannot have sub-steps is one people abandon.
         TaskItem.configure({ nested: true }),
-        Link.configure({ openOnClick: false, autolink: false }),
+        PageLink.configure({ openOnClick: false, autolink: false }),
+        ...TABLE,
+        VaultImage.configure({
+          // Inline, because Markdown puts a picture inside a paragraph and pretending otherwise
+          // would mean writing a blank line into the file that nobody typed.
+          inline: true,
+          allowBase64: false,
+          resolve: resolveImage ?? ((link: string) => link),
+        }),
         Placeholder.configure({ placeholder: t("notes.slash_hint") }),
       ],
-      [t],
+      [resolveImage, t],
     ),
     content: toDoc(markdown),
     editorProps: {
@@ -108,6 +168,34 @@ export function RichNote({
         // nobody re-reads.
         class: "font-reading text-body leading-relaxed outline-none",
         "aria-label": t("notes.body"),
+      },
+      // A screenshot on the clipboard is the way most pictures reach a note, and a picture that has
+      // to be saved to disk first is one people do not bother with.
+      handlePaste: (view, event) => {
+        const file = [...(event.clipboardData?.files ?? [])].find((f) =>
+          f.type.startsWith("image/"),
+        );
+        if (!file || !onUpload || !view.editable || !editorRef.current) return false;
+        event.preventDefault();
+        void insert(editorRef.current, file);
+        return true;
+      },
+      handleDrop: (view, event) => {
+        const file = [...(event.dataTransfer?.files ?? [])].find((f) =>
+          f.type.startsWith("image/"),
+        );
+        if (!file || !onUpload || !editorRef.current) return false;
+        event.preventDefault();
+        // Where it was dropped, not where the cursor was. A picture that lands at the top of the
+        // note because that is where the caret happened to be is a picture in the wrong place.
+        const landed = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        if (landed) {
+          view.dispatch(
+            view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(landed.pos))),
+          );
+        }
+        void insert(editorRef.current, file);
+        return true;
       },
     },
     onUpdate: ({ editor: live }) => {
@@ -118,11 +206,66 @@ export function RichNote({
     },
   });
 
+  // The editor, reachable from the handlers above — which are built when the editor is created and
+  // therefore cannot close over it. Assigned in an effect rather than during render: a paste or a
+  // drop is a user gesture and cannot arrive before the first commit.
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
+  /**
+   * Ask for a picture from the disk.
+   *
+   * An input made for the occasion rather than a hidden one kept in the tree. A file input that is
+   * always there is a control in the document that nothing may show, whose only purpose is to be
+   * clicked by something else — and keeping a ref to it made every list this component builds a
+   * list something might read a ref out of.
+   */
+  const pick = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/png,image/jpeg,image/gif,image/webp";
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      if (file && editor) void insert(editor, file);
+    });
+    input.click();
+  }, [editor, insert]);
+
+  /**
+   * A page inside this one, and a link to it where the cursor is.
+   *
+   * The page is made first and linked with the id it came back with, so a link in the file always
+   * points at something that exists.
+   */
+  const subpage = useCallback(() => {
+    void (async () => {
+      const page = await onNewSubpage?.();
+      if (!page || !editor) return;
+      // A link, because that is what a sub-page *is* in the file: `[Tên](/pages/id)` reads
+      // correctly in Obsidian and needs nothing from this app to mean something.
+      editor
+        .chain()
+        .focus()
+        .insertContent([
+          {
+            type: "text",
+            text: page.title,
+            marks: [{ type: "link", attrs: { href: `/pages/${page.id}` } }],
+          },
+        ])
+        // Off the end of the link, so the next thing typed is not part of it.
+        .unsetMark("link")
+        .run();
+    })();
+  }, [editor, onNewSubpage]);
+
   // The check that decides whether this editor may be used at all.
   //
   // After the content has been through ProseMirror, not before: the schema coerces what it is
-  // given, and that coercion is exactly the step a converter test cannot see. Reported through a
-  // ref so a re-render cannot raise it twice and put the caller in a loop.
+  // given, and that coercion is exactly the step a converter test cannot see. A ragged table is the
+  // clearest case — the converter reproduces one exactly, and ProseMirror squares it up. Reported
+  // through a ref so a re-render cannot raise it twice and put the caller in a loop.
   const told = useRef(false);
   useEffect(() => {
     if (!editor || told.current) return;
@@ -144,6 +287,7 @@ export function RichNote({
           ? /^\/(\S*)$/.exec(line)?.[1]
           : undefined;
       setQuery(asking ?? null);
+      setInTable(editor.isActive("table"));
     };
     editor.on("selectionUpdate", check);
     editor.on("update", check);
@@ -153,69 +297,52 @@ export function RichNote({
     };
   }, [editor]);
 
+  /**
+   * Apply a block, having first removed the `/` that asked for it.
+   *
+   * `act` rather than a chain for the two blocks that have to go and fetch something — a picture
+   * from the disk, a page from the daemon. Both still delete the query first, so a slash command
+   * that opens a file dialog does not leave `/anh` in the paragraph while the dialog is up.
+   */
   const run = useCallback(
-    (apply: (chain: ReturnType<Editor["chain"]>) => void) => {
+    (block: BlockAction) => {
       if (!editor) return;
-      // The `/` and whatever was typed after it are not content; they are how the menu was asked
-      // for and narrowed.
       const chain = editor.chain().focus().deleteRange({
         from: editor.state.selection.$from.start(),
         to: editor.state.selection.from,
       });
-      apply(chain);
+      if (block.apply) block.apply(chain);
       chain.run();
       setQuery(null);
+      block.act?.();
     },
     [editor],
   );
 
-  const blocks = useMemo(
+  const blocks: BlockAction[] = useMemo(
     () =>
       [
-        { key: "text", icon: Type, apply: (c: ReturnType<Editor["chain"]>) => c.setParagraph() },
+        { key: "text", icon: Type, apply: (c: Chain) => c.setParagraph() },
+        { key: "h1", icon: Heading1, apply: (c: Chain) => c.setHeading({ level: 1 }) },
+        { key: "h2", icon: Heading2, apply: (c: Chain) => c.setHeading({ level: 2 }) },
+        { key: "h3", icon: Heading3, apply: (c: Chain) => c.setHeading({ level: 3 }) },
+        { key: "todo", icon: CheckSquare, apply: (c: Chain) => c.toggleTaskList() },
+        { key: "bullet", icon: List, apply: (c: Chain) => c.toggleBulletList() },
+        { key: "ordered", icon: ListOrdered, apply: (c: Chain) => c.toggleOrderedList() },
+        { key: "quote", icon: Quote, apply: (c: Chain) => c.toggleBlockquote() },
+        { key: "code", icon: Code, apply: (c: Chain) => c.toggleCodeBlock() },
         {
-          key: "h1",
-          icon: Heading1,
-          apply: (c: ReturnType<Editor["chain"]>) => c.setHeading({ level: 1 }),
+          key: "table",
+          icon: TableIcon,
+          // Three columns and a header row: the shape of nearly every table anybody starts, and one
+          // fewer decision before there is something on the screen to edit.
+          apply: (c: Chain) => c.insertTable({ rows: 3, cols: 3, withHeaderRow: true }),
         },
-        {
-          key: "h2",
-          icon: Heading2,
-          apply: (c: ReturnType<Editor["chain"]>) => c.setHeading({ level: 2 }),
-        },
-        {
-          key: "h3",
-          icon: Heading3,
-          apply: (c: ReturnType<Editor["chain"]>) => c.setHeading({ level: 3 }),
-        },
-        {
-          key: "todo",
-          icon: CheckSquare,
-          apply: (c: ReturnType<Editor["chain"]>) => c.toggleTaskList(),
-        },
-        {
-          key: "bullet",
-          icon: List,
-          apply: (c: ReturnType<Editor["chain"]>) => c.toggleBulletList(),
-        },
-        {
-          key: "ordered",
-          icon: ListOrdered,
-          apply: (c: ReturnType<Editor["chain"]>) => c.toggleOrderedList(),
-        },
-        {
-          key: "quote",
-          icon: Quote,
-          apply: (c: ReturnType<Editor["chain"]>) => c.toggleBlockquote(),
-        },
-        { key: "code", icon: Code, apply: (c: ReturnType<Editor["chain"]>) => c.toggleCodeBlock() },
-        {
-          key: "divider",
-          icon: Minus,
-          apply: (c: ReturnType<Editor["chain"]>) => c.setHorizontalRule(),
-        },
-      ] as const,
-    [],
+        ...(onUpload ? [{ key: "image", icon: ImageIcon, act: pick }] : []),
+        ...(onNewSubpage ? [{ key: "subpage", icon: FileText, act: subpage }] : []),
+        { key: "divider", icon: Minus, apply: (c: Chain) => c.setHorizontalRule() },
+      ] as BlockAction[],
+    [onNewSubpage, onUpload, pick, subpage],
   );
 
   /**
@@ -264,7 +391,7 @@ export function RichNote({
       if (event.key === "Enter" || event.key === "Tab") {
         event.preventDefault();
         const block = shown[chosen];
-        if (block) run(block.apply);
+        if (block) run(block);
         return;
       }
       if (event.key === "Escape") {
@@ -279,37 +406,93 @@ export function RichNote({
   const marks = useMemo(
     () =>
       [
-        {
-          key: "bold",
-          icon: Bold,
-          is: "bold",
-          apply: (c: ReturnType<Editor["chain"]>) => c.toggleBold(),
-        },
-        {
-          key: "italic",
-          icon: Italic,
-          is: "italic",
-          apply: (c: ReturnType<Editor["chain"]>) => c.toggleItalic(),
-        },
-        {
-          key: "strike",
-          icon: Strikethrough,
-          is: "strike",
-          apply: (c: ReturnType<Editor["chain"]>) => c.toggleStrike(),
-        },
-        {
-          key: "code",
-          icon: Code,
-          is: "code",
-          apply: (c: ReturnType<Editor["chain"]>) => c.toggleCode(),
-        },
+        { key: "bold", icon: Bold, is: "bold", apply: (c: Chain) => c.toggleBold() },
+        { key: "italic", icon: Italic, is: "italic", apply: (c: Chain) => c.toggleItalic() },
+        { key: "strike", icon: Strikethrough, is: "strike", apply: (c: Chain) => c.toggleStrike() },
+        { key: "code", icon: Code, is: "code", apply: (c: Chain) => c.toggleCode() },
+      ] as const,
+    [],
+  );
+
+  /** What can be done to the table the cursor is in. */
+  const tableActions = useMemo(
+    () =>
+      [
+        { key: "row_after", apply: (c: Chain) => c.addRowAfter() },
+        { key: "row_delete", apply: (c: Chain) => c.deleteRow() },
+        { key: "column_after", apply: (c: Chain) => c.addColumnAfter() },
+        { key: "column_delete", apply: (c: Chain) => c.deleteColumn() },
+        { key: "header_row", apply: (c: Chain) => c.toggleHeaderRow() },
+        { key: "delete", icon: Trash2, apply: (c: Chain) => c.deleteTable() },
       ] as const,
     [],
   );
 
   return (
-    <div className={cn("relative min-h-0 flex-1 overflow-y-auto px-6 py-5", className)}>
+    <div
+      className={cn("relative min-h-0 flex-1 overflow-y-auto px-6 py-5", className)}
+      // A sub-page is a link, and a link inside an editor does nothing when you click it — the
+      // click sets the caret, which is right for a URL and wrong for a page in this vault. Caught
+      // here rather than by turning `openOnClick` back on, because that would also follow every
+      // `https://` in the note into whatever the shell decides to do with it.
+      onClick={(event) => {
+        if (!onOpenPage) return;
+        const link = (event.target as HTMLElement).closest?.("a[data-page]");
+        const href = link?.getAttribute("href") ?? "";
+        const page = /^\/pages\/([^/?#]+)/.exec(href)?.[1];
+        if (!page) return;
+        event.preventDefault();
+        onOpenPage(decodeURIComponent(page));
+      }}
+    >
+      {/* Sticky in the flow rather than floating beside the cursor. A menu placed by coordinates
+          has to be re-placed on every scroll and reflow of the document underneath it, and a table
+          is exactly the block a person scrolls while editing. */}
+      {inTable && (
+        <div
+          data-testid="table-tools"
+          role="toolbar"
+          aria-label={t("notes.table_tools")}
+          className="border-line bg-bg-raised sticky top-0 z-10 mb-2 flex flex-wrap items-center gap-1 rounded-[var(--radius-card)] border p-1 shadow-[var(--shadow-sm)]"
+        >
+          {tableActions.map((action) => (
+            <button
+              key={action.key}
+              type="button"
+              onClick={() => editor && action.apply(editor.chain().focus()).run()}
+              className={cn(
+                "text-micro rounded-[var(--radius-pill)] px-2 py-1 transition-colors",
+                action.key === "delete"
+                  ? "text-danger hover:bg-danger-soft"
+                  : "text-fg-dim hover:bg-bg-soft hover:text-fg",
+              )}
+            >
+              {t(`notes.table_${action.key}`)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* The gutter handle. A block you cannot pick up is a block you rewrite to move, and rewriting
+          a paragraph to move it is what makes people paste notes into another app. */}
+      {editor && (
+        <DragHandle editor={editor} nested>
+          <div
+            aria-hidden="true"
+            className="text-fg-faint hover:bg-bg-soft hover:text-fg-dim mr-1 grid size-6 cursor-grab place-items-center rounded active:cursor-grabbing"
+          >
+            <GripVertical className="size-4" />
+          </div>
+        </DragHandle>
+      )}
+
       <EditorContent editor={editor} />
+
+      {busy && (
+        <p role="status" className="text-fg-faint text-micro mt-2">
+          {t("notes.uploading")}
+        </p>
+      )}
 
       {/* Formatting where the text is, rather than in a toolbar at the top of a pane the user is
           not looking at. It appears only over a selection, which is the only moment any of it is
@@ -384,7 +567,7 @@ export function RichNote({
                 // The pointer moves the keyboard's highlight rather than fighting it: two rows
                 // marked at once is two answers to "what does Enter do".
                 onMouseEnter={() => setAt(index)}
-                onClick={() => run(block.apply)}
+                onClick={() => run(block)}
                 className={cn(
                   "text-meta flex w-full items-center gap-2 px-3 py-1.5 text-start transition-colors",
                   index === chosen ? "bg-accent-soft text-accent" : "text-fg-dim",
@@ -399,4 +582,14 @@ export function RichNote({
       )}
     </div>
   );
+}
+
+type Chain = ReturnType<Editor["chain"]>;
+
+/** One row of the block menu: a formatting change, or something that has to go and fetch first. */
+interface BlockAction {
+  key: string;
+  icon: typeof Type;
+  apply?: (chain: Chain) => void;
+  act?: () => void;
 }

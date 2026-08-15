@@ -124,6 +124,23 @@ export function PageScreen() {
    * screen; a red bar because the suggestions could not be fetched would be a failure report about
    * something the reader never asked for.
    */
+  /**
+   * The page this one is inside, when it is inside one.
+   *
+   * A second request rather than a field on the first: the daemon hands back a parent's *id*,
+   * because that is what the file says, and a title is the parent's business and changes when the
+   * parent is renamed. Its failure is silent — a missing breadcrumb is a missing convenience, and a
+   * red bar about a page the reader did not ask for would be a failure report about nothing.
+   */
+  const parentOf = loaded?.id === pageId ? (loaded.detail.summary.parent ?? null) : null;
+  const container = useLoad(
+    useCallback(
+      async () => (parentOf ? await library.detail(parentOf) : null),
+      [library, parentOf],
+    ),
+    [library, parentOf],
+  );
+
   const asked = useLoad(
     useCallback(async () => {
       const [unnamed, view] = await Promise.all([people.unknowns(pageId), people.list()]);
@@ -205,9 +222,22 @@ export function PageScreen() {
 
   const meta = (
     <>
-      <Link to="/library" search={{}} className="text-fg-dim hover:text-fg text-meta">
-        ← {t("meeting.back")}
-      </Link>
+      {/* Where this page is, when it is inside another one. A sub-page opened from a search result
+          or a citation arrives with no context at all otherwise — it looks like a top-level note
+          that happens to be called "Ngân sách", and the thing it is part of is invisible. */}
+      {summary.parent ? (
+        <Link
+          to="/pages/$pageId"
+          params={{ pageId: summary.parent }}
+          className="text-fg-dim hover:text-fg text-meta"
+        >
+          ← {container.data?.summary.title ?? t("meeting.back")}
+        </Link>
+      ) : (
+        <Link to="/library" search={{}} className="text-fg-dim hover:text-fg text-meta">
+          ← {t("meeting.back")}
+        </Link>
+      )}
       {/* A recording's title is a heading; a note's title is the first line of the note, and the
           editor below already shows it. Drawing it twice would put the user's own first sentence
           above the field they are about to edit it in. */}
@@ -232,6 +262,7 @@ export function PageScreen() {
           id={pageId}
           className="border-line border-t"
           onRemoved={() => void navigate({ to: "/library", search: {} })}
+          onOpenPage={(id) => void navigate({ to: "/pages/$pageId", params: { pageId: id } })}
         />
       </div>
     );

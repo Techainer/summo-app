@@ -30,13 +30,16 @@ cơ sở dữ liệu của ai khác. Ba nguyên tắc sau đây theo từ đó, 
 
 Đã dùng được từ đầu đến cuối: ghi âm hoặc nhập một bản ghi có sẵn, có transcript gắn tên người nói,
 một bản tóm tắt do agent soạn để bạn duyệt, việc cần làm trên bảng kanban, hỏi đáp trả lời từ kho dữ
-liệu kèm trích dẫn, dịch trực tiếp nội dung đang phát, lồng tiếng (dubbing), ghi chú, lịch, bình
-luận, một dàn agent bạn chỉnh sửa như file, và đồng bộ mã hoá giữa các máy qua bất kỳ thư mục dùng
-chung nào. Đăng ký lịch bằng URL thì lịch luôn cập nhật, sắp tới giờ họp app hỏi có ghi chú không —
+liệu kèm trích dẫn, dịch trực tiếp nội dung đang phát, lồng tiếng (dubbing), lịch, bình luận, một
+dàn agent bạn chỉnh sửa như file, và đồng bộ mã hoá giữa các máy qua bất kỳ thư mục dùng chung nào.
+Ghi chú viết trong trình soạn thảo khối: có bảng, ảnh, kéo thả để đổi thứ tự, và trang lồng trong
+trang — trên một file vẫn là Markdown, và mở ở dạng văn bản thuần thay vì làm mất thứ nó chưa giữ
+được. Đăng ký lịch bằng URL thì lịch luôn cập nhật, sắp tới giờ họp app hỏi có ghi chú không —
 không bao giờ tự ghi âm — và họp xong thì soạn sẵn thư gửi đi để bạn tự gửi.
 
-**Chưa xong:** phần mobile mới ở dạng khung sườn và chưa từng biên dịch được, và relay đồng bộ trên
-cloud (hosted sync relay) chưa được xây — hiện tại đồng bộ vẫn chạy qua một thư mục dùng chung.
+**Chưa xong:** bản Android đã build và cài được nhưng chưa ghi âm được — chưa ký, và manifest chưa
+xin quyền micro; iOS cần máy Mac nên chưa từng build. Relay đồng bộ trên cloud (hosted sync relay)
+cũng chưa được xây — hiện tại đồng bộ vẫn chạy qua một thư mục dùng chung.
 
 Các con số dưới đây đều đo trên chính codebase này, không phải ước lượng. Mỗi con số tái lập được
 bằng đúng lệnh ghi kèm; xem đầy đủ phương pháp và các lưu ý ở

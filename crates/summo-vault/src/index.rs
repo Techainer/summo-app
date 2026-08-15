@@ -54,6 +54,17 @@ pub struct MeetingEntry {
     pub path: PathBuf,
     /// Folder under `meetings/`, empty for the root. This is how a user files their own work.
     pub folder: String,
+    /// The page this one lives inside, when it is a sub-page.
+    ///
+    /// A folder and a parent are two different structures over the same set and both are the
+    /// user's: a folder is where the file *is*, a parent is what the page is *part of*. A sub-page
+    /// keeps whichever folder it was filed in, because moving a child out of its parent's directory
+    /// is a filing decision and detaching it from its parent is not.
+    ///
+    /// A document naming itself as its parent is dropped here rather than at the point of drawing —
+    /// see [`read_entry`]. Every reader of this field would otherwise need the same guard, and the
+    /// one that forgot would loop.
+    pub parent: Option<MeetingId>,
     pub title: String,
     /// The `date` field verbatim, so nothing is lost when it is not a timestamp we can parse.
     pub date: String,
@@ -569,11 +580,19 @@ fn read_entry(path: &Path, root: &Path) -> Result<MeetingEntry> {
         .map(|p| p.to_string_lossy().replace('\\', "/"))
         .unwrap_or_default();
 
+    // A file that names itself as its own parent has no parent. Hand-edited frontmatter is the
+    // likely source, and the cost of trusting it is a row that is its own ancestor — which is not a
+    // wrong drawing but an infinite one.
+    let parent = frontmatter
+        .parent
+        .filter(|p| !p.as_str().is_empty() && p != &frontmatter.id);
+
     Ok(MeetingEntry {
         id: frontmatter.id,
         kind: kind_of(&head, frontmatter.duration),
         path: path.to_path_buf(),
         folder,
+        parent,
         title,
         day,
         started_at,
