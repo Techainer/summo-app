@@ -82,11 +82,19 @@ for (const label of SCREENS) {
         return style.visibility !== "hidden" && style.opacity !== "0";
       };
 
-      /** A leaf that puts something on screen: text, an image, a control. */
+      /**
+       * A leaf that puts something on screen: text, an image, a control.
+       *
+       * `toUpperCase`, and it matters. `SVG` was in this list from the first version and never once
+       * matched: an SVG element's `tagName` is lowercase `svg` in an HTML document, so every icon
+       * in the app has been invisible to this measurement. A screen whose only content was a
+       * drawing therefore measured as empty from the top of its text — which is what an illustrated
+       * empty state is, and what made one fail the moment its picture got bigger than its heading.
+       */
       const isInk = (el) =>
         el.childElementCount === 0 &&
         ((el.textContent ?? "").trim().length > 0 ||
-          ["IMG", "SVG", "CANVAS", "INPUT", "TEXTAREA"].includes(el.tagName));
+          ["IMG", "SVG", "CANVAS", "INPUT", "TEXTAREA"].includes(el.tagName.toUpperCase()));
 
       /** The vertical extent of everything drawn inside `root`. */
       const inkBounds = (root) => {

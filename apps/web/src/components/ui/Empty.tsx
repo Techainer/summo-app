@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
 import { GENTLE } from "../../lib/motion";
+import { Spot } from "./Spot";
 
 /**
  * A screen with nothing on it yet.
@@ -15,8 +16,10 @@ import { GENTLE } from "../../lib/motion";
  *
  * Three things, in this order, and no more:
  *
- * - **An icon**, dimmed and in a soft disc. It gives the eye somewhere to land in a space that
- *   otherwise has no landmark, and it says which screen this is without repeating the heading.
+ * - **A drawing** — see [`Spot`] — with the screen's icon at the centre of it. It gives the eye
+ *   somewhere to land in a space that otherwise has no landmark, and it says which screen this is
+ *   without repeating the heading. It moves, slowly, because a still empty screen reads as a screen
+ *   that failed rather than one that is waiting for you.
  * - **What is true**, not what went wrong. "No meetings yet" — not "failed to load", which is a
  *   different state and deserves a different message.
  * - **What to do about it**, when there is something. An empty state with no way out is a dead end,
@@ -65,12 +68,9 @@ export function Empty({
         className,
       )}
     >
-      {/* A soft disc rather than a bare glyph: at 20px an outline icon on a flat background is a
-          smudge, and the ring is what gives the eye something to land on in a space with no other
-          landmark. */}
-      <span className="bg-bg-soft ring-line grid size-14 place-items-center rounded-full ring-1">
-        <Icon aria-hidden="true" className="text-fg-faint size-6 stroke-[1.5]" />
-      </span>
+      {/* A drawing rather than a bare glyph: at 20px an outline icon on a flat background is a
+          smudge, and this is the one screen in the app that has nothing else on it to look at. */}
+      <Spot icon={Icon} size={full ? 104 : 84} className="mb-1" />
       <p className="text-fg text-body font-medium">{title}</p>
       {hint && <p className="text-fg-faint text-meta max-w-sm leading-relaxed">{hint}</p>}
       {action}

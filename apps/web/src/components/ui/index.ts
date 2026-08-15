@@ -9,6 +9,7 @@ export { StatusChip, type Status } from "./StatusChip";
 export { Wave } from "./Wave";
 export { Page, PageGlow } from "./Page";
 export { Skeleton } from "./Skeleton";
+export { Spot } from "./Spot";
 export { Input, TextArea, Labelled } from "./Field";
 export { Chip, SectionTitle } from "./Chip";
 export { Ticker } from "./Ticker";

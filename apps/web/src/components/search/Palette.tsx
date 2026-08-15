@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { CornerDownLeft, NotebookPen, Search, Waves } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useT } from "../../i18n/context";
@@ -8,7 +9,15 @@ import { cn } from "../../lib/cn";
 import { useEngine } from "../../lib/engine-context";
 import { SNAPPY } from "../../lib/motion";
 import { LibraryClient } from "../../lib/library";
-import { asThings, matchPlaces, order, type Place, type Result } from "../../lib/palette";
+import {
+  asThings,
+  matchCommands,
+  order,
+  type Action,
+  type Command,
+  type Place,
+  type Result,
+} from "../../lib/palette";
 
 /** How long to wait after the last keystroke before asking the daemon. */
 const DEBOUNCE_MS = 140;
@@ -34,12 +43,32 @@ const DEBOUNCE_MS = 140;
  * pieces of state whenever `open` changed, which is a synchronous re-render for something React
  * does for free: unmount it, and there is no state left to be stale.
  */
-export function Palette({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function Palette({
+  open,
+  onClose,
+  actions = [],
+}: {
+  open: boolean;
+  onClose: () => void;
+  /**
+   * What the palette can *do*, supplied by whoever owns the state it touches.
+   *
+   * Recording, the assistant panel and the window's shape all live in the shell, so the shell hands
+   * them down rather than the palette reaching for a context it would then be coupled to.
+   */
+  actions?: (Action & { icon: LucideIcon })[];
+}) {
   if (!open) return null;
-  return <PaletteDialog onClose={onClose} />;
+  return <PaletteDialog onClose={onClose} actions={actions} />;
 }
 
-function PaletteDialog({ onClose }: { onClose: () => void }) {
+function PaletteDialog({
+  onClose,
+  actions,
+}: {
+  onClose: () => void;
+  actions: (Action & { icon: LucideIcon })[];
+}) {
   const t = useT();
   const navigate = useNavigate();
   const { handshake } = useEngine();
@@ -102,13 +131,16 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
     return () => window.clearTimeout(timer);
   }, [library, query]);
 
-  const results = order(matchPlaces(places, query), found as never, query).slice(0, 12);
+  const commands: Command[] = useMemo(() => [...actions, ...places], [actions, places]);
+  const results = order(matchCommands(commands, query), found as never, query).slice(0, 12);
 
   const run = useCallback(
     (result: Result | undefined) => {
       if (!result) return;
       onClose();
-      if (result.kind === "place") {
+      if (result.kind === "action") {
+        result.run();
+      } else if (result.kind === "place") {
         void navigate({ to: result.to });
       } else {
         // One address for both kinds. A note used to land on `/notes` with nothing open, which is
@@ -166,7 +198,10 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
             }}
             placeholder={t("palette.placeholder")}
             aria-label={t("palette.title")}
-            className="text-body text-fg placeholder:text-fg-faint w-full bg-transparent focus:outline-none"
+            // No focus ring on this one field. The dialog exists to be typed in and focuses it on
+            // open, so a ring around it marks the only place focus could be — and the caret already
+            // says so, which is the same argument the note editor makes for itself.
+            className="text-body text-fg placeholder:text-fg-faint w-full bg-transparent outline-none focus-visible:outline-none"
           />
           <kbd className="text-fg-faint text-micro border-line rounded border px-1.5 py-0.5">
             esc
@@ -180,29 +215,40 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
             </li>
           ) : (
             results.map((result, index) => (
-              <li key={result.kind === "place" ? result.to : `${result.entry}-${result.id}`}>
+              <li key={keyOf(result)}>
+                {/* A heading only where the kind changes. Three labelled sections over four results
+                    is more chrome than list; a rule that draws one where the list actually turns
+                    over says the same thing and disappears when there is nothing to say. */}
+                {bandOf(result) !== bandOf(results[index - 1]) && (
+                  <p className="text-fg-faint text-micro px-3 pt-2 pb-1 font-semibold tracking-wider uppercase">
+                    {t(`palette.band_${bandOf(result)}`)}
+                  </p>
+                )}
                 <button
                   type="button"
                   onMouseEnter={() => setCursor(index)}
                   onClick={() => run(result)}
                   aria-current={index === cursor ? "true" : undefined}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-[var(--radius-card)] px-3 py-2 text-left transition-colors",
+                    "group/row flex w-full items-center gap-3 rounded-[var(--radius-card)] px-3 py-2 text-left transition-colors",
                     index === cursor ? "bg-bg-elevated" : "hover:bg-bg-soft",
                   )}
                 >
-                  <span className="bg-bg-soft ring-line grid size-7 shrink-0 place-items-center rounded-full ring-1">
-                    {result.kind === "place" ? (
-                      <CornerDownLeft aria-hidden="true" className="text-fg-faint size-3.5" />
-                    ) : result.entry === "note" ? (
-                      <NotebookPen aria-hidden="true" className="text-fg-faint size-3.5" />
-                    ) : (
-                      <Waves aria-hidden="true" className="text-fg-faint size-3.5" />
+                  <span
+                    className={cn(
+                      "grid size-7 shrink-0 place-items-center rounded-full ring-1 transition-colors",
+                      // An action is the one row that changes something, so it is the one row that
+                      // gets the accent. Colour here is a warning as much as an affordance.
+                      result.kind === "action"
+                        ? "bg-accent-soft ring-accent/20 text-accent"
+                        : "bg-bg-soft ring-line text-fg-faint",
                     )}
+                  >
+                    <Glyph result={result} />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="text-body block truncate">
-                      {result.kind === "place" ? result.label : result.title}
+                      {result.kind === "thing" ? result.title : result.label}
                     </span>
                     {result.kind === "thing" && result.excerpt && (
                       <span className="text-fg-faint text-micro block truncate">
@@ -213,12 +259,59 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
                   {result.kind === "thing" && (
                     <span className="text-fg-faint tabular text-micro shrink-0">{result.day}</span>
                   )}
+                  {/* On the row the keyboard is on, not on all of them. It answers "what does
+                      Enter do" for the row Enter would actually reach. */}
+                  {index === cursor && (
+                    <kbd className="text-fg-faint text-micro border-line hidden shrink-0 rounded border px-1.5 py-0.5 sm:block">
+                      ⏎
+                    </kbd>
+                  )}
                 </button>
               </li>
             ))
           )}
         </ul>
+
+        {/* The two keys that drive it, said once. A palette whose navigation has to be guessed is
+            a palette people click their way through, which is the mouse journey it replaced. */}
+        <div className="border-line text-fg-faint text-micro flex items-center gap-3 border-t px-4 py-2">
+          <span className="flex items-center gap-1">
+            <kbd className="border-line rounded border px-1 py-0.5">↑</kbd>
+            <kbd className="border-line rounded border px-1 py-0.5">↓</kbd>
+            {t("palette.move")}
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="border-line rounded border px-1 py-0.5">⏎</kbd>
+            {t("palette.choose")}
+          </span>
+        </div>
       </motion.div>
     </div>
+  );
+}
+
+/** Which band a row belongs to, and `undefined` for the row before the first one. */
+function bandOf(result: Result | undefined): "action" | "place" | "thing" | undefined {
+  if (!result) return undefined;
+  return result.kind;
+}
+
+/** A stable key per row: two vault hits can share a title, and an action can share a label. */
+function keyOf(result: Result): string {
+  if (result.kind === "action") return `action-${result.id}`;
+  if (result.kind === "place") return `place-${result.to}`;
+  return `${result.entry}-${result.id}`;
+}
+
+function Glyph({ result }: { result: Result & { icon?: LucideIcon } }) {
+  if (result.kind === "action") {
+    const Drawn = result.icon ?? CornerDownLeft;
+    return <Drawn aria-hidden="true" className="size-3.5" />;
+  }
+  if (result.kind === "place") return <CornerDownLeft aria-hidden="true" className="size-3.5" />;
+  return result.entry === "note" ? (
+    <NotebookPen aria-hidden="true" className="size-3.5" />
+  ) : (
+    <Waves aria-hidden="true" className="size-3.5" />
   );
 }

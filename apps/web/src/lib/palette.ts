@@ -3,13 +3,15 @@ import type { SearchHit } from "./library";
 /**
  * What ⌘K can find.
  *
- * Two kinds of result, deliberately in one list. **Places** are the eleven destinations the sidebar
- * holds, and **things** are what is in the vault. Splitting them into two searches would mean a
- * user has to know which one they are looking for before they can look — and "tasks" is a screen,
- * a word in a note and the name of an agent's file, all at once.
+ * Three kinds of result, deliberately in one list. **Actions** are things you do, **places** are
+ * the destinations the sidebar holds, and **things** are what is in the vault. Splitting them into
+ * separate searches would mean a user has to know which one they are looking for before they can
+ * look — and "ghi" is a verb, a screen and a word inside a note, all at once.
  *
- * Places rank above things when the query is short. Typing two letters is almost always somebody
- * navigating; typing a sentence is somebody searching.
+ * Actions rank first. Somebody who typed a verb has told you what they want to happen, and making
+ * them scroll past two screens with that word in the name to reach it is the palette failing at
+ * the one thing it is for. Places then rank above things when the query is short: two letters is
+ * almost always navigation, a sentence is a search.
  */
 
 export interface Place {
@@ -20,6 +22,24 @@ export interface Place {
   /** Words that should find it beyond its label, so `models` finds `Mô hình` in any interface language. */
   keywords: string[];
 }
+
+/**
+ * Something the palette does rather than somewhere it goes.
+ *
+ * Carries its own closure. The alternative — an id the caller switches on — puts the list of what
+ * exists in one file and the list of what each one means in another, and the two drift the first
+ * time somebody adds a command and forgets the second half.
+ */
+export interface Action {
+  kind: "action";
+  id: string;
+  label: string;
+  keywords: string[];
+  run: () => void;
+}
+
+/** A place or an action: the half of the palette that is not the vault. */
+export type Command = Place | Action;
 
 export interface Thing {
   kind: "thing";
@@ -32,7 +52,7 @@ export interface Thing {
   excerpt?: string;
 }
 
-export type Result = Place | Thing;
+export type Result = Command | Thing;
 
 /** Below this, a query is a navigation; above it, a search. */
 export const NAVIGATION_LENGTH = 3;
@@ -59,12 +79,15 @@ export function fold(value: string): string {
   );
 }
 
-/** Places whose label or keywords contain every word of the query. */
-export function matchPlaces(places: Place[], query: string): Place[] {
+/** Commands whose label or keywords contain every word of the query. */
+export function matchCommands<T extends { label: string; keywords: string[] }>(
+  all: T[],
+  query: string,
+): T[] {
   const words = fold(query).split(/\s+/).filter(Boolean);
-  if (words.length === 0) return places;
-  return places.filter((place) => {
-    const haystack = fold([place.label, ...place.keywords].join(" "));
+  if (words.length === 0) return all;
+  return all.filter((one) => {
+    const haystack = fold([one.label, ...one.keywords].join(" "));
     return words.every((word) => haystack.includes(word));
   });
 }
@@ -84,10 +107,15 @@ export function asThings(hits: SearchHit[]): Thing[] {
 /**
  * The list as shown.
  *
- * Short query: places first, because two letters is somebody navigating. Long query: things first,
- * because a sentence is somebody searching and the screens they could have meant are still there
- * underneath rather than in the way.
+ * Actions always first — a verb is an instruction, and there are never more than a handful of them
+ * matching. Then: short query, places before things, because two letters is somebody navigating;
+ * long query, things before places, because a sentence is somebody searching and the screens they
+ * could have meant are still there underneath rather than in the way.
  */
-export function order(places: Place[], things: Thing[], query: string): Result[] {
-  return query.trim().length < NAVIGATION_LENGTH ? [...places, ...things] : [...things, ...places];
+export function order(commands: Command[], things: Thing[], query: string): Result[] {
+  const actions = commands.filter((one): one is Action => one.kind === "action");
+  const places = commands.filter((one): one is Place => one.kind === "place");
+  return query.trim().length < NAVIGATION_LENGTH
+    ? [...actions, ...places, ...things]
+    : [...actions, ...things, ...places];
 }

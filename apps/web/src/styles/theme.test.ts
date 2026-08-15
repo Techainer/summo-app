@@ -106,6 +106,12 @@ describe("colour utilities", () => {
     // bg-
     ...["fixed", "local", "scroll", "cover", "contain", "none", "repeat", "no-repeat"],
     ...["top", "bottom", "auto", "clip-text", "clip-border", "clip-padding", "clip-content"],
+    // A gradient's *direction*. `bg-linear-to-br` names an angle, not a colour, and the colours it
+    // interpolates arrive separately as `from-` and `to-` — which this test does not walk, because
+    // a gradient with a missing stop still paints something.
+    ...["linear-to-t", "linear-to-tr", "linear-to-r", "linear-to-br"],
+    ...["linear-to-b", "linear-to-bl", "linear-to-l", "linear-to-tl"],
+    ...["radial", "conic"],
     // border-
     ...["0", "2", "4", "8", "x", "y", "s", "e", "t", "r", "b", "l"],
     ...["solid", "dashed", "dotted", "double", "hidden", "collapse", "separate"],

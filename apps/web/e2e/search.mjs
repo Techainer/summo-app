@@ -92,6 +92,27 @@ try {
     fail(`the note opened without its text: ${JSON.stringify(opened.slice(0, 200))}`);
   }
 
+  // ---- and it does things, not only finds them ---------------------------
+  //
+  // A palette that can only navigate is a menu with a text field. What somebody typed a verb into
+  // it for is the verb — so an action ranks above the two screens with that word in their name,
+  // and Enter runs it.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+k");
+  await palette.waitFor({ timeout: 5000 });
+  // Without diacritics again, because that is what the keyboard produces.
+  await page.keyboard.type("trang moi");
+  await page.waitForTimeout(400);
+  const bands = await palette.innerText();
+  if (!/HÀNH ĐỘNG[\s\S]*Trang mới/.test(bands)) {
+    fail(`"trang moi" did not offer the action: ${JSON.stringify(bands)}`);
+  }
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(2500);
+  if (!/#\/pages\//.test(page.url())) {
+    fail(`running the "new page" action went to ${page.url()}`);
+  }
+
   // Escape closes it, and closing it is not a navigation.
   await page.keyboard.press("ControlOrMeta+k");
   await palette.waitFor({ timeout: 5000 });
