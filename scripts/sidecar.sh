@@ -114,6 +114,32 @@ if [[ "${staged}" -eq 0 ]]; then
   echo "no libraries to stage — this build links them in"
 fi
 
+# Linux is told inside the binary, because the AppImage bundler reads the binary and nothing else.
+#
+# `linuxdeploy` walks every ELF in the AppDir and resolves what it declares. The staged daemon
+# declares `libsherpa-onnx-c-api.so` with a runpath of `$ORIGIN`, and inside a bundle it sits in
+# `usr/bin` while its libraries are in `usr/lib/Summo/lib` — so the bundler stopped with
+#
+#   ERROR: Could not find dependency: libsherpa-onnx-c-api.so
+#
+# reported by Tauri as nothing but "failed to run linuxdeploy". The `.deb` bundled fine either way,
+# which is why the first release built one format and failed the other.
+#
+# One extra runpath entry answers it in both formats and at runtime: `usr/bin/../lib/Summo/lib` is
+# `/usr/lib/Summo/lib` in the `.deb` and the same relative path inside the AppDir. The environment
+# variable the shell sets stays as well — it costs nothing and it is what makes a build without
+# `patchelf` still run.
+if [[ "$(uname -s)" == "Linux" && "${staged}" -gt 0 ]]; then
+  if command -v patchelf >/dev/null 2>&1; then
+    patchelf --set-rpath '$ORIGIN:$ORIGIN/../lib/Summo/lib' "${OUT}/summo-engine-${TARGET}"
+    echo "runpath set to \$ORIGIN:\$ORIGIN/../lib/Summo/lib"
+  else
+    # Not fatal: the `.deb` and a development run work without it. Only the AppImage needs it, and
+    # only at bundle time.
+    echo "patchelf not installed — the .deb will work and 'tauri build --bundles appimage' will not"
+  fi
+fi
+
 # macOS finds them without being told, because it cannot be told.
 #
 # The shell puts the resource directory on the daemon's library path, which works on Linux and

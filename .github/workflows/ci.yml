@@ -378,17 +378,27 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
-            librsvg2-dev libasound2-dev
+            librsvg2-dev libasound2-dev patchelf
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # `deb` only. AppImage's tooling is downloaded at bundle time from a third party, which is a
-      # network dependency in the middle of a check; the `.deb` exercises the same staging and the
-      # same layout. The release workflow builds every format, from a tag.
-      - run: pnpm -C apps/desktop exec tauri build --bundles deb
+      # Both Linux formats, because they fail differently and the release found that out the hard
+      # way: the `.deb` bundled cleanly and the AppImage died with "failed to run linuxdeploy" —
+      # its tooling is an AppImage, mounting one needs FUSE, and the runner images no longer ship
+      # it. Checking only the format that works is how a release breaks on the day it is cut.
+      #
+      # The cost is honest: AppImage's tools are downloaded from a third party at bundle time, so
+      # this check has a network dependency the rest of CI does not.
+      - name: Build the installers
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        # `--verbose` because the bundler's own failure message is `failed to run linuxdeploy` and
+        # nothing else. The reason — a dependency it could not resolve — is in the child's output,
+        # which is printed only at this level.
+        run: pnpm -C apps/desktop exec tauri build --bundles deb --bundles appimage --verbose
 
       # What the bundle has to contain, checked rather than assumed. Each of these was missing at
       # some point this week, and each produced an app that opened and did nothing.
@@ -404,7 +414,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: summo-desktop-linux-x86_64
-          path: apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
           retention-days: 14
 
   registry:
