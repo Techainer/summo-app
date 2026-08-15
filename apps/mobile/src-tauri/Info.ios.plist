@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged into the generated Xcode project's plist by the Tauri CLI. This file exists because
+  `gen/apple` does not: it is written by `tauri ios init`, needs macOS to produce, and is not
+  committed — so anything the iOS app must declare has to live somewhere that survives it being
+  regenerated.
+
+  `NSMicrophoneUsageDescription` is not a nicety. iOS does not refuse an app that asks for input
+  without it; it kills the process, at the instant the user presses record. The desktop bundle has
+  the same key for the same reason, in `apps/desktop/src-tauri/Info.plist`.
+
+  `UIBackgroundModes: audio` is what lets a meeting keep recording when the phone locks, which it
+  does after a minute or two while a meeting lasts forty. Android's answer to the same problem is a
+  foreground service with the `microphone` type; this is Apple's.
+
+  Untested. Nothing in this repository can build for iOS — that needs Xcode, and therefore macOS.
+  These are declarations, not code: they are either present when somebody first builds it or they
+  are the first bug they hit.
+-->
+<plist version="1.0">
+  <dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Summo records meetings with this microphone. The audio stays on this device.</string>
+
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>audio</string>
+    </array>
+  </dict>
+</plist>

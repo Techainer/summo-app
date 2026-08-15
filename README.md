@@ -67,6 +67,21 @@ macOS is missing because ONNX Runtime no longer publishes a build for it — Mic
 releases ship `osx-arm64` only. Building from source on an Intel Mac hits the same wall, with a
 clearer message.
 
+### The app, rather than the command
+
+```bash
+pnpm -C apps/desktop exec tauri build     # .deb and .AppImage, .dmg, .msi
+```
+
+A window, a tray icon, and `⌘⇧R` from anywhere. It starts the same daemon the command above runs —
+adopting one that is already up rather than competing with it — so the two are the same product with
+the same vault, and either can be used.
+
+Releases carry the installers as well as the tarball. **They are not code-signed**: macOS will say
+the developer cannot be verified and Windows will show a SmartScreen warning, because there is no
+Apple certificate and no Windows one. The tarball has no such problem, and is what to use if that
+matters to you.
+
 Or building from source, without packaging:
 
 ```bash

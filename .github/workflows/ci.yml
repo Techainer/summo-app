@@ -276,9 +276,23 @@ jobs:
             grep -q "android.permission.$permission" "$manifest" \
               || { echo "::error file=$manifest::$permission was lost — did 'android init' overwrite the manifest?"; exit 1; }
           done
+      # Signed when this repository has a key, unsigned when it does not — which is every fork and
+      # every pull request from one. The keystore never becomes a file that could be committed or
+      # swept into an artefact: it is written to the runner's temp directory and the job ends.
+      #
+      # A missing secret is an empty string, so this step simply does nothing on a fork, and
+      # `build.gradle.kts` says out loud which of the two it did.
+      - name: The signing key, if this repository has one
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        if: env.KEYSTORE != ''
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/summo.keystore"
+          echo "ANDROID_KEYSTORE=$RUNNER_TEMP/summo.keystore" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
       - run: pnpm -C apps/mobile exec tauri android build --apk --target aarch64
-      # Unsigned on purpose: there is no keystore in this repository and there should not be. What
-      # is being proven is that the thing assembles.
       - uses: actions/upload-artifact@v4
         with:
           name: summo-android-arm64
@@ -337,6 +351,61 @@ jobs:
         working-directory: apps/desktop/src-tauri
       - run: cargo test
         working-directory: apps/desktop/src-tauri
+
+  # Compiling the shell is not the same claim as producing something a person can install, and the
+  # difference is where the bugs were: the daemon and the libraries it loads have to be *inside* the
+  # bundle, in the places the shell looks for them. That is decided by the bundler, and until this
+  # job existed nothing had ever run it.
+  #
+  # Gated like the Android build, and for the same reason: it is a release-profile build of a
+  # recognition stack, and it does not change when somebody edits a screen.
+  desktop-bundle:
+    name: the desktop app packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'desktop')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target\napps/desktop/src-tauri -> target"
+          key: desktop-bundle
+          cache-directories: |
+            ~/.cache/sherpa-rs
+            ~/.cache/ort.pyke.io
+      - name: System libraries Tauri links against
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libasound2-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # `deb` only. AppImage's tooling is downloaded at bundle time from a third party, which is a
+      # network dependency in the middle of a check; the `.deb` exercises the same staging and the
+      # same layout. The release workflow builds every format, from a tag.
+      - run: pnpm -C apps/desktop exec tauri build --bundles deb
+
+      # What the bundle has to contain, checked rather than assumed. Each of these was missing at
+      # some point this week, and each produced an app that opened and did nothing.
+      - name: The daemon and its libraries are inside it
+        run: |
+          package="$(find apps/desktop/src-tauri/target/release/bundle/deb -name '*.deb' | head -1)"
+          test -n "$package" || { echo "::error::no .deb was produced"; exit 1; }
+          dpkg-deb -c "$package" > /tmp/contents.txt
+          grep -q "summo-engine" /tmp/contents.txt \
+            || { echo "::error::the bundle has no daemon in it"; cat /tmp/contents.txt; exit 1; }
+          echo "--- what is in it ---"
+          awk '{print $NF}' /tmp/contents.txt | grep -E "summo|lib/" | head -40
+      - uses: actions/upload-artifact@v4
+        with:
+          name: summo-desktop-linux-x86_64
+          path: apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+          retention-days: 14
 
   registry:
     name: validate the published registry

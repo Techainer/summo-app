@@ -126,3 +126,140 @@ jobs:
           # Written by hand. A changelog generated from commit subjects tells a user what changed in
           # the code; they want to know what changed for them.
           draft: true
+
+  # The installers.
+  #
+  # This job did not exist, and the consequence was quiet: `scripts/sidecar.sh` and the whole desktop
+  # shell were built by CI on every pull request and shipped to nobody. Every release of this
+  # product so far has been a tarball with a command in it — which is the right thing for a server
+  # and the wrong thing for the audience the app is drawn for.
+  #
+  # Separate from `bundle` rather than folded into it: a Tauri build needs the platform's webview
+  # development libraries, it is the slower of the two, and a failure in it should not withhold the
+  # tarball that has been shipping for months.
+  installers:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: System dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libasound2-dev autoconf automake libtool
+      - name: Autotools, for building Opus from source
+        if: runner.os == 'macOS'
+        run: brew install autoconf automake libtool
+
+      - run: pnpm install --frozen-lockfile
+
+      # No cache, for the reason the tarball job gives at length: a release is built from scratch.
+      #
+      # `beforeBuildCommand` in `tauri.conf.json` builds the interface and stages the daemon, so
+      # this one command produces the whole thing.
+      - name: Build the installers
+        run: pnpm -C apps/desktop exec tauri build
+
+      # Unsigned on every platform. There is no Apple certificate and no Windows one, so macOS will
+      # show "cannot be opened because the developer cannot be verified" and Windows will show a
+      # SmartScreen warning. Saying so in the release notes is the honest thing to do; shipping
+      # nothing while waiting for a certificate is not.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: summo-installers-${{ matrix.target }}
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+            apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+          draft: true
+
+  # The phone build, published only when there is a key to sign it with.
+  #
+  # An unsigned `.apk` attached to a release is worse than none: it downloads, and then the phone
+  # refuses to install it, and the person who tried has no way to know why. So this job produces one
+  # on every tag and attaches it only if it was signed.
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup target add aarch64-linux-android
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: The NDK
+        run: |
+          sdkmanager --install "ndk;27.2.12479018" > /dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Opus for arm64
+        run: |
+          echo "OPUS_LIB_DIR=$(./scripts/opus-android.sh arm64-v8a | tail -1)" >> "$GITHUB_ENV"
+          echo "OPUS_STATIC=1" >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: The signing key, if this repository has one
+        id: key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        if: env.KEYSTORE != ''
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/summo.keystore"
+          echo "ANDROID_KEYSTORE=$RUNNER_TEMP/summo.keystore" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - run: pnpm -C apps/mobile exec tauri android init --skip-targets-install
+      - run: pnpm -C apps/mobile exec tauri android build --apk --target aarch64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: summo-android-arm64
+          path: apps/mobile/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/') && steps.key.outputs.signed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/mobile/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          draft: true

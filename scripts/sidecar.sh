@@ -113,3 +113,24 @@ done
 if [[ "${staged}" -eq 0 ]]; then
   echo "no libraries to stage — this build links them in"
 fi
+
+# macOS finds them without being told, because it cannot be told.
+#
+# The shell puts the resource directory on the daemon's library path, which works on Linux and
+# Windows and does not work on a notarised Mac: the hardened runtime strips every `DYLD_*` variable
+# from a child process, precisely so that a library cannot be injected into a signed binary. The
+# variable is not ignored — it is removed — and the daemon then dies looking for a dylib that is in
+# the bundle.
+#
+# An `LC_RPATH` inside the binary survives that, because it is part of what was signed. In a macOS
+# bundle the sidecar is `Contents/MacOS/summo-engine` and its resources are `Contents/Resources/`,
+# so one relative entry covers every install location.
+#
+# Added to the staged copy, never to `target/`: a cargo artefact with an extra rpath would be reused
+# by the next build of the CLI, which has no bundle around it.
+if [[ "$(uname -s)" == "Darwin" && "${staged}" -gt 0 ]]; then
+  install_name_tool -add_rpath "@executable_path/../Resources/lib" \
+    "${OUT}/summo-engine-${TARGET}" 2>/dev/null &&
+    echo "added @executable_path/../Resources/lib to the staged binary" ||
+    echo "rpath already present, or install_name_tool unavailable"
+fi
