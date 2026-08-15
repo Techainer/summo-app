@@ -169,7 +169,9 @@ export function RecordScreen() {
             <SectionTitle>{t("home.recent")}</SectionTitle>
             <Recent
               limit={3}
-              onOpen={(entry) => void navigate({ to: "/pages/$pageId", params: { pageId: entry.id } })}
+              onOpen={(entry) =>
+                void navigate({ to: "/pages/$pageId", params: { pageId: entry.id } })
+              }
             />
           </section>
         </>
