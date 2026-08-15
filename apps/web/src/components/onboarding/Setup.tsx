@@ -185,8 +185,13 @@ export function Setup({ onDone }: { onDone: () => void }) {
       )}
 
       {/* Asked before the models, because it decides them. A picker below a list of models would
-          be a question asked after the answer. */}
-      <section className="border-line bg-bg-raised mt-8 rounded-2xl border p-4">
+          be a question asked after the answer — and not asked at all in a build with no
+          recognition, where it would decide nothing and its own hint would be describing a list
+          that is not there. */}
+      <section
+        hidden={!status.recognition}
+        className="border-line bg-bg-raised mt-8 rounded-2xl border p-4"
+      >
         <label className="flex flex-wrap items-center gap-3">
           <span className="font-medium">{t("setup.spoken")}</span>
           <select
