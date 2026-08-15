@@ -67,6 +67,18 @@ pub struct Status {
     pub checks: Vec<Check>,
     /// What this machine looks like to the model picker, so the wizard can explain its choice.
     pub hardware: HwProfile,
+    /// Whether this build can transcribe at all.
+    ///
+    /// A property of the binary, not of the machine: recognition is a compile-time feature, and
+    /// `--no-models` builds — the small tarball, and the Android emulator build, which cannot have
+    /// it because ONNX Runtime publishes nothing for x86-64 Android — are missing every model the
+    /// user might install.
+    ///
+    /// Reported because the app was happy to sell what it could not do. On Android, where the
+    /// feature had never been enabled, setup offered the catalogue, downloaded 99 MB of Whisper,
+    /// said "Ready to record" and then failed the recording with `session needs a live model`. The
+    /// checklist knew about the file on disk and nothing about whether anything could read it.
+    pub recognition: bool,
 }
 
 impl Status {
@@ -94,14 +106,20 @@ pub fn status(paths: &Paths, hardware: &HwProfile) -> Status {
     let store = ModelStore::new(paths.clone());
     let installed = store.list();
 
+    // What this binary can do, before what is on the disk. A build without recognition cannot use
+    // a model however many are installed, and saying "ready" because a file is present is how an
+    // app ends up promising a recording it will refuse.
+    let recognition = cfg!(feature = "models");
+
     let asr: Vec<_> = installed.iter().filter(|m| m.task == Task::Asr).collect();
     let models = Check {
         step: Step::Models,
-        ready: !asr.is_empty(),
+        ready: recognition && !asr.is_empty(),
         blocking: Step::Models.blocking(),
-        detail: match asr.first() {
-            Some(model) => model.id.to_string(),
-            None => "chưa cài mô hình nhận dạng nào".into(),
+        detail: match (recognition, asr.first()) {
+            (false, _) => "bản dựng này không có nhận dạng giọng nói".into(),
+            (true, Some(model)) => model.id.to_string(),
+            (true, None) => "chưa cài mô hình nhận dạng nào".into(),
         },
     };
 
@@ -131,6 +149,7 @@ pub fn status(paths: &Paths, hardware: &HwProfile) -> Status {
         fresh: is_fresh(paths),
         checks,
         hardware: hardware.clone(),
+        recognition,
     }
 }
 
@@ -354,6 +373,7 @@ mod tests {
             fresh: true,
             checks: Vec::new(),
             hardware: hw(),
+            recognition: true,
         };
         assert!(!status.should_prompt());
     }
@@ -368,7 +388,37 @@ mod tests {
             fresh: false,
             checks: Vec::new(),
             hardware: hw(),
+            recognition: true,
         };
         assert!(!status.should_prompt());
+    }
+
+    /// A build with no recognition in it must not say a recording can start.
+    ///
+    /// This is the Android bug as a test. `models` was not enabled there, so the store had a model
+    /// in it, the checklist called that ready, and every recording then failed with `session needs
+    /// a live model`. `cargo test` runs without the feature, which is exactly the build being
+    /// described.
+    #[cfg(not(feature = "models"))]
+    #[test]
+    fn a_build_that_cannot_transcribe_does_not_claim_a_recording_can_start() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        std::fs::create_dir_all(paths.meetings()).unwrap();
+
+        let status = status(&paths, &hw());
+        assert!(!status.recognition, "a build without the feature claims it");
+        assert!(!status.can_record, "it offered to record anyway");
+        let models = status
+            .checks
+            .iter()
+            .find(|c| c.step == Step::Models)
+            .expect("the models step");
+        assert!(!models.ready);
+        assert!(
+            models.detail.contains("nhận dạng"),
+            "the reason has to name recognition, not a missing file: {}",
+            models.detail
+        );
     }
 }

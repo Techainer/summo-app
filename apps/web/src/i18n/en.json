@@ -387,6 +387,8 @@
   "setup": {
     "title": "Welcome to Summo",
     "promise": "Speech recognition and speaker attribution run entirely on your machine. Audio never leaves it.",
+    "no_recognition": "This build cannot recognise speech",
+    "no_recognition_hint": "The copy of Summo you are running was built without speech recognition, so installing a model would not help. Download a build that has it, or rebuild with the `models` feature.",
     "pick_model": "Choose a speech model",
     "machine": "This machine: {cores} cores, {ram} GB RAM.",
     "no_models": "Could not reach the model list. Check the network, or run `summo pull` if you already have the files.",

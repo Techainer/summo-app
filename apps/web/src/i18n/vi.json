@@ -387,6 +387,8 @@
   "setup": {
     "title": "Chào mừng tới Summo",
     "promise": "Nhận dạng giọng nói và tách người nói chạy hoàn toàn trên máy bạn. Âm thanh không rời khỏi máy.",
+    "no_recognition": "Bản dựng này không nhận dạng được giọng nói",
+    "no_recognition_hint": "Bản Summo bạn đang chạy được build không kèm nhận dạng giọng nói, nên tải model về cũng không dùng được. Hãy tải bản có nhận dạng — hoặc build lại với tính năng `models`.",
     "pick_model": "Chọn mô hình nhận dạng",
     "machine": "Máy này: {cores} nhân, {ram} GB RAM.",
     "no_models": "Không lấy được danh sách mô hình. Kiểm tra mạng, hoặc chạy `summo pull` nếu bạn đã có file.",

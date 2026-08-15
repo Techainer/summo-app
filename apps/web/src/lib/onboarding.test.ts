@@ -15,6 +15,7 @@ import {
 } from "./onboarding";
 
 const status = (checks: Check[]): Status => ({
+  recognition: true,
   acknowledged: false,
   can_record: checks.every((c) => !c.blocking || c.ready),
   fresh: true,
