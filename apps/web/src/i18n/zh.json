@@ -446,7 +446,21 @@
     "seed_idea": "## 想法\n\n## 为什么值得做\n\n## 下一步\n- [ ] ",
     "seed_decision": "## 决定\n\n## 背景\n\n## 谁定的、什么时候\n",
     "seed_todo": "- [ ] \n- [ ] \n",
-    "seed_journal": "## 今天\n\n## 卡住的地方\n\n## 明天\n"
+    "seed_journal": "## 今天\n\n## 卡住的地方\n\n## 明天\n",
+    "slash_hint": "按 '/' 插入块",
+    "insert": "插入块",
+    "title_field": "笔记标题",
+    "block_text": "文本",
+    "block_h1": "一级标题",
+    "block_h2": "二级标题",
+    "block_h3": "三级标题",
+    "block_todo": "待办",
+    "block_bullet": "项目符号列表",
+    "block_ordered": "编号列表",
+    "block_quote": "引用",
+    "block_code": "代码",
+    "block_divider": "分隔线",
+    "plain_mode": "这篇笔记有 Summo 无法排版的内容，因此以纯文本打开，不会丢失任何字。"
   },
   "agenda": {
     "title": "日历",

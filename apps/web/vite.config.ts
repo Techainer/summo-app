@@ -27,6 +27,15 @@ export default defineConfig({
           // React and its scheduler are one unit — splitting them means the renderer waits for a
           // second file before it can do anything at all.
           if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "react";
+          // The editor is 128 kB gzipped and is only reached by opening a note, so it is left to
+          // the dynamic import that pulls it in. Naming it here would put it back in `vendor`,
+          // which every screen loads — including the one the app starts on.
+          if (
+            /[\\/]node_modules[\\/](@tiptap|prosemirror-|orderedmap|rope-sequence|w3c-keyname|linkifyjs)/.test(
+              id,
+            )
+          )
+            return undefined;
           return "vendor";
         },
       },

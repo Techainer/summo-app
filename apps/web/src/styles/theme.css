@@ -457,3 +457,154 @@ body {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* The rich note editor.
+ *
+ * ProseMirror renders real elements, and this app's reset flattens headings and lists everywhere
+ * else on purpose — a heading in an interface is a label, not a document. Inside a note it is a
+ * document, so the styles come back here and nowhere else.
+ *
+ * Sizes are the type scale rather than the browser's defaults, so a note and the rest of the app
+ * are the same typography with different weights. */
+.tiptap {
+  min-height: 100%;
+}
+
+.tiptap :where(h1, h2, h3) {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-block: 1.1em 0.35em;
+}
+
+.tiptap h1 {
+  font-size: 1.6rem;
+}
+
+.tiptap h2 {
+  font-size: 1.3rem;
+}
+
+.tiptap h3 {
+  font-size: 1.08rem;
+}
+
+.tiptap :where(h1, h2, h3):first-child {
+  margin-block-start: 0;
+}
+
+.tiptap p {
+  margin-block: 0.55em;
+}
+
+.tiptap :where(ul, ol) {
+  margin-block: 0.55em;
+  padding-inline-start: 1.4em;
+}
+
+.tiptap ul {
+  list-style: disc;
+}
+
+.tiptap ol {
+  list-style: decimal;
+}
+
+.tiptap li {
+  margin-block: 0.15em;
+}
+
+.tiptap li > p {
+  margin-block: 0;
+}
+
+/* A to-do is `- [ ] …` in the file, which is the line the task board already parses. The marker is
+ * a real checkbox rather than a glyph, so it can be ticked with a pointer or with the keyboard. */
+.tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding-inline-start: 0;
+}
+
+.tiptap ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55em;
+}
+
+.tiptap ul[data-type="taskList"] li > label {
+  margin-block-start: 0.35em;
+  user-select: none;
+}
+
+.tiptap ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tiptap input[type="checkbox"] {
+  accent-color: var(--color-accent);
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.tiptap blockquote {
+  border-inline-start: 2px solid var(--color-line-strong);
+  color: var(--color-fg-dim);
+  margin-block: 0.6em;
+  padding-inline-start: 0.9em;
+}
+
+.tiptap pre {
+  background: var(--color-bg-soft);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  margin-block: 0.7em;
+  overflow-x: auto;
+  padding: 0.7em 0.9em;
+}
+
+.tiptap :not(pre) > code {
+  background: var(--color-bg-soft);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+}
+
+.tiptap hr {
+  border: 0;
+  border-block-start: 1px solid var(--color-line);
+  margin-block: 1.2em;
+}
+
+.tiptap a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* A finished to-do gets out of the way. It has to stay legible — it is still a record of what was
+ * done, and a line somebody may want to read next week — so it is dimmed and struck, not hidden. */
+.tiptap ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--color-fg-faint);
+  text-decoration: line-through;
+}
+
+/* The caret is the focus indicator here, as it already is in the plain textarea beside it. A 2px
+ * ring around the whole document is not a focus ring, it is a border — drawn around the one element
+ * on screen that is unambiguously where the keyboard already is. */
+.tiptap:focus-visible {
+  outline: none;
+}
+
+/* The hint on an empty note. It is the only instruction the editor gives, and it is the one that
+ * says the slash menu exists — without it nobody finds it. */
+.tiptap p.is-editor-empty:first-child::before {
+  color: var(--color-fg-faint);
+  content: attr(data-placeholder);
+  float: inline-start;
+  height: 0;
+  pointer-events: none;
+}

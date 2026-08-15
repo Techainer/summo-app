@@ -82,9 +82,12 @@ try {
   if (!/#\/pages\/01NOTE/.test(page.url())) {
     fail(`opening a note from the palette went to ${page.url()}`);
   }
-  // `inputValue`, not `innerText`: a textarea's contents are its value, and `innerText` reports the
-  // empty string for one however much is typed in it.
-  const opened = await page.locator("main textarea").inputValue();
+  // The editor, whichever one this note got — a note the rich editor can hold opens in it, and one
+  // it cannot opens in the textarea beside it. Both are the note; only one has a `value`.
+  const opened = await page
+    .locator("main .tiptap")
+    .innerText()
+    .catch(() => page.locator("main textarea").inputValue());
   if (!opened.includes("khinhkhicau")) {
     fail(`the note opened without its text: ${JSON.stringify(opened.slice(0, 200))}`);
   }

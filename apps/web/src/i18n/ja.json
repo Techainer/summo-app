@@ -446,7 +446,21 @@
     "seed_idea": "## アイデア\n\n## なぜやる価値があるか\n\n## 次の一歩\n- [ ] ",
     "seed_decision": "## 決定\n\n## 背景\n\n## 誰がいつ決めたか\n",
     "seed_todo": "- [ ] \n- [ ] \n",
-    "seed_journal": "## 今日\n\n## 詰まっていること\n\n## 明日\n"
+    "seed_journal": "## 今日\n\n## 詰まっていること\n\n## 明日\n",
+    "slash_hint": "'/' でブロックを挿入",
+    "insert": "ブロックを挿入",
+    "title_field": "ノートのタイトル",
+    "block_text": "テキスト",
+    "block_h1": "見出し 1",
+    "block_h2": "見出し 2",
+    "block_h3": "見出し 3",
+    "block_todo": "ToDo",
+    "block_bullet": "箇条書き",
+    "block_ordered": "番号付きリスト",
+    "block_quote": "引用",
+    "block_code": "コード",
+    "block_divider": "区切り線",
+    "plain_mode": "このノートには Summo が整形できない部分があるため、プレーンテキストで開きます。何も失われません。"
   },
   "agenda": {
     "title": "カレンダー",
