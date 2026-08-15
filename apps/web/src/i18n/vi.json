@@ -337,6 +337,9 @@
     "spoken_hint": "Mặc định cho mọi buổi ghi. Vẫn đổi được cho từng buổi ở thanh ghi."
   },
   "status": {
+    "unreachable": "Không kết nối được với Summo trên máy này.",
+    "unreachable_hint": "Những gì bạn gõ lúc này chưa được lưu.",
+    "retry_now": "Thử lại",
     "top_bar": "Thanh trên cùng",
     "connecting": "đang kết nối…",
     "reconnecting": "đang kết nối lại…",

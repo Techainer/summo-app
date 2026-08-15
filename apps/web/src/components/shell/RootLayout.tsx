@@ -51,6 +51,7 @@ import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
 import { WindowControls } from "./WindowControls";
 import { NudgeBar } from "./NudgeBar";
+import { Unreachable } from "./Unreachable";
 
 /// Labels are translation keys, resolved at render — a module-level array is built once, before a
 /// provider exists, so baking the text in here would freeze the first language forever.
@@ -453,6 +454,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
           <WindowControls />
         </div>
       </header>
+
+      {/* Above the nudges: "the app cannot reach the thing it runs on" outranks every suggestion
+          the app might have about what to do next. */}
+      <Unreachable />
 
       <NudgeBar />
 
