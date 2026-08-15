@@ -633,7 +633,12 @@
   "palette": {
     "title": "すべてを検索",
     "placeholder": "検索、または移動…",
-    "nothing": "一致するものがありません。"
+    "nothing": "一致するものがありません。",
+    "band_action": "操作",
+    "band_place": "移動",
+    "band_thing": "保管庫",
+    "move": "移動",
+    "choose": "選択"
   },
   "assistant": {
     "title": "アシスタント",

@@ -633,7 +633,12 @@
   "palette": {
     "title": "Tìm mọi thứ",
     "placeholder": "Tìm hoặc nhảy tới…",
-    "nothing": "Không có gì khớp."
+    "nothing": "Không có gì khớp.",
+    "band_action": "Hành động",
+    "band_place": "Đi tới",
+    "band_thing": "Trong kho",
+    "move": "di chuyển",
+    "choose": "chọn"
   },
   "assistant": {
     "title": "Trợ lý",

@@ -633,7 +633,12 @@
   "palette": {
     "title": "Search everything",
     "placeholder": "Search or jump to…",
-    "nothing": "Nothing matches."
+    "nothing": "Nothing matches.",
+    "band_action": "Actions",
+    "band_place": "Go to",
+    "band_thing": "In the vault",
+    "move": "move",
+    "choose": "choose"
   },
   "assistant": {
     "title": "Assistant",

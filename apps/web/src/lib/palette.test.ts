@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { NAVIGATION_LENGTH, asThings, fold, matchPlaces, order, type Place } from "./palette";
+import {
+  NAVIGATION_LENGTH,
+  asThings,
+  fold,
+  matchCommands,
+  order,
+  type Action,
+  type Place,
+} from "./palette";
 import type { SearchHit } from "./library";
 
 const places: Place[] = [
@@ -21,22 +29,22 @@ describe("folding", () => {
 
 describe("places", () => {
   it("finds a screen by its label without diacritics", () => {
-    expect(matchPlaces(places, "mo hinh").map((p) => p.to)).toEqual(["/models"]);
+    expect(matchCommands(places, "mo hinh").map((p) => p.to)).toEqual(["/models"]);
   });
 
   // The interface language is not the language somebody's fingers default to. `models` has to find
   // `Mô hình` even when the app is in Vietnamese.
   it("finds a screen by an English keyword in a Vietnamese interface", () => {
-    expect(matchPlaces(places, "models").map((p) => p.to)).toEqual(["/models"]);
+    expect(matchCommands(places, "models").map((p) => p.to)).toEqual(["/models"]);
   });
 
   it("requires every word, so a second word narrows", () => {
-    expect(matchPlaces(places, "kho vault").map((p) => p.to)).toEqual(["/library"]);
-    expect(matchPlaces(places, "kho models")).toEqual([]);
+    expect(matchCommands(places, "kho vault").map((p) => p.to)).toEqual(["/library"]);
+    expect(matchCommands(places, "kho models")).toEqual([]);
   });
 
   it("offers everything for an empty query", () => {
-    expect(matchPlaces(places, "  ")).toHaveLength(places.length);
+    expect(matchCommands(places, "  ")).toHaveLength(places.length);
   });
 });
 
@@ -88,5 +96,40 @@ describe("vault hits", () => {
       } as unknown as SearchHit,
     ]);
     expect(thing?.excerpt).toBe("chốt spec");
+  });
+});
+
+describe("actions", () => {
+  const doing: Action[] = [
+    { kind: "action", id: "record", label: "Ghi", keywords: ["record", "thu"], run: () => {} },
+  ];
+  const going: Place[] = [{ kind: "place", to: "/record", label: "Ghi", keywords: ["record"] }];
+
+  /**
+   * A verb is an instruction. Somebody who typed "ghi" has said what they want to happen, and
+   * making them walk past two screens with that word in the name to reach it is the palette
+   * failing at the one thing it is for.
+   */
+  it("puts what you can do above where you can go", () => {
+    const shown = order([...going, ...doing], [], "ghi");
+    expect(shown[0]).toMatchObject({ kind: "action", id: "record" });
+  });
+
+  it("keeps them first even when the query is long enough to be a search", () => {
+    const found = asThings([
+      {
+        meeting: { id: "01A", title: "Ghi chép", day: "2026-08-10", kind: "note" },
+        matches: 1,
+        excerpts: [],
+      },
+    ] as never);
+    const shown = order(doing, found, "ghi chép hôm nay");
+    expect(shown[0]).toMatchObject({ kind: "action" });
+    expect(shown[1]).toMatchObject({ kind: "thing" });
+  });
+
+  it("finds one by a keyword in another language, like everything else here", () => {
+    expect(matchCommands(doing, "record")).toHaveLength(1);
+    expect(matchCommands(doing, "khong co")).toHaveLength(0);
   });
 });

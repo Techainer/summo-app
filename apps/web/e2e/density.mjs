@@ -82,11 +82,24 @@ for (const label of SCREENS) {
         return style.visibility !== "hidden" && style.opacity !== "0";
       };
 
-      /** A leaf that puts something on screen: text, an image, a control. */
+      /**
+       * A leaf that puts something on screen: text, an image, a control.
+       *
+       * `data-ink` is how a component says "this draws something" when nothing else here can tell.
+       * The list of tags below cannot see a drawing built out of `<span>`s and gradients, and the
+       * `SVG` in it has never matched anything either — a Lucide icon is an `<svg>` with `<path>`
+       * children, so it is not a leaf, and an SVG element's `tagName` is lowercase in an HTML
+       * document besides. Rather than teach this walker to recognise art, the art declares itself:
+       * see `components/ui/Spot.tsx`.
+       *
+       * It matters because an illustrated empty state is *mostly* drawing. Measured from the top of
+       * its text instead, the composition looks lopsided and the screen is reported as a hole.
+       */
       const isInk = (el) =>
-        el.childElementCount === 0 &&
-        ((el.textContent ?? "").trim().length > 0 ||
-          ["IMG", "SVG", "CANVAS", "INPUT", "TEXTAREA"].includes(el.tagName));
+        el.dataset.ink !== undefined ||
+        (el.childElementCount === 0 &&
+          ((el.textContent ?? "").trim().length > 0 ||
+            ["IMG", "SVG", "CANVAS", "INPUT", "TEXTAREA"].includes(el.tagName)));
 
       /** The vertical extent of everything drawn inside `root`. */
       const inkBounds = (root) => {

@@ -18,6 +18,7 @@ import {
   Minimize2,
   NotebookPen,
   Settings,
+  Square,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -39,6 +40,7 @@ import { motion } from "motion/react";
 import { SNAPPY, screen as screenVariants } from "../../lib/motion";
 import { AssistantPanel } from "../assistant/AssistantPanel";
 import { Palette } from "../search/Palette";
+import type { Action } from "../../lib/palette";
 import { usePaletteShortcut } from "../../lib/use-palette-shortcut";
 import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
@@ -197,6 +199,62 @@ export function RootLayout({ children }: { children: ReactNode }) {
       })();
     },
     [engine.library, say],
+  );
+
+  /**
+   * What ⌘K can do, as opposed to where it can go.
+   *
+   * Assembled here because every one of them touches state this component owns — the recording, the
+   * assistant panel, the shape of the window. Handing them down is what lets the palette stay a
+   * list that runs closures instead of a component that has to know what a recording is.
+   *
+   * Keywords in English beside the Vietnamese labels for the same reason the destinations carry
+   * them: the interface language is not the language a person's fingers default to.
+   */
+  const actions: (Action & { icon: LucideIcon })[] = useMemo(
+    () => [
+      {
+        kind: "action",
+        id: "record",
+        icon: engine.session.recording ? Square : Mic,
+        label: engine.session.recording ? t("record.stop") : t("record.start"),
+        keywords: ["record", "ghi", "thu", "stop", "dung"],
+        run: () => engine.toggle(),
+      },
+      {
+        kind: "action",
+        id: "new-page",
+        icon: NotebookPen,
+        label: t("nav.new_page"),
+        keywords: ["new", "note", "moi", "ghi chu", "trang"],
+        run: () => newPage(search.folder ?? null),
+      },
+      {
+        kind: "action",
+        id: "assistant",
+        icon: Sparkles,
+        label: t("assistant.title"),
+        keywords: ["assistant", "agent", "ask", "tro ly", "hoi"],
+        run: () => setAssistantOpen(true),
+      },
+      {
+        kind: "action",
+        id: "compact",
+        icon: Minimize2,
+        label: t("nav.shrink"),
+        keywords: ["compact", "shrink", "thu gon", "cua so"],
+        run: () => setCompact(true),
+      },
+      {
+        kind: "action",
+        id: "sidebar",
+        icon: Menu,
+        label: navOpen ? t("nav.hide_sidebar") : t("nav.show_sidebar"),
+        keywords: ["sidebar", "thanh ben", "an", "hien"],
+        run: () => setNavOpen((was) => !was),
+      },
+    ],
+    [engine, newPage, navOpen, search.folder, setNavOpen, t],
   );
 
   const selectFolder = useCallback(
@@ -421,7 +479,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           </FirstRun>
         </AppShell>
       </div>
-      <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} actions={actions} />
       <StatusBar
         stat={engine.stat}
         speakers={speakersOf(engine.transcript.segments)}

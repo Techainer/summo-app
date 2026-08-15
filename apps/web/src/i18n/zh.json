@@ -633,7 +633,12 @@
   "palette": {
     "title": "搜索全部",
     "placeholder": "搜索或跳转…",
-    "nothing": "没有匹配项。"
+    "nothing": "没有匹配项。",
+    "band_action": "操作",
+    "band_place": "前往",
+    "band_thing": "在库中",
+    "move": "移动",
+    "choose": "选择"
   },
   "assistant": {
     "title": "助手",
