@@ -31,7 +31,10 @@
     "setup": "ワークスペース",
     "home": "ホーム",
     "new_page": "新しいページ",
-    "new_page_in": "{name} に新しいページ"
+    "new_page_in": "{name} に新しいページ",
+    "move_page": "{name} を移動",
+    "move_to": "{name} へ移動",
+    "move_to_root": "フォルダなし"
   },
   "record": {
     "source": "入力",

@@ -31,7 +31,10 @@
     "setup": "Không gian",
     "home": "Trang chính",
     "new_page": "Trang mới",
-    "new_page_in": "Trang mới trong {name}"
+    "new_page_in": "Trang mới trong {name}",
+    "move_page": "Chuyển {name}",
+    "move_to": "Chuyển vào {name}",
+    "move_to_root": "Ngoài thư mục"
   },
   "record": {
     "source": "Nguồn",

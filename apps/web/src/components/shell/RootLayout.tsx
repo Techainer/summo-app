@@ -180,6 +180,29 @@ export function RootLayout({ children }: { children: ReactNode }) {
     [engine, navigate, say, t],
   );
 
+  const movePage = useCallback(
+    (page: Page, folder: string) => {
+      // Optimistic. A move is a rename on disk and comes back in a few milliseconds, but the tree
+      // is the thing the user is looking at while they let go of the mouse — a row that stays put
+      // for a round trip reads as a drop that did not take.
+      setPages((current) =>
+        current.map((each) => (each.id === page.id ? { ...each, folder } : each)),
+      );
+      void (async () => {
+        try {
+          await engine.library.moveTo(page.id, folder);
+        } catch (e) {
+          console.warn(say(e));
+        } finally {
+          // Either way: on success this picks up a folder the vault created, and on failure it puts
+          // the row back where it really is rather than leaving a lie on screen.
+          setVaultGeneration((n) => n + 1);
+        }
+      })();
+    },
+    [engine.library, say],
+  );
+
   const selectFolder = useCallback(
     (folder: string | null) => {
       // `null` clears the filter; `""` is the vault root, which is a folder like any other. A
@@ -344,6 +367,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           onOpenPage={openPage}
           activePage={activePageId(pathname, search)}
           onNewPage={newPage}
+          onMovePage={movePage}
           activeFolder={search.folder ?? null}
           onSelectFolder={selectFolder}
           navOpen={navOpen}

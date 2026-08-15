@@ -80,6 +80,60 @@ await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/`, {
   }
 }
 
+// ---- filing a page from the tree ------------------------------------------
+//
+// The page just made is unfiled, which is where a new page starts. Filing it is the gesture the
+// tree exists for, and it is checked through the menu rather than through the drag: dragging is
+// pointer-only and undelivered on touch, so the menu is the path that has to work everywhere.
+{
+  const tree = page.getByLabel("Thư mục");
+  const made = tree.getByRole("button", { name: /Chuyển Ghi chú mới/ }).first();
+  await made
+    .waitFor({ timeout: 10000 })
+    .catch(() => problems.push("the new page has no way to be filed"));
+
+  if ((await made.count()) > 0) {
+    await made.click();
+    const menu = page.getByTestId("move-page").first();
+    await menu.waitFor({ timeout: 5000 }).catch(() => problems.push("no destinations offered"));
+    await menu.getByRole("button", { name: "khach-hang" }).first().click();
+    await page.waitForTimeout(1200);
+
+    const listed = await (await fetch(`${engine.url}/library?token=${engine.token}`)).json();
+    const moved = listed.groups
+      .flatMap((g) => g.meetings)
+      .find((m) => m.title === "Ghi chú mới");
+    if (!moved) {
+      problems.push("the filed page vanished from the vault");
+    } else if (moved.folder !== "khach-hang") {
+      problems.push(`filing put the page in ${JSON.stringify(moved.folder)}`);
+    } else if (!moved.file.includes("notes/")) {
+      // A typed note filed into a folder used to be carried out of `notes/` and into the
+      // recordings tree, because every destination was computed from `meetings/`.
+      problems.push(`filing moved the note out of notes/: ${moved.file}`);
+    }
+  }
+}
+
+// ---- and back out again, by dragging --------------------------------------
+{
+  const tree = page.getByLabel("Thư mục");
+  const row = tree.locator("[draggable='true']").filter({ hasText: "Ghi chú mới" }).first();
+  if ((await row.count()) === 0) {
+    problems.push("the filed page is not in the tree to drag");
+  } else {
+    await row.dragTo(tree.getByRole("button", { name: "Tất cả", exact: true }));
+    await page.waitForTimeout(1200);
+    const listed = await (await fetch(`${engine.url}/library?token=${engine.token}`)).json();
+    const moved = listed.groups
+      .flatMap((g) => g.meetings)
+      .find((m) => m.title === "Ghi chú mới");
+    if (moved?.folder !== "") {
+      problems.push(`dragging to the root left it in ${JSON.stringify(moved?.folder)}`);
+    }
+  }
+}
+
 // ---- what you keep asking for becomes a button ----------------------------
 {
   // Written straight into the vault rather than by asking twice through the interface: an agent run

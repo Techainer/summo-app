@@ -31,7 +31,10 @@
     "setup": "Workspace",
     "home": "Home",
     "new_page": "New page",
-    "new_page_in": "New page in {name}"
+    "new_page_in": "New page in {name}",
+    "move_page": "Move {name}",
+    "move_to": "Move into {name}",
+    "move_to_root": "No folder"
   },
   "record": {
     "source": "Source",

@@ -31,7 +31,10 @@
     "setup": "工作区",
     "home": "主页",
     "new_page": "新建页面",
-    "new_page_in": "在 {name} 新建页面"
+    "new_page_in": "在 {name} 新建页面",
+    "move_page": "移动 {name}",
+    "move_to": "移动到 {name}",
+    "move_to_root": "不在文件夹"
   },
   "record": {
     "source": "来源",
