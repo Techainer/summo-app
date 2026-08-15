@@ -32,3 +32,22 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 # `summo_engine::embedded` for why that decides the whole shape of this build.
 summo-engine = { path = "../../../crates/summo-engine" }
 summo-core = { path = "../../../crates/summo-core" }
+
+# Recognition, on the architecture phones are.
+#
+# `models` was not enabled here at all, and the consequence was a product that lied: the app offered
+# the model catalogue, downloaded 99 MB of Whisper, said "Ready to record", and then failed every
+# recording with `session needs a live model` — because the code that picks a model out of the store
+# is behind that feature, so `live_model` was never filled in. Found by installing a model on an
+# emulator and pressing record.
+#
+# Declared per-architecture rather than in `[dependencies]` because ONNX Runtime publishes no
+# Android build for x86-64: `ort-sys` stops with "no prebuilt binaries available for target
+# x86_64-linux-android". Every Android phone worth shipping to is arm64, and the x86-64 build exists
+# only so an emulator can be driven on a CI runner — a job that tests that the app starts and
+# reaches its engine, not that it transcribes.
+#
+# Feature flags are additive across these sections, so the base dependency above stays as it is and
+# this adds to it on the targets that can carry it.
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+summo-engine = { path = "../../../crates/summo-engine", features = ["models"] }
