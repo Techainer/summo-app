@@ -702,5 +702,14 @@
     "times": "{count} times",
     "done": "Done — see it under Tasks",
     "open": "Open"
+  },
+  "theme": {
+    "system": "Match the system",
+    "light": "Light appearance",
+    "dark": "Dark appearance",
+    "heading": "Appearance",
+    "short_system": "System",
+    "short_light": "Light",
+    "short_dark": "Dark"
   }
 }

@@ -1,4 +1,4 @@
-import { Checkbox, Input, Page } from "./ui";
+import { Checkbox, Input, Page, SegmentedControl } from "./ui";
 import { useCallback, useEffect, useState } from "react";
 
 import { useI18n, useT } from "../i18n/context";
@@ -8,6 +8,7 @@ import { SpokenLanguage } from "./record/SpokenLanguage";
 import { load as loadCapture, save as saveCapture } from "../lib/capture";
 import { url } from "../lib/library";
 import type { Handshake } from "../lib/engine";
+import { SCHEMES, choose as chooseScheme, read as readScheme, type Scheme } from "../lib/theme";
 
 /**
  * Settings, which is only ever the language model.
@@ -172,6 +173,7 @@ export function Settings({ handshake }: { handshake: Handshake }) {
   return (
     <Page width="narrow" data-testid="settings">
       <LanguagePicker />
+      <AppearanceSetting />
 
       {/* Above the model and provider settings, because it is the one that stops a recording
           outright — and because a user who arrives here after a failed recording is looking for
@@ -469,5 +471,36 @@ function SpokenLanguageSetting() {
         }}
       />
     </section>
+  );
+}
+
+/**
+ * Light, dark, or whatever the machine says.
+ *
+ * Here as well as in ⌘K, because a preference that only exists in a command palette is one most
+ * people never find — and because this is the screen somebody opens when they are looking for a
+ * setting rather than for a shortcut. `theme.css` has had both blocks written since the palette was
+ * rebuilt; nothing set the attribute, so dark mode has only ever followed the operating system.
+ */
+function AppearanceSetting() {
+  const t = useT();
+  const [scheme, setScheme] = useState<Scheme>(() => readScheme());
+
+  return (
+    <div className={FIELD}>
+      <span className={LABEL}>{t("theme.heading")}</span>
+      <SegmentedControl
+        label={t("theme.heading")}
+        value={scheme}
+        onChange={(next) => {
+          chooseScheme(next);
+          setScheme(next);
+        }}
+        // Short labels here, the sentence in the palette. Three phrases like "Giao diện theo hệ
+        // thống" side by side in a 390px column is a control that wraps out of its own pill — the
+        // screenshot audit caught it as white text on nothing.
+        options={SCHEMES.map((one) => ({ value: one, label: t(`theme.short_${one}`) }))}
+      />
+    </div>
   );
 }

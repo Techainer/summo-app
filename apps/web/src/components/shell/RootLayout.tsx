@@ -19,12 +19,16 @@ import {
   NotebookPen,
   Settings,
   Square,
+  Sun,
+  Moon,
+  Monitor,
+  Languages,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
 
-import { useT } from "../../i18n/context";
+import { useI18n, useT } from "../../i18n/context";
 import { NoteClient } from "../../lib/notes";
 import type { Page } from "./Sidebar";
 import { useIsNarrow } from "../../lib/breakpoint";
@@ -41,6 +45,7 @@ import { SNAPPY, screen as screenVariants } from "../../lib/motion";
 import { AssistantPanel } from "../assistant/AssistantPanel";
 import { Palette } from "../search/Palette";
 import type { Action } from "../../lib/palette";
+import { SCHEMES, choose as chooseScheme, read as readScheme, type Scheme } from "../../lib/theme";
 import { usePaletteShortcut } from "../../lib/use-palette-shortcut";
 import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
@@ -84,6 +89,10 @@ const NAV: { key: string; labelKey: string; icon: LucideIcon; group?: "work" | "
 export function RootLayout({ children }: { children: ReactNode }) {
   const engine = useEngine();
   const navigate = useNavigate();
+  const { languages, setLocale, locale } = useI18n();
+  // Read once. The document already carries the choice — `index.html` applies it before the first
+  // paint — so this is only what the palette needs in order to say which one is on.
+  const [scheme, setScheme] = useState<Scheme>(() => readScheme());
   const matchRoute = useMatchRoute();
   const narrow = useIsNarrow();
   const t = useT();
@@ -253,8 +262,41 @@ export function RootLayout({ children }: { children: ReactNode }) {
         keywords: ["sidebar", "thanh ben", "an", "hien"],
         run: () => setNavOpen((was) => !was),
       },
+      // Three rows rather than one that cycles. A toggle has to be pressed an unknown number of
+      // times to reach the state you want, and "the third one is system" is not something a person
+      // should have to learn from a palette.
+      ...SCHEMES.filter((one) => one !== scheme).map((one) => ({
+        kind: "action" as const,
+        id: `theme-${one}`,
+        icon: { system: Monitor, light: Sun, dark: Moon }[one],
+        label: t(`theme.${one}`),
+        // Per scheme, not one list shared by all three. A shared list means every theme row matches
+        // every theme word, so typing `toi` offers "sáng" as well and Enter picks the wrong one —
+        // a filter that returns everything is a filter that has been turned off.
+        keywords: {
+          system: ["theme", "system", "giao dien", "he thong", "che do"],
+          light: ["theme", "light", "giao dien", "sang"],
+          dark: ["theme", "dark", "night", "giao dien", "toi"],
+        }[one],
+        run: () => {
+          chooseScheme(one);
+          setScheme(one);
+        },
+      })),
+      // Every language but the one already on. Labelled in its own language, because somebody
+      // looking for English is not reading the Vietnamese word for it.
+      ...languages
+        .filter((one) => one.code !== locale)
+        .map((one) => ({
+          kind: "action" as const,
+          id: `locale-${one.code}`,
+          icon: Languages,
+          label: one.label,
+          keywords: ["language", "ngon ngu", one.code],
+          run: () => setLocale(one.code),
+        })),
     ],
-    [engine, newPage, navOpen, search.folder, setNavOpen, t],
+    [engine, languages, locale, newPage, navOpen, scheme, search.folder, setLocale, setNavOpen, t],
   );
 
   const selectFolder = useCallback(

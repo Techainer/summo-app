@@ -702,5 +702,14 @@
     "times": "{count} 次",
     "done": "完成 — 在待办里查看",
     "open": "打开"
+  },
+  "theme": {
+    "system": "跟随系统",
+    "light": "浅色外观",
+    "dark": "深色外观",
+    "heading": "外观",
+    "short_system": "系统",
+    "short_light": "浅色",
+    "short_dark": "深色"
   }
 }
