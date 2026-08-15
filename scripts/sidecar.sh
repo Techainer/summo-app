@@ -75,7 +75,11 @@ case "$(uname -s)" in
     LIBS="$(find "target/${PROFILE}" -maxdepth 1 -name '*.dll')"
     ;;
   *)
-    LIBS="$(ldd "target/${PROFILE}/summo-engine" | awk '/=> \/.*target\// {print $3}')"
+    # Anything the loader resolves outside a system directory. Matching on `target/` alone was
+    # wrong: whether sherpa-onnx is linked statically or borrowed from `~/.cache/sherpa-rs` depends
+    # on how the machine built it, and on CI it is not under `target/` at all.
+    LIBS="$(ldd "target/${PROFILE}/summo-engine" |
+      awk '/=> \// {print $3}' | grep -Ev '^/(usr|lib|lib64)/' || true)"
     ;;
 esac
 
@@ -85,8 +89,27 @@ esac
 # on every platform.
 rm -rf "${OUT}/lib"
 mkdir -p "${OUT}/lib"
+
+# Never empty. `tauri-build` fails outright — not warns — on a resource pattern that matches
+# nothing, and whether there is anything to stage depends on how this machine built sherpa-onnx: a
+# static link leaves nothing behind, and a build that borrowed the prebuilt library leaves two
+# files. A directory that exists and explains itself costs 200 bytes inside the installer and turns
+# a broken build into a readable one.
+cat > "${OUT}/lib/README" <<'NOTE'
+The libraries the daemon loads at start — ONNX Runtime and sherpa-onnx — when this machine's build
+borrowed them rather than linking them in. Staged by scripts/sidecar.sh, shipped as a bundle
+resource, and put on the daemon's library path by apps/desktop/src-tauri/src/engine.rs.
+
+Empty apart from this file means the build linked them statically. Both are fine.
+NOTE
+
+staged=0
 for lib in ${LIBS}; do
   [[ -f "${lib}" ]] || continue
   cp "${lib}" "${OUT}/lib/"
   echo "staged ${OUT}/lib/$(basename "${lib}")"
+  staged=$((staged + 1))
 done
+if [[ "${staged}" -eq 0 ]]; then
+  echo "no libraries to stage — this build links them in"
+fi
