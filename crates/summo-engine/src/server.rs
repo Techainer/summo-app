@@ -3175,6 +3175,7 @@ async fn name_voice(
     as_response(crate::people::name_voice(
         &state.book,
         &state.engine.paths().voices(),
+        &state.library,
         &summo_core::MeetingId::from(id),
         &label,
         &body.name,

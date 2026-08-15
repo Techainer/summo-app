@@ -15,7 +15,7 @@ use crate::{
     write::write_atomically,
 };
 use serde::{Deserialize, Serialize};
-use summo_core::{Error, MeetingId, Result, Segment, paths::Paths};
+use summo_core::{Error, MeetingId, Result, Segment, SpeakerId, paths::Paths};
 use time::OffsetDateTime;
 
 /// How meetings are grouped in the sidebar.
@@ -408,6 +408,51 @@ impl Library {
         }
         std::fs::rename(&entry.path, &target).map_err(|e| Error::io(&target, e))?;
         Ok(target)
+    }
+
+    /// Put a name on particular utterances of a meeting.
+    ///
+    /// This is the half of a voice correction that touches what a person actually reads. Naming a
+    /// voice moves samples between profiles and relabels the vector logs, and *none* of that is
+    /// visible: the transcript on disk is Markdown, and until something rewrites it the meeting
+    /// goes on saying `S2` for ever. [`summo_diar::relabel`] has always returned the per-utterance
+    /// changes "so a caller can rewrite only the files that changed"; there was no such caller.
+    ///
+    /// `changes` is `(seq, name)`. Sequence numbers, not timestamps: an utterance's seq is what the
+    /// vector log and the transcript line agree on, and a float comparison between two recordings
+    /// of the same moment would not be.
+    ///
+    /// A meeting that is not in the vault is zero changes rather than an error. A vector log
+    /// outlives its recording on purpose — that is what lets a name applied this year fix last
+    /// year's transcripts — so a sweep across the history will meet logs whose document has since
+    /// been deleted, and failing the whole correction because of one would break the feature in
+    /// exactly the vault it is most useful in.
+    pub fn relabel_speakers(&self, id: &MeetingId, changes: &[(u64, String)]) -> Result<usize> {
+        if changes.is_empty() {
+            return Ok(0);
+        }
+        let index = self.scan()?;
+        let Some(entry) = index.get(id) else {
+            return Ok(0);
+        };
+        let mut doc = load(entry)?;
+
+        let mut changed = 0;
+        for segment in &mut doc.transcript {
+            let Some((_, name)) = changes.iter().find(|(seq, _)| *seq == segment.seq) else {
+                continue;
+            };
+            if segment.speaker.as_ref().map(SpeakerId::as_str) == Some(name.as_str()) {
+                continue;
+            }
+            segment.speaker = Some(SpeakerId::from(name.clone()));
+            changed += 1;
+        }
+
+        if changed > 0 {
+            write_atomically(&entry.path, doc.to_markdown()?.as_bytes())?;
+        }
+        Ok(changed)
     }
 
     /// Replace a meeting's tags.
