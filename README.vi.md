@@ -37,9 +37,10 @@ trang — trên một file vẫn là Markdown, và mở ở dạng văn bản th
 được. Đăng ký lịch bằng URL thì lịch luôn cập nhật, sắp tới giờ họp app hỏi có ghi chú không —
 không bao giờ tự ghi âm — và họp xong thì soạn sẵn thư gửi đi để bạn tự gửi.
 
-**Chưa xong:** bản Android đã build và cài được nhưng chưa ghi âm được — chưa ký, và manifest chưa
-xin quyền micro; iOS cần máy Mac nên chưa từng build. Relay đồng bộ trên cloud (hosted sync relay)
-cũng chưa được xây — hiện tại đồng bộ vẫn chạy qua một thư mục dùng chung.
+**Chưa xong:** bản Android đã build được, đã xin quyền micro trong manifest và tự ký khi kho mã có
+khoá — nhưng chưa từng chạy trên điện thoại thật, nên hãy coi là chưa kiểm chứng chứ không phải đã
+xong. iOS cần máy Mac nên chưa từng build. Relay đồng bộ trên cloud (hosted sync relay) cũng chưa
+được xây — hiện tại đồng bộ vẫn chạy qua một thư mục dùng chung.
 
 Các con số dưới đây đều đo trên chính codebase này, không phải ước lượng. Mỗi con số tái lập được
 bằng đúng lệnh ghi kèm; xem đầy đủ phương pháp và các lưu ý ở
@@ -156,12 +157,13 @@ crates/
 apps/
   web/            giao diện ứng dụng — React, biên dịch thẳng vào binary
   desktop/        vỏ Tauri: cửa sổ, tray, phím tắt toàn cục
-  mobile/         Tauri iOS/Android                        [mới là khung sườn, chưa từng compile]
+  mobile/         Tauri iOS/Android — Android đã ra .apk; iOS chưa từng build
 ```
 
-`summo-bench`, `summo-audio`, `summo-media`, `summo-calendar`, `summo-tts` và `summo-store` lần lượt
-lo phần đo đạc, capture, ffmpeg, lịch, lồng tiếng và tìm kiếm ngữ nghĩa — xem thư mục `crates/` để
-biết đủ mười bảy crate.
+`summo-bench`, `summo-audio`, `summo-media`, `summo-calendar`, `summo-tts`, `summo-store`,
+`summo-mt` và `summo-pipeline` lần lượt lo phần đo đạc, capture, ffmpeg, lịch, lồng tiếng, tìm kiếm
+ngữ nghĩa, dịch trong tiến trình và các chặng của pipeline — xem thư mục `crates/` để biết đủ hai
+mươi crate.
 
 ## Đóng góp
 

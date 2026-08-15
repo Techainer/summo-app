@@ -210,6 +210,40 @@ export async function boot({ name = "e2e", seed = true, registry = REGISTRY } = 
   child.stdout.unref();
   child.stderr.unref();
 
+  // Killed when this process ends, however it ends.
+  //
+  // `stop()` at the bottom of a suite covers the run that passes. The run that throws — a failed
+  // assertion, a locator that never appeared, `process.exit(1)` on the first problem — never
+  // reaches it, and the daemon it started is `unref`'d, so Node exits and leaves it running. This
+  // machine had sixty-eight of them, the oldest two days old, each holding a port and a vault under
+  // `/tmp` that nothing would ever delete.
+  //
+  // `exit` handlers must be synchronous, which `kill` and `rmSync` both are. SIGINT and SIGTERM get
+  // their own, because a handler on either replaces the default that would have ended the process,
+  // so re-raising is how the exit code stays honest.
+  // The vault outlives a failure on purpose: a suite that fails on "the note never saved" is a
+  // suite whose vault is the evidence. It goes on a clean exit and stays on a dirty one, with the
+  // path printed so it can be looked at and deleted.
+  let stopped = false;
+  const cleanup = (code) => {
+    if (stopped) return;
+    stopped = true;
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      // Already gone, which is the outcome being asked for.
+    }
+    if (code === 0) rmSync(home, { recursive: true, force: true });
+    else console.error(`the vault this ran against is at ${home}`);
+  };
+  process.once("exit", cleanup);
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.once(signal, () => {
+      cleanup(1);
+      process.kill(process.pid, signal);
+    });
+  }
+
   const handshakeFile = join(home, "engine.json");
   const deadline = Date.now() + 20_000;
   for (;;) {
@@ -237,8 +271,9 @@ export async function boot({ name = "e2e", seed = true, registry = REGISTRY } = 
           log: () => log.join(""),
           url: `http://127.0.0.1:${handshake.port}`,
           stop() {
-            child.kill();
-            rmSync(home, { recursive: true, force: true });
+            // Through the same path as the exit handler, so a suite that calls it and a suite that
+            // dies before it get the same treatment — and so calling it twice is harmless.
+            cleanup(0);
           },
         };
       }

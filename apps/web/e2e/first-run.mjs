@@ -44,10 +44,17 @@ let output = "";
 daemon.stdout.on("data", (chunk) => (output += chunk));
 daemon.stderr.on("data", (chunk) => (output += chunk));
 
+let stopped = false;
 const stop = () => {
+  if (stopped) return;
+  stopped = true;
   daemon.kill("SIGTERM");
   rmSync(home, { recursive: true, force: true });
 };
+// However this ends. Every `process.exit` below, and every exception that reaches the top, used to
+// leave a daemon running on a vault under `/tmp` that nothing would ever delete — the same leak
+// `daemon.mjs` had, in the one suite that does not use it.
+process.once("exit", stop);
 
 /** Wait for the port rather than sleeping: a fixed sleep is either flaky or slow. */
 async function ready(url, attempts = 60) {
