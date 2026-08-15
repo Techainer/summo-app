@@ -56,9 +56,20 @@ for _ in $(seq 1 30); do
     echo "::error::the app could not reach its own engine — see network_security_config.xml"
     break
   fi
-  # "This machine: 4 cores, 4 GB RAM." — the daemon's answer, in the app's words.
+  # The daemon's answer, in the app's words — and there are two, because setup says something
+  # different depending on what the *build* can do.
+  #
+  # With recognition: "This machine: 4 cores, 4 GB RAM." — the model picker ranking against
+  # hardware the daemon measured. Without it — which is every x86-64 Android build, because ONNX
+  # Runtime publishes no binaries for that target — setup says so instead of offering a catalogue
+  # it could not load. Both sentences require a successful call over loopback, which is the thing
+  # being tested; asserting only the first one made this check fail the day the second was added.
   if [[ "${screen}" == *"cores,"* && "${screen}" == *"RAM"* ]]; then
     found="$(printf '%s' "${screen}" | grep -o 'text="This machine[^"]*"' | head -1)"
+    break
+  fi
+  if [[ "${screen}" == *"cannot recognise speech"* ]]; then
+    found="$(printf '%s' "${screen}" | grep -o 'text="This build cannot[^"]*"' | head -1)"
     break
   fi
 done
