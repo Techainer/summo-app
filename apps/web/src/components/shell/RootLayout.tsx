@@ -49,6 +49,7 @@ import { SCHEMES, choose as chooseScheme, read as readScheme, type Scheme } from
 import { usePaletteShortcut } from "../../lib/use-palette-shortcut";
 import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
+import { WindowControls } from "./WindowControls";
 import { NudgeBar } from "./NudgeBar";
 
 /// Labels are translation keys, resolved at render — a module-level array is built once, before a
@@ -447,6 +448,9 @@ export function RootLayout({ children }: { children: ReactNode }) {
           >
             <Minimize2 aria-hidden="true" className="size-4 stroke-[1.75]" />
           </button>
+          {/* Last, and only in the desktop app: the window has no system title bar, so these are
+              the only way to minimise it or put it away. Nothing in a browser. */}
+          <WindowControls />
         </div>
       </header>
 

@@ -36,7 +36,11 @@
     "move_to": "{name} へ移動",
     "move_to_root": "フォルダなし",
     "nest_under": "{name} の中に入れる",
-    "unnest": "外に出す"
+    "unnest": "外に出す",
+    "minimise": "最小化",
+    "maximise": "最大化",
+    "restore": "元のサイズに戻す",
+    "close": "閉じる"
   },
   "record": {
     "source": "入力",

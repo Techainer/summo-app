@@ -49,9 +49,14 @@ What has **not** happened:
 1. **An `.apk` is produced; no `.ipa` is.** The Android app builds — 42 MB, one 40 MB
    `libsummo_mobile.so` holding the engine, the vault, the agent, sherpa-onnx and ONNX Runtime —
    and CI assembles it on every push to `master` and on any pull request labelled `mobile`. It is
-   **unsigned**: there is no keystore in this repository and there should not be. Still to do
-   before anybody can install it usefully: signing, and the manifest's `RECORD_AUDIO` and
-   foreground-service declarations.
+   **unsigned**: there is no keystore in this repository and there should not be. Signing is what
+   is left before anybody can install it usefully.
+
+   The manifest asks for what recording needs, and one of those permissions is not obvious.
+   `getUserMedia` in an Android WebView reaches `WebChromeClient.onPermissionRequest`, and wry's
+   implementation requests `RECORD_AUDIO` **and `MODIFY_AUDIO_SETTINGS`** as a pair, granting the
+   page only if every permission in the request came back granted. Android refuses one the manifest
+   never declared, so leaving it out denies the whole request — after the user has tapped Allow.
 
 2. **iOS is unverified.** `aarch64-apple-ios` needs Xcode, which needs macOS. Nothing here suggests
    it will be worse than Android — the same crates, the same C++ libraries, and Apple's toolchain
@@ -75,8 +80,12 @@ pnpm -C apps/mobile exec tauri android build --apk --target aarch64
 pnpm -C apps/mobile exec tauri ios build          # needs Xcode
 ```
 
-`tauri android init` generates `gen/`; it is not committed because it is machine-specific and
-regenerable.
+`tauri android init` generates `gen/`. **`gen/android` is committed**, because the manifest in it is
+hand-written and the permissions above are the difference between an app that records and one that
+cannot. `gen/schemas` and `gen/apple` are not: both are regenerated and machine-specific.
+
+Running `init` again overwrites a template file if the template has changed, which is why CI checks
+the manifest still asks for a microphone between `init` and `build` rather than trusting it to.
 
 ### Three things that had to be fixed before any of that ran
 

@@ -23,9 +23,17 @@ dist
 
 # Tauri
 apps/desktop/src-tauri/gen
-# Same for mobile: `tauri android init` writes a whole Gradle project and a schema dump, both
-# regenerable and both machine-specific.
-apps/mobile/src-tauri/gen
+
+# Mobile is not the same case, and treating it as one was a trap. The Android project under
+# `gen/android` is committed — the manifest in it is hand-written, and the microphone permissions
+# it declares are the difference between an app that records and one that cannot. A blanket ignore
+# over a directory whose files are tracked hides only the *new* ones: `git add -A` after adding a
+# service class or a signing config stages nothing and says nothing.
+#
+# So only the parts that really are regenerated and machine-specific:
+apps/mobile/src-tauri/gen/schemas
+# The Xcode project. Not committed, needs macOS to produce, and rewritten by every `ios init`.
+apps/mobile/src-tauri/gen/apple
 
 # Tauri build outputs
 apps/desktop/src-tauri/target

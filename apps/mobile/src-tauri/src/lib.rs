@@ -37,31 +37,64 @@
 use tauri::{Emitter, Manager};
 
 /// The engine, held for the life of the app so its task is not dropped.
-struct Engine(std::sync::Mutex<Option<summo_engine::embedded::Embedded>>);
-
-/// Where the interface should connect.
 ///
-/// Returned to the webview as a command rather than baked into the URL, because on mobile the
-/// webview is created before the async runtime has finished starting the engine — and a page that
-/// loads with no port is easier to retry than one loaded with the wrong one.
+/// The failure is kept beside it rather than only logged. An engine that cannot start is the end
+/// of the app, and the interface polls this until it gets an answer — so without somewhere to
+/// record *why*, a vault that could not be opened and an engine still opening it look identical
+/// forever, and the app waits for something that is never coming.
+#[derive(Default)]
+struct Engine {
+    embedded: std::sync::Mutex<Option<summo_engine::embedded::Embedded>>,
+    failure: std::sync::Mutex<Option<String>>,
+}
+
+/// What the interface is told when it asks where to connect.
+///
+/// Returned as a command rather than baked into the URL, because on mobile the webview is created
+/// before the async runtime has finished starting the engine — and a page that loads with no port
+/// is easier to retry than one loaded with the wrong one. The same three states as the desktop
+/// shell's `engine_handshake`, because one interface consumes both.
+#[derive(serde::Serialize)]
+#[serde(tag = "status", rename_all = "lowercase")]
+enum Status {
+    Starting,
+    Ready { port: u16, token: String },
+    Failed { error: String },
+}
+
 #[tauri::command]
-fn handshake(engine: tauri::State<'_, Engine>) -> Result<serde_json::Value, String> {
-    let guard = engine.0.lock().map_err(|_| "engine lock poisoned".to_string())?;
-    let embedded = guard
+fn engine_handshake(engine: tauri::State<'_, Engine>) -> Status {
+    // `into_inner` on a poisoned lock: both slots are written whole or not at all, so the value is
+    // readable, and refusing to answer would strand the interface polling a lock it cannot fix.
+    if let Some(embedded) = engine
+        .embedded
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .as_ref()
-        .ok_or_else(|| "the engine is still starting".to_string())?;
-    Ok(serde_json::json!({
-        "port": embedded.handshake().port,
-        "token": embedded.handshake().token,
-    }))
+    {
+        return Status::Ready {
+            port: embedded.handshake().port,
+            token: embedded.handshake().token.clone(),
+        };
+    }
+    match &*engine
+        .failure
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    {
+        Some(error) => Status::Failed {
+            error: error.clone(),
+        },
+        None => Status::Starting,
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(Engine(std::sync::Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![handshake])
+        .manage(Engine::default())
+        .invoke_handler(tauri::generate_handler![engine_handshake])
         .setup(|app| {
             // The app's own sandboxed directory. `~/.summo` does not exist on either platform, and
             // anything written outside this path is removed by the OS or refused outright.
@@ -75,16 +108,25 @@ pub fn run() {
                 match summo_engine::embedded::start(home).await {
                     Ok(embedded) => {
                         let state = handle.state::<Engine>();
-                        if let Ok(mut slot) = state.0.lock() {
-                            *slot = Some(embedded);
-                        }
-                        // The interface polls `handshake` until it answers, so this is the signal
-                        // that it can stop.
+                        // Stored before the event: a listener that asks the instant it hears
+                        // "ready" must not be told "starting".
+                        *state
+                            .embedded
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(embedded);
+                        // The interface polls `engine_handshake` until it answers, so this is the
+                        // signal that it can stop.
                         let _ = handle.emit("summo://engine-ready", ());
                     }
                     Err(e) => {
                         // Nothing works without the engine, and a blank screen is the worst way to
                         // say so. The interface shows this verbatim.
+                        *handle
+                            .state::<Engine>()
+                            .failure
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                            Some(e.to_string());
                         let _ = handle.emit("summo://engine-failed", e.to_string());
                     }
                 }

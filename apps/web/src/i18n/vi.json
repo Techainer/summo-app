@@ -36,7 +36,11 @@
     "move_to": "Chuyển vào {name}",
     "move_to_root": "Ngoài thư mục",
     "nest_under": "Đưa vào trong {name}",
-    "unnest": "Đưa ra ngoài"
+    "unnest": "Đưa ra ngoài",
+    "minimise": "Thu nhỏ",
+    "maximise": "Phóng to",
+    "restore": "Khôi phục",
+    "close": "Đóng"
   },
   "record": {
     "source": "Nguồn",

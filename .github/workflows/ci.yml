@@ -265,6 +265,17 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -C apps/mobile exec tauri android init --skip-targets-install
+      # `init` regenerates the Gradle project from a template, over a project that is committed.
+      # The permissions below are hand-written and are the difference between an app that records
+      # and one that installs, opens and cannot — so this asserts they survived, rather than
+      # discovering months later that a template overwrote them and every build since was deaf.
+      - name: The manifest still asks for a microphone
+        run: |
+          manifest=apps/mobile/src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          for permission in RECORD_AUDIO MODIFY_AUDIO_SETTINGS FOREGROUND_SERVICE_MICROPHONE; do
+            grep -q "android.permission.$permission" "$manifest" \
+              || { echo "::error file=$manifest::$permission was lost — did 'android init' overwrite the manifest?"; exit 1; }
+          done
       - run: pnpm -C apps/mobile exec tauri android build --apk --target aarch64
       # Unsigned on purpose: there is no keystore in this repository and there should not be. What
       # is being proven is that the thing assembles.
@@ -318,6 +329,13 @@ jobs:
       # there before `cargo check` will even parse the file.
       - run: ./scripts/sidecar.sh
       - run: cargo check
+        working-directory: apps/desktop/src-tauri
+      # The shell is outside the workspace, so the `fmt · clippy · test` job above never saw it —
+      # and it had drifted out of format and had no tests at all while it grew the code that starts
+      # the daemon. Cheap here: everything is already compiled by the check above.
+      - run: cargo fmt --check
+        working-directory: apps/desktop/src-tauri
+      - run: cargo test
         working-directory: apps/desktop/src-tauri
 
   registry:

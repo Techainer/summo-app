@@ -1,23 +1,24 @@
 //! The desktop shell.
 //!
 //! Thin on purpose. Everything that touches audio or a model lives in `summo-engine`, which this
-//! process spawns as a sidecar and talks to over a loopback socket. The shell's whole job is to
-//! own the window, the tray icon and the global shortcut — the three things that must work before
-//! the user has decided to look at the app.
+//! process spawns as a sidecar and talks to over a loopback socket — see `engine.rs`, which is
+//! where that spawning finally happens. The rest of the shell's job is to own the window, the tray
+//! icon and the global shortcut — the three things that must work before the user has decided to
+//! look at the app.
 //!
 //! The global shortcut is the reason the tray exists at all: the promise is that pressing record
 //! starts a recording in under a second, and that cannot be true if the app has to be focused first.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod engine;
+
 use tauri::{
     Emitter, Manager,
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
 };
-use tauri_plugin_global_shortcut::{
-    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
-};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 /// Toggle recording from anywhere. Chosen to avoid the system shortcuts on all three platforms.
 ///
@@ -29,11 +30,17 @@ fn record_shortcut() -> Shortcut {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         // The file dialog for `Nhập file`. The webview only ever gets a *path* back, never the
         // bytes: the daemon reads the file itself, so a two-hour video never crosses the IPC
         // boundary.
         .plugin(tauri_plugin_dialog::init())
+        // Spawning the bundled daemon. Nothing in the webview may run a command — see the
+        // capability file, which grants the shell plugin no permission at all — so this is the
+        // Rust side of the plugin only.
+        .plugin(tauri_plugin_shell::init())
+        .manage(engine::Engine::default())
+        .invoke_handler(tauri::generate_handler![engine::engine_handshake])
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -47,6 +54,7 @@ fn main() {
         .setup(|app| {
             app.global_shortcut().register(record_shortcut())?;
             build_tray(app.handle())?;
+            engine::start(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -57,8 +65,18 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("failed to start Summo");
+
+    app.run(|app, event| {
+        // The window hides on close, so this is reached only by `Thoát` in the tray or by the OS
+        // ending the session. Either way the daemon this app started should go with it: a
+        // microphone held open by a process with no window is the worst thing this app could leave
+        // behind.
+        if let tauri::RunEvent::Exit = event {
+            engine::stop(app);
+        }
+    });
 }
 
 /// The three words the tray menu needs, in the language the user chose.
