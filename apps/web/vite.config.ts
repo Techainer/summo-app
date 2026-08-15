@@ -31,7 +31,7 @@ export default defineConfig({
           // the dynamic import that pulls it in. Naming it here would put it back in `vendor`,
           // which every screen loads — including the one the app starts on.
           if (
-            /[\\/]node_modules[\\/](@tiptap|prosemirror-|orderedmap|rope-sequence|w3c-keyname|linkifyjs)/.test(
+            /[\\/]node_modules[\\/](@tiptap|@floating-ui|prosemirror-|orderedmap|rope-sequence|w3c-keyname|linkifyjs)/.test(
               id,
             )
           )

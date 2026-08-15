@@ -460,7 +460,12 @@
     "block_quote": "Trích dẫn",
     "block_code": "Mã",
     "block_divider": "Đường kẻ",
-    "plain_mode": "Ghi chú này có phần Summo chưa định dạng được, nên mở ở dạng văn bản thuần để không mất chữ nào."
+    "plain_mode": "Ghi chú này có phần Summo chưa định dạng được, nên mở ở dạng văn bản thuần để không mất chữ nào.",
+    "mark_bold": "Đậm",
+    "mark_italic": "Nghiêng",
+    "mark_strike": "Gạch ngang",
+    "mark_code": "Mã",
+    "mark_link": "Liên kết"
   },
   "agenda": {
     "title": "Lịch",

@@ -460,7 +460,12 @@
     "block_quote": "引用",
     "block_code": "代码",
     "block_divider": "分隔线",
-    "plain_mode": "这篇笔记有 Summo 无法排版的内容，因此以纯文本打开，不会丢失任何字。"
+    "plain_mode": "这篇笔记有 Summo 无法排版的内容，因此以纯文本打开，不会丢失任何字。",
+    "mark_bold": "加粗",
+    "mark_italic": "斜体",
+    "mark_strike": "删除线",
+    "mark_code": "代码",
+    "mark_link": "链接"
   },
   "agenda": {
     "title": "日历",

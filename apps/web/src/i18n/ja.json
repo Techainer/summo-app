@@ -460,7 +460,12 @@
     "block_quote": "引用",
     "block_code": "コード",
     "block_divider": "区切り線",
-    "plain_mode": "このノートには Summo が整形できない部分があるため、プレーンテキストで開きます。何も失われません。"
+    "plain_mode": "このノートには Summo が整形できない部分があるため、プレーンテキストで開きます。何も失われません。",
+    "mark_bold": "太字",
+    "mark_italic": "斜体",
+    "mark_strike": "取り消し線",
+    "mark_code": "コード",
+    "mark_link": "リンク"
   },
   "agenda": {
     "title": "カレンダー",
