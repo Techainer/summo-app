@@ -702,5 +702,14 @@
     "times": "{count} lần",
     "done": "Xong — xem trong Việc",
     "open": "Mở"
+  },
+  "theme": {
+    "system": "Giao diện theo hệ thống",
+    "light": "Giao diện sáng",
+    "dark": "Giao diện tối",
+    "heading": "Giao diện",
+    "short_system": "Hệ thống",
+    "short_light": "Sáng",
+    "short_dark": "Tối"
   }
 }

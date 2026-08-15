@@ -4,6 +4,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Summo</title>
+    <!--
+      The theme, before the first paint.
+
+      React cannot do this: by the time a component runs, the browser has already painted the
+      document once in whatever the OS asked for, and a person who chose dark on a light machine
+      sees a white flash on every launch. Four lines inline in the head is the whole fix, and it is
+      why this is not in `lib/theme.ts` with the rest — that file is imported by the bundle, and the
+      bundle arrives too late.
+    -->
+    <script>
+      try {
+        var t = localStorage.getItem("summo.theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {
+        /* storage blocked; the OS preference still applies */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

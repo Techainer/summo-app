@@ -702,5 +702,14 @@
     "times": "{count} 回",
     "done": "完了 — タスクで確認できます",
     "open": "開く"
+  },
+  "theme": {
+    "system": "システムに合わせる",
+    "light": "ライト表示",
+    "dark": "ダーク表示",
+    "heading": "外観",
+    "short_system": "システム",
+    "short_light": "ライト",
+    "short_dark": "ダーク"
   }
 }

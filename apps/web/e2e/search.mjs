@@ -121,6 +121,34 @@ try {
   await page.waitForTimeout(300);
   if ((await palette.count()) !== 0) fail("escape does not close the palette");
   if (page.url() !== before) fail("closing the palette navigated somewhere");
+
+  // ---- and it can change the appearance, on a machine that disagrees --------
+  //
+  // `theme.css` has defined `:root[data-theme="light"]` and `:root[data-theme="dark"]` since the
+  // palette was rebuilt and nothing ever set the attribute, so dark mode only ever followed the
+  // operating system. This browser is running with `colorScheme: dark`; asking for light has to
+  // win, and has to still be winning after a reload — which is the part an inline script in the
+  // head does, because by the time React runs the page has already been painted once.
+  await page.keyboard.press("ControlOrMeta+k");
+  await palette.waitFor({ timeout: 5000 });
+  await page.keyboard.type("sang");
+  await page.waitForTimeout(400);
+  const offered = await palette.innerText();
+  if (!offered.includes("Giao diện sáng")) fail(`no appearance action for "sang": ${offered}`);
+  if (offered.includes("Giao diện tối")) {
+    // A shared keyword list makes every theme row match every theme word, which is a filter that
+    // has been turned off.
+    fail(`"sang" also offered the dark one: ${offered}`);
+  }
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(600);
+  if ((await page.evaluate(() => document.documentElement.dataset.theme)) !== "light") {
+    fail("choosing an appearance did not change the document");
+  }
+  await page.reload({ waitUntil: "domcontentloaded" });
+  if ((await page.evaluate(() => document.documentElement.dataset.theme)) !== "light") {
+    fail("the appearance did not survive a reload");
+  }
 } finally {
   await browser.close();
   engine.stop();
