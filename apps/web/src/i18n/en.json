@@ -346,6 +346,7 @@
   },
   "nudge": {
     "dismiss": "Dismiss: {title}",
+    "more": "{count} more",
     "view": "View",
     "record": "Record"
   },

@@ -346,6 +346,7 @@
   },
   "nudge": {
     "dismiss": "閉じる：{title}",
+    "more": "他に{count}件",
     "view": "見る",
     "record": "録音"
   },

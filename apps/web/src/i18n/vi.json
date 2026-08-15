@@ -346,6 +346,7 @@
   },
   "nudge": {
     "dismiss": "Bỏ qua: {title}",
+    "more": "còn {count} nữa",
     "view": "Xem",
     "record": "Ghi"
   },

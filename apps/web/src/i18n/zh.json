@@ -346,6 +346,7 @@
   },
   "nudge": {
     "dismiss": "关闭：{title}",
+    "more": "还有 {count} 条",
     "view": "查看",
     "record": "录音"
   },

@@ -5,7 +5,23 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "../../i18n/context";
 import { GENTLE, collapse } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
-import { NudgeClient, POLL_MS, iconFor, notify, type Nudge } from "../../lib/nudges";
+import { NudgeClient, POLL_MS, iconFor, notify, type Nudge, type Reason } from "../../lib/nudges";
+
+/**
+ * Which one speaks first, when several are due at once.
+ *
+ * A meeting about to start is the only one with a deadline — the prompt is worth nothing a minute
+ * later — so it goes above a draft that has been waiting since yesterday and an overdue task that
+ * will still be overdue tomorrow. The two summaries are the least urgent things the daemon says,
+ * and they are the two most likely to arrive together.
+ */
+const ORDER: Reason[] = [
+  "meeting-soon",
+  "draft-waiting",
+  "overdue",
+  "weekly-rollup",
+  "daily-report",
+];
 
 /**
  * What the agent wants to tell you, when it is allowed to.
@@ -13,6 +29,17 @@ import { NudgeClient, POLL_MS, iconFor, notify, type Nudge } from "../../lib/nud
  * Shown in the app as a strip under the header, and as an OS notification when the user has
  * allowed those. Both, not either: a notification the user missed while in another app should
  * still be waiting when they come back, and the daemon only hands each one out once.
+ *
+ * ## One at a time
+ *
+ * Each nudge used to draw its own full-width bar, and nothing bounded how many. A Monday morning
+ * with a draft waiting, three overdue tasks and a weekly summary opened the app with three of them
+ * stacked above the content — 150 px of notice on a 900 px window, and worse on a laptop. Notice
+ * that large stops being read; it becomes a header with a close button.
+ *
+ * So the strip shows the most urgent one and says how many are behind it. Dismissing brings the
+ * next forward, and the count is a button for a person who would rather see them all at once.
+ * Nothing is hidden and nothing is dropped — the queue is the same queue.
  *
  * Dismissing removes it from the strip and nothing else. The underlying thing — an unread draft,
  * an overdue task — is still there, and the daemon will not repeat itself today.
@@ -22,6 +49,7 @@ export function NudgeBar() {
   const client = useMemo(() => new NudgeClient(handshake), [handshake]);
   const navigate = useNavigate();
   const [queue, setQueue] = useState<Nudge[]>([]);
+  const [expanded, setExpanded] = useState(false);
   const t = useT();
 
   const go = useCallback(
@@ -60,9 +88,22 @@ export function NudgeBar() {
 
   const dismiss = (key: string) => setQueue((q) => q.filter((n) => n.key !== key));
 
+  // Sorted for display only. The queue keeps arrival order, because that is what the daemon handed
+  // out and what a second poll appends to.
+  const ranked = useMemo(
+    () => [...queue].sort((a, b) => ORDER.indexOf(a.reason) - ORDER.indexOf(b.reason)),
+    [queue],
+  );
+  // Derived rather than stored: dismissing the second-to-last nudge should collapse the strip on
+  // its own, and an effect that noticed and called `setExpanded(false)` would be a second render
+  // for something the first one already knows.
+  const showAll = expanded && ranked.length > 1;
+  const shown = showAll ? ranked : ranked.slice(0, 1);
+  const waiting = ranked.length - shown.length;
+
   return (
     <AnimatePresence initial={false}>
-      {queue.map((nudge) => (
+      {shown.map((nudge) => (
         <m.div
           key={nudge.key}
           variants={collapse}
@@ -80,6 +121,18 @@ export function NudgeBar() {
               <strong className="font-medium">{nudge.title}</strong>
               <span className="text-fg-dim"> — {nudge.body}</span>
             </p>
+            {/* How many are behind this one, and a way to see them. Only on the first bar: an
+                expanded strip is already showing everything, so a count there would be a button
+                that says nothing. */}
+            {waiting > 0 && (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                className="text-fg-dim hover:text-fg hover:bg-fg/5 text-micro rounded-full px-2 py-1"
+              >
+                {t("nudge.more", { count: waiting })}
+              </button>
+            )}
             {/* A meeting starting is the one nudge with an obvious next action, and making the
                 user navigate to the record button to take it would waste the minute the prompt
                 exists to save. Recording still begins because a person pressed something. */}
