@@ -5047,7 +5047,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "summo-agent"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aion-agent",
  "aion-config",
@@ -5070,7 +5070,7 @@ dependencies = [
 
 [[package]]
 name = "summo-asr"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hound",
  "pretty_assertions",
@@ -5084,7 +5084,7 @@ dependencies = [
 
 [[package]]
 name = "summo-audio"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "audiopus",
  "cpal",
@@ -5102,7 +5102,7 @@ dependencies = [
 
 [[package]]
 name = "summo-bench"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -5124,7 +5124,7 @@ dependencies = [
 
 [[package]]
 name = "summo-calendar"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "summo-core",
@@ -5135,7 +5135,7 @@ dependencies = [
 
 [[package]]
 name = "summo-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -5164,7 +5164,7 @@ dependencies = [
 
 [[package]]
 name = "summo-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "directories",
  "pretty_assertions",
@@ -5179,7 +5179,7 @@ dependencies = [
 
 [[package]]
 name = "summo-diar"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hound",
  "pretty_assertions",
@@ -5193,7 +5193,7 @@ dependencies = [
 
 [[package]]
 name = "summo-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -5233,7 +5233,7 @@ dependencies = [
 
 [[package]]
 name = "summo-llm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "futures",
  "pretty_assertions",
@@ -5248,7 +5248,7 @@ dependencies = [
 
 [[package]]
 name = "summo-mcp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -5263,7 +5263,7 @@ dependencies = [
 
 [[package]]
 name = "summo-media"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5274,7 +5274,7 @@ dependencies = [
 
 [[package]]
 name = "summo-models"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "futures",
  "hex",
@@ -5295,7 +5295,7 @@ dependencies = [
 
 [[package]]
 name = "summo-mt"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "llama-cpp-2",
  "ort",
@@ -5309,7 +5309,7 @@ dependencies = [
 
 [[package]]
 name = "summo-pipeline"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "summo-core",
@@ -5319,14 +5319,14 @@ dependencies = [
 
 [[package]]
 name = "summo-store"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "summo-core",
 ]
 
 [[package]]
 name = "summo-sync"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "argon2",
  "blake3",
@@ -5345,7 +5345,7 @@ dependencies = [
 
 [[package]]
 name = "summo-tts"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "hound",
  "serde",
@@ -5357,7 +5357,7 @@ dependencies = [
 
 [[package]]
 name = "summo-vad"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ndarray",
  "ort",
@@ -5369,7 +5369,7 @@ dependencies = [
 
 [[package]]
 name = "summo-vault"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "pretty_assertions",
