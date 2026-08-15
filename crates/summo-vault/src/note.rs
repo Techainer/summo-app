@@ -122,68 +122,30 @@ pub fn set_body(paths: &Paths, id: &MeetingId, body: &str, title: Option<&str>) 
     // it, so a note with any `##` in it grew a duplicate of itself on every save. It went unnoticed
     // because the editor only ever displayed `body`, so the duplicate was invisible in the one
     // place somebody would have seen it.
-    let (lead, sections) = split_sections(body);
-    doc.body = lead;
-    doc.sections = sections;
+    //
+    // Read by the document's own parser rather than by a second one that knows about `##` and
+    // nothing else. The second one did not know what `## Transcript` meant, so it handed that text
+    // back as an ordinary section while the *file* parser had already put it somewhere the editor
+    // never saw — and the save then wrote the file without it.
+    doc.set_below_title(body);
     crate::write::write_atomically(&path, doc.to_markdown()?.as_bytes())?;
     Ok(path)
 }
 
-/// Split editor text into the free part and the `##` sections under it.
-///
-/// The transcript heading is *not* special-cased here: notes have no transcript, and a note whose
-/// user typed a heading with that name has typed a heading.
-#[must_use]
-pub fn split_sections(text: &str) -> (String, Vec<crate::meeting::Section>) {
-    let mut lead = String::new();
-    let mut sections: Vec<crate::meeting::Section> = Vec::new();
-
-    for line in text.lines() {
-        if let Some(heading) = line.strip_prefix("## ") {
-            sections.push(crate::meeting::Section {
-                heading: heading.trim().to_string(),
-                body: String::new(),
-            });
-            continue;
-        }
-        match sections.last_mut() {
-            Some(section) => {
-                section.body.push_str(line);
-                section.body.push('\n');
-            }
-            None => {
-                lead.push_str(line);
-                lead.push('\n');
-            }
-        }
-    }
-
-    for section in &mut sections {
-        section.body = section.body.trim_end().to_string();
-    }
-    (lead.trim().to_string(), sections)
-}
-
 /// The whole note as one piece of text, the way the editor shows it: everything under the title.
 ///
-/// The document keeps body and sections apart, which is right for a *meeting* — the summary's
-/// sections are addressable, and the draft machinery rewrites one of them at a time. A note is one
-/// document a person is typing in, and handing the editor only `body` is what made a note written
-/// in Obsidian open with most of itself missing.
+/// The document keeps body, sections and transcript apart, which is right for a *meeting* — the
+/// summary's sections are addressable, and the draft machinery rewrites one of them at a time. A
+/// note is one document a person is typing in, and handing the editor only `body` is what made a
+/// note written in Obsidian open with most of itself missing.
+///
+/// It is [`MeetingDoc::below_title`], which is the same string the serializer writes to the file,
+/// rather than a second rendering. A second rendering is exactly what this was, and it did not know
+/// what `## Transcript` meant: a note with a heading by that name opened without it, and the next
+/// autosave wrote the file without it too.
 #[must_use]
 pub fn as_text(doc: &crate::meeting::MeetingDoc) -> String {
-    let mut text = doc.body.trim().to_string();
-    for section in &doc.sections {
-        if !text.is_empty() {
-            text.push_str("\n\n");
-        }
-        text.push_str(&format!(
-            "## {}\n{}",
-            section.heading,
-            section.body.trim_end()
-        ));
-    }
-    text
+    doc.below_title().trim().to_string()
 }
 
 /// Delete a note. `false` when there was nothing there.
@@ -254,9 +216,51 @@ mod tests {
 
     #[test]
     fn text_with_no_headings_is_left_exactly_as_it_is() {
-        let (lead, sections) = split_sections("một dòng\nhai dòng");
-        assert_eq!(lead, "một dòng\nhai dòng");
-        assert!(sections.is_empty());
+        let (_tmp, paths) = vault();
+        let (id, _) = create(&paths, "Ghi", "2026-08-10", "một dòng\nhai dòng").unwrap();
+        assert_eq!(as_text(&read(&paths, &id).unwrap()), "một dòng\nhai dòng");
+    }
+
+    /// A note losing everything under a heading it happened to call `Transcript`.
+    ///
+    /// The file parser puts that block in `MeetingDoc::transcript`, and the editor was handed a
+    /// second rendering that only knew about `body` and `##` sections — so the block was invisible,
+    /// and the autosave two seconds after the next keystroke wrote the file without it. Nothing
+    /// reported anything; the text was simply gone.
+    #[test]
+    fn a_note_with_a_heading_called_transcript_keeps_what_is_under_it() {
+        let (_tmp, paths) = vault();
+        let seed = "Ghi nhanh.\n\n## Transcript\nBạn nói gì đó\n\n## Sau đó\ncòn nữa";
+        let (id, path) = create(&paths, "Bản ghi tay", "2026-08-14", seed).unwrap();
+
+        let shown = as_text(&read(&paths, &id).unwrap());
+        assert!(
+            shown.contains("Bạn nói gì đó"),
+            "the editor sees it: {shown}"
+        );
+
+        // Saving back exactly what was shown, which is what an autosave does.
+        set_body(&paths, &id, &shown, Some("Bản ghi tay")).unwrap();
+        let on_disk = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            on_disk.contains("Bạn nói gì đó"),
+            "and keeps it:\n{on_disk}"
+        );
+        assert!(on_disk.contains("còn nữa"));
+        assert_eq!(on_disk.matches("## Transcript").count(), 1);
+    }
+
+    /// The same heading over real utterances is still a transcript, and a person editing the note
+    /// around it must not turn the lines into prose.
+    #[test]
+    fn a_transcript_of_actual_utterances_is_still_a_transcript() {
+        let (_tmp, paths) = vault();
+        let seed = "## Transcript\n**[00:00:01] Ngọc** — xin chào <!-- seq:0 end:2.00 -->";
+        let (id, _) = create(&paths, "Có ghi âm", "2026-08-14", seed).unwrap();
+
+        let doc = read(&paths, &id).unwrap();
+        assert_eq!(doc.transcript.len(), 1, "parsed as speech, not as prose");
+        assert!(as_text(&doc).contains("xin chào"), "and still shown");
     }
 
     use super::*;

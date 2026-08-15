@@ -2595,6 +2595,11 @@ async fn list_notes(
     if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
+    // Relative to the vault, like every other path this daemon reports. This one was absolute —
+    // `/home/ngoc/.summo/vault/notes/…` — so the notes list was the single route handing the
+    // client the user's home directory, and any log, bug report or screenshot of it carried their
+    // name off the machine.
+    let vault = state.engine.paths().vault();
     let result = summo_vault::note::list(state.engine.paths()).map(|entries| {
         entries
             .into_iter()
@@ -2609,7 +2614,12 @@ async fn list_notes(
                     // mark wherever the note appears.
                     "color": e.color,
                     "tags": e.tags,
-                    "file": e.path.display().to_string(),
+                    "file": e
+                        .path
+                        .strip_prefix(&vault)
+                        .unwrap_or(&e.path)
+                        .display()
+                        .to_string(),
                 })
             })
             .collect::<Vec<_>>()
@@ -4992,6 +5002,13 @@ mod tests {
             .unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0]["title"], "Ý tưởng");
+        // Relative to the vault, like every other path this daemon reports. This one was absolute,
+        // so the notes list was the single route handing the client the user's home directory.
+        let file = listed[0]["file"].as_str().expect("a path");
+        assert!(
+            file.starts_with("notes/") && !file.starts_with('/'),
+            "a note's path leaks where the vault lives: {file}"
+        );
 
         let updated = client()
             .post(format!("{base}/notes/{id}"))

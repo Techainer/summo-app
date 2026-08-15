@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "../ui";
+
 import { useEngine } from "../../lib/engine-context";
 import { useErrorText } from "../../lib/errors";
 import { useT } from "../../i18n/context";
@@ -31,6 +32,16 @@ import { cn } from "../../lib/cn";
  * first time it round-tripped something it did not understand. Tasks work here because
  * `- [ ] @ngoc …` is parsed from the file, not from a widget.
  */
+/**
+ * Loaded when a note is opened, not when the app is.
+ *
+ * ProseMirror and its extensions are 128 kB gzipped — more than a third of everything else here —
+ * and most of what this app does is recording, reading and searching. Paying for the editor on the
+ * home screen would make the whole thing slower to start for the sake of a screen the user may not
+ * open. It is a local server, but it is also a phone browser on a bad connection.
+ */
+const RichNote = lazy(() => import("./RichNote").then((m) => ({ default: m.RichNote })));
+
 export function NoteEditor({
   id,
   onSaved,
@@ -51,6 +62,16 @@ export function NoteEditor({
   const [text, setText] = useState("");
   const [saved, setSaved] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Which editor this note gets.
+   *
+   * `null` until the note has been read — a rich editor mounted on an empty string would report
+   * "this is fine" about a document that has not arrived. `rich` is the default afterwards, and
+   * `plain` is where a note goes when the editor cannot hold it without changing it: see
+   * [`RichNote`]. Falling back is the guarantee, not a failure — a note with a table opens as text
+   * and keeps its table.
+   */
+  const [mode, setMode] = useState<"rich" | "plain" | null>(null);
 
   // Held in a ref as well as in state: the debounce fires from a timer that closed over an older
   // render, and saving the text from two seconds ago would undo the last two seconds of typing.
@@ -82,6 +103,7 @@ export function NoteEditor({
         // `text`, not `body`: the latter stops at the first heading.
         const body = note.text.trim();
         setText(body ? `${note.title}\n\n${body}` : note.title);
+        setMode("rich");
       })
       .catch((e: unknown) => !cancelled && setError(say(e)));
     return () => {
@@ -104,6 +126,11 @@ export function NoteEditor({
       setError(say(e));
     }
   }, [client, onSaved, say]);
+
+  // The title line and everything under it. Split here rather than held as two states, because the
+  // file is one document and the debounce, the save and the unsaved flag are all about the whole
+  // of it — two states would need two of each and a rule about which wins.
+  const { title, rest } = split(text);
 
   const edit = (value: string) => {
     setText(value);
@@ -152,23 +179,65 @@ export function NoteEditor({
             {saved ? t("notes.saved") : t("notes.saving")}
           </motion.span>
         </AnimatePresence>
+        {/* Why this note looks different from the last one. An editor that silently degrades is one
+            the user assumes is broken; saying so once, quietly, is the difference between a rule
+            and a glitch. */}
+        {mode === "plain" && (
+          <span className="text-fg-faint text-micro truncate" title={t("notes.plain_mode")}>
+            {t("notes.plain_mode")}
+          </span>
+        )}
         <span className="flex-1" />
         <Button size="sm" variant="ghost" onClick={() => void remove()}>
           {t("common.delete")}
         </Button>
       </div>
 
-      <textarea
-        value={text}
-        onChange={(e) => edit(e.target.value)}
+      {/* The title is the first line and stays a plain input, in both modes. It is one line of
+          text that names a file; formatting it would be formatting a filename. */}
+      <input
+        value={title}
+        onChange={(e) => edit(`${e.target.value}\n${rest}`)}
         onBlur={() => void persist()}
-        aria-label={t("notes.body")}
+        aria-label={t("notes.title_field")}
         spellCheck={false}
-        placeholder={t("notes.placeholder")}
-        // `font-reading` and a measure: a note is prose, and prose at full window width is prose
-        // nobody re-reads.
-        className="font-reading text-body min-h-0 flex-1 resize-none bg-transparent px-6 py-5 leading-relaxed outline-none"
+        placeholder={t("notes.untitled")}
+        className="font-reading text-fg placeholder:text-fg-faint bg-transparent px-6 pt-5 pb-1 text-2xl font-semibold tracking-tight outline-none"
       />
+
+      {mode === "rich" ? (
+        // No fallback element: the chunk lands in a frame or two on a local daemon, and a spinner
+        // that flashes is worse than a pane that is briefly blank.
+        <Suspense fallback={null}>
+          <RichNote
+            // Keyed on the note, so a different document is a different editor rather than one
+            // editor asked to change its mind about what it is holding.
+            key={id}
+            markdown={rest}
+            onChange={(next) => edit(`${title}\n\n${next}`)}
+            onUnsupported={() => setMode("plain")}
+          />
+        </Suspense>
+      ) : (
+        <textarea
+          value={rest}
+          onChange={(e) => edit(`${title}\n\n${e.target.value}`)}
+          onBlur={() => void persist()}
+          aria-label={t("notes.body")}
+          spellCheck={false}
+          placeholder={t("notes.placeholder")}
+          // `font-reading` and a measure: a note is prose, and prose at full window width is prose
+          // nobody re-reads.
+          className="font-reading text-body min-h-0 flex-1 resize-none bg-transparent px-6 pb-5 leading-relaxed outline-none"
+        />
+      )}
     </div>
   );
+}
+
+/** The first line, and everything after it. */
+function split(text: string): { title: string; rest: string } {
+  const at = text.indexOf("\n");
+  if (at === -1) return { title: text, rest: "" };
+  return { title: text.slice(0, at), rest: text.slice(at + 1).replace(/^\n+/, "") };
 }

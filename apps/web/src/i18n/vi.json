@@ -446,7 +446,21 @@
     "seed_idea": "## Ý tưởng\n\n## Vì sao đáng làm\n\n## Bước tiếp theo\n- [ ] ",
     "seed_decision": "## Quyết định\n\n## Bối cảnh\n\n## Ai chốt / khi nào\n",
     "seed_todo": "- [ ] \n- [ ] \n",
-    "seed_journal": "## Hôm nay\n\n## Vướng mắc\n\n## Mai làm gì\n"
+    "seed_journal": "## Hôm nay\n\n## Vướng mắc\n\n## Mai làm gì\n",
+    "slash_hint": "Nhấn '/' để chèn khối",
+    "insert": "Chèn khối",
+    "title_field": "Tiêu đề ghi chú",
+    "block_text": "Văn bản",
+    "block_h1": "Tiêu đề lớn",
+    "block_h2": "Tiêu đề vừa",
+    "block_h3": "Tiêu đề nhỏ",
+    "block_todo": "Việc cần làm",
+    "block_bullet": "Danh sách",
+    "block_ordered": "Danh sách đánh số",
+    "block_quote": "Trích dẫn",
+    "block_code": "Mã",
+    "block_divider": "Đường kẻ",
+    "plain_mode": "Ghi chú này có phần Summo chưa định dạng được, nên mở ở dạng văn bản thuần để không mất chữ nào."
   },
   "agenda": {
     "title": "Lịch",
