@@ -49,6 +49,9 @@ const ONBOARDED = "onboarded";
  * - Indented checkboxes under the agent task, which is how it records its own steps.
  * - A `<!-- summo:draft -->` heading, since an unapproved summary is what the draft panel is for.
  * - A note with no `id` and no `date`, which is what Obsidian leaves behind.
+ * - Transcript lines attributed to `S2` and `S3`, matching the voice logs, because that is what a
+ *   recording looks like before anybody has said who was talking — and it is the state the naming
+ *   affordance in the transcript exists for.
  */
 function seedVault(home) {
   const meetings = join(home, "vault/meetings");
@@ -82,8 +85,8 @@ Chốt ngân sách quý bốn.
 ## Transcript
 **[00:12:04] Bạn** — Mình họp về ngân sách nhé <!-- seq:0 end:734.0 -->
 **[00:13:10] Ngọc** — Em nghĩ nên chốt spec trước <!-- seq:1 end:795.0 -->
-**[00:14:02] Bạn** — Vậy chốt hôm nay nhé <!-- seq:2 end:848.0 -->
-**[00:15:30] Ngọc** — Em gửi bản nháp chiều nay <!-- seq:3 end:935.0 -->
+**[00:14:02] S2** — Vậy chốt hôm nay nhé <!-- seq:2 end:848.0 -->
+**[00:15:30] S3** — Em gửi bản nháp chiều nay <!-- seq:3 end:935.0 -->
 `,
   );
 
@@ -111,7 +114,7 @@ color: red
 Họ muốn bản dùng thử.
 
 ## Transcript
-**[00:03:00] Bình** — Bên mình cần bản dùng thử trước <!-- seq:0 end:186.0 -->
+**[00:03:00] S2** — Bên mình cần bản dùng thử trước <!-- seq:0 end:186.0 -->
 `,
   );
 
@@ -136,17 +139,21 @@ Họ muốn bản dùng thử.
         meeting,
         schema: 1,
         model: "campplus-sv",
-        samples: samples.map((sample, seq) => ({ seq, t0: 0, confirmed: false, ...sample })),
+        samples: samples.map((sample) => ({ confirmed: false, ...sample })),
       }),
     );
   // Both recordings, because both were recorded: a vault where only one meeting has vectors is a
   // vault that could not have happened, and the screens that read them were being measured against
   // it.
+  //
+  // `seq` matches the `<!-- seq:n -->` on the transcript line it came from. That is the join:
+  // naming a voice rewrites the utterances whose sequence numbers its samples carry, so a log whose
+  // numbering does not line up produces a name nobody ever sees applied.
   log("01E2E0", [
-    { duration: 96, label: "S2", embedding: [0, 1, 0, 0] },
-    { duration: 61, label: "S3", embedding: [0, 0, 1, 0] },
+    { seq: 2, t0: 842, duration: 6, label: "S2", embedding: [0, 1, 0, 0] },
+    { seq: 3, t0: 930, duration: 5, label: "S3", embedding: [0, 0, 1, 0] },
   ]);
-  log("01E2E1", [{ duration: 42, label: "S2", embedding: [1, 0, 0, 0] }]);
+  log("01E2E1", [{ seq: 0, t0: 180, duration: 6, label: "S2", embedding: [1, 0, 0, 0] }]);
 }
 
 /**

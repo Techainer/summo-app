@@ -1,14 +1,17 @@
 /**
- * The voice book, and the half of it that had never rendered.
+ * Naming a voice — from the book, and from the line where you recognised it.
  *
- * `People` took a `meeting` prop and asked "which voices in *this* recording have no name". Nothing
- * ever passed it one — the component is used in exactly one place, the voice book screen, with no
- * meeting — so the questions half was permanently empty and the screen was a read-only list of
- * people Summo already knew. The naming interface, which is the entire point of a voice book, was
- * unreachable from the interface.
+ * Two things this covers.
  *
- * So the question is now asked of the whole vault, which is also the right question: a voice you
- * cannot place is one you go looking for, not one you happen to be looking at.
+ * **The voice book's questions half had never rendered.** `People` took a `meeting` prop and asked
+ * "which voices in *this* recording have no name". Nothing ever passed it one — the component is
+ * used in exactly one place, the voice book screen, with no meeting — so the naming interface, the
+ * entire point of a voice book, was unreachable. It asks about the whole vault now, which is also
+ * the right question: a voice you cannot place is one you go looking for.
+ *
+ * **And the book is the wrong place to answer it.** You know who `S2` is because you are reading
+ * what they said. Naming from the transcript is one click at the point of recognition, instead of a
+ * screen, a scroll, and a label held in your head on the way.
  */
 import { chromium } from "playwright";
 
@@ -24,7 +27,13 @@ const context = await browser.newContext({
 const page = await context.newPage();
 page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 
+const unnamed = async () =>
+  (await (await fetch(`${engine.url}/voices/unknown?token=${engine.token}`)).json()).flatMap((m) =>
+    m.voices.map((v) => `${m.meeting}/${v.label}`),
+  );
+
 try {
+  // ---- the book asks about the whole vault --------------------------------
   await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/people`, {
     waitUntil: "networkidle",
   });
@@ -34,6 +43,9 @@ try {
     .waitFor({ timeout: 10000 })
     .catch(() => problems.push("the voice book asks about nothing"));
 
+  const before = await unnamed();
+  if (before.length !== 3) problems.push(`expected three unnamed voices, got ${before}`);
+
   if ((await asking.count()) > 0) {
     const shown = await asking.innerText();
     // The label alone is not a question anybody can answer — which conversation it was in is what
@@ -42,22 +54,69 @@ try {
     if (!shown.includes("Demo khách hàng")) {
       problems.push(`the voice is not attributed to a meeting: ${shown}`);
     }
+    // Newest first, so the recording you can still remember is at the top.
+    if (shown.indexOf("Họp đầu tuần") > shown.indexOf("Demo khách hàng")) {
+      problems.push(`the meetings are oldest-first: ${shown}`);
+    }
 
-    // Naming it. The name is typed rather than picked, because on a fresh vault there is nobody in
-    // the book to pick from — which is exactly the state a first user is in.
-    await asking.getByRole("textbox").first().fill("Bình");
+    // Naming one. Typed rather than picked, because on a fresh vault there is nobody in the book to
+    // pick from — which is exactly the state a first user is in.
+    await asking.getByRole("textbox").first().fill("Ngọc");
     await asking.getByRole("button", { name: "Lưu" }).first().click();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(2500);
 
     const people = await (await fetch(`${engine.url}/people?token=${engine.token}`)).json();
-    if (!people.people.some((who) => who.name === "Bình")) {
+    if (!people.people.some((who) => who.name === "Ngọc")) {
       problems.push(`naming the voice made nobody: ${JSON.stringify(people.people)}`);
     }
 
-    // An answered question leaves the list.
-    const left = await (await fetch(`${engine.url}/voices/unknown?token=${engine.token}`)).json();
-    if (left.length !== 0) {
-      problems.push(`the named voice is still being asked about: ${JSON.stringify(left)}`);
+    // The answered question leaves, and only it.
+    const after = await unnamed();
+    if (after.length !== 2 || after.includes("01E2E0/S2")) {
+      problems.push(`naming 01E2E0/S2 left ${JSON.stringify(after)}`);
+    }
+  }
+
+  // ---- and from the transcript, where the question is answerable ----------
+  await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/pages/01E2E0`, {
+    waitUntil: "networkidle",
+  });
+  await page.locator("h1").waitFor({ timeout: 10000 });
+  await page.getByRole("radio", { name: "Bản ghi" }).click();
+  await page.waitForTimeout(600);
+
+  // `S3` is still a label. `Ngọc` was named a moment ago and must not be offered again — a name is
+  // not a question.
+  const speaker = page.getByRole("button", { name: "Đặt tên cho S3" });
+  await speaker
+    .waitFor({ timeout: 10000 })
+    .catch(() => problems.push("the transcript offers no way to name its unnamed speaker"));
+  if ((await page.getByRole("button", { name: "Đặt tên cho Ngọc" }).count()) > 0) {
+    problems.push("a speaker who already has a name is still being asked about");
+  }
+
+  if ((await speaker.count()) > 0) {
+    await speaker.click();
+    const panel = page.getByTestId("name-voice");
+    await panel.waitFor({ timeout: 5000 }).catch(() => problems.push("no naming panel opened"));
+
+    // Somebody already in the book is one click, because by now there is one.
+    const known = panel.getByRole("button", { name: "Ngọc", exact: true });
+    if ((await known.count()) === 0) {
+      problems.push("the people already in the book are not offered");
+    } else {
+      await known.click();
+      await page.waitForTimeout(2500);
+
+      // The transcript is rewritten by naming, so the chip has to stop saying `S3` without a
+      // reload — the answer and the thing it changes are read back together.
+      const rail = await page.locator("main").innerText();
+      if (/\bS3\b/.test(rail)) problems.push(`the transcript still says S3: ${rail.slice(0, 300)}`);
+
+      const left = await unnamed();
+      if (left.length !== 1 || left[0] !== "01E2E1/S2") {
+        problems.push(`naming from the transcript left ${JSON.stringify(left)}`);
+      }
     }
   }
 } finally {

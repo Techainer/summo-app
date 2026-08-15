@@ -14,6 +14,8 @@ import { useEngine } from "../lib/engine-context";
 import { DraftClient, readable, type Draft } from "../lib/draft";
 import { url, type MeetingDetail } from "../lib/library";
 import { formatDuration } from "../lib/duration";
+import type { Naming } from "../components/meeting/TranscriptChips";
+import { useLoad } from "../lib/use-load";
 
 type Pane = "comments" | "transcript";
 
@@ -49,7 +51,7 @@ export function PageScreen() {
   const say = useErrorText();
   const navigate = useNavigate();
   const { pageId } = useParams({ from: "/pages/$pageId" });
-  const { library, handshake } = useEngine();
+  const { library, handshake, people } = useEngine();
   // Stored with the page it belongs to, so switching pages does not need an effect to blank it
   // first. The `setDetail(null)` that used to do that ran synchronously inside the effect — one
   // extra render per navigation, and a frame in which the new page's title sat above the old
@@ -63,6 +65,7 @@ export function PageScreen() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const player = useRef<PlayerHandle>(null);
   const drafts = useMemo(() => new DraftClient(handshake), [handshake]);
+  const [naming, setNaming] = useState<string | null>(null);
 
   // One place to apply whatever the draft endpoints return, so the note and the panel cannot drift.
   const applyDraft = useCallback(
@@ -109,6 +112,57 @@ export function PageScreen() {
   );
 
   const summarise = () => void run(() => drafts.generate(pageId));
+
+  /**
+   * Who is still a label rather than a person, and everybody they could be.
+   *
+   * Read beside the detail rather than inside the transcript, because naming one voice *rewrites*
+   * the transcript — so the answer and the thing it changes have to be reloaded together, or the
+   * chips go on showing `S2` beside somebody who now has a name.
+   *
+   * Its failure is deliberately not shown. This is an offer on top of a transcript already on
+   * screen; a red bar because the suggestions could not be fetched would be a failure report about
+   * something the reader never asked for.
+   */
+  const asked = useLoad(
+    useCallback(async () => {
+      const [unnamed, view] = await Promise.all([people.unknowns(pageId), people.list()]);
+      return { unnamed, book: view.people };
+    }, [people, pageId]),
+    [people, pageId],
+  );
+  const reask = asked.reload;
+
+  const name = useCallback(
+    (label: string, who: string) => {
+      if (!who.trim()) return;
+      setNaming(label);
+      void (async () => {
+        try {
+          await people.nameVoice(pageId, label, who.trim());
+          // Both, in this order: the transcript has been rewritten under us, and the question has
+          // been answered.
+          setLoaded({ id: pageId, detail: await library.detail(pageId) });
+          reask();
+        } catch (e) {
+          setError(say(e));
+        } finally {
+          setNaming(null);
+        }
+      })();
+    },
+    [library, pageId, people, reask, say],
+  );
+
+  const speakers: Naming = useMemo(
+    () => ({
+      unnamed: Object.fromEntries((asked.data?.unnamed ?? []).map((voice) => [voice.label, voice])),
+      people: asked.data?.book ?? [],
+      busy: naming,
+      onName: name,
+    }),
+    [asked.data, naming, name],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -267,6 +321,7 @@ export function PageScreen() {
                 at={at}
                 onSeek={(seconds) => player.current?.seek(seconds)}
                 reading
+                naming={speakers}
               />
             ) : (
               <CardBody className="flex h-full min-h-0 flex-col pt-4">

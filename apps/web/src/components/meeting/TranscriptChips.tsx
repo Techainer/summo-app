@@ -1,10 +1,12 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useT } from "../../i18n/context";
 import { cn } from "../../lib/cn";
 import { decorate, italicise, type Row } from "../../lib/reading";
 import { clock } from "../../lib/clock";
+import { NameVoice } from "./NameVoice";
+import type { Person, UnknownVoice } from "../../lib/people";
 
 /**
  * The least this component needs to draw a line.
@@ -30,6 +32,23 @@ export interface Line {
   translation?: { lang: string; text: string };
 }
 
+/**
+ * Everything needed to say who a voice belongs to, from here.
+ *
+ * Absent while recording — a voice log is written as the meeting is attributed, and asking "who is
+ * `S2`?" of a transcript still arriving would be asking about a label that may not survive the
+ * next utterance.
+ */
+export interface Naming {
+  /** The voices in this meeting that belong to nobody, by their label. */
+  unnamed: Record<string, UnknownVoice>;
+  /** Everyone in the book, offered as one-click answers. */
+  people: Person[];
+  /** Which label is being written, so its controls can be disabled without freezing the rest. */
+  busy: string | null;
+  onName: (label: string, name: string) => void;
+}
+
 interface Props {
   segments: Line[];
   /** Playhead position, so the line being spoken can be marked. */
@@ -37,6 +56,13 @@ interface Props {
   onSeek?: (seconds: number) => void;
   /** Reading mode uses Be Vietnam Pro and looser leading, for actually reading it back. */
   reading?: boolean;
+  /**
+   * Naming a speaker from the transcript.
+   *
+   * The voice book asks who `S2` is from a list, out of context. This is the moment the question is
+   * actually answerable — you know who it is because you are reading what they said.
+   */
+  naming?: Naming;
 }
 
 /**
@@ -50,7 +76,7 @@ interface Props {
  * Virtualised because an eight-hour meeting is tens of thousands of utterances and the scroll has
  * to stay at 60fps.
  */
-export function TranscriptChips({ segments, at, onSeek, reading = false }: Props) {
+export function TranscriptChips({ segments, at, onSeek, reading = false, naming }: Props) {
   // Not compiled by the React Compiler, deliberately.
   //
   // `useVirtualizer` keeps a mutable instance and reads layout during render, which the compiler
@@ -62,6 +88,9 @@ export function TranscriptChips({ segments, at, onSeek, reading = false }: Props
 
   const t = useT();
   const scroller = useRef<HTMLDivElement>(null);
+  /** Which speaker label has its naming panel open. One at a time: two open panels is two answers
+      to one question, and the second would scroll the first out of view anyway. */
+  const [asking, setAsking] = useState<string | null>(null);
 
   // The same rules the recording screen uses. Two views of one transcript that disagreed about
   // who was talking over whom would be two answers to a question with one answer.
@@ -112,7 +141,15 @@ export function TranscriptChips({ segments, at, onSeek, reading = false }: Props
                   {t("transcript.pause", { seconds: Math.round(line.pause) })}
                 </p>
               )}
-              <Chip row={line} active={isActive} reading={reading} onSeek={onSeek} />
+              <Chip
+                row={line}
+                active={isActive}
+                reading={reading}
+                onSeek={onSeek}
+                naming={naming}
+                asking={asking}
+                onAsk={setAsking}
+              />
             </div>
           );
         })}
@@ -126,11 +163,17 @@ function Chip({
   active,
   reading,
   onSeek,
+  naming,
+  asking,
+  onAsk,
 }: {
   row: Row<Line>;
   active: boolean;
   reading: boolean;
   onSeek?: (seconds: number) => void;
+  naming?: Naming;
+  asking: string | null;
+  onAsk: (label: string | null) => void;
 }) {
   const { segment, overlapping, showSpeaker } = row;
   // Unconditionally, at the top. Below the early return this was a hook called only on some
@@ -139,51 +182,65 @@ function Chip({
   // state.
   const t = useT();
   const seekable = onSeek !== undefined;
+  // A label nobody has claimed, in a transcript that can be corrected.
+  const unnamed = segment.speaker ? naming?.unnamed[segment.speaker] : undefined;
+  const open = unnamed !== undefined && asking === segment.speaker;
 
-  const body = (
-    <>
-      <span className="flex items-baseline gap-2">
-        {/* Only at the start of a run. Three chips in a row from one person is one turn, and
-            repeating the name on each of them is what turns a paragraph into a list — the exact
-            thing this component's chips exist to make visible. */}
-        {segment.speaker && showSpeaker && (
-          <span className="text-fg-dim text-micro font-semibold">{segment.speaker}</span>
-        )}
-        <span className="tabular text-fg-faint text-micro">{clock(segment.t0)}</span>
-        {/* Two people talking at once. Without this the two chips read as a question and an
-            answer, and nothing on screen would tell a reader otherwise. */}
-        {overlapping && (
-          <span className="text-accent text-micro">{t("transcript.at_the_same_time")}</span>
-        )}
-      </span>
-      <span
-        className={cn(
-          "mt-0.5 block",
-          reading
-            ? "text-body leading-[1.75] font-[var(--font-reading)]"
-            : "text-sm leading-relaxed",
-          // A partial is still being revised; showing it as settled text makes the app look like
-          // it changes its mind.
-          segment.source === "partial" && "text-fg-dim italic",
-        )}
-      >
-        {segment.text}
-        {segment.translation && (
-          <span
-            lang={segment.translation.lang}
-            className={cn(
-              "text-fg-dim mt-1 block",
-              // Italic is how this says "the machine wrote this line". CJK, Thai, Arabic and
-              // Hebrew have no italic form, so a browser shears the glyphs instead — harder to
-              // read, and it looks like a rendering fault.
-              italicise(segment.translation.lang) && "italic",
-            )}
+  const header = (
+    <span className="flex items-baseline gap-2">
+      {/* Only at the start of a run. Three chips in a row from one person is one turn, and
+          repeating the name on each of them is what turns a paragraph into a list — the exact
+          thing this component's chips exist to make visible. */}
+      {segment.speaker &&
+        showSpeaker &&
+        (unnamed ? (
+          <button
+            type="button"
+            onClick={() => onAsk(open ? null : segment.speaker!)}
+            aria-expanded={open}
+            aria-label={t("people.name_this", { label: segment.speaker })}
+            className="text-accent hover:bg-accent-soft text-micro -mx-1 rounded px-1 font-semibold underline decoration-dotted underline-offset-2"
           >
-            {segment.translation.text}
-          </span>
-        )}
-      </span>
-    </>
+            {segment.speaker}
+          </button>
+        ) : (
+          <span className="text-fg-dim text-micro font-semibold">{segment.speaker}</span>
+        ))}
+      <span className="tabular text-fg-faint text-micro">{clock(segment.t0)}</span>
+      {/* Two people talking at once. Without this the two chips read as a question and an
+          answer, and nothing on screen would tell a reader otherwise. */}
+      {overlapping && (
+        <span className="text-accent text-micro">{t("transcript.at_the_same_time")}</span>
+      )}
+    </span>
+  );
+
+  const said = (
+    <span
+      className={cn(
+        "mt-0.5 block",
+        reading ? "text-body leading-[1.75] font-[var(--font-reading)]" : "text-sm leading-relaxed",
+        // A partial is still being revised; showing it as settled text makes the app look like
+        // it changes its mind.
+        segment.source === "partial" && "text-fg-dim italic",
+      )}
+    >
+      {segment.text}
+      {segment.translation && (
+        <span
+          lang={segment.translation.lang}
+          className={cn(
+            "text-fg-dim mt-1 block",
+            // Italic is how this says "the machine wrote this line". CJK, Thai, Arabic and
+            // Hebrew have no italic form, so a browser shears the glyphs instead — harder to
+            // read, and it looks like a rendering fault.
+            italicise(segment.translation.lang) && "italic",
+          )}
+        >
+          {segment.translation.text}
+        </span>
+      )}
+    </span>
   );
 
   const className = cn(
@@ -195,22 +252,36 @@ function Chip({
     overlapping && "border-l-accent/40 ms-3 rounded-l-none border-l-2",
   );
 
-  if (!seekable) {
-    return (
-      <div className={className} data-overlapping={overlapping || undefined}>
-        {body}
-      </div>
-    );
-  }
+  // The chip is a container, and what seeks is the line of speech inside it.
+  //
+  // It used to be one big `<button>`, which is why the speaker's name could not become one: a
+  // button inside a button is invalid, and the browser's repair — dropping the inner one out of the
+  // parent — leaves a control that is unreachable by keyboard and fires nothing on click. Moving
+  // the seek onto the text also stops "who was this?" from being a request to start playback.
   return (
-    <button
-      type="button"
-      className={className}
-      data-overlapping={overlapping || undefined}
-      onClick={() => onSeek(segment.t0)}
-      aria-label={t("meeting.play_from", { time: clock(segment.t0) })}
-    >
-      {body}
-    </button>
+    <div className={className} data-overlapping={overlapping || undefined}>
+      {header}
+      {seekable ? (
+        <button
+          type="button"
+          className="block w-full text-left"
+          onClick={() => onSeek(segment.t0)}
+          aria-label={t("meeting.play_from", { time: clock(segment.t0) })}
+        >
+          {said}
+        </button>
+      ) : (
+        said
+      )}
+      {open && unnamed && naming && (
+        <NameVoice
+          voice={unnamed}
+          people={naming.people}
+          busy={naming.busy === unnamed.label}
+          onName={(name) => naming.onName(unnamed.label, name)}
+          onCancel={() => onAsk(null)}
+        />
+      )}
+    </div>
   );
 }

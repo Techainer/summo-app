@@ -247,6 +247,7 @@ pub fn unknowns_everywhere(
 pub fn name_voice(
     book: &SharedBook,
     voices_dir: &Path,
+    library: &summo_vault::library::Library,
     meeting: &MeetingId,
     label: &str,
     name: &str,
@@ -256,6 +257,15 @@ pub fn name_voice(
         .ok_or_else(|| Error::Other(format!("no voice log for meeting {meeting}")))?;
 
     let label = SpeakerId::from(label.to_string());
+    // Which utterances of *this* meeting are about to change, captured before the correction — the
+    // whole point of `confirm` is that afterwards nothing carries the old label any more.
+    let here: Vec<u64> = log
+        .samples
+        .iter()
+        .filter(|s| s.label == label)
+        .map(|s| s.seq)
+        .collect();
+
     let (correction, person) = book.write(|book| {
         let correction = attribution::correct(voices_dir, book, &mut log, &label, name)?;
         let person = book
@@ -265,6 +275,29 @@ pub fn name_voice(
         Ok((correction, person))
     })?;
     log.save(&log_path)?;
+
+    // And now the half a person can actually see.
+    //
+    // Everything above moves vectors between profiles and relabels the logs. None of it touches the
+    // transcript, which is the Markdown in the vault and the only thing anybody reads — so before
+    // this, naming a voice left every meeting saying `S2` for ever while the interface reported
+    // "fixed 4 lines in 2 past meetings". That message was about files nothing had opened.
+    //
+    // `person.name` rather than the name that was typed: the book folds by name, so "Ngoc" applied
+    // to a book that already holds "Ngọc" is that person, and the transcript should say what the
+    // book says.
+    let here: Vec<(u64, String)> = here
+        .into_iter()
+        .map(|seq| (seq, person.name.clone()))
+        .collect();
+    library.relabel_speakers(meeting, &here)?;
+    for (swept, changes) in &correction.swept {
+        let changes: Vec<(u64, String)> = changes
+            .iter()
+            .map(|change| (change.seq, change.to.to_string()))
+            .collect();
+        library.relabel_speakers(swept, &changes)?;
+    }
 
     Ok(CorrectionView {
         person,
@@ -368,6 +401,15 @@ mod tests {
         log.save(&path).expect("save");
     }
 
+    /// A vault rooted at the same temporary directory.
+    ///
+    /// These tests seed vector logs and no Markdown, so the library finds no meetings and the
+    /// transcript rewrite is a no-op — which is what the argument is there to prove is *safe*. The
+    /// rewrite itself is pinned by `naming_a_voice_rewrites_the_transcript_a_person_reads`.
+    fn vault(dir: &tempfile::TempDir) -> summo_vault::library::Library {
+        summo_vault::library::Library::new(summo_core::paths::Paths::at(dir.path()))
+    }
+
     #[test]
     fn an_empty_vault_has_nobody_rather_than_failing() {
         let dir = voices();
@@ -452,8 +494,15 @@ mod tests {
         let meeting = MeetingId::from(String::from("01D"));
         seed_log(dir.path(), &meeting, "S2", BINH, 40.0);
 
-        let result =
-            name_voice(&open(dir.path()), dir.path(), &meeting, "S2", "Bình").expect("name");
+        let result = name_voice(
+            &open(dir.path()),
+            dir.path(),
+            &vault(&dir),
+            &meeting,
+            "S2",
+            "Bình",
+        )
+        .expect("name");
         assert_eq!(result.person.name, "Bình");
         assert_eq!(result.relabelled_here, 1);
 
@@ -473,8 +522,15 @@ mod tests {
         let meeting = MeetingId::from(String::from("01E"));
         seed_log(dir.path(), &meeting, "S2", NGOC_ON_A_PHONE, 30.0);
 
-        let result =
-            name_voice(&open(dir.path()), dir.path(), &meeting, "S2", "Ngọc").expect("name");
+        let result = name_voice(
+            &open(dir.path()),
+            dir.path(),
+            &vault(&dir),
+            &meeting,
+            "S2",
+            "Ngọc",
+        )
+        .expect("name");
         assert_eq!(result.person.id, "ngoc");
         assert_eq!(
             list(&open(dir.path())).expect("list").people.len(),
@@ -487,12 +543,80 @@ mod tests {
         );
     }
 
+    /// The half a person can actually see, and the one nothing was doing.
+    ///
+    /// Naming a voice moved vectors between profiles and relabelled the logs. It did not touch the
+    /// transcript — which is the Markdown in the vault, and the only thing anybody reads — so the
+    /// meeting went on saying `S2` for ever while the interface reported "fixed 1 line". That
+    /// message was about a file nothing had opened. `summo_diar::relabel` has always returned the
+    /// per-utterance changes "so a caller can rewrite only the files that changed"; there was no
+    /// such caller.
+    #[test]
+    fn naming_a_voice_rewrites_the_transcript_a_person_reads() {
+        use summo_core::paths::Paths;
+
+        let dir = voices();
+        let paths = Paths::at(dir.path());
+        std::fs::create_dir_all(paths.meetings()).expect("meetings");
+        std::fs::write(
+            paths.meetings().join("hop.md"),
+            "---\nid: 01R\ndate: 2026-08-10T09:00:00+07:00\nduration: 600\n---\n             # Họp\n\n## Transcript\n             **[00:00:01] Bạn** — Mình bắt đầu nhé <!-- seq:0 end:4.0 -->\n             **[00:00:05] S2** — Bên mình cần bản dùng thử <!-- seq:1 end:9.0 -->\n",
+        )
+        .expect("write");
+
+        let meeting = MeetingId::from(String::from("01R"));
+        let library = vault(&dir);
+        // `seq: 1`, matching the transcript line. Sequence numbers are the join between the vector
+        // log and the Markdown; a log numbered differently produces a name nobody sees applied.
+        let path = VoiceLog::path_for(dir.path(), &meeting);
+        let mut log = VoiceLog::new(meeting.clone(), "campplus-sv");
+        log.samples.push(summo_diar::VoiceSample {
+            seq: 1,
+            t0: 5.0,
+            duration: 4.0,
+            label: SpeakerId::from(String::from("S2")),
+            person: None,
+            confirmed: false,
+            embedding: BINH.to_vec(),
+        });
+        log.save(&path).expect("save");
+
+        name_voice(
+            &open(dir.path()),
+            dir.path(),
+            &library,
+            &meeting,
+            "S2",
+            "Bình",
+        )
+        .expect("name");
+
+        let written = std::fs::read_to_string(paths.meetings().join("hop.md")).expect("read");
+        assert!(
+            written.contains("**[00:00:05] Bình**"),
+            "the transcript still says S2:\n{written}"
+        );
+        // And only the line the voice was on. A correction that renamed every speaker would be
+        // worse than one that renamed none.
+        assert!(written.contains("**[00:00:01] Bạn**"), "{written}");
+    }
+
     #[test]
     fn naming_a_voice_that_does_not_exist_is_an_error_not_a_silent_no_op() {
         let dir = voices();
         let meeting = MeetingId::from(String::from("01F"));
         seed_log(dir.path(), &meeting, "S2", BINH, 10.0);
-        assert!(name_voice(&open(dir.path()), dir.path(), &meeting, "S9", "Bình").is_err());
+        assert!(
+            name_voice(
+                &open(dir.path()),
+                dir.path(),
+                &vault(&dir),
+                &meeting,
+                "S9",
+                "Bình"
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -502,6 +626,7 @@ mod tests {
             name_voice(
                 &open(dir.path()),
                 dir.path(),
+                &vault(&dir),
                 &MeetingId::from(String::from("01NOPE")),
                 "S2",
                 "Bình"
@@ -578,8 +703,15 @@ mod tests {
 
         let meeting = MeetingId::from(String::from("01G"));
         seed_log(dir.path(), &meeting, "S3", BINH, 25.0);
-        let result =
-            name_voice(&open(dir.path()), dir.path(), &meeting, "S3", "Bình").expect("correct");
+        let result = name_voice(
+            &open(dir.path()),
+            dir.path(),
+            &vault(&dir),
+            &meeting,
+            "S3",
+            "Bình",
+        )
+        .expect("correct");
 
         assert_eq!(result.person.name, "Bình");
         assert!(
