@@ -216,6 +216,64 @@ jobs:
           AR_aarch64_linux_android: llvm-ar
         run: cargo check --target ${{ matrix.target }} --workspace
 
+  # The Android app, assembled.
+  #
+  # `mobile-portability` above type-checks the workspace for `aarch64-linux-android`, which is a
+  # different claim: it says the code is well-formed for the platform, not that it links, and
+  # certainly not that anything can be installed. Everything this job found was invisible to a type
+  # check — a missing trait import, a missing icon, a codec that cross-compiles only if asked, and a
+  # CLI the build could not resolve. `apps/mobile/README.md` said "no `.apk` has ever been
+  # produced"; this is the job that stops that being true again.
+  #
+  # Only on `master` and on a change under `apps/mobile`. It is a twenty-minute build for a claim
+  # that does not change when somebody edits a screen.
+  android:
+    name: the Android app assembles
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'mobile')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # `rustup target add` rather than the action's input, for the reason in every other job here:
+      # `rust-toolchain.toml` pins the version, and the action adds the target to *stable*.
+      - run: rustup target add aarch64-linux-android
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: The NDK
+        run: |
+          sdkmanager --install "ndk;27.2.12479018" > /dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target\napps/mobile/src-tauri -> target"
+          key: android
+      # Opus, cross-compiled. `audiopus_sys` runs `configure` with no `--host`, so its bundled build
+      # either refuses to run its own test program or produces an x86-64 library the linker rejects.
+      # `OPUS_LIB_DIR` is the crate's own way out. See the script.
+      - name: Opus for arm64
+        run: |
+          echo "OPUS_LIB_DIR=$(./scripts/opus-android.sh arm64-v8a | tail -1)" >> "$GITHUB_ENV"
+          echo "OPUS_STATIC=1" >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C apps/mobile exec tauri android init --skip-targets-install
+      - run: pnpm -C apps/mobile exec tauri android build --apk --target aarch64
+      # Unsigned on purpose: there is no keystore in this repository and there should not be. What
+      # is being proven is that the thing assembles.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: summo-android-arm64
+          path: apps/mobile/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          retention-days: 14
+
   # The shell users actually install. It is not a workspace member — a Tauri app has its own
   # lockfile and its own build script — so `cargo build --workspace` never touched it, and it had
   # stopped compiling against Tauri v2 without anybody finding out.

@@ -30,7 +30,11 @@
 //! which is the machinery this needs; what it does not yet have is a measured RTF row for phone
 //! CPUs, so the ranking on a phone is currently an extrapolation rather than a measurement.
 
-use tauri::Manager;
+// `Emitter` as well as `Manager`, and it is not tidiness. Tauri v2 split what v1 had on one trait:
+// `Manager` carries `path()` and `state()`, `Emitter` carries `emit()`. Without the second import
+// the two `handle.emit(...)` calls below do not compile — which is how far this file had ever been
+// taken, because nothing built it.
+use tauri::{Emitter, Manager};
 
 /// The engine, held for the life of the app so its task is not dropped.
 struct Engine(std::sync::Mutex<Option<summo_engine::embedded::Embedded>>);

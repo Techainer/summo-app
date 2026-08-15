@@ -22,18 +22,18 @@ written outside the directory the OS hands the app is removed or refused.
 
 ## What works and what does not
 
-| | |
-|---|---|
-| Microphone recording | Planned, both platforms. Covers in-person meetings. |
+|                      |                                                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Microphone recording | Planned, both platforms. Covers in-person meetings.                                                                                                          |
 | In-app meeting audio | Android only, via `AudioPlaybackCapture`. An app may opt out of being captured, and the meeting apps are exactly the ones that might. iOS has no equivalent. |
-| **Call recording** | **Not implementable.** See below. |
+| **Call recording**   | **Not implementable.** See below.                                                                                                                            |
 
 Call recording is out permanently, not "later". iOS has never exposed call audio to third-party
 apps, and iOS 18.1's own call recording ships with no third-party API. Google Play has banned
 third-party call recording apps since May 2022 — only the OEM dialer may. This is policy and
 platform, not difficulty.
 
-## Status: the Rust compiles for Android; the app has not been assembled
+## Status: the Android app assembles
 
 **The entire workspace type-checks for `aarch64-linux-android`** — the engine with its bundled
 interface, the vault, the agent, the model registry, and `summo-asr` with sherpa-onnx and ONNX
@@ -46,10 +46,12 @@ build scripts pick up the NDK's clang and cross-compile without any help from us
 
 What has **not** happened:
 
-1. **No `.apk` and no `.ipa` has ever been produced.** Type-checking is not linking, and linking is
-   not packaging. Between here and an installable app: `cargo tauri android init`, a Gradle
-   project, signing, the Android manifest's `RECORD_AUDIO` and foreground-service declarations, and
-   the same again for iOS.
+1. **An `.apk` is produced; no `.ipa` is.** The Android app builds — 42 MB, one 40 MB
+   `libsummo_mobile.so` holding the engine, the vault, the agent, sherpa-onnx and ONNX Runtime —
+   and CI assembles it on every push to `master` and on any pull request labelled `mobile`. It is
+   **unsigned**: there is no keystore in this repository and there should not be. Still to do
+   before anybody can install it usefully: signing, and the manifest's `RECORD_AUDIO` and
+   foreground-service declarations.
 
 2. **iOS is unverified.** `aarch64-apple-ios` needs Xcode, which needs macOS. Nothing here suggests
    it will be worse than Android — the same crates, the same C++ libraries, and Apple's toolchain
@@ -59,15 +61,40 @@ What has **not** happened:
    nothing about whether the microphone permission flow works, whether recognition is fast enough
    on a mid-range Android, or what the battery cost is.
 
-2. **Model size against phone memory.** `summo_models::recommend` already scores by available RAM,
+4. **Model size against phone memory.** `summo_models::recommend` already scores by available RAM,
    which is the right machinery. What it lacks is a measured RTF row for phone CPUs, so a ranking
    on a phone today is an extrapolation rather than a measurement. `summo-bench asr` on a device
    is what fixes that.
 
 ```bash
-pnpm --filter @summo/mobile android      # needs the Android SDK and NDK
-pnpm --filter @summo/mobile ios          # needs Xcode
+export ANDROID_HOME=~/Android/Sdk NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018
+export OPUS_STATIC=1 OPUS_LIB_DIR="$(./scripts/opus-android.sh arm64-v8a | tail -1)"
+
+pnpm -C apps/mobile exec tauri android init --skip-targets-install
+pnpm -C apps/mobile exec tauri android build --apk --target aarch64
+pnpm -C apps/mobile exec tauri ios build          # needs Xcode
 ```
 
-`tauri android init` / `tauri ios init` generate the `gen/` directory these commands expect; it is
-not committed because it is machine-specific and regenerable.
+`tauri android init` generates `gen/`; it is not committed because it is machine-specific and
+regenerable.
+
+### Three things that had to be fixed before any of that ran
+
+Every one of them was invisible to `cargo check --target aarch64-linux-android`, which is what CI
+had been running and calling portability.
+
+**Opus does not cross-compile on its own.** `audiopus_sys` 0.1.8 runs `configure` with no `--host`,
+so autoconf believes it is building for the machine it is running on: it compiles a test program
+with the NDK's compiler, tries to _run_ it, and stops. Set the compiler without the flag and it goes
+one step further and produces an x86-64 `libopus.so`, which the linker rejects as "incompatible with
+aarch64linux". `scripts/opus-android.sh` builds the upstream release properly and `OPUS_LIB_DIR` —
+the crate's own supported escape hatch — points at it.
+
+**`use tauri::Manager` is not enough in Tauri v2.** `emit()` moved to a separate `Emitter` trait, so
+the two lines that tell the interface the engine is up did not compile. A type check for the target
+never reached them, because it never reached this crate.
+
+**Gradle could not find the Tauri CLI.** The generated `rustBuildArm64Release` task runs
+`pnpm tauri …` with the working directory set to `src-tauri`, which has no `package.json` — so pnpm
+walked up, found no `tauri` binary, and failed with a message about a recursive exec. The CLI is a
+root dev dependency now, which is where a tool used by two apps belongs.

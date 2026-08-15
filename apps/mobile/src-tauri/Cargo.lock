@@ -5308,6 +5308,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hound",
  "parking_lot",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "summo-agent",
