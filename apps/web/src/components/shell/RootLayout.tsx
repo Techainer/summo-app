@@ -39,7 +39,7 @@ import { RecordButton } from "../RecordButton";
 import { ListeningIn } from "../record/ListeningIn";
 import { StatusBar } from "../StatusBar";
 import { Waveform } from "../Waveform";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 
 import { SNAPPY, screen as screenVariants } from "../../lib/motion";
 import { AssistantPanel } from "../assistant/AssistantPanel";
@@ -535,7 +535,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
                 Below the breakpoint there is no room for two columns, so the panel takes the
                 whole width — the same component, the same state, one implementation. */}
             <div className="flex h-full min-h-0">
-              <motion.div
+              <m.div
                 key={pathname}
                 variants={screenVariants}
                 initial="hidden"
@@ -547,7 +547,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
                 )}
               >
                 {children}
-              </motion.div>
+              </m.div>
               {assistantOpen && (
                 <div className={cn("h-full shrink-0", narrow ? "w-full" : "w-[380px]")}>
                   <AssistantPanel onClose={() => setAssistantOpen(false)} />

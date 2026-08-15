@@ -1,5 +1,5 @@
 import { DreamPanel } from "../components/agents/Dream";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
@@ -180,14 +180,14 @@ export function AgentsScreen() {
         </p>
       ))}
 
-      <motion.div
+      <m.div
         initial="hidden"
         animate="shown"
         transition={stagger(roster?.agents.length ?? 0)}
         className="grid gap-3 sm:grid-cols-2"
       >
         {roster?.agents.map((each) => (
-          <motion.button
+          <m.button
             key={each.slug}
             variants={listItem}
             type="button"
@@ -232,13 +232,13 @@ export function AgentsScreen() {
               )}
               {each.model && <span className="tabular">· {each.model}</span>}
             </p>
-          </motion.button>
+          </m.button>
         ))}
-      </motion.div>
+      </m.div>
 
       <AnimatePresence mode="wait">
         {agent && draft !== null && (
-          <motion.div
+          <m.div
             key={agent.slug}
             variants={screenVariants}
             initial="enter"
@@ -315,7 +315,7 @@ export function AgentsScreen() {
                 </CardBody>
               </Card>
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 

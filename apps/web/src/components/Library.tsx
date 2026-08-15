@@ -8,7 +8,7 @@ import {
   PencilLine,
   Users,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Recent } from "./library/Recent";
 import { Avatar, Button, SectionTitle, Wave } from "./ui";
@@ -325,7 +325,7 @@ export function Library({
               // Keyed on the filter as well as the day, so changing a filter re-runs the stagger:
               // the list assembling is what tells the user the change took effect on a screen
               // where the only other feedback is that some rows are gone.
-              <motion.section
+              <m.section
                 key={`${g.key}-${folder ?? ""}-${tags.join()}-${colour ?? ""}`}
                 className="mb-3.5"
                 initial="hidden"
@@ -342,7 +342,7 @@ export function Library({
                     onOpen={onOpen ? () => onOpen(m.id) : undefined}
                   />
                 ))}
-              </motion.section>
+              </m.section>
             ))
           )}
 
@@ -432,7 +432,7 @@ function MeetingRow({
 }) {
   const { t, locale } = useI18n();
   return (
-    <motion.button
+    <m.button
       variants={listItem}
       transition={GENTLE}
       type="button"
@@ -499,7 +499,7 @@ function MeetingRow({
           </span>
         </span>
       </span>
-    </motion.button>
+    </m.button>
   );
 }
 
@@ -585,7 +585,7 @@ function Dashboard({
           </Button>
         </div>
 
-        <motion.div
+        <m.div
           initial="hidden"
           animate="shown"
           transition={stagger(4)}
@@ -609,7 +609,7 @@ function Dashboard({
             note={formatDuration(stats.last_seven_days_duration, locale, "short")}
           />
           <Tile icon={Users} label={t("library.people")} value={String(stats.people)} />
-        </motion.div>
+        </m.div>
 
         {/* Unsummarised is not a statistic, it is a chore: it belongs beside the others only when
             there are some, and coloured like the work it is. */}
@@ -647,7 +647,7 @@ function Tile({
   tone?: "accent";
 }) {
   return (
-    <motion.div
+    <m.div
       variants={listItem}
       className="rounded-card border-line bg-bg-soft flex flex-col gap-0.5 border p-3.5 shadow-[var(--shadow-sm)]"
     >
@@ -672,7 +672,7 @@ function Tile({
       </span>
       <span className="text-fg-dim text-micro">{label}</span>
       {note && <span className="text-fg-faint text-micro">{note}</span>}
-    </motion.div>
+    </m.div>
   );
 }
 

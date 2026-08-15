@@ -1,5 +1,5 @@
 import { useRouterState } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useEffect, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
@@ -55,7 +55,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
 
   return (
     <AnimatePresence>
-      <motion.aside
+      <m.aside
         // A polite live region rather than a dialog: it does not take focus, so somebody typing in
         // the app is not interrupted by it.
         role="complementary"
@@ -79,7 +79,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
             {t("tour.skip")}
           </Button>
         </div>
-      </motion.aside>
+      </m.aside>
     </AnimatePresence>
   );
 }

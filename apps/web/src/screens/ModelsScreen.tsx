@@ -1,5 +1,5 @@
 import { CloudOff, HardDriveDownload, Package, Trash2 } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button, Empty, Page, PageGlow, SectionTitle } from "../components/ui";
@@ -168,7 +168,7 @@ export function ModelsScreen() {
                 page repainting; a short stagger reads as a list being laid out, and it gives the
                 eye an order to follow. `stagger` shortens the step as the count grows, so a long
                 section does not take a second to finish. */}
-            <motion.div
+            <m.div
               initial="hidden"
               animate="shown"
               transition={stagger(group.models.length)}
@@ -185,7 +185,7 @@ export function ModelsScreen() {
                   inUse={chosen[roleFor(model.task) ?? ""] === model.id}
                 />
               ))}
-            </motion.div>
+            </m.div>
           </section>
         ))
       )}
@@ -216,7 +216,7 @@ function Card({
   const done = percent(job ?? ({} as Install));
 
   return (
-    <motion.article
+    <m.article
       variants={listItem}
       className={cn(
         // A real card on the page surface, not a translucent tint of it. Elevation is what tells
@@ -337,6 +337,6 @@ function Card({
       {job?.state === "failed" && (
         <p className="text-rec text-micro mt-2">{job.error ?? t("models.failed")}</p>
       )}
-    </motion.article>
+    </m.article>
   );
 }

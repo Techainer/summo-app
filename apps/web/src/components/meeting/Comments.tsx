@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useCallback, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
@@ -117,7 +117,7 @@ export function Comments({
             const fromAgent = annotation.author === "agent";
 
             return (
-              <motion.li
+              <m.li
                 key={annotation.id}
                 variants={listItem}
                 initial="hidden"
@@ -186,7 +186,7 @@ export function Comments({
                     </button>
                   ))}
                 </div>
-              </motion.li>
+              </m.li>
             );
           })}
         </AnimatePresence>

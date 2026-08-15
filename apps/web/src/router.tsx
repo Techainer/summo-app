@@ -4,24 +4,60 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   redirect,
 } from "@tanstack/react-router";
 
 import { claimHandshake } from "./lib/session";
 import { RootLayout } from "./components/shell/RootLayout";
-import { AgendaScreen } from "./screens/AgendaScreen";
+import { ScreenPending } from "./components/shell/ScreenPending";
 import { HomeScreen } from "./screens/HomeScreen";
-import { AnalyticsScreen } from "./screens/AnalyticsScreen";
-import { AgentsScreen } from "./screens/AgentsScreen";
-import { ChatScreen } from "./screens/ChatScreen";
-import { LibraryScreen } from "./screens/LibraryScreen";
-import { PageScreen } from "./screens/PageScreen";
-import { NotesScreen } from "./screens/NotesScreen";
-import { PeopleScreen } from "./screens/PeopleScreen";
-import { RecordScreen } from "./screens/RecordScreen";
-import { TasksScreen } from "./screens/TasksScreen";
-import { ModelsScreen } from "./screens/ModelsScreen";
-import { SettingsScreen } from "./screens/SettingsScreen";
+
+/**
+ * Every screen but the first one, fetched when it is opened.
+ *
+ * All thirteen used to be imported at the top of this file, which put all thirteen into the chunk
+ * the browser has to parse before it can paint anything — the models catalogue, the analytics
+ * charts and the settings form included, on an app that opens on Home. It was 96 kB gzipped of
+ * entry chunk and a first load of 277 kB against a 300 kB budget, most of it screens nobody had
+ * asked for yet.
+ *
+ * Home stays eager on purpose: splitting the screen the app starts on trades a smaller parse for a
+ * second round trip before the first pixel, which is the wrong way round.
+ *
+ * The rest are warmed on idle by {@link warmScreens} rather than left to be fetched on the click.
+ * From a local daemon or a `tauri://` bundle a chunk arrives in single-digit milliseconds, so this
+ * is not about the network — it is about *when* the browser spends the parse: after the first
+ * screen is on the glass instead of before it.
+ */
+const screens = {
+  record: () => import("./screens/RecordScreen"),
+  library: () => import("./screens/LibraryScreen"),
+  page: () => import("./screens/PageScreen"),
+  notes: () => import("./screens/NotesScreen"),
+  agenda: () => import("./screens/AgendaScreen"),
+  chat: () => import("./screens/ChatScreen"),
+  agents: () => import("./screens/AgentsScreen"),
+  tasks: () => import("./screens/TasksScreen"),
+  people: () => import("./screens/PeopleScreen"),
+  analytics: () => import("./screens/AnalyticsScreen"),
+  models: () => import("./screens/ModelsScreen"),
+  settings: () => import("./screens/SettingsScreen"),
+};
+
+/**
+ * Fetch every screen's chunk, for when the browser has nothing better to do.
+ *
+ * Called from `main.tsx` on idle. Without it the first visit to each screen pays a fetch at the
+ * moment somebody is watching, which is the one moment it is expensive; with it navigation is as
+ * instant as it was when everything was in one file, and the first paint is not waiting on any of
+ * it. Failures are ignored — a chunk that could not be prefetched is fetched again by the router
+ * when the screen is actually opened, and reporting it here would be an error about a screen the
+ * user has not asked for.
+ */
+export function warmScreens() {
+  for (const fetch of Object.values(screens)) void fetch().catch(() => undefined);
+}
 
 /**
  * Hash history, not browser history.
@@ -70,13 +106,13 @@ const homeRoute = createRoute({
 const recordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/record",
-  component: RecordScreen,
+  component: lazyRouteComponent(screens.record, "RecordScreen"),
 });
 
 const libraryRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/library",
-  component: LibraryScreen,
+  component: lazyRouteComponent(screens.library, "LibraryScreen"),
   // Filters live in the URL so a filtered view can be reloaded, shared and stepped back out of.
   // Every key is optional: `/library` with no query is the unfiltered view, and callers should be
   // able to set one filter without restating the others.
@@ -104,7 +140,7 @@ const libraryRoute = createRoute({
 const pageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/pages/$pageId",
-  component: PageScreen,
+  component: lazyRouteComponent(screens.page, "PageScreen"),
 });
 
 /// Kept, as a redirect. `/meetings/<id>` is in links people have saved, in the desktop shell's
@@ -124,7 +160,7 @@ const meetingRoute = createRoute({
 const notesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/notes",
-  component: NotesScreen,
+  component: lazyRouteComponent(screens.notes, "NotesScreen"),
   // `?open=` so a note is a link. Without it the sidebar could list every page and open none of
   // them, which is a table of contents for a book with no page numbers.
   validateSearch: (search: Record<string, unknown>) => ({
@@ -135,49 +171,49 @@ const notesRoute = createRoute({
 const agendaRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/agenda",
-  component: AgendaScreen,
+  component: lazyRouteComponent(screens.agenda, "AgendaScreen"),
 });
 
 const chatRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/chat",
-  component: ChatScreen,
+  component: lazyRouteComponent(screens.chat, "ChatScreen"),
 });
 
 const agentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/agents",
-  component: AgentsScreen,
+  component: lazyRouteComponent(screens.agents, "AgentsScreen"),
 });
 
 const tasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/tasks",
-  component: TasksScreen,
+  component: lazyRouteComponent(screens.tasks, "TasksScreen"),
 });
 
 const peopleRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/people",
-  component: PeopleScreen,
+  component: lazyRouteComponent(screens.people, "PeopleScreen"),
 });
 
 const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/analytics",
-  component: AnalyticsScreen,
+  component: lazyRouteComponent(screens.analytics, "AnalyticsScreen"),
 });
 
 const modelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/models",
-  component: ModelsScreen,
+  component: lazyRouteComponent(screens.models, "ModelsScreen"),
 });
 
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
-  component: SettingsScreen,
+  component: lazyRouteComponent(screens.settings, "SettingsScreen"),
 });
 
 const routeTree = rootRoute.addChildren([
@@ -197,7 +233,15 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
 ]);
 
-export const router = createRouter({ routeTree, history });
+export const router = createRouter({
+  routeTree,
+  history,
+  // Shown while a screen's chunk is in flight, and only when that takes long enough to be worth
+  // saying something about. The router's own default is a second of nothing followed by half a
+  // second of the pending component, which is right here: locally a chunk arrives in a few
+  // milliseconds, so the screen simply appears and this is never rendered.
+  defaultPendingComponent: ScreenPending,
+});
 
 declare module "@tanstack/react-router" {
   interface Register {

@@ -1,5 +1,5 @@
 import { CalendarDays } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useCallback, useMemo, useState } from "react";
 
 import { Avatar, Empty, Page, PageGlow } from "../components/ui";
@@ -70,7 +70,7 @@ export function AgendaScreen() {
               </h2>
               <ul className="mt-2 space-y-1.5">
                 {items.map((entry) => (
-                  <motion.li
+                  <m.li
                     key={`${entry.calendar}:${entry.uid}:${entry.start_epoch}`}
                     variants={listItem}
                     initial="hidden"
@@ -128,7 +128,7 @@ export function AgendaScreen() {
                         {service(entry.conference)}
                       </a>
                     )}
-                  </motion.li>
+                  </m.li>
                 ))}
               </ul>
             </section>

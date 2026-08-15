@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
@@ -61,7 +61,7 @@ export function Chip({
   }
 
   return (
-    <motion.button
+    <m.button
       type="button"
       onClick={onClick}
       aria-pressed={on}
@@ -71,7 +71,7 @@ export function Chip({
       className={shell}
     >
       {inner}
-    </motion.button>
+    </m.button>
   );
 }
 

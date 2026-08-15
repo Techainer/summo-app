@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
@@ -228,41 +228,43 @@ export function Setup({ onDone }: { onDone: () => void }) {
             <p className="text-fg-faint mt-4 text-sm">{t("setup.no_models")}</p>
           ) : (
             <ul className="mt-4 space-y-2">
-              {models.map((m) => {
-                const job = installs.find((i) => i.model === m.id);
+              {models.map((model) => {
+                const job = installs.find((i) => i.model === model.id);
                 const pct = job ? percent(job) : null;
                 return (
-                  <li key={m.id}>
+                  <li key={model.id}>
                     <label
                       className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${
-                        m.id === chosen ? "border-accent bg-accent-soft" : "border-line bg-bg-soft"
+                        model.id === chosen
+                          ? "border-accent bg-accent-soft"
+                          : "border-line bg-bg-soft"
                       }`}
                     >
                       <input
                         type="radio"
                         name="model"
-                        value={m.id}
-                        checked={m.id === chosen}
-                        onChange={() => setChosen(m.id)}
+                        value={model.id}
+                        checked={model.id === chosen}
+                        onChange={() => setChosen(model.id)}
                         className="mt-1"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-3">
-                          <span className="font-medium">{m.name}</span>
+                          <span className="font-medium">{model.name}</span>
                           <span className="text-fg-faint text-meta">
-                            {m.installed ? t("setup.installed") : size(m.size_bytes)}
+                            {model.installed ? t("setup.installed") : size(model.size_bytes)}
                           </span>
                         </span>
-                        <span className="text-fg-dim text-meta mt-0.5 block">{m.reason}</span>
-                        {m.license && (
+                        <span className="text-fg-dim text-meta mt-0.5 block">{model.reason}</span>
+                        {model.license && (
                           <span className="text-fg-faint text-micro mt-0.5 block">
-                            {m.license}
-                            {needsConsent(m) ? ` · ${t("setup.upstream")}` : ""}
+                            {model.license}
+                            {needsConsent(model) ? ` · ${t("setup.upstream")}` : ""}
                           </span>
                         )}
                         {job && (
                           <span className="bg-line mt-2 block h-1 overflow-hidden rounded-full">
-                            <motion.span
+                            <m.span
                               className="bg-accent block h-full"
                               animate={
                                 pct === null ? { x: ["-100%", "100%"] } : { width: `${pct}%` }

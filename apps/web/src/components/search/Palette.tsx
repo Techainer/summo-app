@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { CornerDownLeft, NotebookPen, Search, Waves } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -159,7 +159,7 @@ function PaletteDialog({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: -8, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={SNAPPY}
@@ -285,7 +285,7 @@ function PaletteDialog({
             {t("palette.choose")}
           </span>
         </div>
-      </motion.div>
+      </m.div>
     </div>
   );
 }

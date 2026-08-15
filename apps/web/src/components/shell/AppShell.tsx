@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import type { ReactNode } from "react";
 
 import { useT } from "../../i18n/context";
@@ -104,7 +104,7 @@ export function AppShell({
           through a sidebar they cannot see. */}
       <AnimatePresence initial={false}>
         {!narrow && navOpen && (
-          <motion.aside
+          <m.aside
             key="sidebar"
             // A surface of its own, not a translucent wash of the page. The window used to be one
             // flat colour from edge to edge, so the sidebar existed only because of a one-pixel
@@ -116,7 +116,7 @@ export function AppShell({
             transition={SPRING}
           >
             <div className="h-full w-[270px]">{sidebar}</div>
-          </motion.aside>
+          </m.aside>
         )}
       </AnimatePresence>
 

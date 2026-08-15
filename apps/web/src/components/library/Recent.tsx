@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { NotebookPen } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -76,14 +76,9 @@ export function Recent({
   if (entries.length === 0) return null;
 
   return (
-    <motion.ul
-      initial="hidden"
-      animate="shown"
-      transition={stagger(entries.length)}
-      className={grid}
-    >
+    <m.ul initial="hidden" animate="shown" transition={stagger(entries.length)} className={grid}>
       {entries.map((entry) => (
-        <motion.li key={entry.id} variants={listItem}>
+        <m.li key={entry.id} variants={listItem}>
           {/* A plain button. The lift used to be `whileHover={{ y: -2 }}`, which is Motion running a
               spring on one hover — a rAF loop and an inline transform per card, to move something
               two pixels. `.lift` is the same movement as a CSS transition, it is the same rule every
@@ -133,8 +128,8 @@ export function Recent({
               </span>
             )}
           </button>
-        </motion.li>
+        </m.li>
       ))}
-    </motion.ul>
+    </m.ul>
   );
 }

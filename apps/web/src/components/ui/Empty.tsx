@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
@@ -51,7 +51,7 @@ export function Empty({
   full?: boolean;
 }) {
   return (
-    <motion.div
+    <m.div
       role="status"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -74,7 +74,7 @@ export function Empty({
       <p className="text-fg text-body font-medium">{title}</p>
       {hint && <p className="text-fg-faint text-meta max-w-sm leading-relaxed">{hint}</p>}
       {action}
-    </motion.div>
+    </m.div>
   );
 }
 

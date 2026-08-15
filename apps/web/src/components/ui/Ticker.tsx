@@ -1,4 +1,4 @@
-import { animate, useReducedMotion } from "motion/react";
+import { useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef } from "react";
 
 import { useI18n } from "../../i18n/context";
@@ -50,19 +50,36 @@ export function Ticker({ value, className }: { value: string; className?: string
       element.textContent = value;
       return;
     }
-    const running = animate(0, target, {
-      duration: Math.min(0.9, 0.25 + target * 0.02),
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate: (at) => {
-        element.textContent = format.format(Math.round(at));
-      },
+    // Counted by hand rather than by the animation library.
+    //
+    // `animate()` from `motion` is the same engine that drives every animated element — keyframes,
+    // springs, interpolation between colours and transforms — and importing it put all of that in
+    // the chunk the browser parses before the first paint, for a number going up. Every animated
+    // *element* is loaded on the side (see `main.tsx`); this was the one import that dragged the
+    // engine back into the entry chunk, because the home screen is made of these.
+    //
+    // What is lost: nothing this uses. One value, one duration, one curve, no interruption — the
+    // count runs once per element and stops.
+    const span = Math.min(900, 250 + target * 20);
+    let frame = 0;
+    let started: number | null = null;
+    const step = (now: number) => {
+      started ??= now;
+      const t = Math.min(1, (now - started) / span);
+      // Expo out, which is what `[0.16, 1, 0.3, 1]` was: nearly all of the distance in the first
+      // third, then a long settle. A count that eases in reads as hesitation.
+      const eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+      element.textContent = format.format(Math.round(target * eased));
+      if (t < 1) {
+        frame = requestAnimationFrame(step);
+        return;
+      }
       // On completion rather than on start, so an animation that was torn down before it finished
       // — React's development double-invoke does exactly this — is allowed to run again.
-      onComplete: () => {
-        counted.current = true;
-      },
-    });
-    return () => running.stop();
+      counted.current = true;
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
   }, [target, value, still, format]);
 
   return (

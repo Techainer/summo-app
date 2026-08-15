@@ -1,6 +1,6 @@
 import { AudioLines } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useCallback, useState } from "react";
 
 import { Avatar, Empty, Page, SectionTitle } from "./ui";
@@ -267,14 +267,14 @@ export function People({ client }: Props) {
       ) : (
         // A card each rather than rows separated by a hairline. The voice book is the one screen
         // where the unit of interest is a *person*, and a person is worth a surface.
-        <motion.ul
+        <m.ul
           initial="hidden"
           animate="shown"
           transition={stagger(people.length)}
           className="grid gap-2 sm:grid-cols-2"
         >
           {people.map((person) => (
-            <motion.li
+            <m.li
               key={person.id}
               variants={listItem}
               className="border-line bg-bg-soft flex items-center gap-3 rounded-[var(--radius-card)] border p-3 shadow-[var(--shadow-sm)]"
@@ -327,9 +327,9 @@ export function People({ client }: Props) {
               >
                 ✕
               </button>
-            </motion.li>
+            </m.li>
           ))}
-        </motion.ul>
+        </m.ul>
       )}
     </Page>
   );

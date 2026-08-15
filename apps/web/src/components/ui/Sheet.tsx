@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import type { ReactNode } from "react";
 
 import { SNAPPY, SPRING } from "../../lib/motion";
@@ -42,7 +42,7 @@ export function Sheet({
         {open && (
           <Dialog.Portal forceMount>
             <Dialog.Overlay asChild>
-              <motion.div
+              <m.div
                 className="fixed inset-0 z-40 bg-black/50"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -51,7 +51,7 @@ export function Sheet({
               />
             </Dialog.Overlay>
             <Dialog.Content asChild>
-              <motion.div
+              <m.div
                 className={cn(
                   "bg-bg-raised border-line fixed z-50 shadow-[var(--shadow-pop)]",
                   side === "left" && "inset-y-0 left-0 w-[290px] border-r",
@@ -75,7 +75,7 @@ export function Sheet({
                   <Dialog.Description className="sr-only">{description}</Dialog.Description>
                 )}
                 {children}
-              </motion.div>
+              </m.div>
             </Dialog.Content>
           </Dialog.Portal>
         )}
