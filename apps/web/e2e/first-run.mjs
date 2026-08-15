@@ -109,9 +109,22 @@ const heading = await page.locator("h1").first().innerText();
 if (!/welcome/i.test(heading)) fail(`expected a welcome screen, got ${JSON.stringify(heading)}`);
 
 const setupText = await page.locator("main").innerText();
-for (const promise of [/never leaves/i, /speech model/i]) {
-  if (!promise.test(setupText)) fail(`setup did not say ${promise}`);
+if (!/never leaves/i.test(setupText)) fail("setup did not say the audio never leaves the machine");
+
+// Setup has to say where recognition stands, and there are two honest answers.
+//
+// This binary is built `--features serve,bundled` — no `models` — so it *cannot* transcribe, and
+// the screen says so instead of offering a catalogue of models it could not load. A build with
+// recognition offers the catalogue. Either is correct; a screen that says neither is the bug this
+// line is here for, and it is the exact shape the Android app shipped in: a model catalogue on a
+// build that could not use one.
+const noRecognition = /cannot recognise speech/i.test(setupText);
+if (!noRecognition && !/speech model/i.test(setupText)) {
+  fail("setup neither offered a speech model nor said this build has no recognition");
 }
+console.log(
+  `setup: ${noRecognition ? "no recognition in this build, and it says so" : "offers a model"}`,
+);
 console.log(`setup: ${setupText.split("\n").slice(0, 2).join(" · ")}`);
 
 await page.screenshot({ path: "/tmp/shots/first-run-setup.png", fullPage: true });
