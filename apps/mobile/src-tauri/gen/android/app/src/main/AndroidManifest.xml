@@ -5,6 +5,19 @@
     <!-- What the app is for. Without this it installs, opens, and cannot record a thing. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Not optional, and not obvious. The interface records through `getUserMedia`, which in an
+         Android WebView goes to `WebChromeClient.onPermissionRequest`. Wry's implementation of
+         that asks the system for RECORD_AUDIO *and* MODIFY_AUDIO_SETTINGS together, and grants the
+         page only if **every** permission in the request came back granted. Android refuses a
+         permission the manifest never declared, so without this line the second half of the pair
+         is denied at once, the whole request is denied with it, and `getUserMedia` rejects — after
+         the user has tapped Allow. A microphone that is refused because of a permission nobody
+         asked for and no dialog ever mentioned.
+
+         It is a normal permission, so declaring it is the whole of the work: it is granted at
+         install and the user is never asked about it. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     <!-- Recording has to survive the screen going off. A meeting is forty minutes and a phone
          sleeps in two, and a foreground service is the only way Android lets an app keep the
          microphone open across that. `microphone` is the type Android requires be declared for

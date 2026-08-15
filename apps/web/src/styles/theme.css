@@ -448,6 +448,55 @@ body {
   }
 }
 
+/* The mark on the splash the desktop and mobile shells show while their engine starts.
+ *
+ * Written here rather than as utilities because the component that uses it renders above the
+ * theme provider and above i18n — it is the one screen in the app that has no words, so the whole
+ * of what it says is this shape moving. The global `prefers-reduced-motion` rule below stops it,
+ * which is correct: the reason to wait is a splash that exists at all, not the animation. */
+.starting-mark {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 2rem;
+}
+
+.starting-mark i {
+  width: 5px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  transform-origin: bottom;
+  animation: starting-bar 1.1s ease-in-out infinite;
+}
+
+.starting-mark i:nth-child(1) {
+  height: 1rem;
+  animation-delay: 0s;
+}
+.starting-mark i:nth-child(2) {
+  height: 2rem;
+  animation-delay: 0.15s;
+}
+.starting-mark i:nth-child(3) {
+  height: 0.75rem;
+  animation-delay: 0.3s;
+}
+
+/* Stopped, not hidden: the bars stay as the mark once there is a failure underneath them to read. */
+.starting-mark-stopped i {
+  animation: none;
+}
+
+@keyframes starting-bar {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

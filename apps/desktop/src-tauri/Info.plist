@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged into the macOS bundle by tauri-bundler. Two keys, and the first one is not optional.
+
+  macOS refuses microphone access to an app whose bundle does not explain why it wants one, and it
+  does not refuse it politely: the process is killed the moment it calls for input. So without this
+  key the desktop app does not show a denied-microphone banner on macOS — it disappears, at the
+  instant the user presses record, every time.
+
+  Written in English rather than the interface's default Vietnamese. The system draws this dialog,
+  not the app, and it is drawn before the app has read anybody's language setting — the same reason
+  the tray menu falls back to English when it has not been told otherwise.
+-->
+<plist version="1.0">
+  <dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Summo records meetings with this microphone. The audio stays on this Mac.</string>
+
+    <!-- Summo has no notion of a place and asks for no location permission; this is here to say
+         that the app is complete without one, so that a future dependency that quietly wants
+         location is a visible change to this file. -->
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+  </dict>
+</plist>

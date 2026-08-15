@@ -36,7 +36,11 @@
     "move_to": "移动到 {name}",
     "move_to_root": "不在文件夹",
     "nest_under": "放入 {name}",
-    "unnest": "移到外面"
+    "unnest": "移到外面",
+    "minimise": "最小化",
+    "maximise": "最大化",
+    "restore": "还原",
+    "close": "关闭"
   },
   "record": {
     "source": "来源",

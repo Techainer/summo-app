@@ -8,12 +8,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { DEV_HANDSHAKE, EngineContext, IDLE, type EngineValue, type Stat } from "./engine-context";
+import type { Handshake } from "./engine";
 import { LibraryClient } from "./library";
 import { PeopleClient } from "./people";
 import type { Event } from "./protocol";
 import { load as loadCapture, save as saveCapture } from "./capture";
 import { Session, handshakeFromLocation, type SessionState } from "./session";
+import { bridgeShellEvents, inShell, shellHandshake } from "./shell";
 import { apply, empty, type TranscriptState } from "./transcript";
+import { Starting } from "../components/shell/Starting";
 
 export function EngineProvider({ children }: { children: ReactNode }) {
   const [transcript, setTranscript] = useState<TranscriptState>(empty);
@@ -24,7 +27,6 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const timer = useRef<number | null>(null);
-  const controller = useRef<Session | null>(null);
 
   const onEvent = useCallback((event: Event) => {
     switch (event.kind) {
@@ -46,20 +48,73 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const handshake = useMemo(
-    () => handshakeFromLocation(window.location.search) ?? DEV_HANDSHAKE,
-    [],
+  /**
+   * Where the daemon is.
+   *
+   * Three sources, and which one applies is decided once. A page the daemon served carries the
+   * handshake in the document; a page the desktop or mobile shell loaded from its bundle has to
+   * ask the shell for it, which takes as long as the engine takes to start; a page opened by
+   * `pnpm dev` has neither and talks to whatever is on the development port.
+   *
+   * `null` means "asking" — the app renders nothing but a splash until it has an answer, because
+   * every screen in it is a view of the vault and there is no vault to view yet.
+   */
+  const [handshake, setHandshake] = useState<Handshake | null>(
+    () => handshakeFromLocation(window.location.search) ?? (inShell() ? null : DEV_HANDSHAKE),
   );
-  const library = useMemo(() => new LibraryClient(handshake), [handshake]);
-  const people = useMemo(() => new PeopleClient(handshake), [handshake]);
+  const [shellError, setShellError] = useState<string | null>(null);
 
-  if (controller.current === null) {
-    controller.current = new Session(handshake, {
-      onEvent,
-      onState: setSession,
-      onLevel: setLevel,
+  useEffect(() => {
+    if (handshake !== null) return undefined;
+    let live = true;
+    void shellHandshake().then(
+      (found) => {
+        if (live) setHandshake(found);
+      },
+      (error: unknown) => {
+        if (live) setShellError(error instanceof Error ? error.message : String(error));
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [handshake]);
+
+  // The tray icon and the global shortcut, translated into the DOM event the record button already
+  // listens for. Once, for the life of the app.
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    let live = true;
+    void bridgeShellEvents().then((found) => {
+      if (live) stop = found;
+      else found?.();
     });
-  }
+    return () => {
+      live = false;
+      stop?.();
+    };
+  }, []);
+
+  // `DEV_HANDSHAKE` only until the real one lands: hooks cannot be skipped, and nothing fetches
+  // through these clients before the splash below has been replaced by the app.
+  const library = useMemo(() => new LibraryClient(handshake ?? DEV_HANDSHAKE), [handshake]);
+  const people = useMemo(() => new PeopleClient(handshake ?? DEV_HANDSHAKE), [handshake]);
+
+  /**
+   * The recording session, rebuilt only if the daemon's address changes — which happens once, when
+   * a shell answers with the real one, and never while anything is being recorded.
+   *
+   * A `useMemo` rather than the lazily-filled ref this used to be. The ref was fine while the
+   * handshake was decided before the first render; comparing one ref against another to decide
+   * whether to rebuild is the pattern React's own lint rule exists to stop.
+   */
+  const controller = useMemo(
+    () =>
+      handshake === null
+        ? null
+        : new Session(handshake, { onEvent, onState: setSession, onLevel: setLevel }),
+    [handshake, onEvent],
+  );
 
   const start = useCallback(async () => {
     setElapsed(0);
@@ -69,7 +124,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     // both reach `toggle` without going through the screen, and they have to honour whatever the
     // user last chose rather than whatever was set when the window opened.
     const chosen = loadCapture();
-    await controller.current?.start({
+    await controller?.start({
       // Deliberately not named here. This was hardcoded to `gipformer-65m`, which made the model
       // catalogue decorative: installing a Japanese model changed nothing, because recording still
       // reached for the Vietnamese transducer. The daemon reads the setting, and falls back to the
@@ -84,22 +139,25 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       diarize: chosen.lanes.includes("system"),
       ...(chosen.translateTo ? { translate_to: chosen.translateTo } : {}),
     });
-  }, []);
+  }, [controller]);
 
   // Mid-meeting, and it also updates what the *next* meeting starts from: somebody who corrects
   // the language during a call has told us the setting was wrong, not only this recording.
-  const retune = useCallback((language: string) => {
-    const current = loadCapture();
-    saveCapture({ ...current, spoken: language });
-    controller.current?.retune(language);
-  }, []);
+  const retune = useCallback(
+    (language: string) => {
+      const current = loadCapture();
+      saveCapture({ ...current, spoken: language });
+      controller?.retune(language);
+    },
+    [controller],
+  );
 
   const stop = useCallback(() => {
     if (timer.current !== null) window.clearInterval(timer.current);
     timer.current = null;
     setLevel(0);
-    controller.current?.stop();
-  }, []);
+    controller?.stop();
+  }, [controller]);
 
   const toggle = useCallback(() => {
     if (session.recording) stop();
@@ -127,7 +185,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     () => ({
       library,
       people,
-      handshake,
+      handshake: handshake ?? DEV_HANDSHAKE,
       session,
       transcript,
       elapsed,
@@ -156,6 +214,11 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       retune,
     ],
   );
+
+  // After every hook, never before one. The app is not rendered at all while the shell is still
+  // starting its engine: a screen that fetches from a port nobody is on would fill with failures
+  // the user cannot act on and would have to watch disappear a second later.
+  if (handshake === null) return <Starting error={shellError} />;
 
   return <EngineContext.Provider value={value}>{children}</EngineContext.Provider>;
 }

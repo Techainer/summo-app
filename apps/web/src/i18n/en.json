@@ -36,7 +36,11 @@
     "move_to": "Move into {name}",
     "move_to_root": "No folder",
     "nest_under": "Put inside {name}",
-    "unnest": "Move out"
+    "unnest": "Move out",
+    "minimise": "Minimise",
+    "maximise": "Maximise",
+    "restore": "Restore down",
+    "close": "Close"
   },
   "record": {
     "source": "Source",

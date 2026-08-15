@@ -14,10 +14,15 @@ license = "AGPL-3.0-or-later"
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+# `#[tokio::test]` only. Kept out of the shipped feature set: the app's own runtime is Tauri's.
+[dev-dependencies]
+tokio = { version = "1", features = ["macros"] }
+
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "process", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "process", "time", "net"] }

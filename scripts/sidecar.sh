@@ -31,8 +31,10 @@ if [[ "${1:-}" == "--release" ]]; then
   CARGO_PROFILE=(--release)
 fi
 
-# The interface has to be inside the daemon: the shell points a webview at it rather than serving
-# the files itself, so a daemon without `bundled` gives a window with nothing in it.
+# `bundled` so the daemon carries the interface as well. The window is loaded from the app's own
+# bundle rather than from the daemon, so this is not what puts a screen in front of the user — it is
+# what lets `summo serve` from the same binary open one in a browser, and what the browser suites
+# run against.
 FEATURES="bundled,mcp,models,dub"
 
 TARGET="$(rustc -vV | sed -n 's/^host: //p')"
@@ -44,3 +46,47 @@ cargo build "${CARGO_PROFILE[@]}" --bin summo-engine --features "${FEATURES}"
 mkdir -p "${OUT}"
 cp "target/${PROFILE}/summo-engine" "${OUT}/summo-engine-${TARGET}"
 echo "staged ${OUT}/summo-engine-${TARGET}"
+
+# The libraries it loads at start, beside it.
+#
+# The daemon is linked against ONNX Runtime and sherpa-onnx — C++ libraries, not Rust crates — with
+# a runpath of `$ORIGIN`. Staging the executable alone produced a desktop bundle that installed,
+# opened, and killed its own engine the moment it started it:
+#
+#   error while loading shared libraries: libsherpa-onnx-c-api.so
+#
+# and nothing said so, because nothing had ever run the packaged app. `scripts/bundle.sh` had solved
+# this for the CLI tarball years earlier; this script was written later and did not.
+#
+# They are listed as `bundle.resources` in `tauri.conf.json`, which puts them in `lib/` under the
+# app's resource directory, and `apps/desktop/src-tauri/src/engine.rs` points the daemon's loader
+# there — the resource directory is not the directory the sidecar itself ends up in on Linux or
+# macOS.
+#
+# Asked of the linker rather than globbed: copying every `.so` in `target/` would sweep in build
+# script leftovers, and this ends up inside every installer.
+echo "staging the libraries it loads"
+case "$(uname -s)" in
+  Darwin)
+    LIBS="$(otool -L "target/${PROFILE}/summo-engine" |
+      awk '/@rpath\// {sub(/@rpath\//, "", $1); print "target/'"${PROFILE}"'/" $1}')"
+    ;;
+  MINGW* | MSYS* | CYGWIN*)
+    LIBS="$(find "target/${PROFILE}" -maxdepth 1 -name '*.dll')"
+    ;;
+  *)
+    LIBS="$(ldd "target/${PROFILE}/summo-engine" | awk '/=> \/.*target\// {print $3}')"
+    ;;
+esac
+
+# A directory of their own, and one that is never empty on any platform this builds for. The three
+# globs this replaced — `*.so`, `*.dylib`, `*.dll` — were a build failure rather than a warning:
+# `tauri-build` refuses a resource pattern that matches nothing, so two of the three broke the build
+# on every platform.
+rm -rf "${OUT}/lib"
+mkdir -p "${OUT}/lib"
+for lib in ${LIBS}; do
+  [[ -f "${lib}" ]] || continue
+  cp "${lib}" "${OUT}/lib/"
+  echo "staged ${OUT}/lib/$(basename "${lib}")"
+done

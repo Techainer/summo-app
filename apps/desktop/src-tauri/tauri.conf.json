@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      "csp": "default-src 'self'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*; img-src 'self' data: http://127.0.0.1:*; media-src 'self' http://127.0.0.1:*; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
@@ -39,7 +39,13 @@
     "externalBin": [
       "binaries/summo-engine"
     ],
+    "resources": {
+      "binaries/lib/*": "lib/"
+    },
     "shortDescription": "Meeting notes that run on your machine",
-    "longDescription": "Speech recognition and speaker attribution run locally. Audio never leaves the device."
+    "longDescription": "Speech recognition and speaker attribution run locally. Audio never leaves the device.",
+    "macOS": {
+      "entitlements": "Entitlements.plist"
+    }
   }
 }

@@ -55,6 +55,12 @@ export default defineConfig({
             )
           )
             return undefined;
+          // The bridge to the desktop and mobile shells, for the same reason. Every use of it is
+          // behind `inShell()` and behind a dynamic import, so in a browser — which is what the
+          // daemon serves, and what the browser suites run — it is never fetched at all. Naming it
+          // here put it in `vendor` and cost every browser user 5 kB of an API for an app they are
+          // not running.
+          if (/[\\/]node_modules[\\/]@tauri-apps[\\/]/.test(id)) return undefined;
           return "vendor";
         },
       },
