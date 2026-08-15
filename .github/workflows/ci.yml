@@ -328,6 +328,30 @@ jobs:
             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      # Android will not install an APK with no signature at all — `INSTALL_PARSE_FAILED_NO
+      # _CERTIFICATES` — and this repository's key is a secret that forks do not have and that a
+      # pull request from one cannot read. So when the build produced an unsigned APK, it is signed
+      # here with a key generated for this job and thrown away with the runner.
+      #
+      # Nothing about that key is secret and nothing depends on it: it exists so the package manager
+      # has a signature to parse. The release APK, signed with the real key, is the artefact above —
+      # this is the copy that gets installed on an emulator and deleted.
+      - name: A signature, so the emulator will install it
+        run: |
+          apk="$(ls -t apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk | head -1)"
+          echo "built: $apk"
+          if [ "${apk#*unsigned}" != "$apk" ]; then
+            tools="$(ls -d "$ANDROID_HOME"/build-tools/* | tail -1)"
+            keytool -genkeypair -dname "CN=summo smoke test" -alias smoke -validity 30 \
+              -keyalg RSA -keysize 2048 -storetype PKCS12 \
+              -keystore "$RUNNER_TEMP/smoke.p12" -storepass throwaway -keypass throwaway
+            "$tools/apksigner" sign --ks "$RUNNER_TEMP/smoke.p12" --ks-pass pass:throwaway \
+              --out "$RUNNER_TEMP/smoke.apk" "$apk"
+            echo "signed with a throwaway key — this repository has no Android key configured"
+          else
+            cp "$apk" "$RUNNER_TEMP/smoke.apk"
+            echo "already signed by this repository's key"
+          fi
       - name: The app runs, and reaches its own engine
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -337,11 +361,7 @@ jobs:
           # No window, no audio, no boot animation: nothing here looks at pixels. The assertion is
           # read out of the accessibility tree, which is where a WebView publishes its text.
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
-          # Signed here, unsigned on a fork — the file is named for which it is, and picking it by
-          # date rather than by name means this step does not need to know.
-          script: >-
-            ./scripts/android-smoke.sh
-            "$(ls -t apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk | head -1)"
+          script: ./scripts/android-smoke.sh "$RUNNER_TEMP/smoke.apk"
 
   # The shell users actually install. It is not a workspace member — a Tauri app has its own
   # lockfile and its own build script — so `cargo build --workspace` never touched it, and it had
