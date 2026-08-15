@@ -249,6 +249,12 @@ jobs:
         run: |
           sdkmanager --install "ndk;27.2.12479018" > /dev/null
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          # bindgen runs its own clang, and that clang does not inherit the cross-compiler's idea of
+          # where the headers are. `sherpa-rs-sys` generates bindings, so without this it reads the
+          # *host's* `/usr/include` and dies on `bits/libc-header-start.h`, several hundred crates
+          # into an otherwise correct Android build.
+          sysroot="$ANDROID_HOME/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+          echo "BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android=--sysroot=$sysroot --target=aarch64-linux-android26" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target\napps/mobile/src-tauri -> target"

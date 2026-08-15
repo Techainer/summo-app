@@ -83,6 +83,10 @@ What has **not** happened:
 ```bash
 export ANDROID_HOME=~/Android/Sdk NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018
 export OPUS_STATIC=1 OPUS_LIB_DIR="$(./scripts/opus-android.sh arm64-v8a | tail -1)"
+# bindgen runs its own clang, which does not inherit the cross-compiler's header paths, so
+# `sherpa-rs-sys` reads the host's `/usr/include` and dies on `bits/libc-header-start.h`.
+sysroot=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--sysroot=$sysroot --target=aarch64-linux-android26"
 
 pnpm -C apps/mobile exec tauri android init --skip-targets-install
 pnpm -C apps/mobile exec tauri android build --apk --target aarch64
@@ -119,7 +123,30 @@ What the emulator confirmed after it:
 | The engine | Starts in-process, listens on loopback, answers |
 | Setup | Ranks models against **the device's** cores and memory, which is a live call |
 | The microphone | "Allow Summo to record audio?" — granted, `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS` both |
-| Recording | Runs, times, stops cleanly. With no model installed it says so, which is correct |
+| Recording | Runs, times, stops cleanly |
+| Models | The catalogue installs — 99 MB of Whisper tiny, downloaded, verified and stored — and the app says "Ready to record" |
+
+And then it would not transcribe: **`configuration error: session needs a live model`**, on a machine
+with a model installed. `models` was never enabled for this app, and the code that picks a model out
+of the store is behind that feature, so `live_model` was never filled in. The app offered a
+catalogue it could not use.
+
+It is enabled now, per-architecture:
+
+```toml
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+summo-engine = { path = "…", features = ["models"] }
+```
+
+ONNX Runtime publishes no Android build for x86-64 — `ort-sys` stops with "no prebuilt binaries
+available for target x86_64-linux-android" — and every phone worth shipping to is arm64. The x86-64
+build exists so an emulator can be driven on a CI runner, which tests that the app starts and
+reaches its engine, not that it transcribes. Feature flags are additive across those sections, so
+the arm64 APK gets recognition and the emulator's does not.
+
+The arm64 APK is **75 MB** now, against 43 MB before: a 70 MB `libsummo_mobile.so` holding the
+engine, the vault, the agent, sherpa-onnx and ONNX Runtime. It links; **nothing has decoded audio
+with it yet**, because this machine's emulator is x86-64 and cannot run it.
 
 ### Three things that had to be fixed before any of that ran
 
