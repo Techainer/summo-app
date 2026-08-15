@@ -37,6 +37,17 @@ fi
 # run against.
 FEATURES="bundled,mcp,models,dub"
 
+# Opus is linked *into* the daemon, not borrowed from the machine that built it — the same line
+# `scripts/bundle.sh` has carried for a year, and the same reason. `audiopus_sys` links the system
+# libopus when pkg-config finds one, which it does on every developer machine and every CI runner
+# and does not on a stranger's laptop. Without this the installer carries a daemon that dies with
+#
+#   error while loading shared libraries: libopus.so.0
+#
+# on a machine that does not happen to have it. The tarball learned this the hard way; this script
+# was written later and inherited none of it.
+export OPUS_STATIC=1
+
 TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 OUT="apps/desktop/src-tauri/binaries"
 
@@ -66,27 +77,54 @@ echo "staged ${OUT}/summo-engine-${TARGET}"
 # Asked of the linker rather than globbed: copying every `.so` in `target/` would sweep in build
 # script leftovers, and this ends up inside every installer.
 echo "staging the libraries it loads"
-case "$(uname -s)" in
-  Darwin)
-    LIBS="$(otool -L "target/${PROFILE}/summo-engine" |
-      awk '/@rpath\// {sub(/@rpath\//, "", $1); print "target/'"${PROFILE}"'/" $1}')"
-    ;;
-  MINGW* | MSYS* | CYGWIN*)
-    LIBS="$(find "target/${PROFILE}" -maxdepth 1 -name '*.dll')"
-    ;;
-  *)
-    # Anything the loader resolves outside a system directory. Matching on `target/` alone was
-    # wrong: whether sherpa-onnx is linked statically or borrowed from `~/.cache/sherpa-rs` depends
-    # on how the machine built it, and on CI it is not under `target/` at all.
-    LIBS="$(ldd "target/${PROFILE}/summo-engine" |
-      awk '/=> \// {print $3}' | grep -Ev '^/(usr|lib|lib64)/' || true)"
-    ;;
-esac
 
-# A directory of their own, and one that is never empty on any platform this builds for. The three
-# globs this replaced — `*.so`, `*.dylib`, `*.dll` — were a build failure rather than a warning:
-# `tauri-build` refuses a resource pattern that matches nothing, so two of the three broke the build
-# on every platform.
+BIN="target/${PROFILE}/summo-engine"
+
+# What the binary *says* it needs, before asking where any of it is.
+#
+# The earlier version of this asked `ldd`, which answers only when the loader can already find the
+# library — and on CI it cannot: the prebuilt sherpa-onnx lives in `~/.cache/sherpa-rs`, the runpath
+# says `$ORIGIN`, and `ldd` prints `=> not found`. That matched no pattern, staged nothing, and
+# produced a bundle whose daemon could not start, with no error anywhere. Reading the declared
+# dependencies instead means the list is right whether or not this machine can resolve them.
+needs_of() {
+  local file="$1"
+  case "$(uname -s)" in
+    Darwin)
+      otool -L "${file}" | awk '/@rpath\// {sub(/.*@rpath\//, "", $1); print $1}'
+      ;;
+    MINGW* | MSYS* | CYGWIN*)
+      # No dependency query worth trusting here; the DLLs land beside the binary and are the only
+      # ones in that directory.
+      find "target/${PROFILE}" -maxdepth 1 -name '*.dll' -printf '%f\n' 2>/dev/null || true
+      ;;
+    *)
+      readelf -d "${file}" 2>/dev/null |
+        awk '/NEEDED/ {gsub(/[][]/, "", $NF); print $NF}' |
+        grep -Ev '^(libc|libm|libdl|libpthread|librt|libgcc_s|libstdc\+\+|ld-linux)' || true
+      ;;
+  esac
+}
+
+# Where that named library actually is. The loader first, since it is authoritative when it works,
+# then the places a build script puts a prebuilt C++ library on each platform.
+locate_lib() {
+  local name="$1" found=""
+  case "$(uname -s)" in
+    Darwin) found="$(find "target/${PROFILE}" -maxdepth 2 -name "${name}" -type f 2>/dev/null | head -1)" ;;
+    MINGW* | MSYS* | CYGWIN*) found="target/${PROFILE}/${name}" ;;
+    *)
+      found="$(ldd "${BIN}" | awk -v n="${name}" '$1 == n && $3 ~ /^\// {print $3}' | head -1)"
+      ;;
+  esac
+  if [[ -z "${found}" || ! -f "${found}" ]]; then
+    found="$(find "target/${PROFILE}" "${HOME}/.cache/sherpa-rs" "${HOME}/.cache/ort.pyke.io" \
+      "${HOME}/Library/Caches/sherpa-rs" "${HOME}/Library/Caches/ort.pyke.io" \
+      -name "${name}" -type f 2>/dev/null | head -1)"
+  fi
+  [[ -n "${found}" && -f "${found}" ]] && printf '%s' "${found}"
+}
+
 rm -rf "${OUT}/lib"
 mkdir -p "${OUT}/lib"
 
@@ -103,13 +141,49 @@ resource, and put on the daemon's library path by apps/desktop/src-tauri/src/eng
 Empty apart from this file means the build linked them statically. Both are fine.
 NOTE
 
+# Breadth-first, because a dependency has dependencies.
+#
+# `libonnxruntime.so` is not named by the daemon at all — it is named by `libsherpa-onnx-c-api.so`.
+# A pass over the binary alone stages the one and leaves the other out, which is a bundle that gets
+# exactly as far as loading sherpa and then stops.
 staged=0
-for lib in ${LIBS}; do
-  [[ -f "${lib}" ]] || continue
-  cp "${lib}" "${OUT}/lib/"
-  echo "staged ${OUT}/lib/$(basename "${lib}")"
+missing=""
+seen=""
+queue="$(needs_of "${BIN}")"
+while [[ -n "${queue// /}" ]]; do
+  name="$(printf '%s\n' ${queue} | head -1)"
+  queue="$(printf '%s\n' ${queue} | tail -n +2)"
+  case " ${seen} " in *" ${name} "*) continue ;; esac
+  seen="${seen} ${name}"
+
+  path="$(locate_lib "${name}")"
+  if [[ -z "${path}" ]]; then
+    missing="${missing} ${name}"
+    continue
+  fi
+  # A library the operating system provides is the operating system's to provide. Copying
+  # `/usr/lib/…` into the bundle ships one machine's glibc-linked build to every other one, and the
+  # `.deb` would rather depend on the package than carry a stranger's copy of it.
+  case "${path}" in
+    /usr/* | /lib/* | /lib64/*)
+      echo "leaving ${name} to the system (${path})"
+      continue
+      ;;
+  esac
+  cp "${path}" "${OUT}/lib/"
+  echo "staged ${OUT}/lib/${name}"
   staged=$((staged + 1))
+  queue="${queue} $(needs_of "${path}")"
 done
+
+# A hard failure, and this is the point of the rewrite. A library the binary declares and the bundle
+# does not contain is an app that installs, opens, and cannot start its engine — discovered by
+# whoever downloaded it. Better to fail here, where somebody is reading the output.
+if [[ -n "${missing}" ]]; then
+  echo "cannot find:${missing}" >&2
+  echo "the daemon declares these and they are not in target/${PROFILE} or any known cache." >&2
+  exit 1
+fi
 if [[ "${staged}" -eq 0 ]]; then
   echo "no libraries to stage — this build links them in"
 fi

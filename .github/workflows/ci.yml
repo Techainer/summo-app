@@ -409,6 +409,13 @@ jobs:
           dpkg-deb -c "$package" > /tmp/contents.txt
           grep -q "summo-engine" /tmp/contents.txt \
             || { echo "::error::the bundle has no daemon in it"; cat /tmp/contents.txt; exit 1; }
+          # Every library the staged daemon declares, and everything those declare in turn, has to
+          # be in the bundle. `sidecar.sh` fails when it cannot find one; this checks the rest of
+          # the way — that what it found survived into the package.
+          for lib in $(ls apps/desktop/src-tauri/binaries/lib | grep -v README); do
+            grep -q "$lib" /tmp/contents.txt \
+              || { echo "::error::$lib was staged and is not in the .deb"; exit 1; }
+          done
           echo "--- what is in it ---"
           awk '{print $NF}' /tmp/contents.txt | grep -E "summo|lib/" | head -40
       - uses: actions/upload-artifact@v4
