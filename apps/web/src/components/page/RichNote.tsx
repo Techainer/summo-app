@@ -168,6 +168,13 @@ export function RichNote({
         // nobody re-reads.
         class: "font-reading text-body leading-relaxed outline-none",
         "aria-label": t("notes.body"),
+        // A `contenteditable` div is not a text field to anything that reads the page. It carried
+        // only the label, so assistive technology announced a group with a name and no indication
+        // that anything could be typed into it — and the release check that drives a clean install
+        // could not find the editor by role either, which is how this was noticed. The textarea
+        // this replaced was a `<textarea>`, and got both for free.
+        role: "textbox",
+        "aria-multiline": "true",
       },
       // A screenshot on the clipboard is the way most pictures reach a note, and a picture that has
       // to be saved to disk first is one people do not bother with.

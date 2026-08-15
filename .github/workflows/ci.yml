@@ -555,6 +555,16 @@ jobs:
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
 
+      # The clean-install story, against the binary a user downloads rather than the daemon the
+      # suites above start for themselves.
+      #
+      # It lived only in the release workflow, which is to say it ran on tags and nowhere else —
+      # and by the time a tag was cut it had rotted: it clicked a button named "New" that the empty
+      # state had since learned to offer as well, and Playwright refused the ambiguity. A test that
+      # runs twice a year is a test that fails when you need it.
+      - run: cargo build -p summo-cli --features serve,bundled
+      - run: node apps/web/e2e/first-run.mjs target/debug/summo 8793
+
       # The whole product, once, with recognition actually compiled in.
       #
       # Every suite above runs against `--features bundled`, which has no speech model support at

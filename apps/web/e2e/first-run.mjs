@@ -126,14 +126,33 @@ await nav.getByRole("button", { name: "Notes" }).click();
 await page.waitForTimeout(500);
 // `exact`, because the sidebar now offers "New page" as well: a page and a note are the same
 // thing, and the tree can make one too. Without it this matches both and Playwright refuses.
-await page.getByRole("button", { name: "New", exact: true }).click();
+//
+// Scoped to the empty state on top of that, which is the second time this line has had to be
+// narrowed. On a vault with nothing in it there are two "New" buttons — the toolbar's and the one
+// the empty state draws — and this suite is the only one that ever sees an empty vault, so it is
+// the only one that hit it. The empty state's is also the one a real first-time user presses: it
+// is the larger target, in the middle of the screen, under a drawing that says there is nothing
+// here yet.
+await page.getByRole("status").getByRole("button", { name: "New", exact: true }).click();
 await page.waitForTimeout(700);
 
+// Waited for rather than slept at. The editor is a lazily-fetched chunk, so on a cold cache it is
+// not there 700 ms after the click — which is how this read as "could not create a note" on a note
+// that had been created perfectly well.
 const box = page.getByRole("textbox", { name: "Note body" });
+await box.waitFor({ timeout: 20000 }).catch(() => undefined);
 if ((await box.count()) === 0) {
   fail("could not create a note on a clean install");
 } else {
-  await box.fill("First run\n\nIt works.\n- [ ] @me Try recording");
+  // Typed, not filled. The editor is a rich one now: `fill` writes into the DOM behind
+  // ProseMirror's back, so the document never changes, nothing is dirty and nothing autosaves —
+  // the test would pass on an editor that saves nothing.
+  await box.click();
+  await page.keyboard.type("First run");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("It works.");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("- [ ] @me Try recording");
   // Longer than the two-second autosave, so this tests the debounce rather than racing it.
   await page.waitForTimeout(2800);
 
