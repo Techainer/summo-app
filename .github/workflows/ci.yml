@@ -228,9 +228,11 @@ jobs:
   # Only on `master` and on a change under `apps/mobile`. It is a twenty-minute build for a claim
   # that does not change when somebody edits a screen.
   android:
-    name: the Android app assembles
+    name: the Android app assembles, and runs
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Two Rust builds and an emulator. The arm64 APK is what ships; the x86_64 one is what can be
+    # started on a runner, and starting it is the whole point of the job's second half.
+    timeout-minutes: 100
     if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'mobile')
     steps:
       - uses: actions/checkout@v4
@@ -276,6 +278,10 @@ jobs:
             grep -q "android.permission.$permission" "$manifest" \
               || { echo "::error file=$manifest::$permission was lost — did 'android init' overwrite the manifest?"; exit 1; }
           done
+          # And that a release build is still allowed to talk to its own engine. Without this line
+          # the app installs, opens, starts its daemon and cannot reach it — see the config itself.
+          grep -q 'android:networkSecurityConfig' "$manifest" \
+            || { echo "::error file=$manifest::the network security config was lost — a release build cannot reach 127.0.0.1 without it"; exit 1; }
       # Signed when this repository has a key, unsigned when it does not — which is every fork and
       # every pull request from one. The keystore never becomes a file that could be committed or
       # swept into an artefact: it is written to the runner's temp directory and the job ends.
@@ -298,6 +304,64 @@ jobs:
           name: summo-android-arm64
           path: apps/mobile/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           retention-days: 14
+
+      # And then it is run, which is a claim nothing here could make until now.
+      #
+      # An arm64 APK cannot be started on an x86-64 runner, so this builds the same app for the
+      # emulator's architecture and drives that. It is a second Rust build and it is worth it: the
+      # first time this app was ever launched, it opened, drew its interface, started its daemon and
+      # said "Failed to fetch" — a release build sets `usesCleartextTraffic="false"`, so Android
+      # refused every request the webview made to the engine inside its own process. The debug
+      # build sets it to "true", which is why the only configuration that worked was the one nobody
+      # ships. `scripts/android-smoke.sh` is what would have caught it.
+      - name: Opus for x86_64, for the emulator build
+        run: echo "OPUS_LIB_DIR_X86=$(./scripts/opus-android.sh x86_64 | tail -1)" >> "$GITHUB_ENV"
+      - name: Build for the emulator
+        env:
+          OPUS_LIB_DIR: ${{ env.OPUS_LIB_DIR_X86 }}
+        run: pnpm -C apps/mobile exec tauri android build --apk --target x86_64
+      # KVM is present on the runner and owned by a group the job is not in, so without this the
+      # emulator falls back to software and takes long enough to hit the timeout.
+      - name: Let the emulator use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      # Android will not install an APK with no signature at all — `INSTALL_PARSE_FAILED_NO
+      # _CERTIFICATES` — and this repository's key is a secret that forks do not have and that a
+      # pull request from one cannot read. So when the build produced an unsigned APK, it is signed
+      # here with a key generated for this job and thrown away with the runner.
+      #
+      # Nothing about that key is secret and nothing depends on it: it exists so the package manager
+      # has a signature to parse. The release APK, signed with the real key, is the artefact above —
+      # this is the copy that gets installed on an emulator and deleted.
+      - name: A signature, so the emulator will install it
+        run: |
+          apk="$(ls -t apps/mobile/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk | head -1)"
+          echo "built: $apk"
+          if [ "${apk#*unsigned}" != "$apk" ]; then
+            tools="$(ls -d "$ANDROID_HOME"/build-tools/* | tail -1)"
+            keytool -genkeypair -dname "CN=summo smoke test" -alias smoke -validity 30 \
+              -keyalg RSA -keysize 2048 -storetype PKCS12 \
+              -keystore "$RUNNER_TEMP/smoke.p12" -storepass throwaway -keypass throwaway
+            "$tools/apksigner" sign --ks "$RUNNER_TEMP/smoke.p12" --ks-pass pass:throwaway \
+              --out "$RUNNER_TEMP/smoke.apk" "$apk"
+            echo "signed with a throwaway key — this repository has no Android key configured"
+          else
+            cp "$apk" "$RUNNER_TEMP/smoke.apk"
+            echo "already signed by this repository's key"
+          fi
+      - name: The app runs, and reaches its own engine
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          # No window, no audio, no boot animation: nothing here looks at pixels. The assertion is
+          # read out of the accessibility tree, which is where a WebView publishes its text.
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          script: ./scripts/android-smoke.sh "$RUNNER_TEMP/smoke.apk"
 
   # The shell users actually install. It is not a workspace member — a Tauri app has its own
   # lockfile and its own build script — so `cargo build --workspace` never touched it, and it had
