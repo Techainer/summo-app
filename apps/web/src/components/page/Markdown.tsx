@@ -222,7 +222,7 @@ function TaskItem({ node, ...shared }: Shared & { node: JSONContent }) {
         </span>
       </label>
       {rest.length > 0 && (
-        <div className="mt-1 ms-5.5 space-y-1">
+        <div className="ms-5.5 mt-1 space-y-1">
           {rest.map((child, at) => (
             <Block key={at} node={child} {...shared} />
           ))}
