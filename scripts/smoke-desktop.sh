@@ -66,7 +66,15 @@ fi
 # one a developer's own daemon left behind. `engine.rs` reads `SUMMO_HOME` before anything else for
 # exactly this.
 HOME_DIR="$(mktemp -d /tmp/summo-smoke-XXXXXX)"
-export SUMMO_HOME="${HOME_DIR}"
+# The daemon is a native program, and on Windows this script runs under Git Bash: arguments are
+# path-translated for it, environment variables are not. A Windows binary handed `/tmp/summo-smoke-x`
+# as its home would create a directory called `tmp` beside itself and this script would wait forever
+# for a handshake in the other one.
+if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then
+  export SUMMO_HOME="$(cygpath -w "${HOME_DIR}")"
+else
+  export SUMMO_HOME="${HOME_DIR}"
+fi
 # The AppImage runtime needs FUSE, which no CI runner has any more. Extracting instead is the
 # documented way out and costs a second.
 export APPIMAGE_EXTRACT_AND_RUN=1
@@ -99,9 +107,10 @@ fail() {
 
 # A display, because a Tauri app with no `DISPLAY` exits before it reaches any of the code being
 # tested — and its complaint is about GTK, which is a long way from what is being checked here.
-# macOS has a window server already; `xvfb-run` does not exist there and is not needed.
+# macOS and Windows have a window server already; `xvfb-run` exists on neither and is needed on
+# neither.
 echo "starting ${APP##*/}"
-if [[ "$(uname -s)" == "Darwin" ]]; then
+if [[ "$(uname -s)" != "Linux" ]]; then
   "${APP}" > "${LOG}" 2>&1 &
 else
   xvfb-run -a --server-args="-screen 0 1280x900x24" "${APP}" > "${LOG}" 2>&1 &

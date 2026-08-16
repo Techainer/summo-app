@@ -196,8 +196,8 @@ jobs:
       # It is the check that would have caught the version of this bundle whose daemon exited on a
       # missing library — which was published, downloaded, and opened a window with nothing in it.
       #
-      # macOS and Windows go out with the contents checked and nothing run. Saying which is which
-      # is better than implying both were tested.
+      # Every platform runs its own bundle now. macOS was the last one that shipped unopened, and
+      # what it was hiding was total: the app it produced could not be launched at all.
       - name: The app starts, and its daemon answers
         if: runner.os == 'Linux'
         run: |
@@ -238,6 +238,29 @@ jobs:
           cp -R "${APP}" "${HOME}/Applications/Summo.app"
           hdiutil detach "$(dirname "${APP}")" || true
           ./scripts/smoke-desktop.sh "${HOME}/Applications/Summo.app"
+
+      # And Windows, installed the way a person installs it.
+      #
+      # The NSIS installer takes `/S`, so this is the shipped installer doing the shipped install
+      # rather than a binary run out of the build directory — which is a different program in the
+      # one way that matters here, because it is the installed layout that decides whether the app
+      # can find the daemon beside it.
+      - name: The Windows app installs, starts, and its daemon answers
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          SETUP="$(find apps/desktop/src-tauri/target/release/bundle/nsis -name '*-setup.exe' | head -1)"
+          echo "installing ${SETUP}"
+          # `/S` is silent, `/D` is the destination and must be last and unquoted — NSIS's own rules,
+          # and both are ignored without the other.
+          cmd //c "$(cygpath -w "${SETUP}") /S /D=C:\\Summo"
+          # The installer returns before it has finished writing.
+          for _ in $(seq 1 30); do
+            [[ -x "/c/Summo/summo-desktop.exe" ]] && break
+            sleep 1
+          done
+          ls -l /c/Summo
+          ./scripts/smoke-desktop.sh /c/Summo/summo-desktop.exe
 
       # No certificate on any platform, and two different consequences.
       #
