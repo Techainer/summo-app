@@ -201,6 +201,7 @@
     "by_folder": "Folder",
     "by_tag": "Tag",
     "filters": "Filters",
+    "more": "Show {count} more",
     "filter_folder": "Filter by folder",
     "filter_tag": "Filter by tag",
     "unfiled": "Unfiled",

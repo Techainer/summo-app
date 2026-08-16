@@ -38,6 +38,18 @@ import { useRefresh } from "../lib/use-load";
 /** How long to wait after the last keystroke before searching. */
 const SEARCH_DEBOUNCE_MS = 180;
 
+/**
+ * How many rows to draw before the list asks to be scrolled.
+ *
+ * The daemon sends the whole vault — it has to, because the counters, the folder list and the tag
+ * list are all sums over everything, and a page of rows cannot produce them. Drawing the whole
+ * vault is a different decision, and it was being taken by default: seeded with 5,000 meetings the
+ * library took 5.6 seconds to open and put 125,000 nodes in the document, on a machine with no
+ * other tab open. 120 is more than fits any window, so the first screen is full either way, and
+ * more arrive as the bottom of the list comes into view.
+ */
+const PAGE = 120;
+
 // Keys, resolved at render: a module-level array is built before any provider exists, so baking
 // the text in would freeze whichever language loaded first.
 // Keys, resolved at render, for the same reason as `GROUPS` below.
@@ -177,6 +189,55 @@ export function Library({
     setSeenQuery(query);
     if (typed.trim() !== query.trim()) setTyped(query);
   }
+
+  /**
+   * How many rows are drawn, and the list this many were drawn *of*.
+   *
+   * Reset on the same render that changes the list rather than in an effect, for the reason above:
+   * an effect draws once with the old window over the new list, and here that is a hundred rows of
+   * the wrong filter appearing for a frame.
+   */
+  const [limit, setLimit] = useState(PAGE);
+  const shape = `${group}|${kind ?? ""}|${folder ?? ""}|${tags.join()}|${colour ?? ""}|${query}`;
+  const [seenShape, setSeenShape] = useState(shape);
+  if (seenShape !== shape) {
+    setSeenShape(shape);
+    setLimit(PAGE);
+  }
+
+  // The groups, cut to the window. Cut across the groups rather than within each, because a day
+  // with four meetings and a day with four hundred are the same list to somebody scrolling it.
+  const groups = view?.groups;
+  const windowed = useMemo(() => {
+    let left = limit;
+    const out = [];
+    for (const g of groups ?? []) {
+      if (left <= 0) break;
+      out.push(left >= g.meetings.length ? g : { ...g, meetings: g.meetings.slice(0, left) });
+      left -= g.meetings.length;
+    }
+    return out;
+  }, [groups, limit]);
+  const undrawn = (view?.total ?? 0) - windowed.reduce((n, g) => n + g.meetings.length, 0);
+
+  /**
+   * Grow the window when its bottom edge is reached.
+   *
+   * The observer is rebuilt whenever the number left changes, which is what makes it fire again: a
+   * button that is still on screen after the list grew never crosses the boundary a second time, so
+   * a single long-lived observer would hand over one page and stop. The button stays a real button
+   * — a keyboard, a screen reader and a browser without `IntersectionObserver` all need one.
+   */
+  const moreRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    const node = moreRef.current;
+    if (!node || typeof IntersectionObserver !== "function") return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setLimit((l) => l + PAGE);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [undrawn]);
 
   // Searching on every keystroke would send a request per character; waiting for a pause sends one
   // per word, which is what a person means by typing anyway. The same pause is when the URL
@@ -366,7 +427,7 @@ export function Library({
           {hits !== null ? (
             <SearchResults hits={hits} onSelect={setSelected} selected={selected} />
           ) : (
-            (view?.groups ?? []).map((g) => (
+            windowed.map((g) => (
               // Keyed on the filter as well as the day, so changing a filter re-runs the stagger:
               // the list assembling is what tells the user the change took effect on a screen
               // where the only other feedback is that some rows are gone.
@@ -389,6 +450,18 @@ export function Library({
                 ))}
               </m.section>
             ))
+          )}
+
+          {hits === null && undrawn > 0 && (
+            <button
+              ref={moreRef}
+              type="button"
+              data-testid="library-more"
+              onClick={() => setLimit((l) => l + PAGE)}
+              className="text-fg-dim hover:bg-bg-soft text-meta w-full rounded-lg px-2 py-2"
+            >
+              {t("library.more", { count: undrawn })}
+            </button>
           )}
 
           {hits === null && view?.total === 0 && (

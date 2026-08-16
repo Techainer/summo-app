@@ -201,6 +201,7 @@
     "by_folder": "Thư mục",
     "by_tag": "Thẻ",
     "filters": "Lọc",
+    "more": "Hiện thêm {count} nữa",
     "filter_folder": "Lọc theo thư mục",
     "filter_tag": "Lọc theo thẻ",
     "unfiled": "Chưa phân loại",

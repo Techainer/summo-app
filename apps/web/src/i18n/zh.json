@@ -201,6 +201,7 @@
     "by_folder": "按文件夹",
     "by_tag": "按标签",
     "filters": "筛选",
+    "more": "再显示 {count} 条",
     "filter_folder": "按文件夹筛选",
     "filter_tag": "按标签筛选",
     "unfiled": "未归档",

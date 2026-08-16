@@ -113,6 +113,16 @@ describe("stagger", () => {
     const step = (stagger(60) as { staggerChildren: number }).staggerChildren;
     expect(step * 60).toBeLessThanOrEqual(1);
   });
+
+  // The rows start at `opacity: 0`, so a step that does not know how long the list is hides the
+  // bottom of it. A thousand meetings at the old constant 15 ms put the last row fifteen seconds
+  // behind the first, and a vault that size is a year of ordinary use, not a stress test.
+  it("holds the whole list to under half a second however long it is", () => {
+    for (const total of [200, 1_000, 5_000]) {
+      const step = (stagger(total) as { staggerChildren: number }).staggerChildren;
+      expect(step * total).toBeLessThanOrEqual(0.5);
+    }
+  });
 });
 
 describe("travel", () => {

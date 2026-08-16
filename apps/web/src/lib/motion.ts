@@ -97,14 +97,26 @@ export const screen: Variants = {
 };
 
 /**
+ * How long the whole list may take to assemble, however many rows it has.
+ *
+ * The step used to be a constant, and a constant step is a delay that grows with the list: a vault
+ * of a thousand meetings staggered at 15 ms put the last row 15 seconds behind the first, and the
+ * rows start at `opacity: 0`. Measured on a seeded vault, the eight hundredth row was still
+ * invisible ten seconds after the library opened, and the list took half a minute to finish
+ * appearing. Nobody had opened the app on a vault that size.
+ */
+const ASSEMBLY_S = 0.4;
+
+/**
  * Stagger a list so it assembles rather than appearing all at once.
  *
- * Capped: past about eight items the stagger becomes a visible wait for the last one, so a long
- * list gets a shorter step. `total` is how many are being rendered.
+ * Capped twice: past about eight items the step shortens, and past a few dozen the *total* is what
+ * is held to `ASSEMBLY_S` — a stagger is a hint that the list is arriving, not a queue the last row
+ * waits in. `total` is how many are being rendered.
  */
 export function stagger(total: number): Transition {
   const step = total > 8 ? 0.015 : 0.03;
-  return { staggerChildren: step };
+  return { staggerChildren: Math.min(step, ASSEMBLY_S / Math.max(total, 1)) };
 }
 
 /**
