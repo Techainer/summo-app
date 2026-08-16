@@ -337,6 +337,9 @@
     "spoken_hint": "所有录音的默认值。仍可在录音栏中按会议更改。"
   },
   "status": {
+    "unreachable": "无法连接到本机上的 Summo。",
+    "unreachable_hint": "现在输入的内容不会被保存。",
+    "retry_now": "重试",
     "top_bar": "顶栏",
     "connecting": "连接中…",
     "reconnecting": "重新连接中…",
