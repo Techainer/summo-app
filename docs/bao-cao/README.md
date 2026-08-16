@@ -138,6 +138,67 @@ kiểm tra tương phản, tràn khung, giảm chuyển động **lần đầu t
 
 ---
 
+## 5. macOS: "Summo is damaged" 🍎
+
+Bạn mở bản 0.2.0 trên Mac và nhận được **"Summo is damaged and can't be opened. You should move it
+to the Trash."** README của repo nói macOS sẽ báo *không xác minh được nhà phát triển* — đó là câu
+dành cho app **đã ký nhưng chưa notarize**. App **không ký gì cả** thì Apple Silicon không cảnh báo:
+nó từ chối thẳng, và câu người dùng nhận được là câu về "hỏng". Bundle không có chữ ký nào, vì
+daemon và các thư viện được chép vào dưới dạng resource và không có gì ký lại kết quả.
+
+**Chạy được ngay bây giờ** (bản đã tải về):
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Summo.app
+```
+
+**Sửa trong repo:** ký ad-hoc (`signingIdentity: "-"`) — miễn phí, không cần chứng chỉ — đưa nó về
+đúng mức cảnh báo lẽ ra phải có. Và lần đầu tiên **bản Mac được mở ra trong CI**: gắn `.dmg` mà
+người dùng tải, chép app ra, kiểm chữ ký rồi chạy. Ba lần chạy, ba lỗi thật, không lỗi nào đoán được
+từ Linux:
+
+1. `.app` không nằm ở `bundle/macos` như tưởng → tìm trong chính `.dmg`.
+2. Bundle tên `Summo.app` nhưng file chạy tên `summo-desktop` → tìm file thực thi thay vì suy ra tên.
+3. `this build has no daemon in it: current_exe() contains a symlink on a non-allowed platform:
+   /tmp` — Tauri từ chối đường dẫn có symlink trên macOS, mà `/tmp` là symlink tới `/private/tmp`.
+   Chạy từ `~/Applications` như người dùng thật thì hết.
+
+Kết quả cuối:
+
+```
+signature: Identifier=app.summo.desktop Signature=adhoc
+handshake: port 49247
+smoke ok: the app started, its daemon answered on 49247, and both were alive five seconds later
+```
+
+Chưa làm được: **Developer ID + notarize** — cần tài khoản Apple Developer trả phí. Có cái đó thì
+người dùng không phải gõ `xattr` nữa.
+
+## 6. Landing làm lại 🎨
+
+Trang cũ: một tiêu đề trong cột hẹp, một thẻ terminal bên cạnh, rồi tám khối *tiêu đề — mô tả — lưới
+thẻ* giống hệt nhau. Người vào trang có thể đọc hết màn hình đầu của một trang về ứng dụng **nhìn cả
+ngày** mà chưa thấy ứng dụng đó.
+
+![Hero mới](landing-hero.png)
+
+- **Hero cho xem sản phẩm**: chữ 60px, hai nút, bốn nền tảng bằng emoji, rồi ảnh app tràn khung với
+  thẻ biên bản trực tiếp đè lên góc. Trên điện thoại đổi sang **ảnh bố cục điện thoại** — ảnh
+  desktop 1440px thu vào cột 390px là minh hoạ một thanh bên mà máy đó không bao giờ có.
+- **Ba bước** (`Một ngày với Summo`) — trước đó trang chưa từng nói dùng nó là như thế nào.
+- **Bốn hàng tính năng xen kẽ**, mỗi hàng một ảnh lớn + ba gạch đầu dòng. Bốn hàng giống nhau thì
+  cuộn qua như một mảng vân, không ai đọc phần giữa.
+- **Băng kêu gọi cuối trang**, vì người đọc tới đó đã quyết rồi, cần cái nút chứ không cần lập luận
+  thêm.
+- **Emoji** trên tiêu đề mục và gạch đầu dòng.
+
+![Bốn hàng tính năng](landing-features.png)
+
+Hai chỗ nói quá bị sửa luôn: thẻ tải về đang mời **macOS Intel** và **Windows ARM64** — cả hai đều
+không build được (ONNX Runtime không có bản Intel macOS, `audiopus_sys` không có ARM64 Windows), và
+Android được ghi rõ là *sắp có* chứ không ngụ ý đã có. Mục tải về giờ có sẵn dòng `xattr` cho macOS,
+ngay cạnh cái nút tạo ra vấn đề đó.
+
 ## Việc đã kiểm chứng thật
 
 - 1.340 kiểm thử Rust, 392 kiểm thử giao diện, 22 kịch bản trình duyệt (thêm `scale.mjs`,
