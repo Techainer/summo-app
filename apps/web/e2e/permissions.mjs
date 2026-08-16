@@ -55,8 +55,12 @@ async function open({ allow }) {
   const page = await context.newPage();
   page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
   // Hash routing, and the handshake goes in the query: the app reads `port`/`token` on load.
-  await page.goto(`${appUrl}?port=${port}&token=${token}#/settings`, { waitUntil: "networkidle" });
-  await page.locator('[data-testid="settings"]').waitFor({ timeout: 10000 });
+  // Straight to the section the permission panel lives in: settings is six sections behind a rail,
+  // and `?section=` is in the URL so a suite can open one the way a link would.
+  await page.goto(`${appUrl}?port=${port}&token=${token}#/settings?section=recording`, {
+    waitUntil: "networkidle",
+  });
+  await page.locator('[data-testid="settings-recording"]').waitFor({ timeout: 10000 });
   return { context, page };
 }
 
