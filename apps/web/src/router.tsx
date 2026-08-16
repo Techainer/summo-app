@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 
 import { claimHandshake } from "./lib/session";
+import { isSection } from "./lib/settings";
 import { RootLayout } from "./components/shell/RootLayout";
 import { ScreenPending } from "./components/shell/ScreenPending";
 import { HomeScreen } from "./screens/HomeScreen";
@@ -214,6 +215,14 @@ const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
   component: lazyRouteComponent(screens.settings, "SettingsScreen"),
+  // `?section=` so a setting is a link. An unknown or absent one opens the first section rather
+  // than an empty pane — a URL somebody edited by hand should not be able to produce a blank screen.
+  //
+  // Absent rather than `undefined` when there is none: a key that is always present, even holding
+  // nothing, makes `search` a required argument of every `navigate({ to: "/settings" })` in the
+  // app — including the one in the header that has no opinion about which section to open.
+  validateSearch: (search: Record<string, unknown>) =>
+    isSection(search.section) ? { section: search.section } : {},
 });
 
 const routeTree = rootRoute.addChildren([

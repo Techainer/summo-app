@@ -199,6 +199,7 @@ impl Server {
             .route("/onboarding/recommend", get(recommend_models))
             .route("/languages", get(languages))
             .route("/settings/language", post(set_language))
+            .route("/settings/storage", post(set_storage))
             .route("/installs", get(list_installs).post(start_install))
             .route("/installs/{id}", get(get_install))
             .route("/meetings/{id}/summarize", post(summarize_meeting))
@@ -863,6 +864,18 @@ struct LanguageBody {
     /// ISO code, or empty for "let the model detect it".
     #[serde(default)]
     language: String,
+}
+
+/// What the user decided about keeping audio.
+///
+/// Both fields optional so a client can change one without having to know the other — the settings
+/// screen sends the checkbox it just moved, not the whole file.
+#[derive(Deserialize)]
+struct StorageBody {
+    /// Delete recordings after this many days, keeping the transcript. Zero keeps them forever.
+    keep_days: Option<u32>,
+    /// Keep the audio beside the transcript at all.
+    keep_audio: Option<bool>,
 }
 
 /// Fill in the models a session did not name.
@@ -2426,6 +2439,40 @@ async fn set_language(
         settings.models.language = (!code.is_empty()).then_some(code);
         settings.save(&path)?;
         Ok(serde_json::json!({ "language": settings.models.language }))
+    })())
+}
+
+/// How long recorded audio is kept, and whether it is kept at all.
+///
+/// The daemon has had `storage.audio_retention_days` and `storage.keep_audio` since the vault was
+/// written, `/storage` has reported what they cost, and `/storage/prune` has enforced them — with
+/// no way to *set* them outside a text editor. A retention policy nobody can reach is a promise the
+/// product does not keep: audio is the largest thing Summo writes and the most sensitive, and "how
+/// long do you keep my recordings" is a question the interface has to be able to answer.
+async fn set_storage(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<StorageBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    as_response((|| {
+        let path = state.engine.paths().settings();
+        let mut settings = summo_core::Settings::load(&path)?;
+        if let Some(days) = body.keep_days {
+            settings.storage.audio_retention_days = days;
+        }
+        if let Some(keep) = body.keep_audio {
+            settings.storage.keep_audio = keep;
+        }
+        settings.save(&path)?;
+        Ok(serde_json::json!({
+            "keep_days": settings.storage.audio_retention_days,
+            "keep_audio": settings.storage.keep_audio,
+        }))
     })())
 }
 
@@ -6115,6 +6162,49 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
         assert!(
             Paths::at(tmp.path()).meetings().join("01A.md").exists(),
             "pruning deleted a transcript"
+        );
+        server.shutdown();
+    }
+
+    #[tokio::test]
+    async fn how_long_recordings_are_kept_can_be_set_from_the_app() {
+        let (tmp, server) = running().await;
+
+        let body: serde_json::Value = client()
+            .post(format!("http://{}/settings/storage", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "keep_days": 30 }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(body["keep_days"], 30);
+
+        // On disk, not only in the answer: the next prune reads the file, and a setting that lived
+        // in a response would be a retention policy that lasted until the daemon restarted.
+        let settings = summo_core::Settings::load(&Paths::at(tmp.path()).settings()).unwrap();
+        assert_eq!(settings.storage.audio_retention_days, 30);
+        assert!(
+            settings.storage.keep_audio,
+            "a field nobody sent was changed"
+        );
+
+        // One field at a time. The screen sends the control the user just moved, and a body that
+        // had to carry both would let a stale checkbox undo the number beside it.
+        client()
+            .post(format!("http://{}/settings/storage", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "keep_audio": false }))
+            .send()
+            .await
+            .unwrap();
+        let settings = summo_core::Settings::load(&Paths::at(tmp.path()).settings()).unwrap();
+        assert!(!settings.storage.keep_audio);
+        assert_eq!(
+            settings.storage.audio_retention_days, 30,
+            "saving one setting reset the other"
         );
         server.shutdown();
     }
