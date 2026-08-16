@@ -106,26 +106,40 @@ pub fn between(vault: &std::path::Path, from: &str, to: &str) -> Result<Report> 
         if entry.day.as_str() < from || entry.day.as_str() > to {
             continue;
         }
-        busy_days.insert(entry.day.clone(), ());
-        total_seconds += entry.duration;
-
-        for raw in &entry.participants {
-            // Without the brackets, and merged on the stripped name: `[[Ngọc]]` and `Ngọc` are one
-            // person, and counting them as two would split somebody's hours across two bars.
-            let name = crate::index::unlink(raw);
-            let slot = people.entry(name.clone()).or_insert_with(|| PersonTime {
-                name: name.clone(),
-                meetings: 0,
-                seconds: 0,
-            });
-            slot.meetings += 1;
-            slot.seconds += entry.duration;
+        // A typed note is a document, not a meeting, and every number shaped like a meeting has to
+        // say so: it has no duration, nobody was in it, and it did not make the day a busy one.
+        // Counted as one, a vault of notes reported "2 buổi họp · 42 phút" for a single recording,
+        // and the home screen asked the user to summarise a note they had written themselves.
+        //
+        // Its *tasks* still count, below: a to-do typed into a note is work somebody has to do,
+        // whichever kind of document it was written in.
+        let recorded = !entry.kind.is_note();
+        if recorded {
+            busy_days.insert(entry.day.clone(), ());
+            total_seconds += entry.duration;
         }
+
+        if recorded {
+            for raw in &entry.participants {
+                // Without the brackets, and merged on the stripped name: `[[Ngọc]]` and `Ngọc` are
+                // one person, and counting them as two would split somebody's hours across two bars.
+                let name = crate::index::unlink(raw);
+                let slot = people.entry(name.clone()).or_insert_with(|| PersonTime {
+                    name: name.clone(),
+                    meetings: 0,
+                    seconds: 0,
+                });
+                slot.meetings += 1;
+                slot.seconds += entry.duration;
+            }
+            if !entry.has_summary {
+                without_summary.push(entry.title.clone());
+            }
+        }
+        // Tags, from both kinds. A tag is how a person files their own work, and half a filing
+        // system is worse than none.
         for tag in &entry.tags {
             *tags.entry(tag.clone()).or_default() += 1;
-        }
-        if !entry.has_summary {
-            without_summary.push(entry.title.clone());
         }
 
         // Actions need the body, which the head-only scan deliberately does not read. A report is
@@ -133,8 +147,11 @@ pub fn between(vault: &std::path::Path, from: &str, to: &str) -> Result<Report> 
         let path = vault.join(&entry.path);
         if let Ok(body) = std::fs::read_to_string(&path) {
             // One parser, in `tasks.rs`. A second copy here drifted from it the moment the task
-            // format grew ids, statuses and agent steps.
-            for task in crate::tasks::parse(&body, &entry.path.display().to_string()) {
+            // format grew ids, statuses and agent steps — and one scope, chosen by the document's
+            // kind, so a to-do typed into a note counts here as it does on the board.
+            for task in
+                crate::tasks::parse_document(&body, &entry.path.display().to_string(), entry.kind)
+            {
                 if task.status.is_finished() {
                     done_actions += 1;
                     continue;
@@ -150,6 +167,9 @@ pub fn between(vault: &std::path::Path, from: &str, to: &str) -> Result<Report> 
             }
         }
 
+        if !recorded {
+            continue;
+        }
         meetings.push(ReportMeeting {
             id: entry.id.to_string(),
             title: entry.title.clone(),
@@ -273,6 +293,56 @@ mod tests {
             "---\nid: {id}\ndate: {date}\nduration: 1800\n\
              participants: [\"Bạn\", \"Ngọc\"]\ntags: [weekly]\n---\n# {title}\n{extra}\n"
         )
+    }
+
+    /// A typed note, filed where the app files them.
+    fn with_note(dir: &TempDir, name: &str, body: &str) {
+        let notes = dir.path().join("notes");
+        std::fs::create_dir_all(&notes).expect("mkdir");
+        std::fs::write(notes.join(name), body).expect("write");
+    }
+
+    #[test]
+    fn a_typed_note_is_not_counted_as_a_meeting() {
+        let dir = vault_with(&[(
+            "a.md",
+            &meeting("01A", "2026-08-10T09:00:00+07:00", "Họp", ""),
+        )]);
+        with_note(
+            &dir,
+            "y-tuong.md",
+            "---\ndate: 2026-08-10T11:00:00+07:00\ntags: [ý-tưởng]\n---\n# Ý tưởng giá\nBán 3 đô.\n",
+        );
+
+        let report = day(dir.path(), "2026-08-10").expect("report");
+
+        // One recording, and its duration alone.
+        assert_eq!(report.meetings.len(), 1);
+        assert_eq!(report.meetings[0].title, "Họp");
+        assert_eq!(report.total_seconds, 1800);
+        // Nobody was *in* a note, so it adds nothing to anyone's hours.
+        assert!(report.people.iter().all(|p| p.seconds == 1800));
+        // And nobody is asked to summarise something they wrote themselves.
+        assert_eq!(report.without_summary, vec!["Họp".to_string()]);
+        // Its tag is still the user's filing, so it is still counted.
+        assert!(report.tags.iter().any(|(tag, _)| tag == "ý-tưởng"));
+    }
+
+    #[test]
+    fn a_task_typed_into_a_note_is_still_a_task() {
+        let dir = vault_with(&[]);
+        with_note(
+            &dir,
+            "viec.md",
+            "---\ndate: 2026-08-10T11:00:00+07:00\n---\n# Việc\n- [ ] @Ngọc Gọi cho khách\n",
+        );
+
+        let report = day(dir.path(), "2026-08-10").expect("report");
+
+        assert_eq!(report.open_actions.len(), 1);
+        assert_eq!(report.open_actions[0].text, "Gọi cho khách");
+        // A day with only notes in it is still a day with no meetings.
+        assert_eq!(report.quiet_days, vec!["2026-08-10"]);
     }
 
     #[test]

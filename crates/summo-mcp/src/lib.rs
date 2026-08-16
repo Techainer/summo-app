@@ -505,9 +505,13 @@ fn list_tasks(paths: &Paths) -> Result<String, String> {
             continue;
         };
         open.extend(
-            summo_vault::tasks::parse(&body, &entry.path.display().to_string())
-                .into_iter()
-                .filter(|t| t.status != summo_vault::tasks::Status::Done),
+            summo_vault::tasks::parse_document(
+                &body,
+                &entry.path.display().to_string(),
+                entry.kind,
+            )
+            .into_iter()
+            .filter(|t| t.status != summo_vault::tasks::Status::Done),
         );
     }
 

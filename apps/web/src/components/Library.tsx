@@ -714,6 +714,10 @@ function Dashboard({
             label={t("library.meeting")}
             value={String(stats.meetings)}
             tone="accent"
+            // Said here rather than folded into the number above it. The two used to be added
+            // together, so a vault of typed notes reported them all as recordings — under an
+            // icon of a waveform, beside a count of hours none of them had.
+            note={stats.notes > 0 ? t("library.notes_count", { count: stats.notes }) : undefined}
           />
           <Tile
             icon={Clock}
