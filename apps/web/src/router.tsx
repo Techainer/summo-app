@@ -108,6 +108,14 @@ const recordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/record",
   component: lazyRouteComponent(screens.record, "RecordScreen"),
+  // Which of the two ways in is showing. It was component state, so importing a file was reachable
+  // only by clicking the control that switches to it: the home screen's "Nhập file" button had
+  // nowhere to send anybody and navigated to the screen it was already on, a reload put the user
+  // back on the recorder, and nothing could link to the panel at all.
+  //
+  // Absent rather than `undefined` when it is the recorder, for the reason `/settings` gives below.
+  validateSearch: (search: Record<string, unknown>) =>
+    search.source === "upload" ? { source: "upload" as const } : {},
 });
 
 const libraryRoute = createRoute({

@@ -146,6 +146,29 @@ pub fn parse(markdown: &str, file: &str) -> Vec<Task> {
     parse_scoped(markdown, file, Scope::ActionSections)
 }
 
+/// Every task in one document, at the scope its kind implies.
+///
+/// This is the choice every reader of the vault has to make, made once. Four of them made it
+/// separately — the task board said "a note's checkboxes are all tasks", and the home queue, the
+/// agent's `ListTasks` and the MCP server all said "only under an actions heading". So a to-do
+/// somebody typed into a note appeared on the board and was invisible everywhere else, including to
+/// the assistant they would ask about it.
+///
+/// The kind comes off the index, which reads it from the document — a transcript, or a duration —
+/// rather than from the folder the file sits in. Moving a file must not change what it means.
+#[must_use]
+pub fn parse_document(markdown: &str, file: &str, kind: crate::index::Kind) -> Vec<Task> {
+    parse_scoped(
+        markdown,
+        file,
+        if kind.is_note() {
+            Scope::Everywhere
+        } else {
+            Scope::ActionSections
+        },
+    )
+}
+
 /// Where in a document checkboxes count as tasks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
@@ -612,6 +635,19 @@ Không phải việc.
         let tasks = parse(doc, "m.md");
         assert_eq!(tasks.len(), 2, "{tasks:?}");
         assert!(tasks.iter().all(|t| t.steps.is_empty()));
+    }
+
+    /// The board and the home queue read the same file and used to disagree about it.
+    #[test]
+    fn a_checkbox_typed_into_a_note_is_a_task_wherever_it_is() {
+        let note = "# Ý tưởng giá\nBán 3 đô.\n\n- [ ] @Ngọc Gọi cho khách\n";
+        assert_eq!(
+            parse_document(note, "notes/x.md", crate::index::Kind::Note).len(),
+            1,
+        );
+        // The same lines in a recording are prose the model wrote, until they are under a heading
+        // that says otherwise.
+        assert!(parse_document(note, "meetings/x.md", crate::index::Kind::Meeting).is_empty());
     }
 
     #[test]

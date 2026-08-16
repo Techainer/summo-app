@@ -2,6 +2,7 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Comments } from "../components/meeting/Comments";
+import { Markdown } from "../components/page/Markdown";
 import { NoteEditor } from "../components/page/NoteEditor";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
@@ -11,8 +12,10 @@ import { Player, type PlayerHandle } from "../components/meeting/Player";
 import { TranscriptChips } from "../components/meeting/TranscriptChips";
 import { Button, Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
 import { useEngine } from "../lib/engine-context";
-import { DraftClient, readable, type Draft } from "../lib/draft";
+import { DraftClient, type Draft } from "../lib/draft";
 import { url, type MeetingDetail } from "../lib/library";
+import { NoteClient } from "../lib/notes";
+import { TaskClient } from "../lib/tasks";
 import { formatDuration } from "../lib/duration";
 import type { Naming } from "../components/meeting/TranscriptChips";
 import { useLoad } from "../lib/use-load";
@@ -65,7 +68,43 @@ export function PageScreen() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const player = useRef<PlayerHandle>(null);
   const drafts = useMemo(() => new DraftClient(handshake), [handshake]);
+  const tasks = useMemo(() => new TaskClient(handshake), [handshake]);
+  const notes = useMemo(() => new NoteClient(handshake), [handshake]);
   const [naming, setNaming] = useState<string | null>(null);
+  /** Ticks in flight, and what the user asked for — see `pending` on {@link Markdown}. */
+  const [ticking, setTicking] = useState<ReadonlyMap<string, boolean>>(new Map());
+
+  const resolveImage = useCallback((link: string) => notes.src(link), [notes]);
+
+  /**
+   * Tick a checkbox in the body of this page.
+   *
+   * Through the task API by id, which is the same call the board makes, so the two cannot disagree
+   * about what a tick means — and the page is reloaded afterwards because the daemon rewrote the
+   * file this screen is drawing.
+   */
+  const tick = useCallback(
+    (id: string, done: boolean) => {
+      setTicking((busy) => new Map(busy).set(id, done));
+      void (async () => {
+        try {
+          await tasks.move(id, { status: done ? "done" : "todo" });
+          setLoaded({ id: pageId, detail: await library.detail(pageId) });
+        } catch (e) {
+          setError(say(e));
+        } finally {
+          // After the reload, so the box is never drawn from the old file for a frame — which is
+          // the flicker this whole mechanism exists to avoid.
+          setTicking((busy) => {
+            const next = new Map(busy);
+            next.delete(id);
+            return next;
+          });
+        }
+      })();
+    },
+    [library, pageId, say, tasks],
+  );
 
   // One place to apply whatever the draft endpoints return, so the note and the panel cannot drift.
   const applyDraft = useCallback(
@@ -327,7 +366,14 @@ export function PageScreen() {
                 <Card key={section.heading}>
                   <CardHeader title={section.heading} />
                   <CardBody>
-                    <p className="leading-relaxed whitespace-pre-wrap">{readable(section.body)}</p>
+                    {/* The body as it is on disk, comments and all: the renderer strips them, and
+                        the ids inside them are what makes a checkbox here tickable. */}
+                    <Markdown
+                      markdown={section.body}
+                      resolveImage={resolveImage}
+                      onToggleTask={tick}
+                      pending={ticking}
+                    />
                   </CardBody>
                 </Card>
               ))

@@ -53,7 +53,9 @@ export interface SummaryGroup {
 }
 
 export interface Stats {
+  /** Recordings. A typed note has no duration and nobody was in it, so it is counted apart. */
   meetings: number;
+  notes: number;
   total_duration: number;
   people: number;
   tags: number;

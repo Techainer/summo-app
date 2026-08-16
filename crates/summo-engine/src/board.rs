@@ -46,14 +46,14 @@ pub fn read(paths: &Paths) -> Result<Board> {
         // recorded meeting has a model-written summary, so only the actions section counts —
         // otherwise a checkbox the model produced inside "Quyết định" becomes a task nobody agreed
         // to. The document decides, not the folder: moving a file must not change what it means.
-        let scope = match summo_vault::open(&vault, &path) {
-            Ok(doc) if summo_vault::note::is_note(&doc) => tasks::Scope::Everywhere,
-            _ => tasks::Scope::ActionSections,
-        };
-        all.extend(tasks::parse_scoped(
+        //
+        // The kind is the index's, which read it from the head of the file during the scan. This
+        // used to open and parse every document in the vault a second time to ask the same
+        // question, and to answer it differently from the three other places that ask it.
+        all.extend(tasks::parse_document(
             &body,
             &entry.path.display().to_string(),
-            scope,
+            entry.kind,
         ));
     }
 

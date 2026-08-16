@@ -35,6 +35,7 @@ import { useIsNarrow } from "../../lib/breakpoint";
 import { useEngine } from "../../lib/engine-context";
 import { deviceWarning } from "../../lib/session";
 import { useErrorText } from "../../lib/errors";
+import * as sidebar from "../../lib/sidebar";
 import { RecordButton } from "../RecordButton";
 import { ListeningIn } from "../record/ListeningIn";
 import { StatusBar } from "../StatusBar";
@@ -114,8 +115,14 @@ export function RootLayout({ children }: { children: ReactNode }) {
   // crossing of the breakpoint. A wide window has a column that can be collapsed and starts open; a
   // narrow one has a sheet that starts closed. Kept apart, resizing needs no synchronisation at
   // all, and each layout remembers what the user last did to it.
-  const [columnOpen, setColumnOpen] = useState(true);
+  const [columnOpen, setColumnOpen] = useState(sidebar.wasOpen);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Written on change rather than inside a wrapped setter, because the setter is handed to callers
+  // that pass an updater — `setNavOpen((was) => !was)` — and a wrapper would have to reimplement
+  // that to know what it was writing.
+  useEffect(() => {
+    sidebar.remember(columnOpen);
+  }, [columnOpen]);
   const navOpen = narrow ? sheetOpen : columnOpen;
   const setNavOpen = narrow ? setSheetOpen : setColumnOpen;
   const [paletteOpen, setPaletteOpen] = useState(false);

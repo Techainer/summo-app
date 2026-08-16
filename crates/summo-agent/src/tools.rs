@@ -446,7 +446,11 @@ fn read_all_tasks(paths: &Paths) -> summo_core::Result<Vec<tasks::Task>> {
     for entry in index.entries() {
         let path = vault.join(&entry.path);
         if let Ok(body) = std::fs::read_to_string(&path) {
-            all.extend(tasks::parse(&body, &entry.path.display().to_string()));
+            all.extend(tasks::parse_document(
+                &body,
+                &entry.path.display().to_string(),
+                entry.kind,
+            ));
         }
     }
     Ok(all)

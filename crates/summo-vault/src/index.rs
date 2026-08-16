@@ -151,7 +151,10 @@ pub struct Skipped {
 /// Totals for the dashboard.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Stats {
+    /// Recordings. Notes are counted separately, because none of the numbers beside this one —
+    /// duration, people, the last seven days — mean anything for a document nobody spoke into.
     pub meetings: usize,
+    pub notes: usize,
     /// Seconds of recorded audio across the whole vault.
     pub total_duration: u64,
     pub people: usize,
@@ -383,14 +386,23 @@ impl MeetingIndex {
             })
             .collect();
 
+        // Recordings and notes are counted apart. Together, a vault where somebody types more than
+        // they record reported hundreds of "meetings" with an hour of audio between them — and
+        // asked, in the same breath, to summarise notes the person had written by hand.
+        let recorded = || self.entries.iter().filter(|e| !e.kind.is_note());
         Stats {
-            meetings: self.entries.len(),
-            total_duration: self.entries.iter().map(|e| e.duration).sum(),
+            meetings: recorded().count(),
+            notes: self.entries.iter().filter(|e| e.kind.is_note()).count(),
+            total_duration: recorded().map(|e| e.duration).sum(),
             people: self.people().len(),
             tags: self.tags().len(),
-            without_summary: self.entries.iter().filter(|e| !e.has_summary).count(),
-            last_seven_days: recent.len(),
-            last_seven_days_duration: recent.iter().map(|e| e.duration).sum(),
+            without_summary: recorded().filter(|e| !e.has_summary).count(),
+            last_seven_days: recent.iter().filter(|e| !e.kind.is_note()).count(),
+            last_seven_days_duration: recent
+                .iter()
+                .filter(|e| !e.kind.is_note())
+                .map(|e| e.duration)
+                .sum(),
             latest: self.entries.first().map(|e| e.date.clone()),
         }
     }
