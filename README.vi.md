@@ -81,9 +81,18 @@ Một cửa sổ, một icon ở khay hệ thống, và `⌘⇧R` gọi được
 mà lệnh ở trên chạy — và nếu đã có một cái đang chạy thì dùng luôn thay vì tranh nhau — nên hai
 đường là cùng một sản phẩm, cùng một vault, dùng đường nào cũng được.
 
-Bản phát hành có kèm installer bên cạnh tarball. **Chúng chưa được ký số**: macOS sẽ báo không xác
-minh được nhà phát triển, Windows sẽ hiện cảnh báo SmartScreen — vì không có chứng chỉ Apple, cũng
-không có chứng chỉ Windows. Tarball không vướng chuyện này, và là thứ nên dùng nếu bạn ngại điều đó.
+Bản phát hành có kèm installer bên cạnh tarball. **Chúng chưa được ký số**, và macOS khó tính hơn
+những gì câu này từng thừa nhận. App được ký ad-hoc — đó là thứ khiến máy Apple Silicon chịu chạy nó:
+một binary arm64 hoàn toàn không ký sẽ bị từ chối thẳng với thông báo "Summo is damaged and can't be
+opened" chứ không phải một cảnh báo. Nhưng không có chứng chỉ Apple đứng sau, nên bản tải về vẫn
+mang cờ kiểm dịch của Gatekeeper. Gỡ bằng một dòng:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Summo.app
+```
+
+Windows hiện cảnh báo SmartScreen và vẫn cho bạn đi tiếp. Tarball không gặp cả hai vấn đề đó, và là
+thứ nên dùng nếu bạn quan tâm.
 
 Hoặc build từ source, không đóng gói:
 
