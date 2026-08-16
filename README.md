@@ -80,10 +80,18 @@ A window, a tray icon, and `⌘⇧R` from anywhere. It starts the same daemon th
 adopting one that is already up rather than competing with it — so the two are the same product with
 the same vault, and either can be used.
 
-Releases carry the installers as well as the tarball. **They are not code-signed**: macOS will say
-the developer cannot be verified and Windows will show a SmartScreen warning, because there is no
-Apple certificate and no Windows one. The tarball has no such problem, and is what to use if that
-matters to you.
+Releases carry the installers as well as the tarball. **They are not code-signed**, and macOS is
+stricter about that than the sentence here used to admit. The app is ad-hoc signed, which is what
+keeps Apple Silicon willing to run it at all — an entirely unsigned arm64 binary is refused with
+"Summo is damaged and can't be opened" rather than warned about — but there is no Apple certificate
+behind it, so a downloaded copy still carries Gatekeeper's quarantine flag. One line clears it:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Summo.app
+```
+
+Windows shows a SmartScreen warning and lets you through it. The tarball has neither problem, and is
+what to use if this matters to you.
 
 Or building from source, without packaging:
 

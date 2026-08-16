@@ -49,7 +49,8 @@
     "shortDescription": "Meeting notes that run on your machine",
     "longDescription": "Speech recognition and speaker attribution run locally. Audio never leaves the device.",
     "macOS": {
-      "entitlements": "Entitlements.plist"
+      "entitlements": "Entitlements.plist",
+      "signingIdentity": "-"
     }
   }
 }

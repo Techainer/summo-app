@@ -205,10 +205,33 @@ jobs:
           ./scripts/smoke-desktop.sh \
             "$(find apps/desktop/src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -1)"
 
-      # Unsigned on every platform. There is no Apple certificate and no Windows one, so macOS will
-      # show "cannot be opened because the developer cannot be verified" and Windows will show a
-      # SmartScreen warning. Saying so in the release notes is the honest thing to do; shipping
-      # nothing while waiting for a certificate is not.
+      # The same check on the Mac, which is the only Mac this project has.
+      #
+      # A user opened the 0.2.0 build and was told "Summo is damaged and can't be opened". Not a
+      # warning about an unknown developer — a refusal: Apple Silicon will not run a binary with no
+      # signature at all, and the bundle had none, because the sidecar daemon and its libraries are
+      # copied in as resources. The bundle is ad-hoc signed now, and this runs the result: the
+      # signature is verified and the app is started, which is the pair of facts nobody had checked
+      # on this platform.
+      - name: The Mac app is signed, starts, and its daemon answers
+        if: runner.os == 'macOS'
+        run: |
+          ./scripts/smoke-desktop.sh \
+            "$(find apps/desktop/src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
+
+      # No certificate on any platform, and two different consequences.
+      #
+      # Windows shows a SmartScreen warning and lets the user through. macOS is stricter and the
+      # first version of this comment got it wrong: on Apple Silicon an *unsigned* binary is not
+      # "unverified", it is refused outright — "Summo is damaged and can't be opened", which is what
+      # a user was actually shown. The bundle is now ad-hoc signed (`signingIdentity: "-"`), which
+      # is free and takes it back to the warning it should have been: right-click → Open, once.
+      # Removing the warning entirely needs a Developer ID certificate and notarisation, which is a
+      # paid Apple account and a decision for whoever owns it.
+      #
+      # Until then a user who double-clicks still meets Gatekeeper's quarantine flag, so the release
+      # notes carry the one-line way past it:
+      #   xattr -dr com.apple.quarantine /Applications/Summo.app
       - uses: actions/upload-artifact@v4
         with:
           name: summo-installers-${{ matrix.target }}

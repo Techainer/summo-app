@@ -4,6 +4,7 @@
 #
 #   ./scripts/smoke-desktop.sh apps/desktop/src-tauri/target/release/bundle/appimage/Summo_*.AppImage
 #   ./scripts/smoke-desktop.sh /tmp/deb-root/usr/bin/summo-desktop
+#   ./scripts/smoke-desktop.sh "apps/desktop/src-tauri/target/release/bundle/macos/Summo.app"
 #
 # The `desktop-bundle` job builds the installers and checks what is inside them. That is a different
 # claim from "it starts": every bug this project has had in packaging looked identical from outside
@@ -23,11 +24,35 @@
 
 set -euo pipefail
 
-APP="${1:?usage: smoke-desktop.sh <path to the app binary or AppImage>}"
+APP="${1:?usage: smoke-desktop.sh <path to the app binary, AppImage or .app bundle>}"
+
+# A macOS bundle is a directory. The executable inside it is what actually runs, and running it
+# directly rather than through `open` is what lets this script give it a vault of its own: `open`
+# hands the app to `launchd`, which does not carry this shell's environment, so `SUMMO_HOME` would
+# be dropped and the check would run against the developer's own vault.
+if [[ -d "${APP}" && "${APP}" == *.app ]]; then
+  BUNDLE="${APP}"
+  APP="${BUNDLE}/Contents/MacOS/$(basename "${BUNDLE}" .app)"
+fi
+
 [[ -x "${APP}" ]] || {
   echo "not executable: ${APP}" >&2
   exit 2
 }
+
+# The signature, on macOS only.
+#
+# An unsigned arm64 binary is not "unverified" — it is refused. Apple Silicon requires at least an
+# ad-hoc signature, and a user who downloads one is told the app "is damaged and can't be opened",
+# which is what a person actually saw. The bundle is ad-hoc signed at build time
+# (`signingIdentity: "-"` in `tauri.conf.json`); this fails the build if that ever stops being true,
+# because the failure is invisible on the machine that produces it and total on the machine that
+# receives it.
+if [[ "$(uname -s)" == "Darwin" && -n "${BUNDLE:-}" ]]; then
+  codesign --verify --deep --strict --verbose=2 "${BUNDLE}" ||
+    { echo "smoke: the bundle carries no valid signature — macOS will call it damaged" >&2; exit 1; }
+  echo "signature: $(codesign -dv "${BUNDLE}" 2>&1 | grep -i "^Signature\|^Identifier" | tr "\n" " ")"
+fi
 
 # A vault of its own, so this never touches ~/.summo — and so the handshake it waits for cannot be
 # one a developer's own daemon left behind. `engine.rs` reads `SUMMO_HOME` before anything else for
@@ -66,8 +91,13 @@ fail() {
 
 # A display, because a Tauri app with no `DISPLAY` exits before it reaches any of the code being
 # tested — and its complaint is about GTK, which is a long way from what is being checked here.
+# macOS has a window server already; `xvfb-run` does not exist there and is not needed.
 echo "starting ${APP##*/}"
-xvfb-run -a --server-args="-screen 0 1280x900x24" "${APP}" > "${LOG}" 2>&1 &
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  "${APP}" > "${LOG}" 2>&1 &
+else
+  xvfb-run -a --server-args="-screen 0 1280x900x24" "${APP}" > "${LOG}" 2>&1 &
+fi
 APP_PID=$!
 
 # The handshake, which is the app saying it has a daemon and where it is. Sixty seconds because a
