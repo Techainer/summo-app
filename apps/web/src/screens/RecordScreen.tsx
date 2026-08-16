@@ -1,5 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 
 import { Transcript } from "../components/Transcript";
 import { ImportPanel } from "../components/import/ImportPanel";
@@ -136,7 +135,10 @@ function Idle() {
 export function RecordScreen() {
   const navigate = useNavigate();
   const { transcript } = useEngine();
-  const [source, setSource] = useState<Source>("record");
+  // In the URL, so the panel can be linked to, reloaded into and stepped back out of. `replace`
+  // because switching between the two ways in is not a place somebody wants to arrive back at by
+  // pressing Back once for each time they changed their mind.
+  const source: Source = useSearch({ from: "/record" }).source === "upload" ? "upload" : "record";
   const t = useT();
 
   return (
@@ -148,7 +150,13 @@ export function RecordScreen() {
           label={t("record.source")}
           size="sm"
           value={source}
-          onChange={setSource}
+          onChange={(next) =>
+            void navigate({
+              to: "/record",
+              search: next === "upload" ? { source: "upload" } : {},
+              replace: true,
+            })
+          }
           options={[
             { value: "record", label: t("record.tab_record") },
             { value: "upload", label: t("record.tab_upload") },

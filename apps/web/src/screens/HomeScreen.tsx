@@ -228,7 +228,13 @@ export function HomeScreen() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" variant="secondary" onClick={() => void navigate({ to: "/" })}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    void navigate({ to: "/record", search: { source: "upload" } as const })
+                  }
+                >
                   <FileUp aria-hidden="true" className="me-1 size-3.5" />
                   {t("record.tab_upload")}
                 </Button>
