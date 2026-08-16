@@ -122,6 +122,9 @@ await page.screenshot({ path: "/tmp/shots/library-edited.png" });
 // Settings is only the language model, and it has to say plainly where words go.
 await page.getByRole("button", { name: "Cài đặt" }).click();
 await page.locator('[data-testid="settings"]').waitFor({ timeout: 5000 });
+// Settings is six sections behind a rail now; the model lives in the one about the language model.
+await page.getByTestId("settings-tab-ai").click();
+await page.locator('[data-testid="settings-ai"]').waitFor({ timeout: 5000 });
 // Exact: the settings screen has a second model field for the translation model, and a
 // substring match picks up its checkbox too — which fails as an ambiguity rather than as a
 // wrong field, so it is at least loud.
