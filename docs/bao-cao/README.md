@@ -124,7 +124,17 @@ mã. Thẻ cuối xin phản hồi thật, kèm link mở issue.
 > **Lưu ý cho bạn:** có lời của người thật lúc nào, thay vào chỗ đó lúc đó. Bạn gửi câu nào tôi ghép
 > câu đó — kèm tên, nơi làm việc, ảnh nếu có, đúng như openwhispr đang làm với các tweet.
 
-**PR [Techainer/summo-site#1](https://github.com/Techainer/summo-site/pull/1) — đang mở.**
+**Và CI của trang giới thiệu chưa từng chạy xong lần nào.** Mọi lần chạy trên `main` từ khi tạo
+repo đều đỏ ở đúng một chỗ: `wait-on http://127.0.0.1:4190` hết giờ. Nguyên nhân nằm bốn dòng phía
+trên trong log, trong cái khung pnpm vẽ quanh một cảnh báo: `Ignored build scripts: esbuild, sharp,
+workerd.` pnpm 10 không chạy script cài của dependency trừ khi được gọi tên; `wrangler dev` cần
+workerd, mà binary workerd tải về đúng bằng một script như vậy. Sau khi gọi tên ba cái đó, wrangler
+lên được — rồi lộ tiếp hai lỗi nữa: nó bind `localhost` (trên runner là `::1`) trong khi vòng chờ
+nhìn `127.0.0.1`, và cuối cùng bước kiểm tra **chạy quá 25 phút không xong** dù cùng bộ file đó
+kiểm tra tại đây hết 70 giây. Nên bước đó giờ phục vụ file tĩnh — thứ mà bản export vốn là — và
+kiểm tra tương phản, tràn khung, giảm chuyển động **lần đầu tiên chạy xong**: 2 phút 57.
+
+**PR [Techainer/summo-site#1](https://github.com/Techainer/summo-site/pull/1) — đã gộp.**
 
 ---
 
