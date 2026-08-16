@@ -32,7 +32,15 @@ APP="${1:?usage: smoke-desktop.sh <path to the app binary, AppImage or .app bund
 # be dropped and the check would run against the developer's own vault.
 if [[ -d "${APP}" && "${APP}" == *.app ]]; then
   BUNDLE="${APP}"
-  APP="${BUNDLE}/Contents/MacOS/$(basename "${BUNDLE}" .app)"
+  # Whatever is in there, rather than the bundle's own name: the bundle is `Summo.app` and the
+  # executable inside it is the Cargo binary, `summo-desktop`. Deriving one from the other looked
+  # right and reported "not executable" against a path that had never existed.
+  APP="$(find "${BUNDLE}/Contents/MacOS" -maxdepth 1 -type f -perm -u+x | head -1)"
+  [[ -n "${APP}" ]] || {
+    echo "no executable inside ${BUNDLE}/Contents/MacOS:" >&2
+    ls -l "${BUNDLE}/Contents/MacOS" >&2
+    exit 2
+  }
 fi
 
 [[ -x "${APP}" ]] || {
