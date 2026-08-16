@@ -70,7 +70,11 @@ HOME_DIR="$(mktemp -d /tmp/summo-smoke-XXXXXX)"
 # path-translated for it, environment variables are not. A Windows binary handed `/tmp/summo-smoke-x`
 # as its home would create a directory called `tmp` beside itself and this script would wait forever
 # for a handshake in the other one.
-if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then
+case "$(uname -s)" in
+MINGW* | MSYS* | CYGWIN*) WINDOWS=yes ;;
+*) WINDOWS=no ;;
+esac
+if [[ "${WINDOWS}" == "yes" ]]; then
   export SUMMO_HOME="$(cygpath -w "${HOME_DIR}")"
 else
   export SUMMO_HOME="${HOME_DIR}"
@@ -89,6 +93,14 @@ cleanup() {
   sleep 1
   [[ -n "${APP_PID:-}" ]] && kill -9 "${APP_PID}" 2>/dev/null || true
   pkill -f "summo-engine --home ${HOME_DIR}" 2>/dev/null || true
+  # Windows needs its own killing. A `kill` from Git Bash ends the shell's job and leaves the native
+  # process running — which then holds the pipe this script writes to, so the step that started it
+  # never finishes. That is not a hypothetical: the first run of this on a runner sat for half an
+  # hour after the check itself had passed.
+  if [[ "${WINDOWS}" == "yes" ]]; then
+    taskkill //F //IM "$(basename "${APP}")" //T > /dev/null 2>&1 || true
+    taskkill //F //IM summo-engine.exe //T > /dev/null 2>&1 || true
+  fi
   if [[ "${FAILED}" -eq 0 ]]; then
     rm -rf "${HOME_DIR}"
   else
@@ -111,7 +123,7 @@ fail() {
 # neither.
 echo "starting ${APP##*/}"
 if [[ "$(uname -s)" != "Linux" ]]; then
-  "${APP}" > "${LOG}" 2>&1 &
+  "${APP}" > "${LOG}" 2>&1 < /dev/null &
 else
   xvfb-run -a --server-args="-screen 0 1280x900x24" "${APP}" > "${LOG}" 2>&1 &
 fi

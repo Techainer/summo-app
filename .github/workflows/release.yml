@@ -249,6 +249,10 @@ jobs:
       - name: The Windows app installs, starts, and its daemon answers
         if: runner.os == 'Windows'
         shell: bash
+        # Five minutes is four more than the check needs. It is here because the first run of this
+        # step held a runner for half an hour *after* passing — a native process started from Git
+        # Bash keeps the step's pipe open — and a check that cannot end is worse than one that fails.
+        timeout-minutes: 5
         run: |
           MSI="$(find apps/desktop/src-tauri/target -name '*.msi' | head -1)"
           echo "installing ${MSI}"
