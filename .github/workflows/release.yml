@@ -216,8 +216,21 @@ jobs:
       - name: The Mac app is signed, starts, and its daemon answers
         if: runner.os == 'macOS'
         run: |
-          ./scripts/smoke-desktop.sh \
-            "$(find apps/desktop/src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
+          # Out of the disk image, not out of the build directory. The `.app` under `bundle/macos`
+          # is an intermediate — the first version of this step looked for one there, found nothing,
+          # and handed the empty string to the smoke script — while the `.dmg` is the file a person
+          # downloads, and mounting it is the only way to check the thing that is actually shipped.
+          DMG="$(find apps/desktop/src-tauri/target -name '*.dmg' | head -1)"
+          echo "mounting ${DMG}"
+          hdiutil attach -nobrowse -readonly "${DMG}"
+          APP="$(find /Volumes -maxdepth 3 -name '*.app' -type d | head -1)"
+          echo "found ${APP}"
+          # Copied off the image first: a read-only volume is not where an app runs, and the smoke
+          # test writes a vault beside nothing — but `codesign` on a mounted image can also report a
+          # signature the copied bundle would not have.
+          cp -R "${APP}" /tmp/Summo.app
+          hdiutil detach "$(dirname "${APP}")" || true
+          ./scripts/smoke-desktop.sh /tmp/Summo.app
 
       # No certificate on any platform, and two different consequences.
       #
