@@ -228,9 +228,16 @@ jobs:
           # Copied off the image first: a read-only volume is not where an app runs, and the smoke
           # test writes a vault beside nothing — but `codesign` on a mounted image can also report a
           # signature the copied bundle would not have.
-          cp -R "${APP}" /tmp/Summo.app
+          # Into `~/Applications`, not `/tmp`. Tauri resolves its sidecar from `current_exe()` and
+          # refuses a path containing a symlink on macOS — and `/tmp` is a symlink to `/private/tmp`,
+          # so the app started, could not find the daemon inside itself, and reported "this build has
+          # no daemon in it". Nothing to do with the build; everything to do with where it was run
+          # from, which is why it is run from where a person would put it.
+          mkdir -p "${HOME}/Applications"
+          rm -rf "${HOME}/Applications/Summo.app"
+          cp -R "${APP}" "${HOME}/Applications/Summo.app"
           hdiutil detach "$(dirname "${APP}")" || true
-          ./scripts/smoke-desktop.sh /tmp/Summo.app
+          ./scripts/smoke-desktop.sh "${HOME}/Applications/Summo.app"
 
       # No certificate on any platform, and two different consequences.
       #
