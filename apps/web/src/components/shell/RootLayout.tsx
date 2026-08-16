@@ -379,7 +379,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
     <>
       <header
         aria-label={t("status.top_bar")}
-        className="drag-region border-line flex items-center gap-3 border-b px-3 py-2.5"
+        // The top inset, for the phone: Android draws this app edge to edge, so without it the
+        // status bar's clock and battery are painted over the title and the record button. Zero on
+        // a desktop, where there is no inset to clear.
+        className="drag-region border-line flex items-center gap-3 border-b px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]"
       >
         <button
           type="button"

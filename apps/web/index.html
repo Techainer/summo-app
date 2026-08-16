@@ -2,7 +2,11 @@
 <html lang="vi">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- `viewport-fit=cover` is what makes `env(safe-area-inset-*)` mean anything. Without it those
+      values are zero on every phone, and the bottom bar's `pb-[env(safe-area-inset-bottom)]` — which
+      has been there since the bar was written — was padding by nothing. On Android the app draws
+      edge to edge, so the system clock, wifi and battery were sitting on top of the header. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Summo</title>
     <!--
       The theme, before the first paint.
