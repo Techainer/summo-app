@@ -52,7 +52,21 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
-            app.global_shortcut().register(record_shortcut())?;
+            // A shortcut that is already taken is not a reason to refuse to start.
+            //
+            // On Windows a global hotkey is exclusive: whoever registers ⊞+Shift+R first owns it,
+            // and everybody after them gets `HotKey already registered`. That was propagated out of
+            // the setup hook, which Tauri turns into a panic — so the app died on launch, before a
+            // window, with a message only a terminal would show. It happens to anybody who has that
+            // combination bound to something else, and to anybody who launches Summo twice.
+            //
+            // Found the first time this app was ever started on Windows, by the release job.
+            if let Err(e) = app.global_shortcut().register(record_shortcut()) {
+                eprintln!(
+                    "summo: the global record shortcut is not available ({e}). \
+                     Everything else works; use the record button in the window."
+                );
+            }
             build_tray(app.handle())?;
             engine::start(app.handle());
             Ok(())
