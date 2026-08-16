@@ -241,26 +241,29 @@ jobs:
 
       # And Windows, installed the way a person installs it.
       #
-      # The NSIS installer takes `/S`, so this is the shipped installer doing the shipped install
-      # rather than a binary run out of the build directory — which is a different program in the
-      # one way that matters here, because it is the installed layout that decides whether the app
-      # can find the daemon beside it.
+      # The `.msi`, because that is what this project builds: `tauri.conf.json` lists `msi` and not
+      # `nsis`, and the first version of this step went looking for an NSIS installer that has never
+      # existed here. `msiexec /qn` is the silent install, and the app is then found where the
+      # installer put it rather than where this file guessed — an installed layout is the thing
+      # being tested, so choosing its location would defeat the point.
       - name: The Windows app installs, starts, and its daemon answers
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          SETUP="$(find apps/desktop/src-tauri/target/release/bundle/nsis -name '*-setup.exe' | head -1)"
-          echo "installing ${SETUP}"
-          # `/S` is silent, `/D` is the destination and must be last and unquoted — NSIS's own rules,
-          # and both are ignored without the other.
-          cmd //c "$(cygpath -w "${SETUP}") /S /D=C:\\Summo"
-          # The installer returns before it has finished writing.
-          for _ in $(seq 1 30); do
-            [[ -x "/c/Summo/summo-desktop.exe" ]] && break
-            sleep 1
-          done
-          ls -l /c/Summo
-          ./scripts/smoke-desktop.sh /c/Summo/summo-desktop.exe
+          MSI="$(find apps/desktop/src-tauri/target -name '*.msi' | head -1)"
+          echo "installing ${MSI}"
+          msiexec.exe //i "$(cygpath -w "${MSI}")" //qn //l*v install.log || {
+            tail -40 install.log
+            exit 1
+          }
+          APP="$(find "/c/Program Files" "/c/Program Files (x86)" -maxdepth 3 -name 'summo-desktop.exe' 2>/dev/null | head -1)"
+          [[ -n "${APP}" ]] || {
+            echo "the installer reported success and left no summo-desktop.exe:" >&2
+            ls "/c/Program Files" >&2
+            exit 1
+          }
+          echo "installed at ${APP}"
+          ./scripts/smoke-desktop.sh "${APP}"
 
       # No certificate on any platform, and two different consequences.
       #
