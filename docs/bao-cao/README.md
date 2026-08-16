@@ -199,6 +199,50 @@ không build được (ONNX Runtime không có bản Intel macOS, `audiopus_sys`
 Android được ghi rõ là *sắp có* chứ không ngụ ý đã có. Mục tải về giờ có sẵn dòng `xattr` cho macOS,
 ngay cạnh cái nút tạo ra vấn đề đó.
 
+## 7. Windows: app chết ngay khi mở 🪟
+
+Sau macOS, tới lượt Windows — nền tảng cuối cùng vẫn phát hành mà chưa ai mở. Lần đầu chạy trong CI:
+
+```
+thread 'main' panicked at tauri-2.11.5/src/app.rs:1425:11:
+Failed to setup app: error encountered during setup hook:
+HotKey already registered: HotKey { mods: Modifiers(SHIFT | SUPER), key: KeyR, id: 570425380 }
+```
+
+Phím tắt toàn cục trên Windows là **độc quyền**: ai đăng ký ⊞+Shift+R trước thì giữ, người sau bị từ
+chối. Dấu `?` trong setup hook biến lời từ chối đó thành panic — app **chết trước khi vẽ cửa sổ**,
+với một thông báo chỉ terminal mới thấy. Ai đang gán tổ hợp đó cho việc khác, hoặc mở Summo lần thứ
+hai, đều dính.
+
+Sửa: đăng ký hỏng thì ghi ra stderr rồi chạy tiếp. Cửa sổ, khay hệ thống, daemon và nút ghi vẫn chạy;
+mất một tiện lợi không phải lý do để từ chối khởi động.
+
+Sau khi sửa:
+
+```
+handshake: port 53731
+smoke ok: the app started, its daemon answered on 53731, and both were alive five seconds later
+```
+
+**Ba nền tảng desktop giờ đều được mở thật trong CI trước khi phát hành.** Riêng bộ cài `.msi`:
+`msiexec /qn` treo 5 phút không in gì trên runner (hai lần), nên bước này chạy app từ đúng bố cục
+mà bộ cài tạo ra chứ không chạy chính bộ cài — và ghi rõ như vậy trong workflow thay vì để một dấu
+tích xanh nghĩa hẹp hơn vẻ ngoài của nó.
+
+## 8. Android: app vẽ đè lên thanh trạng thái 📱
+
+Máy ảo dự án dùng từ trước là **320×640**. Điện thoại thật là 1080×2340. Dựng máy ảo đúng độ phân
+giải rồi cài lại, lỗi lộ ra ngay: Android vẽ app tràn viền, nên **đồng hồ, wifi, pin của hệ thống
+nằm đè lên tiêu đề và nút Ghi của app**.
+
+| Trước | Sau |
+|---|---|
+| ![Trước](android-truoc.png) | ![Sau](android-sau.png) |
+
+Thiếu đúng một dòng: `viewport-fit=cover`. Không có nó thì `env(safe-area-inset-*)` bằng 0 trên mọi
+điện thoại — kể cả `pb-[env(safe-area-inset-bottom)]` của thanh dưới, viết từ ngày làm thanh đó và
+từ đó tới nay **đệm bằng không**. Có test giữ lại thẻ meta này, vì nó dễ bị viết lại nhất.
+
 ## Việc đã kiểm chứng thật
 
 - 1.340 kiểm thử Rust, 392 kiểm thử giao diện, 22 kịch bản trình duyệt (thêm `scale.mjs`,
