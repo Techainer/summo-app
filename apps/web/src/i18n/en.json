@@ -334,7 +334,18 @@
     "mt_in_app": "In Summo",
     "mt_pull": "Install it once with `summo pull small100` — 611 MB, and nothing else to run. `milmmt-46-1b` is more accurate at 806 MB.",
     "spoken_heading": "Spoken language",
-    "spoken_hint": "The default for every recording. Still changeable per meeting from the record bar."
+    "spoken_hint": "The default for every recording. Still changeable per meeting from the record bar.",
+    "section_general": "General",
+    "section_recording": "Recording",
+    "section_ai": "Intelligence",
+    "section_translation": "Translation",
+    "section_storage": "Storage",
+    "section_about": "About",
+    "general_heading": "General",
+    "general_hint": "What language the app speaks, and whether it is light or dark.",
+    "recording_heading": "Recording",
+    "recording_hint": "Microphone permission, and the language a recording starts in.",
+    "vault_at": "Everything lives in"
   },
   "status": {
     "unreachable": "Cannot reach Summo on this machine.",
@@ -736,5 +747,26 @@
     "short_system": "System",
     "short_light": "Light",
     "short_dark": "Dark"
+  },
+  "storage": {
+    "heading": "Storage",
+    "hint": "A recording costs a hundred times what its transcript does. Deleting audio never deletes the transcript.",
+    "audio": "Audio",
+    "vault": "Documents",
+    "models": "Models",
+    "total": "Total",
+    "keep_audio": "Keep the audio after a recording ends",
+    "keep_audio_hint": "Off keeps only the transcript — far smaller, and nothing to play back.",
+    "keep_days": "Keep for (days)",
+    "keep_days_hint": "Past this, the audio is deleted and the transcript stays.",
+    "forever": "Zero keeps recordings forever.",
+    "check": "See what can go",
+    "delete": "Delete {size}",
+    "would_free": "Would free {size} from {count} recordings.",
+    "nothing_to_free": "Nothing is old enough to delete.",
+    "freed": "Freed {size}.",
+    "biggest": "Largest recordings",
+    "orphan": "No meeting left",
+    "orphaned": "{count} audio folders have no meeting left, {size} in total."
   }
 }

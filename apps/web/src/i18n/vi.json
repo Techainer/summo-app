@@ -334,7 +334,18 @@
     "mt_in_app": "Trong Summo",
     "mt_pull": "Cài một lần bằng `summo pull small100` — 611 MB, không cần chạy thêm gì. `milmmt-46-1b` dịch chuẩn hơn, 806 MB.",
     "spoken_heading": "Ngôn ngữ nói",
-    "spoken_hint": "Mặc định cho mọi buổi ghi. Vẫn đổi được cho từng buổi ở thanh ghi."
+    "spoken_hint": "Mặc định cho mọi buổi ghi. Vẫn đổi được cho từng buổi ở thanh ghi.",
+    "section_general": "Chung",
+    "section_recording": "Ghi âm",
+    "section_ai": "Trí tuệ",
+    "section_translation": "Dịch",
+    "section_storage": "Dung lượng",
+    "section_about": "Giới thiệu",
+    "general_heading": "Chung",
+    "general_hint": "Ngôn ngữ của giao diện, và sáng hay tối.",
+    "recording_heading": "Ghi âm",
+    "recording_hint": "Quyền micro và ngôn ngữ mặc định khi bắt đầu ghi.",
+    "vault_at": "Mọi thứ nằm trong"
   },
   "status": {
     "unreachable": "Không kết nối được với Summo trên máy này.",
@@ -736,5 +747,26 @@
     "short_system": "Hệ thống",
     "short_light": "Sáng",
     "short_dark": "Tối"
+  },
+  "storage": {
+    "heading": "Dung lượng",
+    "hint": "Bản ghi âm chiếm chỗ gấp trăm lần bản chữ. Xoá âm thanh không bao giờ xoá bản ghi chép.",
+    "audio": "Âm thanh",
+    "vault": "Văn bản",
+    "models": "Mô hình",
+    "total": "Tổng cộng",
+    "keep_audio": "Giữ lại âm thanh sau khi ghi xong",
+    "keep_audio_hint": "Tắt thì chỉ giữ bản chữ — nhẹ hơn nhiều, nhưng không nghe lại được.",
+    "keep_days": "Giữ trong (ngày)",
+    "keep_days_hint": "Quá số ngày này thì âm thanh bị xoá, bản chữ vẫn còn.",
+    "forever": "Số 0 nghĩa là giữ mãi.",
+    "check": "Xem sẽ dọn được gì",
+    "delete": "Xoá {size}",
+    "would_free": "Sẽ giải phóng {size} từ {count} bản ghi.",
+    "nothing_to_free": "Không có gì quá hạn để xoá.",
+    "freed": "Đã giải phóng {size}.",
+    "biggest": "Bản ghi nặng nhất",
+    "orphan": "Không còn cuộc họp",
+    "orphaned": "{count} thư mục âm thanh không còn cuộc họp nào, tổng {size}."
   }
 }

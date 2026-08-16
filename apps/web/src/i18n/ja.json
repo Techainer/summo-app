@@ -334,7 +334,18 @@
     "mt_in_app": "Summo の中",
     "mt_pull": "`summo pull small100` で一度入れるだけ。611 MBで、ほかに動かすものはありません。`milmmt-46-1b` は806 MBでより正確です。",
     "spoken_heading": "話す言語",
-    "spoken_hint": "すべての録音の既定値です。録音バーで会議ごとに変更できます。"
+    "spoken_hint": "すべての録音の既定値です。録音バーで会議ごとに変更できます。",
+    "section_general": "一般",
+    "section_recording": "録音",
+    "section_ai": "AI",
+    "section_translation": "翻訳",
+    "section_storage": "ストレージ",
+    "section_about": "情報",
+    "general_heading": "一般",
+    "general_hint": "アプリの表示言語と、ライト/ダークの切り替え。",
+    "recording_heading": "録音",
+    "recording_hint": "マイクの許可と、録音を始めるときの言語。",
+    "vault_at": "すべての保存先"
   },
   "status": {
     "unreachable": "このマシンの Summo に接続できません。",
@@ -736,5 +747,26 @@
     "short_system": "システム",
     "short_light": "ライト",
     "short_dark": "ダーク"
+  },
+  "storage": {
+    "heading": "ストレージ",
+    "hint": "録音は文字起こしの百倍の容量を使います。音声を削除しても文字起こしは残ります。",
+    "audio": "音声",
+    "vault": "文書",
+    "models": "モデル",
+    "total": "合計",
+    "keep_audio": "録音の終了後も音声を保持する",
+    "keep_audio_hint": "オフにすると文字起こしのみ。容量は大幅に減りますが再生はできません。",
+    "keep_days": "保持日数",
+    "keep_days_hint": "この日数を過ぎた音声は削除され、文字起こしは残ります。",
+    "forever": "0 は永久保持です。",
+    "check": "削除できる分を確認",
+    "delete": "{size} を削除",
+    "would_free": "{count} 件の録音から {size} を解放します。",
+    "nothing_to_free": "期限切れのものはありません。",
+    "freed": "{size} を解放しました。",
+    "biggest": "容量の大きい録音",
+    "orphan": "会議なし",
+    "orphaned": "会議のない音声フォルダが {count} 件、合計 {size}。"
   }
 }
