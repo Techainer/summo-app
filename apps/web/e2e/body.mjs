@@ -15,27 +15,30 @@ import { join } from "node:path";
 
 import { chromium } from "playwright";
 
-import { boot } from "./daemon.mjs";
+import { EARLIER, RECENT, boot } from "./daemon.mjs";
 
 const problems = [];
 const engine = await boot({ name: "body" });
 
 // A meeting whose summary uses the Markdown a model actually writes.
-const RICH = join(engine.home, "vault/meetings/2026-08-12-ban-ke-hoach.md");
+const RICH = join(engine.home, `vault/meetings/${RECENT}-ban-ke-hoach.md`);
 mkdirSync(join(engine.home, "vault/meetings"), { recursive: true });
 writeFileSync(
   RICH,
   `---
 id: 01BODY
-date: 2026-08-12T09:00:00+07:00
+date: ${RECENT}T09:00:00+07:00
 duration: 900
 participants: ["[[Bạn]]"]
 ---
 
 # Bản kế hoạch
 
-## Tóm tắt
+## Tóm tắt <!-- summo:draft -->
 Chốt **ngân sách**, xem [bản spec](https://example.invalid/spec).
+
+- Ngân sách quý bốn đã chốt
+- Bản dùng thử gửi thứ Sáu
 
 ### Rủi ro
 - Thiếu người
@@ -96,6 +99,59 @@ const open = async (route) => {
   }
   // The nested bullet keeps its nesting: "Nhà cung cấp B" is under "Chậm hàng", not beside it.
   if ((await main.locator("ul ul li").count()) === 0) problems.push("a nested list was flattened");
+}
+
+// ---- the draft is read, not decoded ---------------------------------------
+{
+  // The draft panel is where a person reads most carefully — it is the text they are being asked
+  // to agree to — and it was the one printing `- ` and `**` at them.
+  const panel = page.locator("main").locator("section", { hasText: "Tóm tắt" }).first();
+  const shown = await panel.innerText();
+  for (const marker of ["- Ngân sách", "**ngân sách**", "](https://"]) {
+    if (shown.includes(marker)) problems.push(`the draft shows its own Markdown: ${marker}`);
+  }
+  if ((await panel.locator("li").count()) < 2) problems.push("the draft's list was not a list");
+
+  // And a phrase selected inside the *rendered* text still points at bytes the daemon can find.
+  // Without the mapping this comes back as "that passage is no longer in the draft"; with it, the
+  // daemon gets past the lookup and fails on the model instead, which is not configured here.
+  const selected = await page.evaluate(() => {
+    const strong = document.querySelector("main strong");
+    const paragraph = strong?.parentElement;
+    if (!paragraph) return "";
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    paragraph.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    return selection.toString();
+  });
+  // The words, spaced as a reader sees them — a bold run must not weld itself to what precedes it.
+  if (!selected.includes("Chốt ngân sách")) {
+    problems.push(`the rendered text lost its spacing: "${selected}"`);
+  }
+  await page.waitForTimeout(500);
+  const box = page.getByRole("textbox", { name: "Muốn sửa thế nào" });
+  if ((await box.count()) === 0) problems.push("selecting a rendered phrase offered no prompt");
+  else {
+    await box.fill("ngắn hơn");
+    await page.getByRole("button", { name: "Sửa", exact: true }).click();
+    await page.waitForTimeout(2500);
+    const said =
+      (await page.locator("main").innerText()) + (await page.locator("body").innerText());
+    if (/không còn trong bản nháp|no longer in the draft/i.test(said)) {
+      problems.push("the selection did not map back to the file");
+    }
+    // The refine cannot finish — there is no model here — and the failure must land *on* the page
+    // rather than replace it. Every other failure on this screen used to blank it.
+    if (!(await page.locator("main").innerText()).includes("Việc cần làm")) {
+      problems.push("a failed request took the whole page with it");
+    }
+    const dismiss = page.getByRole("button", { name: "Đóng" });
+    if ((await dismiss.count()) === 0) problems.push("the failure could not be dismissed");
+    else await dismiss.first().click();
+  }
 }
 
 // ---- a checkbox in the body is a checkbox ---------------------------------
@@ -162,7 +218,7 @@ const open = async (route) => {
 // ---- a typed note is not a meeting ----------------------------------------
 {
   const report = await (
-    await fetch(`${engine.url}/report?from=2026-08-01&to=2026-08-31&token=${engine.token}`)
+    await fetch(`${engine.url}/report?from=${EARLIER}&to=${RECENT}&token=${engine.token}`)
   ).json();
   const titles = report.meetings.map((m) => m.title);
   if (titles.includes("Ý tưởng giá")) {

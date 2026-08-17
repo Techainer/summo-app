@@ -53,6 +53,28 @@ const ONBOARDED = "onboarded";
  *   recording looks like before anybody has said who was talking — and it is the state the naming
  *   affordance in the transcript exists for.
  */
+/**
+ * A day, `n` days before today, as `YYYY-MM-DD`.
+ *
+ * The seeded meetings used to carry fixed dates in August 2026. They were inside every window the
+ * app asks about when they were written and they aged out of them overnight: one morning the
+ * analytics screen's default range held nothing, and the suite that checks no screen is mostly
+ * background failed on a screen that had correctly gone empty. A fixture that stops exercising the
+ * thing it was written for is worse than one that fails — it goes on passing.
+ *
+ * Relative, therefore. The two recordings are always yesterday and the day before, which is what
+ * "this week" means on any day somebody runs this.
+ */
+function daysAgo(n) {
+  const day = new Date();
+  day.setDate(day.getDate() - n);
+  return day.toISOString().slice(0, 10);
+}
+
+/** Yesterday and the day before, exported so a suite can name the files this wrote. */
+export const RECENT = daysAgo(1);
+export const EARLIER = daysAgo(2);
+
 function seedVault(home) {
   const meetings = join(home, "vault/meetings");
   const notes = join(home, "vault/notes");
@@ -60,10 +82,10 @@ function seedVault(home) {
   mkdirSync(notes, { recursive: true });
 
   writeFileSync(
-    join(meetings, "2026-08-10-hop-dau-tuan.md"),
+    join(meetings, `${RECENT}-hop-dau-tuan.md`),
     `---
 id: 01E2E0
-date: 2026-08-10T10:00:00+07:00
+date: ${RECENT}T10:00:00+07:00
 duration: 2538
 participants: ["[[Bạn]]", "[[Ngọc]]"]
 tags: [weekly, sản-phẩm]
@@ -98,10 +120,10 @@ Chốt ngân sách quý bốn.
   writeFileSync(join(audio, "mic.opus"), Buffer.alloc(4096, 9));
 
   writeFileSync(
-    join(meetings, "khach-hang/2026-08-09-demo.md"),
+    join(meetings, `khach-hang/${EARLIER}-demo.md`),
     `---
 id: 01E2E1
-date: 2026-08-09T09:00:00+07:00
+date: ${EARLIER}T09:00:00+07:00
 duration: 1800
 participants: ["[[Bạn]]", "[[Bình]]"]
 tags: [khách-hàng]

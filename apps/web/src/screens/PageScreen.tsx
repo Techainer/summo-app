@@ -238,10 +238,18 @@ export function PageScreen() {
     };
   }, [library, drafts, pageId, say, t]);
 
-  if (error) {
+  // Only when there is nothing else to show. Every failure on this screen used to replace it — so
+  // asking the agent to reword a sentence while the model was unreachable left the reader with one
+  // red line where their meeting had been: the transcript, the summary, the comments and the player
+  // all gone, over an optional request they could simply not have made. A failure that arrives on
+  // top of a page that loaded belongs on top of it, and is drawn beside the content below.
+  if (error && !detail) {
     return (
       <div className="p-5">
-        <p className="border-danger/30 bg-danger-soft text-danger text-meta rounded-lg border px-3 py-2">
+        <p
+          role="alert"
+          className="border-danger/30 bg-danger-soft text-danger text-meta rounded-lg border px-3 py-2"
+        >
           {error}
         </p>
       </div>
@@ -310,6 +318,22 @@ export function PageScreen() {
   return (
     <div className="p-5">
       {meta}
+
+      {error && (
+        <p
+          role="alert"
+          className="border-danger/30 bg-danger-soft text-danger text-meta mt-3 flex items-start justify-between gap-3 rounded-lg border px-3 py-2"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="shrink-0 font-medium hover:underline"
+          >
+            {t("common.dismiss")}
+          </button>
+        </p>
+      )}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_380px]">
         <div className="space-y-4">

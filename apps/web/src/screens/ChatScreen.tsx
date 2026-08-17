@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { MessageCircleQuestion } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import { Markdown } from "../components/page/Markdown";
 
 import { Button, Card, CardBody, Empty } from "../components/ui";
 import { cn } from "../lib/cn";
@@ -106,7 +107,8 @@ export function ChatScreen() {
             {exchange.answer && (
               <Card>
                 <CardBody className="pt-4">
-                  <p className="leading-relaxed whitespace-pre-wrap">{exchange.answer.text}</p>
+                  {/* Rendered, for the reason the assistant panel gives: this is a model's prose. */}
+                  <Markdown markdown={exchange.answer.text} />
                   {exchange.answer.sources.length > 0 && (
                     <div className="border-line mt-3 flex flex-wrap gap-1.5 border-t pt-2.5">
                       {exchange.answer.sources.map((source) => (

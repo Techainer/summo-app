@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { ChartNoAxesColumn, Square } from "lucide-react";
 import { m } from "motion/react";
 import { useMemo, useState } from "react";
@@ -51,6 +52,9 @@ export function AnalyticsScreen() {
 
   return (
     <Page
+      // The frame fills the pane when there is nothing in it, so the one sentence this screen has
+      // to say sits in the middle of it rather than at the top of four hundred pixels of nothing.
+      fill={report?.meetings.length === 0}
       title={t("analytics.title")}
       actions={
         <SegmentedControl
@@ -73,8 +77,17 @@ export function AnalyticsScreen() {
         </p>
       )}
 
+      {/* `full`, because when this is on screen it *is* the screen. Stacked at the top it left
+          four hundred pixels of background under one sentence — which is what a quiet week looks
+          like to anyone who takes a fortnight off, and what this screen looked like the morning the
+          seeded fixture aged past its own window. */}
       {report && report.meetings.length === 0 && (
-        <Empty icon={ChartNoAxesColumn} title={t("analytics.empty")} />
+        <Empty
+          full
+          icon={ChartNoAxesColumn}
+          title={t("analytics.empty")}
+          hint={t("analytics.empty_hint")}
+        />
       )}
 
       {report && report.meetings.length > 0 && (
@@ -122,6 +135,37 @@ export function AnalyticsScreen() {
                       {formatDuration(person.seconds, locale, "short")}
                     </span>
                   </div>
+                ))}
+              </CardBody>
+            </Card>
+          )}
+
+          {/* What this stretch of work was *about*.
+
+              The daemon has counted tags into every report since reports existed and no screen had
+              ever drawn them — the same shape as the retention policy the daemon enforced and the
+              settings screen never offered. They are the one thing here that answers "what have I
+              been spending my time on" rather than "how much", and each one is a link into the
+              library filtered by it, so the answer is somewhere to go rather than a number. */}
+          {report.tags.length > 0 && (
+            <Card>
+              <CardHeader
+                title={t("analytics.tags")}
+                count={t("analytics.tags_count", { count: report.tags.length })}
+              />
+              <CardBody className="flex flex-wrap gap-1.5">
+                {report.tags.slice(0, 12).map(([tag, uses]) => (
+                  <Link
+                    key={tag}
+                    to="/library"
+                    search={{ tag }}
+                    className="border-line bg-bg-soft hover:border-accent hover:text-accent text-meta inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border px-2.5 py-1 transition-colors"
+                  >
+                    #{tag}
+                    <span className="text-fg-faint text-micro">
+                      {t("analytics.tag_uses", { count: uses })}
+                    </span>
+                  </Link>
                 ))}
               </CardBody>
             </Card>
