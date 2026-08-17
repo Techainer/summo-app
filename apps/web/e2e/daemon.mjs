@@ -203,11 +203,13 @@ function libraries() {
   };
 }
 
-export async function boot({ name = "e2e", seed = true, registry = REGISTRY } = {}) {
+export async function boot({ name = "e2e", seed = true, registry = REGISTRY, onboarded = true } = {}) {
   const home = join("/tmp", `summo-${name}-${process.pid}`);
   rmSync(home, { recursive: true, force: true });
   mkdirSync(home, { recursive: true });
-  writeFileSync(join(home, ONBOARDED), "");
+  // `onboarded: false` is for the two callers that want the checklist: `first-run.mjs`, which is
+  // about it, and `site-shots.mjs`, which photographs it for the landing page.
+  if (onboarded) writeFileSync(join(home, ONBOARDED), "");
   if (seed) seedVault(home);
 
   const child = spawn(BINARY, ["--home", home, "--port", "0"], {
