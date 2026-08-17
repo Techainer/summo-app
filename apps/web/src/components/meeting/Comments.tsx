@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
 import { useErrorText } from "../../lib/errors";
+import { Markdown } from "../page/Markdown";
 import {
   CommentClient,
   QUICK,
@@ -154,9 +155,16 @@ export function Comments({
                   </button>
                 </div>
 
-                <p className="text-meta mt-1 leading-relaxed whitespace-pre-wrap">
-                  {annotation.body}
-                </p>
+                {/* An agent writes Markdown — lists, bold, links — and a person types text. So
+                    only the agent's is rendered: silently reinterpreting what somebody typed into a
+                    box with no formatting controls would be the app editing their words. */}
+                {fromAgent ? (
+                  <Markdown markdown={annotation.body} className="text-meta mt-1 space-y-2" />
+                ) : (
+                  <p className="text-meta mt-1 leading-relaxed whitespace-pre-wrap">
+                    {annotation.body}
+                  </p>
+                )}
 
                 <div className="mt-1.5 flex flex-wrap items-center gap-1">
                   {annotation.reactions?.map((reaction) => (

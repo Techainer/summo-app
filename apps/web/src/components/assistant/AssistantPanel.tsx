@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { Check, CornerDownLeft, Loader, Sparkles, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import { Markdown } from "../page/Markdown";
 
 import { Button } from "../ui";
 import { useT } from "../../i18n/context";
@@ -123,7 +124,9 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
 
             {turn.answer && (
               <div className="border-line bg-bg-raised rounded-[var(--radius-card)] border p-3">
-                <p className="text-body whitespace-pre-wrap">{turn.answer.text}</p>
+                {/* A model answers in Markdown — it writes lists and emphasis whether or not anyone
+                    asked — so the answer is rendered rather than printed with its markers on. */}
+                <Markdown markdown={turn.answer.text} className="text-body" />
                 {turn.answer.sources.length > 0 && (
                   <div className="border-line mt-2.5 flex flex-wrap gap-1.5 border-t pt-2.5">
                     {turn.answer.sources.map((source) => (

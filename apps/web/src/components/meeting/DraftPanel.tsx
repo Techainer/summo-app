@@ -2,7 +2,9 @@ import { useCallback, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
 import { cn } from "../../lib/cn";
-import { isRefinable, readable, selectionWithin, type Draft } from "../../lib/draft";
+import { isRefinable, selectionWithin, type Draft } from "../../lib/draft";
+import { sourceOf } from "../../lib/source";
+import { Markdown } from "../page/Markdown";
 import { Button, Card, CardBody, CardHeader } from "../ui";
 
 interface Props {
@@ -30,24 +32,37 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
   const { t, n } = useI18n();
   const [picked, setPicked] = useState<{
     heading: string;
+    /** What the user saw and dragged across, for quoting back to them. */
     text: string;
+    /** The bytes behind it, for the daemon to splice. */
+    source: string;
   } | null>(null);
   const [instruction, setInstruction] = useState("");
   const [message, setMessage] = useState("");
 
-  const onSelect = useCallback((heading: string, element: HTMLElement | null) => {
+  /**
+   * What the user dragged across, and the bytes it came from.
+   *
+   * Two different strings, and the difference is the reason this section is rendered at all. The
+   * daemon replaces the selection in the file **verbatim**, so what it is sent has to be Markdown;
+   * what is quoted back to the user has to be what they saw. `sourceOf` is the translation, and it
+   * returns `null` when it cannot be sure — a phrase that occurs twice, or a selection dragged
+   * across a boundary — in which case the visible text is sent and the daemon gives its own answer
+   * rather than this guessing at which occurrence was meant.
+   */
+  const onSelect = useCallback((heading: string, body: string, element: HTMLElement | null) => {
     const text = selectionWithin(element);
     // A one-word selection is almost always a stray double-click.
     if (!text || !isRefinable(text)) {
       setPicked(null);
       return;
     }
-    setPicked({ heading, text });
+    setPicked({ heading, text, source: sourceOf(body, text) ?? text });
   }, []);
 
   const submitRefine = () => {
     if (!picked || !instruction.trim()) return;
-    onRefine(picked.heading, picked.text, instruction.trim());
+    onRefine(picked.heading, picked.source, instruction.trim());
     setPicked(null);
     setInstruction("");
   };
@@ -80,15 +95,18 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
                 pointers and keyboards are covered, which is what the rule protects. Making this a
                 button would be a lie about what it does, and would take the text out of the
                 reading order it belongs in. */}
-            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
-            <p
+            {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+            <div
               // The tint is the whole signal: this text is in the note but nobody has agreed to it.
-              className="bg-accent-soft selection:bg-accent selection:text-accent-fg mt-1 rounded-md px-2 py-1.5 leading-relaxed whitespace-pre-wrap"
-              onMouseUp={(e) => onSelect(section.heading, e.currentTarget)}
-              onKeyUp={(e) => onSelect(section.heading, e.currentTarget)}
+              className="bg-accent-soft selection:bg-accent selection:text-accent-fg mt-1 rounded-md px-2 py-1.5"
+              onMouseUp={(e) => onSelect(section.heading, section.body, e.currentTarget)}
+              onKeyUp={(e) => onSelect(section.heading, section.body, e.currentTarget)}
             >
-              {readable(section.body)}
-            </p>
+              {/* Rendered, like every other section — a draft is the thing a person reads most
+                  carefully, and it was the one showing them `- [ ] @Ngọc …`. No checkbox works
+                  here: nobody has agreed to this text yet, so there is nothing to tick. */}
+              <Markdown markdown={section.body} />
+            </div>
           </section>
         ))}
 

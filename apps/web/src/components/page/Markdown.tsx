@@ -45,9 +45,16 @@ interface Props {
   className?: string;
 }
 
-/** The machine-readable state the vault carries in comments, removed before a person sees it. */
+/**
+ * The machine-readable state the vault carries in comments, removed before a person sees it.
+ *
+ * Only the comments. Trimming the ends as well is the obvious next line and is wrong: a paragraph
+ * is a run of text nodes — `Chốt `, then a bold `ngân sách` — and taking the trailing space off each
+ * one renders "Chốtngân sách". HTML already collapses a space at the end of a block, so there is
+ * nothing here to tidy.
+ */
 function clean(text: string): string {
-  return text.replace(/<!--[\s\S]*?-->/g, "").replace(/[ \t]+$/g, "");
+  return text.replace(/<!--[\s\S]*?-->/g, "");
 }
 
 /** The task id on a line, when the vault gave it one. */
