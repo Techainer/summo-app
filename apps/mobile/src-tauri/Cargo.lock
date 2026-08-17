@@ -5559,7 +5559,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "summo-agent"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "aion-agent",
  "aion-config",
@@ -5580,7 +5580,7 @@ dependencies = [
 
 [[package]]
 name = "summo-asr"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "serde",
  "sherpa-rs",
@@ -5591,7 +5591,7 @@ dependencies = [
 
 [[package]]
 name = "summo-audio"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "audiopus",
  "cpal",
@@ -5607,7 +5607,7 @@ dependencies = [
 
 [[package]]
 name = "summo-calendar"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "serde",
  "summo-core",
@@ -5617,7 +5617,7 @@ dependencies = [
 
 [[package]]
 name = "summo-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "directories",
  "serde",
@@ -5630,7 +5630,7 @@ dependencies = [
 
 [[package]]
 name = "summo-diar"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -5641,7 +5641,7 @@ dependencies = [
 
 [[package]]
 name = "summo-engine"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "axum",
@@ -5676,7 +5676,7 @@ dependencies = [
 
 [[package]]
 name = "summo-llm"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "futures",
  "reqwest 0.12.28",
@@ -5689,7 +5689,7 @@ dependencies = [
 
 [[package]]
 name = "summo-mcp"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "serde",
@@ -5703,7 +5703,7 @@ dependencies = [
 
 [[package]]
 name = "summo-media"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -5713,7 +5713,7 @@ dependencies = [
 
 [[package]]
 name = "summo-mobile"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -5727,7 +5727,7 @@ dependencies = [
 
 [[package]]
 name = "summo-models"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "futures",
  "hex",
@@ -5746,7 +5746,7 @@ dependencies = [
 
 [[package]]
 name = "summo-pipeline"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "serde",
  "summo-core",
@@ -5755,7 +5755,7 @@ dependencies = [
 
 [[package]]
 name = "summo-vad"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "ndarray",
  "ort",
@@ -5766,7 +5766,7 @@ dependencies = [
 
 [[package]]
 name = "summo-vault"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "blake3",
  "serde",
