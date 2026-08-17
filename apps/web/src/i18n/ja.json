@@ -124,8 +124,20 @@
     "back": "ライブラリ",
     "no_summary_yet": "この会議の要約はまだありません。",
     "summarise_now": "今すぐ要約",
+    "summary_shape": "形式",
+    "shape_auto": "おまかせ",
     "play_from": "{time}から再生",
     "no_transcript": "まだ何も話されていません。"
+  },
+  "export": {
+    "title": "書き出しと翻訳",
+    "subtitle": "ダウンロード、または全体を翻訳",
+    "language": "言語",
+    "original": "原文",
+    "translate_into": "翻訳先",
+    "all_translated": "提案された言語はすべて翻訳済みです。",
+    "translated": "{count} 行を{lang}に翻訳しました。",
+    "translated_partly": "{count} 行を翻訳し、{missing} 行が残りました。"
   },
   "draft": {
     "heading": "エージェントが下書きした要約",

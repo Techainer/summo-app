@@ -124,8 +124,20 @@
     "back": "Thư viện",
     "no_summary_yet": "Chưa có tóm tắt cho buổi họp này.",
     "summarise_now": "Tóm tắt ngay",
+    "summary_shape": "Mẫu",
+    "shape_auto": "Tự chọn",
     "play_from": "Nghe từ {time}",
     "no_transcript": "Chưa có ai nói gì."
+  },
+  "export": {
+    "title": "Xuất & dịch",
+    "subtitle": "tải về, hoặc dịch cả buổi",
+    "language": "Ngôn ngữ",
+    "original": "Bản gốc",
+    "translate_into": "Dịch sang",
+    "all_translated": "Đã dịch hết những ngôn ngữ gợi ý.",
+    "translated": "Đã dịch {count} dòng sang {lang}.",
+    "translated_partly": "Đã dịch {count} dòng, còn {missing} dòng chưa dịch được."
   },
   "draft": {
     "heading": "Bản tóm tắt agent viết",

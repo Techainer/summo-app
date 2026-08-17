@@ -4,15 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Comments } from "../components/meeting/Comments";
 import { Markdown } from "../components/page/Markdown";
 import { NoteEditor } from "../components/page/NoteEditor";
+import { cn } from "../lib/cn";
 import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { DraftPanel } from "../components/meeting/DraftPanel";
 import { AskPanel } from "../components/meeting/Ask";
+import { Export } from "../components/meeting/Export";
 import { Player, type PlayerHandle } from "../components/meeting/Player";
 import { TranscriptChips } from "../components/meeting/TranscriptChips";
 import { Button, Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
 import { useEngine } from "../lib/engine-context";
-import { DraftClient, type Draft } from "../lib/draft";
+import { DraftClient, templates, type Draft } from "../lib/draft";
 import { url, type MeetingDetail } from "../lib/library";
 import { NoteClient } from "../lib/notes";
 import { TaskClient } from "../lib/tasks";
@@ -150,7 +152,22 @@ export function PageScreen() {
     [detail?.transcript],
   );
 
-  const summarise = () => void run(() => drafts.generate(pageId));
+  /**
+   * Which summary shape to ask for, empty for "let the meeting decide".
+   *
+   * The list is read whenever a meeting has no summary yet, which is the only moment it can be
+   * acted on. Its failure is silent: a picker that could not be fetched is one fewer option on a
+   * button that still works.
+   */
+  const [template, setShape] = useState("");
+  const shapes = useLoad(
+    useCallback(
+      async () => (detail && detail.sections.length === 0 ? await templates(handshake) : []),
+      [detail, handshake],
+    ),
+    [detail, handshake],
+  );
+  const summarise = () => void run(() => drafts.generate(pageId, template || undefined));
 
   /**
    * Who is still a label rather than a person, and everybody they could be.
@@ -367,6 +384,10 @@ export function PageScreen() {
               the things people ask for, and what comes back is a note like any other. */}
           <AskPanel meeting={pageId} />
 
+          {/* Taking it out again. Under the summary because that is the order people want it in:
+              read what happened, then send it to somebody. */}
+          <Export meeting={pageId} title={summary.title} day={summary.day ?? ""} recorded={!note} />
+
           {sections.length === 0 ? (
             <Card>
               <CardBody className="pt-4 text-center">
@@ -379,6 +400,31 @@ export function PageScreen() {
                 >
                   {t("meeting.summarise_now")}
                 </Button>
+                {/* Which shape. Four templates ship and `generate` has always taken one; nothing
+                    ever passed it, so a one-to-one and a sprint review were both written up as a
+                    weekly meeting unless the file's tags happened to match. Absent means "let the
+                    tags and the title choose", which is the old behaviour and stays the default. */}
+                {shapes.data && shapes.data.length > 1 && (
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+                    <span className="text-fg-faint text-micro">{t("meeting.summary_shape")}</span>
+                    {[{ id: "", name: t("meeting.shape_auto") }, ...shapes.data].map((shape) => (
+                      <button
+                        key={shape.id}
+                        type="button"
+                        onClick={() => setShape(shape.id)}
+                        aria-pressed={shape.id === template}
+                        className={cn(
+                          "text-micro rounded-[var(--radius-pill)] border px-2.5 py-1 transition-colors",
+                          shape.id === template
+                            ? "border-accent bg-accent-soft text-accent"
+                            : "border-line hover:border-fg-faint",
+                        )}
+                      >
+                        {shape.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </CardBody>
             </Card>
           ) : (
