@@ -39,7 +39,11 @@ if (local.unreachable.length > 0) {
   console.error("the whole-product run needs these models; nothing about it is meaningful without");
   process.exit(1);
 }
-const engine = await boot(process.argv, { name: "full-flow", registry: local });
+// `local.registry`, not `local`. Passing the whole object set `SUMMO_REGISTRY` to
+// "[object Object]", the daemon fell back to the published registry, and this suite quietly
+// downloaded its models from github.com on every run — the exact dependency `mirror.mjs` exists to
+// remove, in the one suite that most needs it. It passed for as long as GitHub felt like answering.
+const engine = await boot(process.argv, { name: "full-flow", registry: local.registry });
 const { url: appUrl, port, token } = engine;
 
 /** Install a model through the daemon, and wait for it. */
