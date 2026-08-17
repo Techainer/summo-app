@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Permissions } from "../onboarding/Permissions";
 import { SpokenLanguage } from "../record/SpokenLanguage";
+import { Plan } from "./Plan";
 import { load as loadCapture, save as saveCapture } from "../../lib/capture";
 import { useT } from "../../i18n/context";
 
@@ -23,6 +24,12 @@ export function Recording() {
 
       {/* First, because it is the one that stops a recording outright. */}
       <Permissions />
+
+      {/* Then what will actually run. The picker below changes the language; this is what that
+          change did to the model, which used to be nothing at all. */}
+      <div className="mt-4">
+        <Plan />
+      </div>
 
       {/* The same control the record bar carries, because it is the same decision — but it belongs
           here too: the record bar is where you change it for *this* meeting, and this is where you

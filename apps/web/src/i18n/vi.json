@@ -860,5 +860,21 @@
     "more": "Còn nữa",
     "readme": "Tài liệu đầy đủ",
     "issue": "Báo lỗi"
+  },
+  "plan": {
+    "title": "Model nào làm việc gì",
+    "subtitle": "tính từ máy bạn, không phải bảng lưu sẵn",
+    "speech": "Nhận dạng",
+    "translation": "Dịch",
+    "summaries": "Tóm tắt & hỏi đáp",
+    "on_device": "trên máy",
+    "over_network": "qua mạng",
+    "in_app": "model trong app",
+    "same_as_below": "dùng chung ở dưới",
+    "none": "chưa có",
+    "no_model": "Chưa cài model nhận dạng nào — chưa ghi được.",
+    "wrong_language": "Model đang chọn không phục vụ ngôn ngữ bạn đã chọn. Chọn lại ngôn ngữ ở dưới để đổi model, hoặc cài model phù hợp.",
+    "better": "Đã cài sẵn model tốt hơn cho ngôn ngữ này: {name} ({accuracy}% chính xác).",
+    "derived": "Tính lại mỗi lần mở, nên cài hay xoá model là bảng này đổi theo."
   }
 }

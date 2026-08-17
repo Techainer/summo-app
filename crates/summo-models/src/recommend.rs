@@ -155,7 +155,12 @@ pub fn recommend(candidates: &[Manifest], hw: &HwProfile, language: &str) -> Rec
 }
 
 /// Whether a manifest claims the language.
-fn covers_language(manifest: &Manifest, language: &str) -> bool {
+///
+/// Public because "can this model serve that language" is asked outside the ranking too — the
+/// daemon asks it when the spoken language changes, to decide whether the pinned model still makes
+/// sense. Two answers to that question would eventually disagree.
+#[must_use]
+pub fn covers_language(manifest: &Manifest, language: &str) -> bool {
     manifest.langs.iter().any(|l| {
         l == "*" || l.eq_ignore_ascii_case(language)
             // `en-US` should match a manifest that says `en`.
@@ -469,5 +474,22 @@ mod tests {
 
         assert!(best.reason.contains("97%"), "got: {}", best.reason);
         assert!(best.reason.contains("faster than real time"));
+    }
+
+    /// The daemon asks this when the spoken language changes, to decide whether the model somebody
+    /// has pinned still makes sense. Before it did, choosing Japanese with a Vietnamese-only model
+    /// pinned left the meeting to be decoded by a model that could not serve it.
+    #[test]
+    fn a_models_languages_are_what_it_can_serve() {
+        let vietnamese = manifest("gipformer-65m", &["vi"], 0.3, "fleurs_vi", 0.09, 400);
+        let everything = manifest("whisper-small", &["*"], 0.8, "fleurs_en", 0.12, 900);
+
+        assert!(covers_language(&vietnamese, "vi"));
+        assert!(!covers_language(&vietnamese, "ja"));
+        // `*` is a claim on every language, which is what makes a multilingual model the fallback.
+        assert!(covers_language(&everything, "ja"));
+        // A region does not make it a different language.
+        let english = manifest("en-only", &["en"], 0.3, "fleurs_en", 0.1, 400);
+        assert!(covers_language(&english, "en-US"));
     }
 }

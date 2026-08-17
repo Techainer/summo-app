@@ -860,5 +860,21 @@
     "more": "More",
     "readme": "Full documentation",
     "issue": "Report a problem"
+  },
+  "plan": {
+    "title": "Which model does what",
+    "subtitle": "worked out from this machine, not a stored table",
+    "speech": "Recognition",
+    "translation": "Translation",
+    "summaries": "Summaries & answers",
+    "on_device": "on this machine",
+    "over_network": "over the network",
+    "in_app": "a model inside the app",
+    "same_as_below": "same as below",
+    "none": "none yet",
+    "no_model": "No speech model is installed, so there is nothing to record with.",
+    "wrong_language": "The chosen model does not serve the language you picked. Pick the language again below to switch the model, or install one that covers it.",
+    "better": "A better model for this language is already installed: {name} ({accuracy}% accurate).",
+    "derived": "Worked out each time this opens, so installing or removing a model changes it."
   }
 }
