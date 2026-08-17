@@ -7,6 +7,7 @@ import {
   optional,
   percent,
   preferred,
+  reasonOf,
   size,
   type Check,
   type Install,
@@ -40,6 +41,41 @@ const install = (over: Partial<Install> = {}): Install => ({
   name: "M",
   state: "queued",
   ...over,
+});
+
+describe("reasonOf", () => {
+  // Echoes the key and its values, so a test can see *which* sentence was chosen and with what,
+  // without depending on the wording of any one language.
+  const say = (key: string, values?: Record<string, string | number>) =>
+    `${key}(${Object.entries(values ?? {})
+      .map(([k, v]) => `${k}=${v}`)
+      .join(",")})`;
+
+  it("says how accurate and how fast, for a model that can keep up", () => {
+    const said = reasonOf(model({ expected_rtf: 0.02, accuracy: 0.92, live_capable: true }), say);
+    expect(said).toBe("setup.reason_fast(accuracy=92,times=50)");
+  });
+
+  it("says what a model that cannot keep up is still good for", () => {
+    expect(reasonOf(model({ expected_rtf: 1.4, accuracy: 0.97 }), say)).toBe(
+      "setup.reason_slow(rtf=1.40)",
+    );
+  });
+
+  it("separates unmeasured speed from unmeasured accuracy", () => {
+    expect(reasonOf(model({ expected_rtf: null, accuracy: 0.9 }), say)).toBe(
+      "setup.reason_unmeasured(accuracy=90)",
+    );
+    expect(reasonOf(model({ expected_rtf: null, accuracy: 0 }), say)).toBe(
+      "setup.reason_unknown()",
+    );
+  });
+
+  // A daemon older than this code sends the sentence and not the numbers. English is worse than
+  // Vietnamese and far better than an empty line where the reason should be.
+  it("falls back to the daemon's own words when the numbers are not on the wire", () => {
+    expect(reasonOf(model({ reason: "97% accurate" }), say)).toBe("97% accurate");
+  });
 });
 
 describe("blocker", () => {

@@ -449,7 +449,11 @@
     "spoken": "Bạn sẽ nói ngôn ngữ nào?",
     "spoken_hint": "Quyết định model nào được đề xuất bên dưới. Đổi lúc nào cũng được, kể cả ngay trước khi ghi.",
     "local": "Chạy trên máy bạn",
-    "permission": "Cho phép dùng micro"
+    "permission": "Cho phép dùng micro",
+    "reason_fast": "Chính xác {accuracy}%, nhanh gấp {times}× thời gian thực trên máy này",
+    "reason_slow": "Quá chậm để hiện chữ trực tiếp ở đây (hệ số thời gian thực {rtf}); vẫn dùng được để chạy lại bản ghi sau buổi họp",
+    "reason_unmeasured": "Chính xác {accuracy}%, nhưng chưa từng đo trên phần cứng như máy này",
+    "reason_unknown": "Chưa có số đo nào cho máy này"
   },
   "tour": {
     "title": "Hướng dẫn nhanh",

@@ -449,7 +449,11 @@
     "spoken": "Which language will be spoken?",
     "spoken_hint": "This decides which model is recommended below. Changeable at any time, including just before recording.",
     "local": "Runs on your machine",
-    "permission": "Allow the microphone"
+    "permission": "Allow the microphone",
+    "reason_fast": "{accuracy}% accurate, {times}× faster than real time on this machine",
+    "reason_slow": "Too slow for live text here (real-time factor {rtf}); usable for re-transcribing a recording afterwards",
+    "reason_unmeasured": "{accuracy}% accurate, but never measured on hardware like this",
+    "reason_unknown": "No measurements available for this machine"
   },
   "tour": {
     "title": "Quick tour",

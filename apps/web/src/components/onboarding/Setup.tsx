@@ -16,6 +16,7 @@ import {
   optional,
   percent,
   preferred,
+  reasonOf,
   size,
   type Install,
   type Recommended,
@@ -315,7 +316,9 @@ export function Setup({ onDone }: { onDone: () => void }) {
                               {model.installed ? t("setup.installed") : size(model.size_bytes)}
                             </span>
                           </span>
-                          <span className="text-fg-dim text-meta mt-0.5 block">{model.reason}</span>
+                          <span className="text-fg-dim text-meta mt-0.5 block">
+                            {reasonOf(model, t)}
+                          </span>
                           {model.license && (
                             <span className="text-fg-faint text-micro mt-0.5 block">
                               {model.license}

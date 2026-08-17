@@ -50,13 +50,65 @@ export interface Recommended {
   id: string;
   name: string;
   score: number;
+  /**
+   * The daemon's own sentence, in English.
+   *
+   * Kept as the last resort rather than shown. See {@link reasonOf}: the numbers it was composed
+   * from travel beside it, so the same sentence can be written in the reader's language.
+   */
   reason: string;
   live_capable: boolean;
   installed: boolean;
+  /** Seconds of processing per second of audio, measured on hardware like this. Null when unmeasured. */
+  expected_rtf?: number | null;
+  /** 0 to 1, for the language that was asked about. Zero means nothing was measured. */
+  accuracy?: number;
   size_bytes?: number | null;
   license?: string | null;
   redistributable?: boolean | null;
   gated?: boolean | null;
+}
+
+/**
+ * Why this model was ranked where it was, in the reader's language.
+ *
+ * The daemon composes this sentence too, and its copy is English — so a Vietnamese user choosing
+ * their first model read "92% accurate, 53× faster than real time on this machine" on an otherwise
+ * Vietnamese screen, at the one moment the app is asking them to trust its judgement.
+ *
+ * It is rebuilt here rather than translated there because the daemon does not know who is reading:
+ * one engine serves the desktop window, a phone on the same network and the CLI, and the interface
+ * language is a property of the screen. The three numbers behind the sentence are already on the
+ * wire, so nothing new is fetched to say it in Vietnamese.
+ *
+ * The daemon's own words remain the fallback. An older daemon that sends the sentence and not the
+ * numbers is a real pairing — the desktop shell bundles its engine, but a browser can point at
+ * whatever is on the port — and English is better than a blank line.
+ */
+export function reasonOf(
+  model: Recommended,
+  t: (key: string, values?: Record<string, string | number>) => string,
+): string {
+  const rtf = model.expected_rtf;
+  const accuracy = model.accuracy ?? 0;
+
+  // Unmeasured speed *and* unmeasured accuracy leaves nothing to say but that. Checked first so
+  // the arms below can assume a number.
+  if (rtf === undefined) return model.reason;
+
+  if (rtf !== null && model.live_capable && accuracy > 0) {
+    return t("setup.reason_fast", {
+      accuracy: Math.round(accuracy * 100),
+      times: Math.round(1 / Math.max(rtf, Number.EPSILON)),
+    });
+  }
+  if (rtf !== null && !model.live_capable) {
+    return t("setup.reason_slow", { rtf: rtf.toFixed(2) });
+  }
+  if (rtf === null && accuracy > 0) {
+    return t("setup.reason_unmeasured", { accuracy: Math.round(accuracy * 100) });
+  }
+  return t("setup.reason_unknown");
 }
 
 export type InstallState = "queued" | "downloading" | "installing" | "done" | "failed";
