@@ -1,0 +1,122 @@
+# What macOS actually does to a copy somebody downloaded.
+#
+# The release job starts the app it just built, which proves the bundle runs and the signature is
+# valid. It proves nothing about the copy a person gets, because a file built on the machine has no
+# `com.apple.quarantine` on it — and quarantine is the whole of Gatekeeper. So this takes the
+# published `.dmg`, marks it the way a browser marks a download, and reports exactly what macOS
+# says: the assessment, the dialog text, and whether "Open Anyway" is offered at all.
+#
+# Run it by hand, against a tag:
+#   gh workflow run gatekeeper.yml -f tag=v0.2.2
+name: what a Mac says about a downloaded copy
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag to test
+        required: true
+        default: v0.2.2
+
+jobs:
+  quarantined:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: macOS version
+        run: sw_vers
+
+      - name: Fetch the published disk image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ inputs.tag }}" --repo "${{ github.repository }}" \
+            --pattern '*aarch64.dmg' --dir .
+          ls -la ./*.dmg
+
+      # What Safari writes onto a download: the flag, the agent, and where it came from. Without
+      # this the file is simply a local file and Gatekeeper never looks at it.
+      - name: Mark it the way a browser would
+        run: |
+          DMG=$(ls ./*.dmg | head -1)
+          xattr -w com.apple.quarantine \
+            "0083;00000000;Safari;F1B2C3D4-0000-0000-0000-000000000000" "$DMG"
+          xattr -l "$DMG"
+
+      - name: What is inside the image
+        run: |
+          DMG=$(ls ./*.dmg | head -1)
+          hdiutil attach "$DMG" -nobrowse -mountpoint /Volumes/summo-test
+          echo "--- contents"
+          ls -la /Volumes/summo-test
+          echo "--- is there an Applications shortcut to drag onto?"
+          if [ -L /Volumes/summo-test/Applications ]; then
+            echo "yes: $(readlink /Volumes/summo-test/Applications)"
+          else
+            echo "NO — the window has nothing to drop the app onto"
+          fi
+          echo "--- window layout (.DS_Store is what positions the icons)"
+          ls -la /Volumes/summo-test/.DS_Store 2>/dev/null || echo "no .DS_Store: icons land wherever Finder puts them"
+          echo "--- background picture"
+          ls -la /Volumes/summo-test/.background 2>/dev/null || echo "no .background"
+
+      - name: Copy it to Applications, the way dragging does
+        run: |
+          # `ditto` keeps extended attributes, which is what Finder does — and the quarantine flag
+          # riding along is the entire point of this test.
+          ditto /Volumes/summo-test/Summo.app /Applications/Summo.app
+          xattr -w -r com.apple.quarantine \
+            "0083;00000000;Safari;F1B2C3D4-0000-0000-0000-000000000000" /Applications/Summo.app
+          echo "--- quarantine on the installed copy"
+          xattr -p com.apple.quarantine /Applications/Summo.app || echo "(none)"
+
+      - name: The signature it carries
+        run: codesign -dv --verbose=4 /Applications/Summo.app 2>&1 || true
+
+      # The verdict Gatekeeper reaches, and the wording it reaches it with. `--raw` prints the whole
+      # assessment; the exit status says whether it would be allowed.
+      - name: What Gatekeeper assesses
+        run: |
+          set +e
+          spctl --assess --type execute --verbose=4 /Applications/Summo.app 2>&1
+          echo "spctl exit: $?"
+          echo "--- as an install rather than an execution"
+          spctl --assess --type install --verbose=4 /Applications/Summo.app 2>&1
+          echo "spctl exit: $?"
+          exit 0
+
+      - name: Try to open it the way a person double-clicks
+        run: |
+          set +e
+          open -W /Applications/Summo.app
+          echo "open exit: $?"
+          sleep 5
+          echo "--- did anything start?"
+          pgrep -fl summo || echo "nothing running"
+          exit 0
+
+      - name: What the system logged about it
+        run: |
+          set +e
+          log show --last 3m --predicate 'subsystem CONTAINS "syspolicy" OR process == "kernel"' \
+            --style compact 2>/dev/null | grep -iE "summo|quarantine|gatekeep|assess|malicious|damaged" | head -40
+          exit 0
+
+      # The same app with the flag taken off, which is what the README tells people to do. If this
+      # starts and the quarantined one does not, the terminal line is load-bearing and the download
+      # cannot be opened from Finder at all.
+      - name: And with the quarantine flag removed
+        run: |
+          set +e
+          xattr -dr com.apple.quarantine /Applications/Summo.app
+          spctl --assess --type execute --verbose=4 /Applications/Summo.app 2>&1
+          echo "spctl exit: $?"
+          open /Applications/Summo.app
+          sleep 6
+          pgrep -fl summo && echo "started once the flag was gone" || echo "still did not start"
+          pkill -f summo-desktop; pkill -f summo-engine
+          exit 0
+
+      - name: Unmount
+        if: always()
+        run: hdiutil detach /Volumes/summo-test || true
