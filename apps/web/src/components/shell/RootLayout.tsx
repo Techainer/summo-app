@@ -24,7 +24,16 @@ import {
   Monitor,
   Languages,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { cn } from "../../lib/cn";
 
@@ -34,6 +43,18 @@ import type { Page } from "./Sidebar";
 import { useIsNarrow } from "../../lib/breakpoint";
 import { useEngine } from "../../lib/engine-context";
 import { deviceWarning } from "../../lib/session";
+import { DOCS, ISSUES } from "../../lib/menu";
+import { inShell, isMac } from "../../lib/shell";
+
+/**
+ * Both are fetched when they are first needed, and neither ever is on the web build.
+ *
+ * The menu bar pulls in a dropdown primitive — twenty kilobytes gzipped — for a bar that only the
+ * Windows and Linux shells draw. Imported directly it went into the chunk every browser parses
+ * before the first paint, including the ones that will never render it.
+ */
+const MenuBar = lazy(() => import("./MenuBar").then((m) => ({ default: m.MenuBar })));
+const Shortcuts = lazy(() => import("./Shortcuts").then((m) => ({ default: m.Shortcuts })));
 import { useErrorText } from "../../lib/errors";
 import * as sidebar from "../../lib/sidebar";
 import { RecordButton } from "../RecordButton";
@@ -126,8 +147,110 @@ export function RootLayout({ children }: { children: ReactNode }) {
   const navOpen = narrow ? sheetOpen : columnOpen;
   const setNavOpen = narrow ? setSheetOpen : setColumnOpen;
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  /**
+   * Whether this window has to draw its own menu bar.
+   *
+   * Only inside the desktop shell, and not on macOS — there the system draws one at the top of the
+   * screen. Read once: neither the platform nor the presence of a shell changes while the app is
+   * open, and an effect for a constant is an effect that runs on every render for nothing.
+   */
+  const [ownMenuBar] = useState(() => inShell() && !isMac());
+  /**
+   * The page-maker, reachable from a handler defined above it.
+   *
+   * `newPage` closes over half this component and is declared two hundred lines further down. A ref
+   * is the cheap way for an event handler to reach the current one without reordering the file or
+   * putting the menu handler's definition somewhere it does not belong.
+   */
+  const newPageRef = useRef<((where: { folder: string | null }) => void) | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
   usePaletteShortcut(useCallback(() => setPaletteOpen(true), []));
+
+  /**
+   * What a menu item means.
+   *
+   * One handler for both menus — the system's at the top of a Mac's screen, and the app's own in
+   * the window everywhere else — because the shell deliberately does not know what a library is.
+   * It emits the id it was given and this decides.
+   */
+  const onMenu = useCallback(
+    (id: string) => {
+      switch (id) {
+        case "new-note":
+          // At the root of the vault, which is where a page made from a menu belongs: the menu has
+          // no folder selected and inventing one would file somebody's note somewhere they did not
+          // choose.
+          newPageRef.current?.({ folder: null });
+          break;
+        case "import":
+          void navigate({ to: "/record", search: { source: "upload" } as const });
+          break;
+        case "record":
+          window.dispatchEvent(new CustomEvent("summo:toggle-record"));
+          break;
+        case "vault":
+          void navigate({ to: "/settings", search: { section: "storage" } as const });
+          break;
+        case "home":
+          void navigate({ to: "/" });
+          break;
+        case "library":
+          void navigate({ to: "/library", search: {} });
+          break;
+        case "tasks":
+          void navigate({ to: "/tasks" });
+          break;
+        case "analytics":
+          void navigate({ to: "/analytics" });
+          break;
+        case "settings":
+          void navigate({ to: "/settings", search: {} });
+          break;
+        case "search":
+          setPaletteOpen(true);
+          break;
+        case "sidebar":
+          setNavOpen((open) => !open);
+          break;
+        case "shortcuts":
+          setShortcutsOpen(true);
+          break;
+        case "docs":
+          window.open(DOCS, "_blank", "noopener,noreferrer");
+          break;
+        case "issue":
+          window.open(ISSUES, "_blank", "noopener,noreferrer");
+          break;
+        default:
+          break;
+      }
+    },
+    [navigate, setNavOpen],
+  );
+
+  // The menu bar's events arrive as DOM events — `lib/shell.ts` translates them — and `?` opens the
+  // sheet from the keyboard, which is what every app with one uses. Not while somebody is typing:
+  // a question mark belongs in the note they are writing.
+  useEffect(() => {
+    const onMenuEvent = (event: Event) => onMenu(String((event as CustomEvent<string>).detail));
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target?.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "");
+      if (event.key === "?" && !typing && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        setShortcutsOpen(true);
+      }
+    };
+    window.addEventListener("summo:menu", onMenuEvent);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("summo:menu", onMenuEvent);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onMenu]);
   const [compact, setCompact] = useState(false);
   const [folders, setFolders] = useState<string[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
@@ -203,6 +326,11 @@ export function RootLayout({ children }: { children: ReactNode }) {
     },
     [engine, navigate, say, t],
   );
+
+  // Set after it is declared, read by the menu handler declared above it. See `newPageRef`.
+  useEffect(() => {
+    newPageRef.current = newPage;
+  }, [newPage]);
 
   const nestPage = useCallback(
     (page: Page, parent: string | null) => {
@@ -391,6 +519,13 @@ export function RootLayout({ children }: { children: ReactNode }) {
         // a desktop, where there is no inset to clear.
         className="drag-region border-line flex items-center gap-3 border-b px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]"
       >
+        {/* Windows and Linux hang the menu off the window frame, and this window has none. Drawn
+            here, next to the app's name, which is where those platforms put it. */}
+        {ownMenuBar && (
+          <Suspense fallback={null}>
+            <MenuBar onChoose={onMenu} />
+          </Suspense>
+        )}
         <button
           type="button"
           onClick={() => setNavOpen((open) => !open)}
@@ -573,6 +708,11 @@ export function RootLayout({ children }: { children: ReactNode }) {
         </AppShell>
       </div>
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} actions={actions} />
+      {shortcutsOpen && (
+        <Suspense fallback={null}>
+          <Shortcuts onClose={() => setShortcutsOpen(false)} />
+        </Suspense>
+      )}
       <StatusBar
         stat={engine.stat}
         speakers={speakersOf(engine.transcript.segments)}

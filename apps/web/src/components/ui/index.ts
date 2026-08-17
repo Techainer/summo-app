@@ -1,4 +1,5 @@
 export { Empty, EmptyColumn } from "./Empty";
+export { Sticker, type StickerName } from "./Sticker";
 export { Checkbox } from "./Checkbox";
 export { Avatar } from "./Avatar";
 export { Button, Spinner, type ButtonProps } from "./Button";

@@ -25,11 +25,20 @@ export function Recent({
   limit = 6,
   columns = 3,
   onOpen,
+  empty = null,
   className,
 }: {
   limit?: number;
   columns?: 2 | 3;
   onOpen: (entry: MeetingSummary) => void;
+  /**
+   * What to draw when the vault has nothing in it yet.
+   *
+   * This used to be `null`, and the callers wrapped it in a card with a heading — so a new user's
+   * home screen carried a titled box with nothing inside it, twice. A card with a heading and no
+   * content is worse than no card: it reads as content that failed to arrive.
+   */
+  empty?: React.ReactNode;
   className?: string;
 }) {
   const t = useT();
@@ -73,7 +82,7 @@ export function Recent({
     );
   }
 
-  if (entries.length === 0) return null;
+  if (entries.length === 0) return <>{empty}</>;
 
   return (
     <m.ul initial="hidden" animate="shown" transition={stagger(entries.length)} className={grid}>

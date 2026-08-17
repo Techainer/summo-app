@@ -29,8 +29,14 @@ import { join } from "node:path";
  *
  * Twelve kB of headroom is deliberate. A dependency bump moving a few kB should not fail a build
  * that changed nothing; a new screen imported eagerly should.
+ *
+ * 225 against a measured 221. The four kB is the empty states: five screens that showed grey text
+ * or a wall of zeros now draw a picture, a sentence and a button, in four languages. The stickers
+ * themselves are *not* in it — the drawings and the Lottie player are both behind `import()`, and
+ * the animations are static files fetched only when one is on screen. Raising this is the answer
+ * the message below offers, taken on purpose and written down.
  */
-const BUDGET = 220;
+const BUDGET = 225;
 
 const dist = join(import.meta.dirname, "..", "dist");
 const html = readFileSync(join(dist, "index.html"), "utf8");

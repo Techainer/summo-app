@@ -47,6 +47,24 @@ export function inShell(): boolean {
 }
 
 /**
+ * Whether this is a Mac, which decides two visible things.
+ *
+ * The modifier a shortcut is written with — `⌘K` on a Mac and `Ctrl+K` everywhere else, and a sheet
+ * that shows the wrong one is worse than no sheet — and where the menu lives. macOS puts a menu bar
+ * at the top of the *screen*, so the native one is the right one and the window should not draw a
+ * second. Windows and Linux put it in the window, and this window has `decorations: false`: there
+ * is no frame for the system to hang a menu on, so the app draws its own.
+ *
+ * `userAgentData` first because `navigator.platform` is deprecated and lies under emulation; the
+ * old field is the fallback that still answers on every webview this ships in.
+ */
+export function isMac(): boolean {
+  const data = (navigator as { userAgentData?: { platform?: string } }).userAgentData;
+  const platform = data?.platform ?? navigator.platform ?? "";
+  return /mac/i.test(platform);
+}
+
+/**
  * Where the daemon is, once the shell has one to give.
  *
  * Polls rather than waiting on the ready event alone, and for a reason that only shows on a fast
@@ -101,8 +119,16 @@ export async function shellHandshake({
 export async function bridgeShellEvents(): Promise<(() => void) | null> {
   if (!inShell()) return null;
   const { listen } = await import("@tauri-apps/api/event");
-  const stop = await listen("summo://toggle-record", () => {
-    window.dispatchEvent(new CustomEvent("summo:toggle-record"));
-  });
-  return stop;
+  const stops = await Promise.all([
+    listen("summo://toggle-record", () => {
+      window.dispatchEvent(new CustomEvent("summo:toggle-record"));
+    }),
+    // The menu bar. The shell knows only that something called `library` was chosen; what that
+    // means is decided here, where the router and the palette are. See `build_menu` for why the
+    // menu exists at all — an app with no menu bar on macOS has no working ⌘C.
+    listen<string>("summo://menu", (event) => {
+      window.dispatchEvent(new CustomEvent("summo:menu", { detail: event.payload }));
+    }),
+  ]);
+  return () => stops.forEach((stop) => stop());
 }

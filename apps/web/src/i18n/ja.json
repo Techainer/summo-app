@@ -130,7 +130,7 @@
     "no_transcript": "まだ何も話されていません。"
   },
   "export": {
-    "title": "書き出しと翻訳",
+    "title": "書き出しと翻訳 📤",
     "subtitle": "ダウンロード、または全体を翻訳",
     "language": "言語",
     "original": "原文",
@@ -162,7 +162,7 @@
     "agent": "エージェント"
   },
   "tasks": {
-    "title": "タスク",
+    "title": "タスク ✅",
     "kind": "種類",
     "mine": "人",
     "agent": "エージェント",
@@ -190,7 +190,9 @@
     "failed": "失敗",
     "due_today": "今日",
     "due_overdue": "{date} — 期限切れ",
-    "due_on": "期限 {date}"
+    "due_on": "期限 {date}",
+    "board_empty": "やることはありません",
+    "board_empty_hint": "会議で誰かが引き受けたとき、またはノートに「- [ ] @名前 …」と書いたときにここへ届きます。"
   },
   "chat": {
     "title": "質問",
@@ -221,7 +223,7 @@
     "empty": "会議はまだありません。",
     "meetings_one": "{count}件の会議",
     "meetings_other": "{count}件の会議",
-    "heading": "保存したものすべて",
+    "heading": "保存したすべて 📚",
     "loading": "保管庫を読んでいます…",
     "no_content": "まだ何もありません。",
     "recorded": "録音",
@@ -249,16 +251,17 @@
     "kind_all": "すべて",
     "kind_meeting": "録音",
     "kind_note": "ノート",
-    "recent_heading": "最近"
+    "recent_heading": "最近",
+    "empty_hint": "会議が始まったら録音、または手元のファイルを取り込んでください。すべてこの端末に残ります。"
   },
   "analytics": {
-    "title": "分析",
+    "title": "統計 📊",
     "range": "期間",
     "last_7": "直近7日",
     "last_30": "直近30日",
     "time": "時間",
-    "time_with": "人と過ごした時間",
-    "tags": "よく使うタグ",
+    "time_with": "一緒にいた時間 🤝",
+    "tags": "よく使うタグ 🏷️",
     "tags_count": "タグ {count} 件",
     "tag_uses": "{count} 回",
     "decisions": "決定事項",
@@ -665,11 +668,11 @@
     "subheading": "録音・記述・質問したものすべてを、この端末に。",
     "capture_hint": "押すと録音が始まります。すべてここで動きます。",
     "write": "書く",
-    "waiting": "あなた待ち",
+    "waiting": "あなた待ち ⏳",
     "all_clear": "待っているものはありません。",
     "overdue": "期限切れ",
     "no_summary": "要約なし",
-    "recent": "最近",
+    "recent": "最近 🕘",
     "see_all": "すべて見る",
     "ask": "質問",
     "assistant_hint": "録音したことも書いたことも聞けます。答えには出典が付きます。",
@@ -682,7 +685,9 @@
     "recording_now": "録音中",
     "tap_to_stop": "タップで停止",
     "shortcut_hint": "⌘K でどこへでも検索・移動",
-    "quick": "クイック操作"
+    "quick": "クイック操作",
+    "first_title": "ようこそ",
+    "first_hint": "まだ何もありません。1 分の会話でもいいので録音して、Summo が何をするか見てみてください。"
   },
   "palette": {
     "title": "すべてを検索",
@@ -786,5 +791,41 @@
     "biggest": "容量の大きい録音",
     "orphan": "会議なし",
     "orphaned": "会議のない音声フォルダが {count} 件、合計 {size}。"
+  },
+  "menu": {
+    "bar": "メニューバー",
+    "file": "ファイル",
+    "edit": "編集",
+    "view": "表示",
+    "help": "ヘルプ",
+    "new_note": "新規ノート",
+    "import": "ファイルを取り込む…",
+    "record": "録音 / 停止",
+    "vault": "保管フォルダ",
+    "home": "ホーム",
+    "library": "ライブラリ",
+    "tasks": "タスク",
+    "analytics": "統計",
+    "search": "すべて検索",
+    "sidebar": "サイドバーの表示切替",
+    "settings": "設定",
+    "shortcuts": "キーボードショートカット",
+    "docs": "ドキュメント",
+    "issue": "問題を報告"
+  },
+  "shortcuts": {
+    "title": "キーボードショートカット ⌨️",
+    "lead": "? を押すといつでもこの一覧が開きます。",
+    "search": "検索、またはどこへでも移動",
+    "record": "録音の開始・停止",
+    "new_note": "新規ノート",
+    "import": "手元のファイルを取り込む",
+    "sidebar": "サイドバーの表示切替",
+    "settings": "設定を開く",
+    "home": "ホーム",
+    "library": "ライブラリ",
+    "tasks": "タスク",
+    "analytics": "統計",
+    "this": "この一覧"
   }
 }

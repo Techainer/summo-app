@@ -1,10 +1,21 @@
 import type { LucideIcon } from "lucide-react";
 import { m } from "motion/react";
-import type { ReactNode } from "react";
+import { Suspense, lazy, type ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
 import { GENTLE } from "../../lib/motion";
 import { Spot } from "./Spot";
+import type { StickerName } from "./Sticker";
+
+/**
+ * Fetched when a sticker is actually drawn, which is on an empty screen and nowhere else.
+ *
+ * Imported directly it landed in the entry chunk — the drawings, the player's loader and all — and
+ * put the first load 0.8 kB over its budget for art that most sessions never see. The fallback while
+ * it arrives is [`Spot`], which is what this component drew before stickers existed, so the wait
+ * shows the old illustration rather than a hole.
+ */
+const Sticker = lazy(() => import("./Sticker").then((m) => ({ default: m.Sticker })));
 
 /**
  * A screen with nothing on it yet.
@@ -30,6 +41,7 @@ import { Spot } from "./Spot";
  */
 export function Empty({
   icon: Icon,
+  sticker,
   title,
   hint,
   action,
@@ -44,6 +56,15 @@ export function Empty({
   full = false,
 }: {
   icon: LucideIcon;
+  /**
+   * A drawing with something happening in it, in place of the generic one.
+   *
+   * `Spot` says *which screen this is* — the screen's own icon, in a tinted blob. A sticker says
+   * *how to feel about it*, which on the one screen a new user is most likely to judge the app by
+   * is the more useful of the two. Where a sticker is given it replaces the spot rather than
+   * sitting beside it: two illustrations stacked is a collage, not a composition.
+   */
+  sticker?: StickerName;
   title: string;
   hint?: string;
   action?: ReactNode;
@@ -70,7 +91,20 @@ export function Empty({
     >
       {/* A drawing rather than a bare glyph: at 20px an outline icon on a flat background is a
           smudge, and this is the one screen in the app that has nothing else on it to look at. */}
-      <Spot icon={Icon} size={full ? 104 : 84} className="mb-1" />
+      {sticker ? (
+        <m.span
+          className="mb-1 inline-flex"
+          initial={{ scale: 0.85, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ ...GENTLE, delay: 0.05 }}
+        >
+          <Suspense fallback={<Spot icon={Icon} size={full ? 128 : 108} />}>
+            <Sticker name={sticker} size={full ? 128 : 108} />
+          </Suspense>
+        </m.span>
+      ) : (
+        <Spot icon={Icon} size={full ? 104 : 84} className="mb-1" />
+      )}
       <p className="text-fg text-body font-medium">{title}</p>
       {hint && <p className="text-fg-faint text-meta max-w-sm leading-relaxed">{hint}</p>}
       {action}
