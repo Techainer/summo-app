@@ -233,4 +233,28 @@ if [[ "$(uname -s)" == "Darwin" && "${staged}" -gt 0 ]]; then
     "${OUT}/summo-engine-${TARGET}" 2>/dev/null &&
     echo "added @executable_path/../Resources/lib to the staged binary" ||
     echo "rpath already present, or install_name_tool unavailable"
+
+  # And signed, because `install_name_tool` invalidates whatever signature the binary had, and
+  # because what is under `Contents/Resources/` is not code as far as the bundler is concerned:
+  # Tauri signs `Contents/MacOS` and leaves these two files exactly as they were copied.
+  #
+  # What they were copied with is a *linker* signature — the ad-hoc one `ld` puts on every arm64
+  # build so the loader will map it at all — over a universal file whose Intel half is not signed
+  # at all. That is enough to load and not enough to say who they belong to, which is the question
+  # the hardened runtime asks. Signing them here answers it in the bundle rather than hoping.
+  #
+  # The same identity Tauri will use, so a Developer ID build signs these with the certificate and
+  # an ordinary build signs them ad-hoc. `--force` because there is already a signature to replace,
+  # and `--timestamp=none` because ad-hoc signing must not reach for Apple's timestamp server.
+  identity="${APPLE_SIGNING_IDENTITY:--}"
+  stamp=(--timestamp=none)
+  [[ "${identity}" != "-" ]] && stamp=(--timestamp)
+  for lib in "${OUT}/lib/"*.dylib; do
+    [[ -e "${lib}" ]] || continue
+    codesign --force --sign "${identity}" "${stamp[@]}" "${lib}" 2>&1 |
+      sed "s|^|codesign: |" || {
+      echo "could not sign ${lib}" >&2
+      exit 1
+    }
+  done
 fi

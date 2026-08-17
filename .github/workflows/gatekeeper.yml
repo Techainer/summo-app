@@ -23,6 +23,10 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
+      # For the scripts. This job used to need nothing but `gh`, and now it runs the same two
+      # checks the release job runs, against the published copy rather than the built one.
+      - uses: actions/checkout@v4
+
       - name: macOS version
         run: sw_vers
 
@@ -95,6 +99,31 @@ jobs:
           sleep 8
           echo "--- did anything start?"
           pgrep -fl summo || echo "nothing running"
+          exit 0
+
+      # Opening it is not the same as it working.
+      #
+      # `open` returns as soon as launchd has the app, and the step above reports whatever is
+      # running eight seconds later — which is the window. The window then starts the daemon, and
+      # the daemon is where a downloaded copy of `v0.2.6` died: the hardened runtime turns on
+      # library validation, an ad-hoc signature has no team, and library validation lets a process
+      # with no team load nothing that is not part of macOS. Both libraries the daemon needs are
+      # in the bundle.
+      #
+      # Reported rather than fatal, like everything else here: this workflow exists to say what a
+      # Mac does, and a red tick against a published tag helps nobody. `scripts/mac-signing.sh`
+      # is the check that fails a build.
+      - name: Does the daemon inside it start, on a copy that was downloaded
+        run: |
+          set +e
+          # The copy the steps above opened is still running, and two daemons racing for a port
+          # would be reported as this one failing.
+          pkill -f summo-desktop; pkill -f summo-engine; sleep 1
+          chmod +x scripts/*.sh
+          ./scripts/mac-signing.sh /Applications/Summo.app
+          echo "mac-signing exit: $?"
+          ./scripts/smoke-desktop.sh /Applications/Summo.app
+          echo "smoke exit: $?"
           exit 0
 
       - name: What the system logged about it

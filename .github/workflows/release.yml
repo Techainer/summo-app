@@ -294,6 +294,23 @@ jobs:
           rm -rf "${HOME}/Applications/Summo.app"
           cp -R "${APP}" "${HOME}/Applications/Summo.app"
           hdiutil detach "$(dirname "${APP}")" || true
+
+          # What the signature permits, before anything is started.
+          #
+          # The run below is not enough and `v0.2.6` is how we know: it started here and died on
+          # the first Mac that downloaded it, because the machine that builds a bundle is the one
+          # machine that runs it leniently. This reads the property instead of trying to provoke
+          # the behaviour.
+          ./scripts/mac-signing.sh "${HOME}/Applications/Summo.app"
+
+          # And marked the way a browser marks a download, because that is the copy that broke.
+          # Quarantine is the whole of Gatekeeper, and a bundle built locally has never carried it
+          # — which is why every macOS check this project has ever run has been run on the one
+          # copy in the world that macOS trusts.
+          xattr -w -r com.apple.quarantine \
+            "0083;00000000;Safari;F1B2C3D4-0000-0000-0000-000000000000" \
+            "${HOME}/Applications/Summo.app"
+
           ./scripts/smoke-desktop.sh "${HOME}/Applications/Summo.app"
 
       # And Windows, started from the layout the installer produces.
