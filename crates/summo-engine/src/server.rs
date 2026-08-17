@@ -147,6 +147,7 @@ impl Server {
             .route("/catalogue", get(catalogue))
             .route("/models/{id}", axum::routing::delete(remove_model))
             .route("/settings/models", post(set_models))
+            .route("/settings/plan", get(plan))
             .route("/agent/run", post(run_errand))
             .route("/agent/habits", get(habits))
             .route("/agent/dream", get(dream_state).post(dream_now))
@@ -301,6 +302,26 @@ impl Server {
                     }
                     tokio::time::sleep(std::time::Duration::from_secs(crate::calsync::REFRESH_S))
                         .await;
+                }
+            });
+        }
+
+        // The warm decoder, given back when nobody is coming for it.
+        //
+        // It holds about 150 MB so that pressing record does not wait three and a half seconds for
+        // ONNX Runtime to build a session. That is the right trade for somebody who is recording
+        // this morning and a poor one for the rest of the day — and nothing released it: the only
+        // thing that emptied the slot was deleting the model it held, so an app left open after one
+        // meeting kept the memory until it was quit.
+        #[cfg(feature = "models")]
+        {
+            let engine = engine.clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+                    if let Some(key) = engine.warm().evict_idle(std::time::Instant::now()) {
+                        tracing::info!(model = %key.model, "released the idle decoder");
+                    }
                 }
             });
         }
@@ -528,10 +549,15 @@ async fn status(
                 },
             );
         }
-        return Json(body).into_response();
+        Json(body).into_response()
     }
+    // A block rather than a bare expression, so the one above can be a tail expression too. With
+    // `return` there, `cargo clippy --features models` — which CI does not run and this therefore
+    // kept passing — reported an unneeded return on every check.
     #[cfg(not(feature = "models"))]
-    Json(state.engine.status()).into_response()
+    {
+        Json(state.engine.status()).into_response()
+    }
 }
 
 async fn models(
@@ -2437,9 +2463,204 @@ async fn set_language(
         let mut settings = summo_core::Settings::load(&path)?;
         let code = body.language.trim().to_lowercase();
         settings.models.language = (!code.is_empty()).then_some(code);
+
+        // And the model that has to serve it.
+        //
+        // This used to write the language and stop. `pick_models` only ranks anything when
+        // `models.live` is empty, so a pinned model — which is what installing one leaves behind —
+        // kept being used for every language afterwards: choose Japanese with `gipformer-65m`
+        // pinned, a model measured on Vietnamese and nothing else, and the meeting is decoded by a
+        // model that cannot serve it. Nothing said so, because the setting that decides was not the
+        // setting the user changed.
+        let switched = repoint_live_model(&state, &mut settings);
+
         settings.save(&path)?;
-        Ok(serde_json::json!({ "language": settings.models.language }))
+        Ok(serde_json::json!({
+            "language": settings.models.language,
+            "live": settings.models.live,
+            // What changed, so the screen can say "switched to X" rather than silently rewriting
+            // somebody's choice — and `null` when nothing installed covers this language, which is
+            // the case where the interface should be offering a download.
+            "switched": switched,
+        }))
     })())
+}
+
+/// Point `models.live` at something that can serve the chosen language.
+///
+/// Only when the pinned model *cannot* serve it. A user who deliberately picked a model that covers
+/// their language keeps it, whatever its score — this is not the place to second-guess a choice
+/// that works. Returns the id it switched to, if it switched.
+#[cfg(feature = "models")]
+fn repoint_live_model(state: &AppState, settings: &mut summo_core::Settings) -> Option<String> {
+    let language = settings.models.language.clone()?;
+    let installed: Vec<_> = state
+        .engine
+        .store()
+        .list()
+        .into_iter()
+        .filter(|m| m.task == summo_models::Task::Asr)
+        .collect();
+
+    let switched = repoint(
+        &installed,
+        state.engine.hardware(),
+        &language,
+        settings.models.live.as_deref(),
+    )?;
+    settings.models.live = Some(switched.clone());
+    Some(switched)
+}
+
+/// Which model should serve `language`, given what is installed and what is pinned.
+///
+/// `None` means leave it alone: either the pin already serves the language, or nothing installed
+/// does — and in the second case the interface should be offering a download rather than this
+/// quietly picking something that cannot do the job.
+///
+/// A pin that *works* is kept whatever its score. Somebody who deliberately chose a model that
+/// covers their language does not want it changed because a benchmark prefers another; this exists
+/// to fix the case where the model cannot serve the language at all.
+#[cfg(feature = "models")]
+fn repoint(
+    installed: &[summo_models::Manifest],
+    hw: &summo_models::HwProfile,
+    language: &str,
+    pinned: Option<&str>,
+) -> Option<String> {
+    let serves = |id: &str| {
+        installed
+            .iter()
+            .find(|m| m.id.as_str() == id)
+            .is_some_and(|m| summo_models::covers_language(m, language))
+    };
+    if pinned.is_some_and(serves) {
+        return None;
+    }
+    let best = summo_models::recommend(installed, hw, language)
+        .best()?
+        .id
+        .clone();
+    (Some(best.as_str()) != pinned).then_some(best)
+}
+
+/// Without recognition compiled in there are no models to choose between.
+#[cfg(not(feature = "models"))]
+fn repoint_live_model(_state: &AppState, _settings: &mut summo_core::Settings) -> Option<String> {
+    None
+}
+
+/// What will actually run, and whether it can do the job.
+///
+/// Three different things decide three different jobs, and until now no screen said which was which:
+/// speech recognition is `models.live` from Summo's own registry, translation is
+/// `llm.translator` — a model inside the app or a provider — and summaries and answers are
+/// `llm.provider` plus `llm.model`, which is usually somebody else's server. A user asking "which
+/// model am I using" had three answers in three places and no way to see them together.
+///
+/// Derived on every request rather than stored as a map. A saved language→model table is a table
+/// that goes stale the moment a model is installed or removed, and the registry already knows the
+/// answer: which installed models claim this language, how accurate each was measured on it, and
+/// whether it keeps up with live audio on this machine.
+async fn plan(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    as_response(build_plan(&state))
+}
+
+#[cfg(feature = "models")]
+fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
+    let settings = summo_core::Settings::load(&state.engine.paths().settings())?;
+    let language = settings.models.language.clone();
+    let installed: Vec<_> = state
+        .engine
+        .store()
+        .list()
+        .into_iter()
+        .filter(|m| m.task == summo_models::Task::Asr)
+        .collect();
+
+    // What a session would pick, by the same rules a session picks it — `pick_models` when nothing
+    // is pinned, the pin when there is one.
+    let chosen = settings.models.live.clone().or_else(|| {
+        let code = language.clone().unwrap_or_else(|| "*".into());
+        summo_models::recommend(&installed, state.engine.hardware(), &code)
+            .best()
+            .map(|s| s.id.clone())
+    });
+
+    let manifest = chosen
+        .as_ref()
+        .and_then(|id| installed.iter().find(|m| m.id.as_str() == id.as_str()));
+    let covers = match (&language, manifest) {
+        (Some(code), Some(m)) => summo_models::covers_language(m, code),
+        // No language chosen means the model detects, which every model can attempt.
+        (None, Some(_)) => true,
+        _ => false,
+    };
+
+    // A better installed model for this language, when there is one. Not a recommendation to
+    // download: this is about what is already here, so it can be acted on with one click.
+    let better = language.as_ref().and_then(|code| {
+        let ranked = summo_models::recommend(&installed, state.engine.hardware(), code);
+        ranked
+            .best()
+            .filter(|best| Some(best.id.as_str()) != chosen.as_deref())
+            .map(|best| {
+                serde_json::json!({
+                    "id": best.id,
+                    "name": best.name,
+                    "accuracy": best.accuracy,
+                    "live_capable": best.live_capable,
+                    "reason": best.reason,
+                })
+            })
+    });
+
+    Ok(serde_json::json!({
+        "language": language,
+        // Speech recognition: Summo's own model, on this machine, always.
+        "speech": {
+            "model": chosen,
+            "name": manifest.map(|m| m.name.clone()),
+            "installed": manifest.is_some(),
+            "covers_language": covers,
+            "better": better,
+        },
+        // Translation: a model inside the app, or a provider the user pointed it at.
+        "translation": {
+            "local": settings.llm.translator.as_ref().is_some_and(summo_core::settings::Translator::is_local),
+            "provider": settings.llm.translator.as_ref().map(|t| t.provider.clone()),
+            "model": settings.llm.translator.as_ref().and_then(|t| t.model.clone()),
+        },
+        // Summaries and answers: usually somebody else's server, which is the one part of this that
+        // can leave the machine — so it is named rather than implied.
+        "language_model": {
+            "provider": settings.llm.provider,
+            "model": settings.llm.model,
+        },
+    }))
+}
+
+/// Without recognition compiled in there is no speech model to report.
+#[cfg(not(feature = "models"))]
+fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
+    let settings = summo_core::Settings::load(&state.engine.paths().settings())?;
+    Ok(serde_json::json!({
+        "language": settings.models.language,
+        "speech": { "model": null, "installed": false, "covers_language": false, "better": null },
+        "translation": {
+            "local": settings.llm.translator.as_ref().is_some_and(summo_core::settings::Translator::is_local),
+            "provider": settings.llm.translator.as_ref().map(|t| t.provider.clone()),
+            "model": settings.llm.translator.as_ref().and_then(|t| t.model.clone()),
+        },
+        "language_model": { "provider": settings.llm.provider, "model": settings.llm.model },
+    }))
 }
 
 /// How long recorded audio is kept, and whether it is kept at all.
@@ -4930,6 +5151,85 @@ mod tests {
     }
 
     /// Writes one meeting into the vault and returns its id.
+    /// A model that claims some languages and has been measured on one of them.
+    #[cfg(feature = "models")]
+    fn asr(id: &str, langs: &[&str], wer_key: &str, wer: f32) -> summo_models::Manifest {
+        let mut profile = summo_models::Profile {
+            rss_mb: summo_models::manifest::RssProfile {
+                idle: 100,
+                peak: 400,
+            },
+            min_ram_mb: 400,
+            ..summo_models::Profile::default()
+        };
+        profile.rtf.insert("cpu_x86_avx512vnni_8t".into(), 0.3);
+        profile.quality.insert(wer_key.into(), wer);
+
+        summo_models::Manifest {
+            schema: 1,
+            id: summo_core::ModelId::parse(id).unwrap(),
+            name: id.to_string(),
+            task: summo_models::Task::Asr,
+            mode: summo_models::Mode::Batch,
+            runtime: "test".into(),
+            langs: langs.iter().map(|l| (*l).to_string()).collect(),
+            domains: vec![],
+            license: "MIT".into(),
+            attribution: None,
+            redistributable: true,
+            gated: false,
+            size_bytes: 1,
+            profile,
+            files: vec![],
+            variants: Vec::new(),
+            installed_variant: None,
+            params: Default::default(),
+            description: None,
+        }
+    }
+
+    /// Choosing a spoken language used to write the language and nothing else. `pick_models` only
+    /// ranks anything when no model is pinned — and installing one pins it — so a Vietnamese-only
+    /// model went on decoding Japanese meetings, with nothing on any screen saying so.
+    #[cfg(feature = "models")]
+    #[test]
+    fn changing_the_language_repoints_a_model_that_cannot_serve_it() {
+        let hw = summo_models::HwProfile::detect();
+        let installed = [
+            asr("gipformer-65m", &["vi"], "fleurs_vi", 0.09),
+            asr("whisper-small", &["*"], "fleurs_en", 0.13),
+        ];
+
+        // Pinned to the Vietnamese model, now recording in Japanese: it cannot serve that, so the
+        // multilingual one takes over.
+        assert_eq!(
+            repoint(&installed, &hw, "ja", Some("gipformer-65m")),
+            Some("whisper-small".to_string()),
+        );
+
+        // Back to Vietnamese, and the pin already serves it — left alone, whatever a benchmark
+        // thinks of the alternative.
+        assert_eq!(repoint(&installed, &hw, "vi", Some("gipformer-65m")), None);
+
+        // Nothing pinned: the best for the language, which is what a session would have picked.
+        assert_eq!(
+            repoint(&installed, &hw, "vi", None),
+            Some("gipformer-65m".to_string()),
+        );
+    }
+
+    /// Nothing installed covers it. Leaving the pin alone is the honest answer: the screen has a
+    /// download to offer, and quietly switching to a model that also cannot do the job would hide
+    /// that.
+    #[cfg(feature = "models")]
+    #[test]
+    fn a_language_nothing_covers_leaves_the_choice_alone() {
+        let hw = summo_models::HwProfile::detect();
+        let installed = [asr("gipformer-65m", &["vi"], "fleurs_vi", 0.09)];
+        assert_eq!(repoint(&installed, &hw, "ja", Some("gipformer-65m")), None);
+        assert_eq!(repoint(&installed, &hw, "ja", None), None);
+    }
+
     fn seed_meeting(paths: &Paths) -> summo_core::MeetingId {
         use summo_core::segment::{Lane, Segment};
         use summo_vault::meeting::{Frontmatter, MeetingDoc};

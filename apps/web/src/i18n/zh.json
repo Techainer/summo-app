@@ -860,5 +860,21 @@
     "more": "更多",
     "readme": "完整文档",
     "issue": "报告问题"
+  },
+  "plan": {
+    "title": "哪个模型负责什么",
+    "subtitle": "依据这台机器实时推算，而非预存表格",
+    "speech": "语音识别",
+    "translation": "翻译",
+    "summaries": "摘要与问答",
+    "on_device": "本机",
+    "over_network": "经由网络",
+    "in_app": "应用内模型",
+    "same_as_below": "与下方相同",
+    "none": "暂无",
+    "no_model": "尚未安装语音模型，无法录制。",
+    "wrong_language": "当前模型不支持你选择的语言。请在下方重新选择语言以切换模型，或安装支持该语言的模型。",
+    "better": "本机已装有更适合该语言的模型：{name}（准确率 {accuracy}%）。",
+    "derived": "每次打开都会重新推算，安装或删除模型都会即时反映。"
   }
 }
