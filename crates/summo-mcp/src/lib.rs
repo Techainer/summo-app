@@ -495,7 +495,7 @@ fn list_meetings(paths: &Paths, args: &Value) -> Result<String, String> {
 /// pull an HTTP server into a stdio binary, and the parsing this needs is one call.
 fn list_tasks(paths: &Paths) -> Result<String, String> {
     let vault = paths.vault();
-    let index = summo_vault::index::MeetingIndex::scan(&vault).map_err(|e| e.to_string())?;
+    let index = summo_vault::index::MeetingIndex::of_vault(&vault).map_err(|e| e.to_string())?;
 
     let mut open = Vec::new();
     for entry in index.entries() {

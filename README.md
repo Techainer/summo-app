@@ -80,15 +80,31 @@ A window, a tray icon, and `⌘⇧R` from anywhere. It starts the same daemon th
 adopting one that is already up rather than competing with it — so the two are the same product with
 the same vault, and either can be used.
 
-Releases carry the installers as well as the tarball. **They are not code-signed**, and macOS is
-stricter about that than the sentence here used to admit. The app is ad-hoc signed, which is what
-keeps Apple Silicon willing to run it at all — an entirely unsigned arm64 binary is refused with
-"Summo is damaged and can't be opened" rather than warned about — but there is no Apple certificate
-behind it, so a downloaded copy still carries Gatekeeper's quarantine flag. One line clears it:
+Releases carry the installers as well as the tarball. **There is no Apple certificate behind them**,
+and this is measured rather than assumed: `.github/workflows/gatekeeper.yml` downloads the published
+`.dmg`, marks it the way a browser marks a download, and asks macOS what it thinks.
+
+```
+Signature=adhoc
+/Applications/Summo.app: rejected      (spctl, macOS 26.5)
+```
+
+`rejected` — not "warned about and let through". The ad-hoc signature is what keeps Apple Silicon
+willing to *load* the binary at all; without one the kernel refuses it outright with "Summo is
+damaged and can't be opened". Gatekeeper still stops the downloaded copy, because nothing vouches
+for it. One line, once:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Summo.app
 ```
+
+That line is printed inside the `.dmg` window, beside the icon you drag, so nobody has to find this
+page to get past it.
+
+**There is no free way around it.** Apple's path is a Developer ID plus notarisation, $99 a year.
+Everything on this side of it is done and waiting: set four secrets — `APPLE_CERTIFICATE`,
+`APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, and `APPLE_ID`/`APPLE_PASSWORD`/
+`APPLE_TEAM_ID` — and the next tag signs and notarises itself. See `.github/workflows/release.yml`.
 
 Windows shows a SmartScreen warning and lets you through it. The tarball has neither problem, and is
 what to use if this matters to you.

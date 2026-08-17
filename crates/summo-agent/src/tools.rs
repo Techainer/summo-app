@@ -441,7 +441,7 @@ fn parse_status(value: &str) -> Option<Status> {
 
 fn read_all_tasks(paths: &Paths) -> summo_core::Result<Vec<tasks::Task>> {
     let vault = paths.vault();
-    let index = summo_vault::index::MeetingIndex::scan(&vault)?;
+    let index = summo_vault::index::MeetingIndex::of_vault(&vault)?;
     let mut all = Vec::new();
     for entry in index.entries() {
         let path = vault.join(&entry.path);

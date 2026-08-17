@@ -97,7 +97,7 @@ fn parse_status(value: &str) -> Option<Status> {
 
 fn set_section(paths: &Paths, note: &str, heading: &str, body: &str) -> Result<()> {
     let vault = paths.vault();
-    let index = summo_vault::index::MeetingIndex::scan(&vault)?;
+    let index = summo_vault::index::MeetingIndex::of_vault(&vault)?;
     let entry = index
         .entries()
         .iter()
@@ -117,7 +117,7 @@ fn set_section(paths: &Paths, note: &str, heading: &str, body: &str) -> Result<(
 /// correct when a file is edited outside the app.
 pub fn pending(paths: &Paths) -> Result<Vec<(String, Annotation)>> {
     let vault = paths.vault();
-    let index = summo_vault::index::MeetingIndex::scan(&vault)?;
+    let index = summo_vault::index::MeetingIndex::of_vault(&vault)?;
 
     let mut out = Vec::new();
     for entry in index.entries() {

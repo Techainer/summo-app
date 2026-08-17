@@ -235,7 +235,7 @@ fn split_sections(markdown: &str) -> std::collections::BTreeMap<&str, String> {
 /// disagree about which file is which meeting is the kind of bug that only shows up once somebody
 /// renames a note.
 pub fn find_meeting_file(vault: &Path, meeting: &MeetingId) -> Result<std::path::PathBuf> {
-    let index = summo_vault::index::MeetingIndex::scan(vault)?;
+    let index = summo_vault::index::MeetingIndex::of_vault(vault)?;
     index
         .entries()
         .iter()

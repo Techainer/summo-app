@@ -24,7 +24,7 @@ pub fn update(
     due: Option<Option<String>>,
 ) -> Result<Task> {
     let vault = paths.vault();
-    let index = crate::index::MeetingIndex::scan(&vault)?;
+    let index = crate::index::MeetingIndex::of_vault(&vault)?;
 
     for entry in index.entries() {
         let relative = entry.path.display().to_string();
@@ -74,7 +74,7 @@ pub fn create(
     }
 
     let vault = paths.vault();
-    let index = crate::index::MeetingIndex::scan(&vault)?;
+    let index = crate::index::MeetingIndex::of_vault(&vault)?;
     let entry = index
         .entries()
         .iter()

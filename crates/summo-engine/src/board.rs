@@ -33,7 +33,7 @@ pub struct Board {
 /// Read every task in the vault.
 pub fn read(paths: &Paths) -> Result<Board> {
     let vault = paths.vault();
-    let index = summo_vault::index::MeetingIndex::scan(&vault)?;
+    let index = summo_vault::index::MeetingIndex::of_vault(&vault)?;
 
     let mut all = Vec::new();
     for entry in index.entries() {

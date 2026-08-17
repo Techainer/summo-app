@@ -88,10 +88,7 @@ pub struct Report {
 /// home screen, so the first thing a new user saw was three configuration files described as
 /// meetings they had failed to summarise.
 pub fn between(vault: &std::path::Path, from: &str, to: &str) -> Result<Report> {
-    let index = MeetingIndex::scan_all([
-        vault.join("meetings").as_path(),
-        vault.join("notes").as_path(),
-    ])?;
+    let index = MeetingIndex::of_vault(vault)?;
 
     let mut meetings = Vec::new();
     let mut total_seconds = 0u64;

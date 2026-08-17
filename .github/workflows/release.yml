@@ -155,6 +155,10 @@ jobs:
             target: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
+    # At the job rather than on the step that reads it: a step's own `env` is not in scope for that
+    # step's `if`, and the whole point of this one is to be skipped when the secret is absent.
+    env:
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -180,13 +184,47 @@ jobs:
       #
       # `beforeBuildCommand` in `tauri.conf.json` builds the interface and stages the daemon, so
       # this one command produces the whole thing.
+      # A real Developer ID, when this repository has been given one.
+      #
+      # Without it the Mac build is signed ad-hoc, which is enough for the binary to *run* and not
+      # enough for Gatekeeper: a downloaded copy is assessed `rejected` — measured, on macOS 26.5,
+      # by `.github/workflows/gatekeeper.yml` — so the first launch needs a terminal line. There is
+      # no free way around that. Apple's own path costs $99 a year, and this is the whole of the
+      # work on our side: set four secrets and the next tag notarises itself.
+      #
+      #   APPLE_CERTIFICATE           base64 of the Developer ID Application .p12
+      #   APPLE_CERTIFICATE_PASSWORD  the password that .p12 was exported with
+      #   APPLE_SIGNING_IDENTITY      e.g. "Developer ID Application: Techainer (TEAMID)"
+      #   APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID   an app-specific password, for notarytool
+      #
+      # The identity is written into the config rather than passed as an environment variable,
+      # because the config already names one — `signingIdentity: "-"`, the ad-hoc marker — and a
+      # build that silently ignored the certificate would ship exactly the artefact this is meant
+      # to replace.
+      - name: Use the Developer ID, if there is one
+        if: runner.os == 'macOS' && env.APPLE_SIGNING_IDENTITY != ''
+        run: |
+          config=apps/desktop/src-tauri/tauri.conf.json
+          jq --arg id "$APPLE_SIGNING_IDENTITY" '.bundle.macOS.signingIdentity = $id' "$config" > "$config.tmp"
+          mv "$config.tmp" "$config"
+          jq '.bundle.macOS.signingIdentity' "$config"
+
       - name: Build the installers
         # AppImage's tooling is itself an AppImage, and mounting one needs FUSE, which the runner
         # images stopped shipping. `linuxdeploy` then fails with nothing but "failed to run
         # linuxdeploy". The variable is the AppImage runtime's own answer: unpack and run instead
         # of mounting. Harmless everywhere else.
+        #
+        # The Apple variables are empty on a repository with no certificate, and Tauri treats an
+        # empty one as absent — so this is the same build it has always been until the day somebody
+        # sets them, and a notarised one from that day on.
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm -C apps/desktop exec tauri build
 
       # Started, before it is offered to anybody.
