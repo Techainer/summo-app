@@ -3854,6 +3854,7 @@ fn handle_command_with_models(
                 vec![Event::Error {
                     message: format!("malformed command: {e}"),
                     transient: false,
+                    code: None,
                 }],
                 session,
             );
