@@ -124,8 +124,20 @@
     "back": "资料库",
     "no_summary_yet": "这场会议还没有摘要。",
     "summarise_now": "立即生成摘要",
+    "summary_shape": "模板",
+    "shape_auto": "自动选择",
     "play_from": "从{time}播放",
     "no_transcript": "还没有人说话。"
+  },
+  "export": {
+    "title": "导出与翻译",
+    "subtitle": "下载，或翻译整场会议",
+    "language": "语言",
+    "original": "原文",
+    "translate_into": "翻译为",
+    "all_translated": "建议的语言都已翻译。",
+    "translated": "已将 {count} 行翻译为{lang}。",
+    "translated_partly": "已翻译 {count} 行，还剩 {missing} 行。"
   },
   "draft": {
     "heading": "智能体起草的摘要",

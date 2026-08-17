@@ -185,6 +185,57 @@ const open = async (route) => {
   if (!(await again.isChecked())) problems.push("the tick did not survive a reload");
 }
 
+// ---- a meeting can be taken back out --------------------------------------
+{
+  // Six formats have been in the daemon since before this screen existed and the route serving
+  // them had no caller at all. Sending somebody the part of a meeting they missed is one of the
+  // two things people do after a meeting.
+  // The seeded recording, because subtitles come from a transcript and that is the one that has
+  // said anything out loud.
+  await open("/pages/01E2E0");
+  const card = page.locator("main").getByText("Xuất & dịch");
+  if ((await card.count()) === 0) problems.push("a meeting cannot be exported");
+  else {
+    const [file] = await Promise.all([
+      page.waitForEvent("download", { timeout: 10000 }).catch(() => null),
+      page.getByRole("button", { name: "SRT", exact: true }).click(),
+    ]);
+    if (!file) problems.push("asking for subtitles downloaded nothing");
+    else {
+      if (!/\.srt$/.test(file.suggestedFilename())) {
+        problems.push(`the subtitles arrived as ${file.suggestedFilename()}`);
+      }
+      const text = readFileSync(await file.path(), "utf8");
+      if (!text.includes("-->")) problems.push(`that is not a subtitle file: ${text.slice(0, 80)}`);
+    }
+  }
+}
+
+// ---- and written up in a shape somebody chose -----------------------------
+{
+  // `generate` has always taken a template id and every caller passed nothing, so a one-to-one and
+  // a sprint review were written up as a weekly meeting unless the tags happened to match.
+  const plain = join(engine.home, `vault/meetings/${RECENT}-chua-tom-tat.md`);
+  writeFileSync(
+    plain,
+    `---\nid: 01PLAIN\ndate: ${RECENT}T14:00:00+07:00\nduration: 600\nparticipants: ["[[Bạn]]"]\n---\n\n# Chưa tóm tắt\n\n## Transcript\n**[00:00:10] Bạn** — Một câu thôi <!-- seq:0 end:12.0 -->\n`,
+  );
+  await open("/pages/01PLAIN");
+  // Waited for, not counted: the shapes are fetched after the screen paints, and a machine running
+  // the whole suite at once takes longer over it than one running this alone — which is exactly the
+  // difference between a green run and a red one when the assertion is a snapshot.
+  const shapes = page.locator("main").getByText("Mẫu", { exact: true });
+  await shapes
+    .first()
+    .waitFor({ timeout: 10000 })
+    .catch(() => undefined);
+  if ((await shapes.count()) === 0) {
+    problems.push("a meeting with no summary offered no choice of shape");
+  } else if ((await page.getByRole("button", { name: "Tự chọn" }).count()) === 0) {
+    problems.push("the shapes were offered without the default the app has always used");
+  }
+}
+
 // ---- the import panel is somewhere you can go -----------------------------
 {
   await open("/");

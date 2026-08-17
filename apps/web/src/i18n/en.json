@@ -124,8 +124,20 @@
     "back": "Library",
     "no_summary_yet": "No summary for this meeting yet.",
     "summarise_now": "Summarise now",
+    "summary_shape": "Shape",
+    "shape_auto": "Choose for me",
     "play_from": "Play from {time}",
     "no_transcript": "Nothing was said yet."
+  },
+  "export": {
+    "title": "Export & translate",
+    "subtitle": "download it, or translate the whole meeting",
+    "language": "Language",
+    "original": "Original",
+    "translate_into": "Translate into",
+    "all_translated": "Every suggested language is done.",
+    "translated": "Translated {count} lines into {lang}.",
+    "translated_partly": "Translated {count} lines; {missing} were left."
   },
   "draft": {
     "heading": "Summary drafted by the agent",

@@ -124,3 +124,24 @@ export function selectionWithin(root: HTMLElement | null): string | null {
 export function isRefinable(selection: string): boolean {
   return selection.trim().split(/\s+/).length >= 3;
 }
+
+/** One summary shape the vault ships, as `summo_vault::template` writes them. */
+export interface Template {
+  id: string;
+  name: string;
+  language: string;
+  match_on: string[];
+  sections: { heading: string; hint?: string }[];
+}
+
+/**
+ * The summary shapes installed.
+ *
+ * The daemon's own comment on this route reads "so the interface can offer a choice", and the
+ * interface never offered one: four templates ship, `generate` has always taken an optional
+ * template id, and every call passed nothing — so a one-to-one and a sprint review were both
+ * summarised as a weekly meeting unless the file's tags happened to match.
+ */
+export async function templates(handshake: Handshake): Promise<Template[]> {
+  return readJson<Template[]>(await fetch(url(handshake, "/templates")));
+}
