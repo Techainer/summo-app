@@ -449,7 +449,11 @@
     "spoken": "会议会讲哪种语言？",
     "spoken_hint": "它决定下面推荐哪个模型。随时可改，录音前也可以。",
     "local": "在本机运行",
-    "permission": "允许使用麦克风"
+    "permission": "允许使用麦克风",
+    "reason_fast": "准确率 {accuracy}%，在本机比实时快 {times} 倍",
+    "reason_slow": "在本机太慢，无法实时出字（实时系数 {rtf}）；录完后重新转写仍可用",
+    "reason_unmeasured": "准确率 {accuracy}%，但从未在同类硬件上测过",
+    "reason_unknown": "本机没有任何测量数据"
   },
   "tour": {
     "title": "快速上手",
