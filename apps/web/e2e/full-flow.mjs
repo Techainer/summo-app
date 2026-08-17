@@ -29,6 +29,16 @@ const wav = join(HERE, "fixtures/vi-fleurs.wav");
 // The models this needs, served from this machine: a recogniser and a voice detector. Without the
 // detector there are no utterance boundaries and nothing is ever committed to the transcript.
 const local = await mirror(["gipformer-65m", "silero-vad-v5"], { name: "full-flow" });
+
+// No skipping here, unlike `models.mjs`. That suite can check a catalogue screen without installing
+// anything; this one is audio going in and text coming out, and there is no version of it worth
+// running without the model that does the recognising. If the bytes are not here, say why and stop
+// rather than pass having transcribed nothing.
+if (local.unreachable.length > 0) {
+  for (const { id, why } of local.unreachable) console.error(`${id}: ${why}`);
+  console.error("the whole-product run needs these models; nothing about it is meaningful without");
+  process.exit(1);
+}
 const engine = await boot(process.argv, { name: "full-flow", registry: local });
 const { url: appUrl, port, token } = engine;
 

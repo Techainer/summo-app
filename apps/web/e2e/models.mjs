@@ -25,6 +25,27 @@ const fail = (message) => problems.push(message);
 // The two models this suite installs are served from this machine. Reaching github.com twice per
 // run made a screen test fail whenever the network or the host felt like it.
 const local = await mirror(["silero-vad-v5", "sense-voice-small"], { name: "models" });
+
+/**
+ * Whether the bytes for a model actually made it onto this machine.
+ *
+ * Everything on this screen that does not involve installing is checked either way — the sizes,
+ * the licences, the upstream marking, the button being there at all. Only the install-and-remove
+ * pass needs the blob, and that pass is skipped rather than failed when github.com has refused a
+ * runner: a red build over a screen with nothing wrong with it teaches people to rerun CI without
+ * reading it, which costs more than this check is worth.
+ *
+ * Loudly, and never for everything at once. If nothing could be mirrored the network is the story
+ * and the suite says so with a non-zero exit, because at that point it has checked almost nothing.
+ */
+const missing = new Set(local.unreachable.map((m) => m.id));
+for (const { id, why } of local.unreachable) {
+  console.log(`SKIPPED install/remove for ${id} — its bytes could not be fetched: ${why}`);
+}
+if (missing.size >= 2) {
+  console.error("no model could be mirrored; this suite checked nothing that matters");
+  process.exit(1);
+}
 const engine = await boot({ name: "models", registry: local.registry });
 const browser = await chromium.launch();
 const context = await browser.newContext({
@@ -77,43 +98,47 @@ try {
 
   // Install, then remove. These are 73 MB to 2.5 GB each and installing the wrong one is the most
   // likely mistake this screen invites, so the way back has to be on it.
-  const vad = page.locator("article", { hasText: "silero-vad-v5" });
-  await vad.getByRole("button", { name: "Cài", exact: true }).click();
-  await page.waitForTimeout(400);
-  // Two minutes, matching the sense-voice wait below. This is a download over a real HTTP client,
-  // and how long it takes is a fact about the machine — this suite failed at 60 s only when it ran
-  // last in a queue of eleven browsers. A timeout that measures load rather than behaviour is a
-  // test that fails for the wrong reason.
-  await vad.getByText("Đã cài").waitFor({ timeout: 120000 });
+  if (!missing.has("silero-vad-v5")) {
+    const vad = page.locator("article", { hasText: "silero-vad-v5" });
+    await vad.getByRole("button", { name: "Cài", exact: true }).click();
+    await page.waitForTimeout(400);
+    // Two minutes, matching the sense-voice wait below. This is a download over a real HTTP
+    // client, and how long it takes is a fact about the machine — this suite failed at 60 s only
+    // when it ran last in a queue of eleven browsers. A timeout that measures load rather than
+    // behaviour is a test that fails for the wrong reason.
+    await vad.getByText("Đã cài").waitFor({ timeout: 120000 });
 
-  // Two clicks, not a dialog: re-downloading a gigabyte is a real cost, and a modal is one more
-  // thing to dismiss while tidying up several models.
-  await vad.getByRole("button", { name: "Xoá", exact: true }).click();
-  await vad.getByRole("button", { name: "Xoá?", exact: true }).click();
-  await page.waitForTimeout(800);
-  if ((await vad.getByText("Đã cài").count()) !== 0) {
-    fail("a removed model is still shown as installed");
+    // Two clicks, not a dialog: re-downloading a gigabyte is a real cost, and a modal is one more
+    // thing to dismiss while tidying up several models.
+    await vad.getByRole("button", { name: "Xoá", exact: true }).click();
+    await vad.getByRole("button", { name: "Xoá?", exact: true }).click();
+    await page.waitForTimeout(800);
+    if ((await vad.getByText("Đã cài").count()) !== 0) {
+      fail("a removed model is still shown as installed");
+    }
   }
 
   // Installing a model and then having no way to say "use this one" is what made the catalogue
   // decorative: the interface used to send a hardcoded `gipformer-65m`, so installing a Japanese
   // model changed nothing about what recording reached for.
-  const sense = page.locator("article", { hasText: "sense-voice-small" });
-  await sense.getByRole("button", { name: "Cài", exact: true }).click();
-  await sense.getByText("Đã cài").waitFor({ timeout: 120000 });
-  await sense.getByRole("button", { name: "Dùng", exact: true }).click();
-  await sense.getByText("Đang dùng").waitFor({ timeout: 10000 });
+  if (!missing.has("sense-voice-small")) {
+    const sense = page.locator("article", { hasText: "sense-voice-small" });
+    await sense.getByRole("button", { name: "Cài", exact: true }).click();
+    await sense.getByText("Đã cài").waitFor({ timeout: 120000 });
+    await sense.getByRole("button", { name: "Dùng", exact: true }).click();
+    await sense.getByText("Đang dùng").waitFor({ timeout: 10000 });
 
-  // And it reached the settings file, not only the screen.
-  const settings = await page.evaluate(
-    async ({ port, token }) =>
-      await (await fetch(`http://127.0.0.1:${port}/settings?token=${token}`)).json(),
-    { port: engine.port, token: engine.token },
-  );
-  if (settings?.settings?.models?.live !== "sense-voice-small") {
-    fail(
-      `choosing a model did not reach the settings: ${JSON.stringify(settings?.settings?.models)}`,
+    // And it reached the settings file, not only the screen.
+    const settings = await page.evaluate(
+      async ({ port, token }) =>
+        await (await fetch(`http://127.0.0.1:${port}/settings?token=${token}`)).json(),
+      { port: engine.port, token: engine.token },
     );
+    if (settings?.settings?.models?.live !== "sense-voice-small") {
+      fail(
+        `choosing a model did not reach the settings: ${JSON.stringify(settings?.settings?.models)}`,
+      );
+    }
   }
 
   // The daemon refuses to remove a model the settings point at, because the alternative is a

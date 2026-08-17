@@ -658,6 +658,12 @@ jobs:
       - run: pnpm -C apps/web e2e
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+          # For `e2e/mirror.mjs`, which fetches a model blob from GitHub the first time a runner
+          # sees one. Unauthenticated from a shared address, github.com refuses the request and
+          # refuses it as `404` — indistinguishable from a file that moved, and it failed this job
+          # on a suite about installing models. The token is sent to GitHub's own hosts only; a
+          # manifest may point anywhere, and a credential must not follow it there.
+          GITHUB_TOKEN: ${{ github.token }}
 
       # The clean-install story, against the binary a user downloads rather than the daemon the
       # suites above start for themselves.
@@ -699,6 +705,12 @@ jobs:
       - run: pnpm -C apps/web e2e:full-flow
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+          # For `e2e/mirror.mjs`, which fetches a model blob from GitHub the first time a runner
+          # sees one. Unauthenticated from a shared address, github.com refuses the request and
+          # refuses it as `404` — indistinguishable from a file that moved, and it failed this job
+          # on a suite about installing models. The token is sent to GitHub's own hosts only; a
+          # manifest may point anywhere, and a credential must not follow it there.
+          GITHUB_TOKEN: ${{ github.token }}
 
       # The pictures, when something went wrong.
       #
