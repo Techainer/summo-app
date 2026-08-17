@@ -131,7 +131,7 @@
     "no_transcript": "Nothing was said yet."
   },
   "export": {
-    "title": "Export & translate 📤",
+    "title": "Export & translate",
     "subtitle": "download it, or translate the whole meeting",
     "language": "Language",
     "original": "Original",
@@ -163,7 +163,7 @@
     "agent": "Agent"
   },
   "tasks": {
-    "title": "Tasks ✅",
+    "title": "Tasks",
     "kind": "Kind",
     "mine": "People",
     "agent": "Agent",
@@ -224,7 +224,7 @@
     "empty": "No meetings yet.",
     "meetings_one": "{count} meeting",
     "meetings_other": "{count} meetings",
-    "heading": "Everything you have kept 📚",
+    "heading": "Everything you have kept",
     "loading": "Reading the vault…",
     "no_content": "Nothing here yet.",
     "recorded": "Recorded",
@@ -256,13 +256,13 @@
     "empty_hint": "Press record when the meeting starts, or drop in a file you already have. All of it stays on your machine."
   },
   "analytics": {
-    "title": "Analytics 📊",
+    "title": "Analytics",
     "range": "Range",
     "last_7": "Last 7 days",
     "last_30": "Last 30 days",
     "time": "Time",
-    "time_with": "Time with 🤝",
-    "tags": "Most used tags 🏷️",
+    "time_with": "Time with",
+    "tags": "Most used tags",
     "tags_count": "{count} tags",
     "tag_uses": "{count}×",
     "decisions": "Decisions",
@@ -656,11 +656,11 @@
     "subheading": "Everything you record, write and ask — kept on this machine.",
     "capture_hint": "Press to record. Everything runs here.",
     "write": "Write",
-    "waiting": "Waiting on you ⏳",
+    "waiting": "Waiting on you",
     "all_clear": "Nothing waiting.",
     "overdue": "overdue",
     "no_summary": "no summary yet",
-    "recent": "Recent 🕘",
+    "recent": "Recent",
     "see_all": "See all",
     "ask": "Ask",
     "assistant_hint": "Ask anything you have recorded or written, and the answer names where it came from.",
@@ -802,7 +802,7 @@
     "issue": "Report a problem"
   },
   "shortcuts": {
-    "title": "Keyboard shortcuts ⌨️",
+    "title": "Keyboard shortcuts ⌨",
     "lead": "Press ? at any time to bring this back.",
     "search": "Search or jump anywhere",
     "record": "Start or stop recording",
@@ -817,7 +817,7 @@
     "this": "This card"
   },
   "help": {
-    "title": "Help 🛟",
+    "title": "Help",
     "lead": "The questions people actually ask, each with the button that acts on it.",
     "privacy_q": "Does my audio go anywhere?",
     "privacy_a": "No. Speech recognition and speaker separation run on models on your machine — pull the network cable and recording still works. Two things need the network: summarising and asking questions, because they call a language model, and you choose that endpoint in Settings (it can be Ollama on this same machine). Translation runs on a model inside the app.",
