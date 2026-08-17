@@ -29,7 +29,21 @@ const wav = join(HERE, "fixtures/vi-fleurs.wav");
 // The models this needs, served from this machine: a recogniser and a voice detector. Without the
 // detector there are no utterance boundaries and nothing is ever committed to the transcript.
 const local = await mirror(["gipformer-65m", "silero-vad-v5"], { name: "full-flow" });
-const engine = await boot(process.argv, { name: "full-flow", registry: local });
+
+// No skipping here, unlike `models.mjs`. That suite can check a catalogue screen without installing
+// anything; this one is audio going in and text coming out, and there is no version of it worth
+// running without the model that does the recognising. If the bytes are not here, say why and stop
+// rather than pass having transcribed nothing.
+if (local.unreachable.length > 0) {
+  for (const { id, why } of local.unreachable) console.error(`${id}: ${why}`);
+  console.error("the whole-product run needs these models; nothing about it is meaningful without");
+  process.exit(1);
+}
+// `local.registry`, not `local`. Passing the whole object set `SUMMO_REGISTRY` to
+// "[object Object]", the daemon fell back to the published registry, and this suite quietly
+// downloaded its models from github.com on every run — the exact dependency `mirror.mjs` exists to
+// remove, in the one suite that most needs it. It passed for as long as GitHub felt like answering.
+const engine = await boot(process.argv, { name: "full-flow", registry: local.registry });
 const { url: appUrl, port, token } = engine;
 
 /** Install a model through the daemon, and wait for it. */

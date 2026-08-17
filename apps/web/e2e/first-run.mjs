@@ -89,7 +89,16 @@ page.on("console", (m) => {
   if (m.type() === "error") fail(`console: ${m.text()}`);
 });
 
-await page.goto(url, { waitUntil: "networkidle" });
+// Waited on the app appearing, not on the network going quiet.
+//
+// `networkidle` was a 30-second timeout that this suite eventually always hit, and the reason has
+// nothing to do with the page being ready: the daemon is polled for its health every five seconds
+// for as long as a window is open, which is correct behaviour and exactly what "no network
+// activity" cannot coexist with. Playwright discourages `networkidle` for this reason, and it is
+// the wrong question anyway — what this suite needs to know is that a new user is looking at
+// setup, which is a thing on the screen rather than a property of the socket.
+await page.goto(url, { waitUntil: "domcontentloaded" });
+await page.locator("h1").first().waitFor({ timeout: 30000 });
 await page.waitForTimeout(1200);
 
 // The handshake reaches the app without ever appearing in a URL.
@@ -204,7 +213,8 @@ if ((await box.count()) === 0) {
 }
 
 // Setup must not greet a user who already has work in the vault.
-await page.reload({ waitUntil: "networkidle" });
+await page.reload({ waitUntil: "domcontentloaded" });
+await page.locator("h1").first().waitFor({ timeout: 30000 });
 await page.waitForTimeout(1200);
 if (/welcome/i.test(await page.locator("h1").first().innerText())) {
   fail("the welcome screen came back after the vault had a note in it");

@@ -120,7 +120,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.plan.outputs.targets) }}
+        include:
+          ${{ fromJSON(needs.plan.outputs.targets) }}
           # No `aarch64-pc-windows-msvc`.
           #
           # `audiopus_sys` 0.1.8 has no ARM64 Windows support: its build script picks an MSVC
@@ -165,7 +166,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-latest,  target: aarch64-apple-ios }
+          - { os: macos-latest, target: aarch64-apple-ios }
           - { os: ubuntu-latest, target: aarch64-linux-android }
     steps:
       - uses: actions/checkout@v4
@@ -630,6 +631,21 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
       - run: pnpm -C apps/web exec playwright install --with-deps chromium
+      # The model blobs the catalogue suite installs, kept between runs.
+      #
+      # `e2e/mirror.mjs` caches them so a machine that has run the suites once needs no network —
+      # but a CI runner is a machine that has never run anything, so every run made an
+      # unauthenticated request to github.com for a real model file. It answers `429` when several
+      # jobs share an address and has answered `404` for a URL that worked a minute later, and
+      # either one failed the whole browser job over a screen with nothing wrong with it.
+      #
+      # Keyed on the manifests, since that is what decides which bytes are wanted: a new model in
+      # the registry misses the cache and downloads once, and every run after it does not.
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/summo-e2e-model-cache
+          key: e2e-models-${{ hashFiles('.registry/**/*.json') }}
+          restore-keys: e2e-models-
       - run: pnpm -C apps/web build
       # `--features bundled` is what puts the interface inside the binary. Without it every suite
       # fails on a missing header, which is a long way from the cause — `e2e/daemon.mjs` detects
@@ -642,6 +658,12 @@ jobs:
       - run: pnpm -C apps/web e2e
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+          # For `e2e/mirror.mjs`, which fetches a model blob from GitHub the first time a runner
+          # sees one. Unauthenticated from a shared address, github.com refuses the request and
+          # refuses it as `404` — indistinguishable from a file that moved, and it failed this job
+          # on a suite about installing models. The token is sent to GitHub's own hosts only; a
+          # manifest may point anywhere, and a credential must not follow it there.
+          GITHUB_TOKEN: ${{ github.token }}
 
       # The clean-install story, against the binary a user downloads rather than the daemon the
       # suites above start for themselves.
@@ -683,6 +705,12 @@ jobs:
       - run: pnpm -C apps/web e2e:full-flow
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+          # For `e2e/mirror.mjs`, which fetches a model blob from GitHub the first time a runner
+          # sees one. Unauthenticated from a shared address, github.com refuses the request and
+          # refuses it as `404` — indistinguishable from a file that moved, and it failed this job
+          # on a suite about installing models. The token is sent to GitHub's own hosts only; a
+          # manifest may point anywhere, and a credential must not follow it there.
+          GITHUB_TOKEN: ${{ github.token }}
 
       # The pictures, when something went wrong.
       #
@@ -698,4 +726,3 @@ jobs:
           path: /tmp/shots
           retention-days: 7
           if-no-files-found: ignore
-

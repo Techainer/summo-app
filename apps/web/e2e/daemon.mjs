@@ -268,50 +268,89 @@ export async function boot({ name = "e2e", seed = true, registry = REGISTRY } = 
 
   const handshakeFile = join(home, "engine.json");
   const deadline = Date.now() + 20_000;
-  for (;;) {
-    try {
-      const handshake = JSON.parse(readFileSync(handshakeFile, "utf8"));
-      if (handshake.port > 0 && handshake.token) {
-        // The interface has to be *inside* the binary, and `cargo test --workspace` rebuilds this
-        // same path without the feature that puts it there — so a suite run after a test run gets
-        // a daemon that answers the API and serves no app. Every assertion then fails on a missing
-        // `header`, which is a long way from the cause.
-        const page = await fetch(`http://127.0.0.1:${handshake.port}/`).catch(() => null);
-        if (!page || !(await page.text()).includes('<div id="root">')) {
-          child.kill();
-          throw new Error(
-            "the daemon is serving no interface. Rebuild it with the feature that bundles one:\n" +
-              "  cargo build --bin summo-engine --features bundled",
-          );
-        }
-        return {
-          home,
-          port: handshake.port,
-          token: handshake.token,
-          /// Everything the daemon has printed, for a suite whose failure is on that side of the
-          /// socket rather than in the browser.
-          log: () => log.join(""),
-          url: `http://127.0.0.1:${handshake.port}`,
-          stop() {
-            // Through the same path as the exit handler, so a suite that calls it and a suite that
-            // dies before it get the same treatment — and so calling it twice is harmless.
-            cleanup(0);
-          },
-        };
+
+  /**
+   * Wait for the handshake, and nothing else.
+   *
+   * Deliberately the only thing inside the `try`. The checks below used to live in here too, and a
+   * `catch` written for "the file is not there yet" swallowed them whole — so a daemon serving no
+   * interface reported "did not come up in 20s", and the sentence naming the actual cause was
+   * built, thrown, and discarded on every single run. The diagnostics that matter are the ones a
+   * developer sees at four in the afternoon with a suite failing for the wrong reason.
+   */
+  const handshake = await (async () => {
+    for (;;) {
+      try {
+        const found = JSON.parse(readFileSync(handshakeFile, "utf8"));
+        if (found.port > 0 && found.token) return found;
+      } catch {
+        // Not written yet, which is the normal state for the first second.
       }
-    } catch {
-      // Not written yet, which is the normal state for the first second.
+      if (Date.now() > deadline) {
+        child.kill();
+        throw new Error(
+          `the daemon did not come up in 20s. Is it built?\n` +
+            `  cargo build --bin summo-engine --features bundled\n` +
+            log.join(""),
+        );
+      }
+      await new Promise((r) => setTimeout(r, 100));
     }
-    if (Date.now() > deadline) {
-      child.kill();
-      throw new Error(
-        `the daemon did not come up in 20s. Is it built?\n` +
-          `  cargo build --bin summo-engine --features bundled\n` +
-          log.join(""),
-      );
-    }
-    await new Promise((r) => setTimeout(r, 100));
+  })();
+
+  const refuse = (why) => {
+    child.kill();
+    throw new Error(why);
+  };
+
+  // The interface has to be *inside* the binary, and `cargo test --workspace` rebuilds this same
+  // path without the feature that puts it there — so a suite run after a test run gets a daemon
+  // that answers the API and serves no app. Every assertion then fails on a missing `header`,
+  // which is a long way from the cause.
+  const page = await fetch(`http://127.0.0.1:${handshake.port}/`).catch(() => null);
+  const document = page ? await page.text() : "";
+  if (!document.includes('<div id="root">')) {
+    refuse(
+      "the daemon is serving no interface. Rebuild it with the feature that bundles one:\n" +
+        "  cargo build --bin summo-engine --features bundled",
+    );
   }
+
+  // And it has to be *this* interface.
+  //
+  // `bundled` bakes `dist/` into the binary at compile time, so a web change followed by
+  // `pnpm build` alone leaves the daemon serving whatever was on disk when the binary was last
+  // linked. Every suite then passes against yesterday's app — which is worse than failing, because
+  // the run reports that the change works. It is not hypothetical: it is how a check added to this
+  // very file was first observed to pass.
+  //
+  // Vite names the entry script after a hash of its contents, so comparing that one filename is an
+  // exact answer: same name, same bundle.
+  const entry = (html) => html.match(/assets\/(index-[A-Za-z0-9_-]+\.js)/)?.[1];
+  const built = entry(readFileSync(join(HERE, "..", "dist", "index.html"), "utf8"));
+  if (built && entry(document) !== built) {
+    refuse(
+      `the daemon is serving an older interface than the one in dist/.\n` +
+        `  serving ${entry(document)}\n  built   ${built}\n` +
+        "Rebuild the binary after building the web app — the interface is compiled into it:\n" +
+        "  pnpm -C apps/web build && cargo build --bin summo-engine --features bundled",
+    );
+  }
+
+  return {
+    home,
+    port: handshake.port,
+    token: handshake.token,
+    /// Everything the daemon has printed, for a suite whose failure is on that side of the socket
+    /// rather than in the browser.
+    log: () => log.join(""),
+    url: `http://127.0.0.1:${handshake.port}`,
+    stop() {
+      // Through the same path as the exit handler, so a suite that calls it and a suite that dies
+      // before it get the same treatment — and so calling it twice is harmless.
+      cleanup(0);
+    },
+  };
 }
 
 /**

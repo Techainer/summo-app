@@ -388,29 +388,6 @@
     "view": "見る",
     "record": "録音"
   },
-  "time": {
-    "today": "今日",
-    "yesterday": "昨日",
-    "week": "{year}年 第{week}週",
-    "minutes_one": "{count}分",
-    "minutes_other": "{count}分",
-    "seconds_one": "{count}秒",
-    "seconds_other": "{count}秒",
-    "hours_one": "{count}時間",
-    "hours_other": "{count}時間",
-    "hours_minutes": "{hours}時間{minutes}分",
-    "days_one": "{count}日",
-    "days_other": "{count}日"
-  },
-  "weekday": {
-    "0": "日曜日",
-    "1": "月曜日",
-    "2": "火曜日",
-    "3": "水曜日",
-    "4": "木曜日",
-    "5": "金曜日",
-    "6": "土曜日"
-  },
   "common": {
     "cancel": "取り消し",
     "save": "保存",

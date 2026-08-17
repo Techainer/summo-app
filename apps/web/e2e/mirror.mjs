@@ -69,10 +69,71 @@ async function cache(url, sha256) {
   return at;
 }
 
-async function download(url) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`mirror: ${url} answered ${response.status}`);
-  return response.arrayBuffer();
+/**
+ * The address to actually ask, and what to send with it.
+ *
+ * The manifests publish `github.com/owner/repo/raw/ref/path`, which is a *redirect* to
+ * `raw.githubusercontent.com`. Unauthenticated, from a shared address, github.com refuses that
+ * redirect — and it refuses it as `404`, which is indistinguishable from a file that moved. That is
+ * what failed the browser job here: the file was never gone. Asked directly of the content host,
+ * with the token every Actions run already has, the same request is served.
+ *
+ * The token is sent to GitHub's own hosts and nowhere else. A manifest may point at any address it
+ * likes — that is the whole point of a registry anyone can publish to — and a credential must not
+ * follow it there.
+ */
+function request(url) {
+  const at = new URL(url);
+  const raw = at.hostname === "github.com" ? at.pathname.replace("/raw/", "/") : null;
+  const asked = raw ? new URL(`https://raw.githubusercontent.com${raw}${at.search}`) : at;
+
+  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+  const github = asked.hostname === "raw.githubusercontent.com" || asked.hostname === "github.com";
+  return {
+    url: asked.toString(),
+    headers: token && github ? { authorization: `Bearer ${token}` } : {},
+  };
+}
+
+/**
+ * Fetch the bytes, allowing for the fact that the other end is a stranger.
+ *
+ * The cache above means this runs at most once per model per machine — but "at most once" is still
+ * once, and on a fresh CI runner that once is an unauthenticated request to github.com. It answers
+ * `429` when several jobs share an address, and it has answered `404` for the same URL that works a
+ * minute later. Either killed the whole browser run, on a suite about installing models, over a
+ * screen with nothing wrong with it. Which is the failure this file was written to stop; it just
+ * stopped it for the tenth download and not for the first.
+ *
+ * So: retried, with a widening gap. Anything in the 400s that is not `429` is left alone — a
+ * genuinely wrong URL should fail on the first attempt and say so, rather than three times slowly.
+ */
+async function download(url, allowed = 4) {
+  const asked = request(url);
+  let last = "";
+  let tried = 0;
+  for (let attempt = 0; attempt < allowed; attempt += 1) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 2000 * 2 ** (attempt - 1)));
+    tried += 1;
+    try {
+      const response = await fetch(asked.url, { headers: asked.headers });
+      if (response.ok) return await response.arrayBuffer();
+      last = `answered ${response.status}`;
+      const retryable = response.status === 429 || response.status >= 500;
+      // `404` from GitHub raw under an abuse limit is indistinguishable from a moved file, so it is
+      // retried once and then believed.
+      if (!retryable && !(response.status === 404 && attempt === 0)) break;
+    } catch (e) {
+      last = `could not be reached (${e.message})`;
+    }
+  }
+  // The count that happened, not the count allowed. A message saying "after 4 attempts" for a URL
+  // asked twice sends whoever reads it looking for three minutes of retries that never ran.
+  //
+  // The address that was actually asked, which is not always the one in the manifest.
+  throw new Error(
+    `mirror: ${asked.url} ${last} after ${tried} ${tried === 1 ? "attempt" : "attempts"}`,
+  );
 }
 
 /**
@@ -115,6 +176,8 @@ export async function mirror(ids, { name = "mirror" } = {}) {
 
   const wanted = new Set(ids);
   const seen = new Set();
+  /** Models whose bytes could not be fetched at all. See the note on the return value. */
+  const unreachable = [];
 
   for (const file of readdirSync(join(root, "models"))) {
     const at = join(root, "models", file);
@@ -122,10 +185,17 @@ export async function mirror(ids, { name = "mirror" } = {}) {
     if (!wanted.has(manifest.id)) continue;
     seen.add(manifest.id);
 
-    for (const entry of manifest.files ?? []) {
-      entry.url = pathToFileURL(await cache(entry.url, entry.sha256)).href;
+    try {
+      for (const entry of manifest.files ?? []) {
+        entry.url = pathToFileURL(await cache(entry.url, entry.sha256)).href;
+      }
+      writeFileSync(at, JSON.stringify(manifest, null, 2));
+    } catch (e) {
+      // Only a fetch that failed. A checksum that does not match is still fatal — that is the
+      // check being made, not an accident of the network.
+      if (!e.message.startsWith("mirror: http")) throw e;
+      unreachable.push({ id: manifest.id, why: e.message });
     }
-    writeFileSync(at, JSON.stringify(manifest, null, 2));
   }
 
   // A model that is not in the registry would otherwise be mirrored silently and then fail in the
@@ -134,5 +204,18 @@ export async function mirror(ids, { name = "mirror" } = {}) {
     if (!seen.has(id)) throw new Error(`mirror: ${id} is not in ${REGISTRY}`);
   }
 
-  return { registry: root, stop: async () => {} };
+  /**
+   * `unreachable` is the difference between "this failed" and "this could not be run".
+   *
+   * The cache above means the bytes are fetched once per machine, and the CI job keeps that cache
+   * between runs — so this list is empty on every run but the first after a registry change. When
+   * it is not empty, github.com has refused a runner rather than the app having done anything
+   * wrong, and the suite reporting a red build for a screen with nothing wrong with it is the
+   * exact failure this file exists to prevent. It just prevented it for the tenth download and not
+   * the first.
+   *
+   * Reported, never silent: a caller that ignores this and installs anyway gets a card that will
+   * not install, and a reader of the log has to be told which check did not happen and why.
+   */
+  return { registry: root, unreachable, stop: async () => {} };
 }
