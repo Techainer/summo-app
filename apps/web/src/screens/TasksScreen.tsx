@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle } from "lucide-react";
+import { Bot, CheckCircle2, Circle, ListChecks } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import {
@@ -7,6 +7,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  Empty,
   EmptyColumn,
   Page,
   SegmentedControl,
@@ -161,39 +162,54 @@ export function TasksScreen() {
             </div>
           )}
 
-          <div className="mt-4 grid min-h-0 flex-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {COLUMNS.map((status) => {
-              const items = forOwner(board[status], owner);
-              return (
-                <Column
-                  key={status}
-                  label={t(`tasks.${status}`)}
-                  count={items.length}
-                  onDrop={(id) => void move(id, status)}
-                >
-                  {items.map((task) => (
-                    <PersonCard
-                      key={task.id}
-                      task={task}
-                      today={now}
-                      dragging={dragging === task.id}
-                      onDragStart={() => setDragging(task.id)}
-                      onDragEnd={() => setDragging(null)}
-                    />
-                  ))}
-                </Column>
-              );
-            })}
-          </div>
+          {/* Four empty columns is not "no work"; it is a screen that failed to load, which is what
+              a board with nothing on it looked like: six hundred pixels of bordered grey. A board
+              only draws its columns once there is something to put in one. */}
+          {COLUMNS.every((status) => forOwner(board[status], owner).length === 0) ? (
+            <Empty
+              full
+              icon={ListChecks}
+              sticker="party"
+              title={t("tasks.board_empty")}
+              hint={t("tasks.board_empty_hint")}
+            />
+          ) : (
+            <div className="mt-4 grid min-h-0 flex-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {COLUMNS.map((status) => {
+                const items = forOwner(board[status], owner);
+                return (
+                  <Column
+                    key={status}
+                    label={t(`tasks.${status}`)}
+                    count={items.length}
+                    onDrop={(id) => void move(id, status)}
+                  >
+                    {items.map((task) => (
+                      <PersonCard
+                        key={task.id}
+                        task={task}
+                        today={now}
+                        dragging={dragging === task.id}
+                        onDragStart={() => setDragging(task.id)}
+                        onDragEnd={() => setDragging(null)}
+                      />
+                    ))}
+                  </Column>
+                );
+              })}
+            </div>
+          )}
         </div>
       ) : (
         <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto">
           {board.agent.length === 0 ? (
-            <p className="text-fg-faint grid h-full place-items-center px-6 text-center">
-              {t("tasks.agent_empty_head")}{" "}
-              <code className="tabular text-meta">- [ ] @agent …</code>{" "}
-              {t("tasks.agent_empty_tail")}
-            </p>
+            <Empty
+              full
+              icon={Bot}
+              sticker="robot"
+              title={t("tasks.agent_empty_head")}
+              hint={t("tasks.agent_empty_tail")}
+            />
           ) : (
             board.agent.map((task) => (
               <AgentCard

@@ -135,7 +135,7 @@ export function NotesScreen() {
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {notes.length === 0 && (
-            <p className="text-fg-faint text-meta px-2 py-6">{t("notes.empty")}</p>
+            <Empty icon={NotebookPen} sticker="pencil" title={t("notes.empty")} />
           )}
           {grouped.map(([day, entries]) => (
             <section key={day} className="mb-3">

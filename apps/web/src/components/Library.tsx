@@ -6,12 +6,13 @@ import {
   Clock,
   Mic,
   PencilLine,
+  Search,
   Users,
 } from "lucide-react";
 import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Recent } from "./library/Recent";
-import { Avatar, Button, SectionTitle, Wave } from "./ui";
+import { Avatar, Button, Empty, SectionTitle, Wave } from "./ui";
 import { cn } from "../lib/cn";
 import { formatDuration } from "../lib/duration";
 import { useI18n, useT } from "../i18n/context";
@@ -464,16 +465,25 @@ export function Library({
             </button>
           )}
 
+          {/* The same empty state every other screen uses. This was two sentences of grey text with
+              the call to action welded onto the end of the first — "Chưa có buổi họp nào.Ghi buổi
+              đầu tiên", no space between them — on the column a new user looks at first. */}
           {hits === null && view?.total === 0 && (
-            <p className="text-fg-faint mt-10 text-center">
-              {t("library.empty")}
-              <button type="button" className="text-accent hover:underline" onClick={onRecord}>
-                {t("library.empty_cta")}
-              </button>
-            </p>
+            <Empty
+              icon={AudioLines}
+              sticker="sprout"
+              title={t("library.empty")}
+              hint={t("library.empty_hint")}
+              action={
+                <Button variant="primary" size="sm" onClick={onRecord}>
+                  <Mic aria-hidden="true" className="me-1.5 size-3.5" />
+                  {t("library.empty_cta")}
+                </Button>
+              }
+            />
           )}
           {hits?.length === 0 && (
-            <p className="text-fg-faint mt-10 text-center">{t("library.no_hits", { query })}</p>
+            <Empty icon={Search} sticker="magnifier" title={t("library.no_hits", { query })} />
           )}
         </div>
 
@@ -687,6 +697,11 @@ function Dashboard({
   const { t, locale } = useI18n();
   if (!stats) return <p className="text-fg-faint mt-10 text-center">{t("library.loading")}</p>;
 
+  // A vault nobody has put anything in yet. Four tiles reading 0, 0, — , 0 above a heading with
+  // nothing under it is a dashboard for a life that has not happened; what a person needs here is
+  // one sentence and the button.
+  const bare = stats.meetings === 0 && stats.notes === 0;
+
   return (
     <div className="relative mx-auto max-w-4xl">
       <div
@@ -703,51 +718,71 @@ function Dashboard({
           </Button>
         </div>
 
-        <m.div
-          initial="hidden"
-          animate="shown"
-          transition={stagger(4)}
-          className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4"
-        >
-          <Tile
+        {bare ? (
+          <Empty
+            className="mt-6"
             icon={AudioLines}
-            label={t("library.meeting")}
-            value={String(stats.meetings)}
-            tone="accent"
-            // Said here rather than folded into the number above it. The two used to be added
-            // together, so a vault of typed notes reported them all as recordings — under an
-            // icon of a waveform, beside a count of hours none of them had.
-            note={stats.notes > 0 ? t("library.notes_count", { count: stats.notes }) : undefined}
+            sticker="sprout"
+            title={t("library.empty")}
+            hint={t("library.vault_hint")}
+            action={
+              <Button variant="primary" onClick={onRecord}>
+                <Mic aria-hidden="true" className="me-1.5 size-4" />
+                {t("library.empty_cta")}
+              </Button>
+            }
           />
-          <Tile
-            icon={Clock}
-            label={t("library.recorded")}
-            value={formatDuration(stats.total_duration, locale, "short")}
-          />
-          <Tile
-            icon={CalendarRange}
-            label={t("library.last_7")}
-            value={`${stats.last_seven_days}`}
-            note={formatDuration(stats.last_seven_days_duration, locale, "short")}
-          />
-          <Tile icon={Users} label={t("library.people")} value={String(stats.people)} />
-        </m.div>
+        ) : (
+          <>
+            <m.div
+              initial="hidden"
+              animate="shown"
+              transition={stagger(4)}
+              className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4"
+            >
+              <Tile
+                icon={AudioLines}
+                label={t("library.meeting")}
+                value={String(stats.meetings)}
+                tone="accent"
+                // Said here rather than folded into the number above it. The two used to be added
+                // together, so a vault of typed notes reported them all as recordings — under an
+                // icon of a waveform, beside a count of hours none of them had.
+                note={
+                  stats.notes > 0 ? t("library.notes_count", { count: stats.notes }) : undefined
+                }
+              />
+              <Tile
+                icon={Clock}
+                label={t("library.recorded")}
+                value={formatDuration(stats.total_duration, locale, "short")}
+              />
+              <Tile
+                icon={CalendarRange}
+                label={t("library.last_7")}
+                value={`${stats.last_seven_days}`}
+                note={formatDuration(stats.last_seven_days_duration, locale, "short")}
+              />
+              <Tile icon={Users} label={t("library.people")} value={String(stats.people)} />
+            </m.div>
 
-        {/* Unsummarised is not a statistic, it is a chore: it belongs beside the others only when
+            {/* Unsummarised is not a statistic, it is a chore: it belongs beside the others only when
             there are some, and coloured like the work it is. */}
-        {stats.without_summary > 0 && (
-          <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-3 inline-flex items-center gap-2 rounded-[var(--radius-pill)] border px-3 py-1.5">
-            <CircleAlert aria-hidden="true" className="size-3.5" />
-            {t("meeting.no_summary")} · {stats.without_summary}
-          </p>
+            {stats.without_summary > 0 && (
+              <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-3 inline-flex items-center gap-2 rounded-[var(--radius-pill)] border px-3 py-1.5">
+                <CircleAlert aria-hidden="true" className="size-3.5" />
+                {t("meeting.no_summary")} · {stats.without_summary}
+              </p>
+            )}
+
+            <section className="mt-7 flex flex-col gap-2.5">
+              <SectionTitle>{t("library.recent_heading")}</SectionTitle>
+              <Recent limit={6} columns={2} onOpen={(entry) => onOpen(entry.id)} />
+            </section>
+
+            <p className="text-fg-faint text-meta mt-7">{t("library.vault_hint")}</p>
+          </>
         )}
-
-        <section className="mt-7 flex flex-col gap-2.5">
-          <SectionTitle>{t("library.recent_heading")}</SectionTitle>
-          <Recent limit={6} columns={2} onOpen={(entry) => onOpen(entry.id)} />
-        </section>
-
-        <p className="text-fg-faint text-meta mt-7">{t("library.vault_hint")}</p>
       </div>
     </div>
   );

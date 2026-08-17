@@ -10,8 +10,10 @@ import {
   Card,
   CardBody,
   CardHeader,
+  Empty,
   Page,
   PageGlow,
+  Sticker,
   Ticker,
   Wave,
 } from "../components/ui";
@@ -268,7 +270,12 @@ export function HomeScreen() {
             />
             <CardBody>
               {waiting.length === 0 ? (
-                <p className="text-fg-faint text-meta py-6 text-center">{t("home.all_clear")}</p>
+                // "Nothing waiting" is good news and read as an error: one line of grey text in a
+                // tall white box. It is the state a person should *want* to see.
+                <p className="text-fg-dim text-meta flex flex-col items-center gap-1 py-4 text-center">
+                  <Sticker name="coffee" size={84} />
+                  {t("home.all_clear")}
+                </p>
               ) : (
                 <ul className="space-y-1">
                   {waiting.slice(0, 5).map((item) => (
@@ -315,7 +322,22 @@ export function HomeScreen() {
               }
             />
             <CardBody>
-              <Recent onOpen={open} />
+              <Recent
+                onOpen={open}
+                empty={
+                  <Empty
+                    icon={Sparkles}
+                    sticker="wave"
+                    title={t("home.first_title")}
+                    hint={t("home.first_hint")}
+                    action={
+                      <Button variant="primary" size="sm" onClick={toggle}>
+                        {t("record.start")}
+                      </Button>
+                    }
+                  />
+                }
+              />
             </CardBody>
           </Card>
         </m.div>

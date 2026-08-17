@@ -130,7 +130,7 @@
     "no_transcript": "还没有人说话。"
   },
   "export": {
-    "title": "导出与翻译",
+    "title": "导出与翻译 📤",
     "subtitle": "下载，或翻译整场会议",
     "language": "语言",
     "original": "原文",
@@ -162,7 +162,7 @@
     "agent": "智能体"
   },
   "tasks": {
-    "title": "任务",
+    "title": "任务 ✅",
     "kind": "类型",
     "mine": "人",
     "agent": "智能体",
@@ -190,7 +190,9 @@
     "failed": "失败",
     "due_today": "今天",
     "due_overdue": "{date} — 已逾期",
-    "due_on": "截止 {date}"
+    "due_on": "截止 {date}",
+    "board_empty": "没有待办",
+    "board_empty_hint": "会议中有人认领，或你在笔记里写下「- [ ] @名字 …」时，任务会出现在这里。"
   },
   "chat": {
     "title": "提问",
@@ -221,7 +223,7 @@
     "empty": "还没有会议。",
     "meetings_one": "{count}场会议",
     "meetings_other": "{count}场会议",
-    "heading": "你保存的一切",
+    "heading": "你保存的一切 📚",
     "loading": "正在读取仓库…",
     "no_content": "这里还是空的。",
     "recorded": "已录制",
@@ -249,16 +251,17 @@
     "kind_all": "全部",
     "kind_meeting": "录音",
     "kind_note": "笔记",
-    "recent_heading": "最近"
+    "recent_heading": "最近",
+    "empty_hint": "会议开始时按下录制，或直接导入已有的文件。所有内容都留在你的电脑上。"
   },
   "analytics": {
-    "title": "统计",
+    "title": "统计 📊",
     "range": "时间范围",
     "last_7": "最近7天",
     "last_30": "最近30天",
     "time": "时长",
-    "time_with": "与谁待的时间",
-    "tags": "常用标签",
+    "time_with": "与谁共处 🤝",
+    "tags": "常用标签 🏷️",
     "tags_count": "{count} 个标签",
     "tag_uses": "{count} 次",
     "decisions": "决定",
@@ -665,11 +668,11 @@
     "subheading": "你录下的、写下的、问过的，都留在这台机器上。",
     "capture_hint": "按下开始录音，全部在本机运行。",
     "write": "写",
-    "waiting": "等你处理",
+    "waiting": "等你处理 ⏳",
     "all_clear": "没有待办。",
     "overdue": "已逾期",
     "no_summary": "未生成摘要",
-    "recent": "最近",
+    "recent": "最近 🕘",
     "see_all": "查看全部",
     "ask": "提问",
     "assistant_hint": "录过的、写过的都能问，答案会注明出处。",
@@ -682,7 +685,9 @@
     "recording_now": "正在录制",
     "tap_to_stop": "点击停止",
     "shortcut_hint": "⌘K 搜索或跳转到任何地方",
-    "quick": "快捷操作"
+    "quick": "快捷操作",
+    "first_title": "你好",
+    "first_hint": "这里还是空的。录一段试试——哪怕只是一分钟的对话——看看 Summo 会做什么。"
   },
   "palette": {
     "title": "搜索全部",
@@ -786,5 +791,41 @@
     "biggest": "最大的录音",
     "orphan": "会议已删除",
     "orphaned": "有 {count} 个音频文件夹已无对应会议，共 {size}。"
+  },
+  "menu": {
+    "bar": "菜单栏",
+    "file": "文件",
+    "edit": "编辑",
+    "view": "视图",
+    "help": "帮助",
+    "new_note": "新建笔记",
+    "import": "导入文件…",
+    "record": "录制 / 停止",
+    "vault": "磁盘上的保管库",
+    "home": "主页",
+    "library": "资料库",
+    "tasks": "任务",
+    "analytics": "统计",
+    "search": "搜索全部",
+    "sidebar": "显示/隐藏侧边栏",
+    "settings": "设置",
+    "shortcuts": "键盘快捷键",
+    "docs": "文档",
+    "issue": "报告问题"
+  },
+  "shortcuts": {
+    "title": "键盘快捷键 ⌨️",
+    "lead": "随时按 ? 可再次打开。",
+    "search": "搜索或跳转到任意位置",
+    "record": "开始或停止录制",
+    "new_note": "新建笔记",
+    "import": "导入已有文件",
+    "sidebar": "显示/隐藏侧边栏",
+    "settings": "打开设置",
+    "home": "主页",
+    "library": "资料库",
+    "tasks": "任务",
+    "analytics": "统计",
+    "this": "本卡片"
   }
 }

@@ -130,7 +130,7 @@
     "no_transcript": "Nothing was said yet."
   },
   "export": {
-    "title": "Export & translate",
+    "title": "Export & translate 📤",
     "subtitle": "download it, or translate the whole meeting",
     "language": "Language",
     "original": "Original",
@@ -162,7 +162,7 @@
     "agent": "Agent"
   },
   "tasks": {
-    "title": "Tasks",
+    "title": "Tasks ✅",
     "kind": "Kind",
     "mine": "People",
     "agent": "Agent",
@@ -190,7 +190,9 @@
     "failed": "Failed",
     "due_today": "today",
     "due_overdue": "{date} — overdue",
-    "due_on": "due {date}"
+    "due_on": "due {date}",
+    "board_empty": "Nothing to do",
+    "board_empty_hint": "Tasks arrive here when somebody takes one on in a meeting, or when you type a “- [ ] @name …” line in a note."
   },
   "chat": {
     "title": "Ask",
@@ -221,7 +223,7 @@
     "empty": "No meetings yet.",
     "meetings_one": "{count} meeting",
     "meetings_other": "{count} meetings",
-    "heading": "Everything you have kept",
+    "heading": "Everything you have kept 📚",
     "loading": "Reading the vault…",
     "no_content": "Nothing here yet.",
     "recorded": "Recorded",
@@ -249,16 +251,17 @@
     "kind_all": "All",
     "kind_meeting": "Recordings",
     "kind_note": "Notes",
-    "recent_heading": "Recent"
+    "recent_heading": "Recent",
+    "empty_hint": "Press record when the meeting starts, or drop in a file you already have. All of it stays on your machine."
   },
   "analytics": {
-    "title": "Analytics",
+    "title": "Analytics 📊",
     "range": "Range",
     "last_7": "Last 7 days",
     "last_30": "Last 30 days",
     "time": "Time",
-    "time_with": "Time with people",
-    "tags": "Most used tags",
+    "time_with": "Time with 🤝",
+    "tags": "Most used tags 🏷️",
     "tags_count": "{count} tags",
     "tag_uses": "{count}×",
     "decisions": "Decisions",
@@ -665,11 +668,11 @@
     "subheading": "Everything you record, write and ask — kept on this machine.",
     "capture_hint": "Press to record. Everything runs here.",
     "write": "Write",
-    "waiting": "Waiting on you",
+    "waiting": "Waiting on you ⏳",
     "all_clear": "Nothing waiting.",
     "overdue": "overdue",
     "no_summary": "no summary yet",
-    "recent": "Recent",
+    "recent": "Recent 🕘",
     "see_all": "See all",
     "ask": "Ask",
     "assistant_hint": "Ask anything you have recorded or written, and the answer names where it came from.",
@@ -682,7 +685,9 @@
     "recording_now": "Recording",
     "tap_to_stop": "Tap to stop",
     "shortcut_hint": "⌘K to search or jump anywhere",
-    "quick": "Quick actions"
+    "quick": "Quick actions",
+    "first_title": "Hello",
+    "first_hint": "Nothing here yet. Record something — even a minute of talking — and see what Summo does with it."
   },
   "palette": {
     "title": "Search everything",
@@ -786,5 +791,41 @@
     "biggest": "Largest recordings",
     "orphan": "No meeting left",
     "orphaned": "{count} audio folders have no meeting left, {size} in total."
+  },
+  "menu": {
+    "bar": "Menu bar",
+    "file": "File",
+    "edit": "Edit",
+    "view": "View",
+    "help": "Help",
+    "new_note": "New note",
+    "import": "Import a file…",
+    "record": "Record / Stop",
+    "vault": "Vault on disk",
+    "home": "Home",
+    "library": "Library",
+    "tasks": "Tasks",
+    "analytics": "Analytics",
+    "search": "Search everything",
+    "sidebar": "Toggle sidebar",
+    "settings": "Settings",
+    "shortcuts": "Keyboard shortcuts",
+    "docs": "Documentation",
+    "issue": "Report a problem"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts ⌨️",
+    "lead": "Press ? at any time to bring this back.",
+    "search": "Search or jump anywhere",
+    "record": "Start or stop recording",
+    "new_note": "New note",
+    "import": "Import a file you have",
+    "sidebar": "Toggle the sidebar",
+    "settings": "Open settings",
+    "home": "Home",
+    "library": "Library",
+    "tasks": "Tasks",
+    "analytics": "Analytics",
+    "this": "This card"
   }
 }

@@ -130,7 +130,7 @@
     "no_transcript": "Chưa có ai nói gì."
   },
   "export": {
-    "title": "Xuất & dịch",
+    "title": "Xuất & dịch 📤",
     "subtitle": "tải về, hoặc dịch cả buổi",
     "language": "Ngôn ngữ",
     "original": "Bản gốc",
@@ -162,7 +162,7 @@
     "agent": "Agent"
   },
   "tasks": {
-    "title": "Việc",
+    "title": "Việc cần làm ✅",
     "kind": "Loại việc",
     "mine": "Của mọi người",
     "agent": "Của agent",
@@ -190,7 +190,9 @@
     "failed": "Lỗi",
     "due_today": "hôm nay",
     "due_overdue": "{date} — quá hạn",
-    "due_on": "hạn {date}"
+    "due_on": "hạn {date}",
+    "board_empty": "Chưa có việc nào",
+    "board_empty_hint": "Việc tự xuất hiện ở đây khi ai đó nhận trong buổi họp, hoặc khi bạn gõ một dòng “- [ ] @tên …” trong ghi chú."
   },
   "chat": {
     "title": "Hỏi đáp",
@@ -221,7 +223,7 @@
     "empty": "Chưa có buổi họp nào.",
     "meetings_one": "{count} buổi họp",
     "meetings_other": "{count} buổi họp",
-    "heading": "Mọi thứ bạn đã lưu",
+    "heading": "Mọi thứ bạn đã lưu 📚",
     "loading": "Đang đọc kho họp…",
     "no_content": "Chưa có nội dung.",
     "recorded": "Đã ghi",
@@ -249,16 +251,17 @@
     "kind_all": "Tất cả",
     "kind_meeting": "Bản ghi",
     "kind_note": "Ghi chú",
-    "recent_heading": "Gần đây"
+    "recent_heading": "Gần đây",
+    "empty_hint": "Bấm ghi khi buổi họp bắt đầu, hoặc kéo một file có sẵn vào. Mọi thứ nằm lại trên máy bạn."
   },
   "analytics": {
-    "title": "Thống kê",
+    "title": "Thống kê 📊",
     "range": "Khoảng thời gian",
     "last_7": "7 ngày qua",
     "last_30": "30 ngày",
     "time": "Thời gian",
-    "time_with": "Thời gian với ai",
-    "tags": "Thẻ hay dùng",
+    "time_with": "Thời gian với ai 🤝",
+    "tags": "Thẻ hay dùng 🏷️",
     "tags_count": "{count} thẻ",
     "tag_uses": "{count} lần",
     "decisions": "Quyết định",
@@ -665,11 +668,11 @@
     "subheading": "Mọi thứ bạn ghi, viết và hỏi — giữ trên máy này.",
     "capture_hint": "Bấm để ghi. Mọi thứ chạy ở đây.",
     "write": "Viết",
-    "waiting": "Đang chờ bạn",
+    "waiting": "Đang chờ bạn ⏳",
     "all_clear": "Không có gì chờ.",
     "overdue": "quá hạn",
     "no_summary": "chưa tóm tắt",
-    "recent": "Gần đây",
+    "recent": "Gần đây 🕘",
     "see_all": "Xem tất cả",
     "ask": "Hỏi",
     "assistant_hint": "Hỏi bất cứ điều gì bạn đã ghi hoặc đã viết — câu trả lời luôn nói rõ lấy từ đâu.",
@@ -682,7 +685,9 @@
     "recording_now": "Đang ghi",
     "tap_to_stop": "Bấm để dừng",
     "shortcut_hint": "⌘K để tìm hoặc nhảy tới bất kỳ đâu",
-    "quick": "Làm nhanh"
+    "quick": "Làm nhanh",
+    "first_title": "Chào bạn",
+    "first_hint": "Chưa có gì ở đây cả. Ghi thử một buổi — hoặc chỉ một phút nói chuyện — rồi xem Summo làm gì với nó."
   },
   "palette": {
     "title": "Tìm mọi thứ",
@@ -786,5 +791,41 @@
     "biggest": "Bản ghi nặng nhất",
     "orphan": "Không còn cuộc họp",
     "orphaned": "{count} thư mục âm thanh không còn cuộc họp nào, tổng {size}."
+  },
+  "menu": {
+    "bar": "Thanh menu",
+    "file": "Tệp",
+    "edit": "Sửa",
+    "view": "Xem",
+    "help": "Trợ giúp",
+    "new_note": "Ghi chú mới",
+    "import": "Nhập file…",
+    "record": "Ghi / Dừng",
+    "vault": "Kho trên đĩa",
+    "home": "Trang chính",
+    "library": "Kho",
+    "tasks": "Việc cần làm",
+    "analytics": "Thống kê",
+    "search": "Tìm mọi thứ",
+    "sidebar": "Ẩn/hiện thanh bên",
+    "settings": "Cài đặt",
+    "shortcuts": "Phím tắt",
+    "docs": "Tài liệu",
+    "issue": "Báo lỗi"
+  },
+  "shortcuts": {
+    "title": "Phím tắt ⌨️",
+    "lead": "Bấm ? bất cứ lúc nào để mở lại bảng này.",
+    "search": "Tìm hoặc nhảy tới bất kỳ đâu",
+    "record": "Bắt đầu hoặc dừng ghi",
+    "new_note": "Ghi chú mới",
+    "import": "Nhập file có sẵn",
+    "sidebar": "Ẩn/hiện thanh bên",
+    "settings": "Mở Cài đặt",
+    "home": "Trang chính",
+    "library": "Kho",
+    "tasks": "Việc cần làm",
+    "analytics": "Thống kê",
+    "this": "Bảng này"
   }
 }

@@ -15,7 +15,7 @@ mod engine;
 
 use tauri::{
     Emitter, Manager,
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::TrayIconBuilder,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
@@ -68,6 +68,12 @@ fn main() {
                 );
             }
             build_tray(app.handle())?;
+            // A menu bar that fails to build is not a reason to refuse to start: the same rule the
+            // global shortcut is under, for the same reason — everything the app does is reachable
+            // from inside the window.
+            if let Err(e) = build_menu(app.handle()) {
+                eprintln!("summo: the menu bar could not be built ({e}). Everything else works.");
+            }
             engine::start(app.handle());
             Ok(())
         })
@@ -184,5 +190,218 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             _ => {}
         })
         .build(app)?;
+    Ok(())
+}
+
+/// The words the menu bar needs, in the language the user chose.
+///
+/// The same three-row table the tray uses and for the same reason: the shell is deliberately thin
+/// and does not depend on the workspace, so this is a list rather than a catalogue. A language it
+/// has never heard of falls back to English rather than to nothing.
+///
+/// Ordered as the menus are built, so adding an item means adding a column here and the compiler
+/// says where.
+struct MenuWords {
+    file: &'static str,
+    edit: &'static str,
+    view: &'static str,
+    help: &'static str,
+    new_note: &'static str,
+    import: &'static str,
+    record: &'static str,
+    home: &'static str,
+    library: &'static str,
+    tasks: &'static str,
+    analytics: &'static str,
+    settings: &'static str,
+    sidebar: &'static str,
+    search: &'static str,
+    shortcuts: &'static str,
+    vault: &'static str,
+    docs: &'static str,
+    issue: &'static str,
+}
+
+fn menu_words(language: &str) -> MenuWords {
+    match language.split(['-', '_']).next().unwrap_or(language) {
+        "vi" => MenuWords {
+            file: "Tệp",
+            edit: "Sửa",
+            view: "Xem",
+            help: "Trợ giúp",
+            new_note: "Ghi chú mới",
+            import: "Nhập file…",
+            record: "Ghi / Dừng",
+            home: "Trang chính",
+            library: "Kho",
+            tasks: "Việc cần làm",
+            analytics: "Thống kê",
+            settings: "Cài đặt",
+            sidebar: "Ẩn/hiện thanh bên",
+            search: "Tìm mọi thứ",
+            shortcuts: "Phím tắt",
+            vault: "Kho trên đĩa",
+            docs: "Tài liệu",
+            issue: "Báo lỗi",
+        },
+        "ja" => MenuWords {
+            file: "ファイル",
+            edit: "編集",
+            view: "表示",
+            help: "ヘルプ",
+            new_note: "新規ノート",
+            import: "ファイルを取り込む…",
+            record: "録音 / 停止",
+            home: "ホーム",
+            library: "ライブラリ",
+            tasks: "タスク",
+            analytics: "統計",
+            settings: "設定",
+            sidebar: "サイドバーの表示切替",
+            search: "すべて検索",
+            shortcuts: "キーボードショートカット",
+            vault: "保管フォルダ",
+            docs: "ドキュメント",
+            issue: "問題を報告",
+        },
+        "zh" => MenuWords {
+            file: "文件",
+            edit: "编辑",
+            view: "视图",
+            help: "帮助",
+            new_note: "新建笔记",
+            import: "导入文件…",
+            record: "录制 / 停止",
+            home: "主页",
+            library: "资料库",
+            tasks: "任务",
+            analytics: "统计",
+            settings: "设置",
+            sidebar: "显示/隐藏侧边栏",
+            search: "搜索全部",
+            shortcuts: "键盘快捷键",
+            vault: "磁盘上的保管库",
+            docs: "文档",
+            issue: "报告问题",
+        },
+        _ => MenuWords {
+            file: "File",
+            edit: "Edit",
+            view: "View",
+            help: "Help",
+            new_note: "New note",
+            import: "Import a file…",
+            record: "Record / Stop",
+            home: "Home",
+            library: "Library",
+            tasks: "Tasks",
+            analytics: "Analytics",
+            settings: "Settings",
+            sidebar: "Toggle sidebar",
+            search: "Search everything",
+            shortcuts: "Keyboard shortcuts",
+            vault: "Vault on disk",
+            docs: "Documentation",
+            issue: "Report a problem",
+        },
+    }
+}
+
+/// The menu bar.
+///
+/// The window had none. On macOS that is not a stylistic choice — an app with no menu bar has no
+/// **Edit** menu, and without one the system shortcuts for cut, copy, paste, undo and select-all
+/// are not bound at all. In a webview that means ⌘C does nothing in a transcript and ⌘Z does
+/// nothing in a note: the app looked like it had lost the user's typing when it had simply never
+/// been given the standard menu that carries those commands. That is what `PredefinedMenuItem`
+/// provides, and it is the reason this exists at all; the rest is navigation.
+///
+/// Everything else emits `summo://menu` with its own id, and the interface decides what that means
+/// — the same shape as the tray's record item. The shell stays a shell: it does not know what a
+/// library is, only that something called `library` was chosen.
+fn build_menu(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let w = menu_words(&chosen_language(app));
+
+    let item = |id: &str, label: &str, accel: Option<&str>| {
+        MenuItem::with_id(app, id, label, true, accel)
+    };
+
+    let file = Submenu::with_items(
+        app,
+        w.file,
+        true,
+        &[
+            &item("new-note", w.new_note, Some("CmdOrCtrl+N"))?,
+            &item("import", w.import, Some("CmdOrCtrl+O"))?,
+            &item("record", w.record, Some("CmdOrCtrl+Shift+R"))?,
+            &PredefinedMenuItem::separator(app)?,
+            &item("vault", w.vault, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::close_window(app, None)?,
+            &PredefinedMenuItem::quit(app, None)?,
+        ],
+    )?;
+
+    // The whole reason for the menu bar. These are the system's own items: they carry the standard
+    // accelerators and they work inside the webview's text fields, which nothing we could write
+    // here would.
+    let edit = Submenu::with_items(
+        app,
+        w.edit,
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+
+    let view = Submenu::with_items(
+        app,
+        w.view,
+        true,
+        &[
+            &item("home", w.home, Some("CmdOrCtrl+1"))?,
+            &item("library", w.library, Some("CmdOrCtrl+2"))?,
+            &item("tasks", w.tasks, Some("CmdOrCtrl+3"))?,
+            &item("analytics", w.analytics, Some("CmdOrCtrl+4"))?,
+            &PredefinedMenuItem::separator(app)?,
+            &item("search", w.search, Some("CmdOrCtrl+K"))?,
+            &item("sidebar", w.sidebar, Some("CmdOrCtrl+B"))?,
+            &item("settings", w.settings, Some("CmdOrCtrl+,"))?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::fullscreen(app, None)?,
+            &PredefinedMenuItem::minimize(app, None)?,
+        ],
+    )?;
+
+    let help = Submenu::with_items(
+        app,
+        w.help,
+        true,
+        &[
+            &item("shortcuts", w.shortcuts, None)?,
+            &item("docs", w.docs, None)?,
+            &item("issue", w.issue, None)?,
+        ],
+    )?;
+
+    let menu = Menu::with_items(app, &[&file, &edit, &view, &help])?;
+    app.set_menu(menu)?;
+    app.on_menu_event(|app, event| {
+        let id = event.id().as_ref().to_string();
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+        // One event with the id in it, rather than one event per item. What each of them means is
+        // the interface's business — it owns the router, the palette and the sidebar — and a shell
+        // that knew would be a second copy of the app's navigation, drifting.
+        let _ = app.emit("summo://menu", id);
+    });
     Ok(())
 }
