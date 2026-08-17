@@ -1,19 +1,34 @@
-import { describe, expect, it, vi as vitest } from "vitest";
+import { beforeAll, describe, expect, it, vi as vitest } from "vitest";
 
 import {
-  BUILT_IN,
+  BUILT_IN_CODES,
   BUILT_IN_LANGUAGES,
   DEFAULT,
   SOURCE,
   catalogFor,
   detectLocale,
+  ensure,
   flatten,
   interpolate,
+  layersOf,
   mergeCatalogs,
   plural,
+  ready,
   translator,
 } from ".";
+import enJson from "./en.json";
+import jaJson from "./ja.json";
 import viJson from "./vi.json";
+import zhJson from "./zh.json";
+
+/**
+ * The catalogues, read from disk rather than through the loader.
+ *
+ * These tests are about the *files* — whether `ja.json` covers every key `vi.json` has. Asking the
+ * loader would make them depend on a fetch having happened, and would let a broken loader read as
+ * a translation problem.
+ */
+const SHIPPED: Record<string, unknown> = { vi: viJson, en: enJson, ja: jaJson, zh: zhJson };
 
 describe("flatten", () => {
   it("turns nested json into dotted keys", () => {
@@ -110,6 +125,12 @@ describe("interpolate", () => {
 });
 
 describe("fallbacks", () => {
+  // `catalogFor` reads what has been loaded, and nothing has been until something asks. Every
+  // assertion below is about layering, not about fetching, so the fetching happens once up here.
+  beforeAll(async () => {
+    await Promise.all(BUILT_IN_CODES.map((code) => ensure(code)));
+  });
+
   it("layers later catalogs over earlier ones", () => {
     expect(mergeCatalogs({ a: "1", b: "2" }, { b: "3" })).toEqual({
       a: "1",
@@ -118,16 +139,30 @@ describe("fallbacks", () => {
   });
 
   // Half-translated is the normal state of a locale someone contributed; it has to degrade to
-  // Vietnamese rather than to key names.
-  it("shows the source language for a key a locale has not translated", () => {
-    const catalog = catalogFor("en", { "brand.new": "only here" });
-    expect(catalog["brand.new"]).toBe("only here");
-    expect(catalog["nav.record"]).toBe("Record");
+  // Vietnamese rather than to key names. A contributed locale is one that is *not* shipped, which
+  // is why this asks about `ko` rather than `en` — a shipped catalog has every key by test.
+  it("shows the source language for a key a contributed locale has not translated", () => {
+    const catalog = catalogFor("ko", { "brand.new": "chỉ ở đây" });
+    expect(catalog["brand.new"]).toBe("chỉ ở đây");
+    expect(catalog["nav.record"]).toBe("Ghi");
   });
 
-  it("puts a user file above the built-in translation", () => {
-    const catalog = catalogFor("en", { "nav.record": "Capture" });
-    expect(catalog["nav.record"]).toBe("Capture");
+  it("puts a user file above a shipped translation", () => {
+    expect(catalogFor("en", { "nav.record": "Capture" })["nav.record"]).toBe("Capture");
+  });
+
+  /**
+   * A shipped language does not carry Vietnamese underneath it.
+   *
+   * This is the saving that splitting the catalogues is for, and it is only sound because the
+   * parity tests below hold every shipped file to the source's keys in both directions. If that
+   * ever stops being true, a Japanese screen would render key names rather than Vietnamese — so
+   * the assumption is asserted here, next to the thing that depends on it.
+   */
+  it("needs only its own file for a shipped language", () => {
+    expect(layersOf("ja")).toEqual(["ja"]);
+    expect(layersOf("ja-JP")).toEqual(["ja"]);
+    expect(layersOf("ko")).toEqual([SOURCE]);
   });
 
   it("falls a regional tag back to its primary language", () => {
@@ -167,7 +202,28 @@ describe("detectLocale", () => {
 
 describe("defaults", () => {
   it("ships the default language", () => {
-    expect(Object.keys(BUILT_IN)).toContain(DEFAULT);
+    expect(BUILT_IN_CODES).toContain(DEFAULT);
+  });
+});
+
+describe("loading a catalog", () => {
+  it("has the strings once it has been fetched", async () => {
+    await ensure("ja");
+    expect(ready("ja")).toBe(true);
+    expect(catalogFor("ja")["nav.record"]).toBe(flatten(jaJson)["nav.record"]);
+  });
+
+  // `ensure` resolving is what lets the provider stop waiting; a language nothing can serve has to
+  // reach that point too, or the app renders nothing at all rather than rendering key names.
+  it("resolves for a language it cannot serve, rather than hanging", async () => {
+    await expect(ensure("kl")).resolves.toBeUndefined();
+  });
+
+  // Every layer has to be a file that exists, or `ready` waits on a fetch that will never happen.
+  it("only ever asks for catalogs it ships", () => {
+    for (const locale of [...BUILT_IN_CODES, "en-GB", "zh-Hant", "ko", "xx-YY"]) {
+      expect(layersOf(locale).every((code) => BUILT_IN_CODES.includes(code))).toBe(true);
+    }
   });
 });
 
@@ -180,7 +236,9 @@ describe("the shipped catalogs", () => {
   // by name, so `ja.json` and `zh.json` could have been half a catalog each and nothing would have
   // said so — the app would simply have rendered Vietnamese in the gaps, on a Japanese screen,
   // where the one person who could notice cannot read it.
-  const shipped = Object.entries(BUILT_IN).filter(([code]) => code !== SOURCE);
+  const shipped = Object.entries(SHIPPED)
+    .filter(([code]) => code !== SOURCE)
+    .map(([code, json]) => [code, flatten(json)] as const);
 
   it("ships more than the source language", () => {
     expect(shipped.length).toBeGreaterThan(0);
@@ -211,13 +269,16 @@ describe("the shipped catalogs", () => {
   }
 
   it("registers every shipped language as built in", () => {
-    expect(Object.keys(BUILT_IN).sort()).toEqual(["en", "ja", "vi", "zh"]);
+    expect(BUILT_IN_CODES.slice().sort()).toEqual(["en", "ja", "vi", "zh"]);
+    // The loader and the files it is checked against are two lists, and a language added to one
+    // and not the other is either an untested catalogue or a fetch of a file nobody verified.
+    expect(Object.keys(SHIPPED).sort()).toEqual(BUILT_IN_CODES.slice().sort());
   });
 
   // The picker is a separate list from the catalogs, and a language present in one and absent from
   // the other is either a dead entry or a translation nobody can reach.
   it("offers exactly the built-in catalogs in the picker", () => {
-    expect(BUILT_IN_LANGUAGES.map((l) => l.code).sort()).toEqual(Object.keys(BUILT_IN).sort());
+    expect(BUILT_IN_LANGUAGES.map((l) => l.code).sort()).toEqual(BUILT_IN_CODES.slice().sort());
   });
 
   // "Japanese" in a list a Japanese speaker is scanning is the one word they cannot use to find it.

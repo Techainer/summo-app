@@ -26,11 +26,6 @@
  * comparing to 1.
  */
 
-import en from "./en.json";
-import ja from "./ja.json";
-import vi from "./vi.json";
-import zh from "./zh.json";
-
 /** A flat key-to-string map. Nested JSON is flattened on load, so `t("meeting.stop")` works. */
 export type Catalog = Record<string, string>;
 
@@ -58,13 +53,91 @@ export interface Language {
   label: string;
 }
 
-/** Languages that ship with the app. User-supplied ones are added on top at runtime. */
-export const BUILT_IN: Record<string, Catalog> = {
-  vi: flatten(vi),
-  en: flatten(en),
-  ja: flatten(ja),
-  zh: flatten(zh),
+/**
+ * Languages that ship with the app, fetched one at a time.
+ *
+ * A dynamic import each, rather than four static ones, and the difference is what a first-time
+ * visitor downloads: the four catalogues used to sit in the entry chunk together, so every user
+ * carried three languages they cannot read before the app painted anything. Thirty kilobytes of it,
+ * and growing by four every time somebody wrote one sentence of new copy.
+ *
+ * The cost of doing it this way is that `t()` has something to wait for, which is why
+ * {@link ready} and {@link ensure} exist and why the provider does not render until the answer is
+ * yes. That wait is one fetch of a few kB from the same origin — the daemon on localhost, or the
+ * shell's own bundle — and it is overlapped with the engine handshake, which takes far longer.
+ *
+ * User-supplied catalogs from `~/.summo/locales/` are added on top at runtime and are not here:
+ * they arrive over the network from the daemon, already parsed.
+ */
+const FILES: Record<string, () => Promise<{ default: unknown }>> = {
+  vi: () => import("./vi.json"),
+  en: () => import("./en.json"),
+  ja: () => import("./ja.json"),
+  zh: () => import("./zh.json"),
 };
+
+/** The tags {@link FILES} can serve, for code that only needs to know what exists. */
+export const BUILT_IN_CODES: string[] = Object.keys(FILES);
+
+/** Flattened catalogs that have arrived. Keyed by tag, filled by {@link ensure}. */
+const loaded = new Map<string, Catalog>();
+
+/** Loads in flight, so two components asking at once cause one fetch rather than two. */
+const inflight = new Map<string, Promise<void>>();
+
+function fetchCatalog(code: string): Promise<void> {
+  if (loaded.has(code)) return Promise.resolve();
+  const running = inflight.get(code);
+  if (running) return running;
+
+  const file = FILES[code];
+  if (!file) return Promise.resolve();
+
+  const task = file()
+    .then(
+      (module) => {
+        loaded.set(code, flatten(module.default));
+      },
+      () => {
+        // A chunk that will not load must not leave the app blank forever. Nothing is cached, so a
+        // later attempt — switching language and switching back — tries again, and in the meantime
+        // the screen renders key names, which is the same thing a missing key has always done.
+      },
+    )
+    .finally(() => inflight.delete(code));
+
+  inflight.set(code, task);
+  return task;
+}
+
+/**
+ * Which shipped catalogs {@link catalogFor} will layer for this locale.
+ *
+ * A built-in locale needs only itself. That is not an optimisation taken on faith: `i18n.test.ts`
+ * holds every shipped catalogue to the source's keys in *both* directions, so `ja.json` cannot be
+ * missing a key that `vi.json` has. Loading Vietnamese underneath Japanese would be downloading a
+ * fallback that can never be reached.
+ *
+ * A locale that is *not* built in is a file somebody dropped into `~/.summo/locales/`, and those
+ * are partial by nature — ten strings translated and the rest not. That one does get the source
+ * underneath it, which is the case the fallback was written for.
+ */
+export function layersOf(locale: string): string[] {
+  const primary = locale.split("-")[0];
+  if (locale in FILES) return [locale];
+  if (primary && primary in FILES) return [primary];
+  return [SOURCE];
+}
+
+/** Whether {@link catalogFor} can answer for this locale right now, without waiting. */
+export function ready(locale: string): boolean {
+  return layersOf(locale).every((code) => loaded.has(code));
+}
+
+/** Fetch whatever this locale needs. Resolves even when a chunk fails — see {@link fetchCatalog}. */
+export function ensure(locale: string): Promise<void> {
+  return Promise.all(layersOf(locale).map(fetchCatalog)).then(() => undefined);
+}
 
 /// `zh` is Simplified Chinese, and is deliberately the bare tag rather than `zh-Hans`: a browser
 /// asking for `zh-CN` or `zh-SG` finds it by primary subtag, and a Traditional catalogue can be
@@ -226,17 +299,18 @@ export function detectLocale(available: string[], saved?: string | null): string
 }
 
 /**
- * Build the catalog for a locale, with its fallbacks underneath.
+ * Build the catalog for a locale, from what has been loaded.
+ *
+ * Synchronous, and deliberately so: `t()` is called during render and cannot await. Everything it
+ * needs is decided by {@link layersOf} and fetched by {@link ensure} before the provider renders,
+ * so this is a map lookup rather than a promise. A locale nothing has loaded yields an empty
+ * catalog, and the translator renders key names — visibly wrong rather than blank.
  *
  * `extra` is the user-supplied file, which wins over everything: someone who dislikes our wording
  * for their own language should be able to change it without asking.
  */
 export function catalogFor(locale: string, extra?: Catalog): Catalog {
-  const layers: Catalog[] = [BUILT_IN[SOURCE] ?? {}];
-  // A regional tag falls back to its primary language: `en-GB` gets `en` underneath.
-  const primary = locale.split("-")[0];
-  if (primary && primary !== locale && BUILT_IN[primary]) layers.push(BUILT_IN[primary]);
-  if (BUILT_IN[locale]) layers.push(BUILT_IN[locale]);
+  const layers: Catalog[] = layersOf(locale).map((code) => loaded.get(code) ?? {});
   if (extra) layers.push(extra);
   return mergeCatalogs(...layers);
 }

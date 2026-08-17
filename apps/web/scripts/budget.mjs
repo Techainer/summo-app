@@ -16,8 +16,8 @@
  * case worth being strict about.
  */
 import { gzipSync } from "node:zlib";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 
 /**
  * Kilobytes, gzipped, for everything needed before the first screen appears.
@@ -34,14 +34,13 @@ import { join } from "node:path";
  * manual — a paragraph per question, times four languages, because `i18n/index.ts` imports all four
  * locale files and every user therefore carries three languages they cannot read.
  *
- * That is the thing to fix, and it is worth more than it costs to raise this: splitting the locales
- * so only the chosen one is in the entry chunk takes about fifteen kB *out*, and it makes every
- * future sentence cost a quarter of what it costs today. It is not done here because `t()` is
- * synchronous from the first render and making it asynchronous is a change to every screen, which
- * is not a thing to do at the end of a long day. Written down so it is a decision rather than a
- * drift.
+ * 200 against a measured 194, and the locales are now one file each. Splitting them took 52 kB out
+ * of the entry chunk and put 14 back as the one catalogue a reader actually needs — a real saving
+ * of about thirty-eight, and rather more than the fifteen this comment used to estimate, because
+ * four copies of the same key names compressed better together than they cost apart. It also
+ * changes the slope: a new sentence of copy now costs its own bytes rather than four times them.
  */
-const BUDGET = 234;
+const BUDGET = 200;
 
 const dist = join(import.meta.dirname, "..", "dist");
 const html = readFileSync(join(dist, "index.html"), "utf8");
@@ -55,16 +54,52 @@ if (assets.length === 0) {
   process.exit(2);
 }
 
-let total = 0;
-const rows = assets
-  .map((asset) => {
-    const size = gzipSync(readFileSync(join(dist, asset))).length / 1024;
-    total += size;
-    return { asset, size };
-  })
-  .sort((a, b) => b.size - a.size);
+/**
+ * The one language file, which the browser fetches before it paints and the document does not name.
+ *
+ * A dynamic import, so it is not in `index.html` and the rule above misses it — but the interface
+ * cannot label a single button without it, so leaving it out would make this number describe a
+ * first load nobody has. Counted at its largest, because which one is needed depends on who is
+ * reading, and a budget that only holds for the cheapest reader is not a budget.
+ *
+ * Matched by chunk name against the catalogues in the source. That is a coupling to how Vite names
+ * a chunk after its module, and it is checked rather than assumed: a rename that breaks the match
+ * fails the build here instead of quietly dropping fourteen kB off the reported total.
+ */
+const locales = readdirSync(join(import.meta.dirname, "..", "src", "i18n"))
+  .filter((file) => file.endsWith(".json"))
+  .map((file) => basename(file, ".json"));
 
-for (const row of rows) console.log(`  ${row.size.toFixed(1).padStart(7)} kB  ${row.asset}`);
+const chunks = readdirSync(join(dist, "assets"));
+const localeChunks = locales
+  .map((code) => chunks.find((chunk) => new RegExp(`^${code}-[A-Za-z0-9_-]+\\.js$`).test(chunk)))
+  .filter((chunk) => chunk !== undefined);
+
+if (localeChunks.length !== locales.length) {
+  console.error(
+    `budget: found ${localeChunks.length} locale chunks for ${locales.length} catalogues.\n` +
+      "Either a language stopped being split out of the entry chunk — which is the regression this\n" +
+      "check exists for — or the chunk is no longer named after its file and this script needs to\n" +
+      "learn the new name.",
+  );
+  process.exit(2);
+}
+
+const weigh = (asset) => ({ asset, size: gzipSync(readFileSync(join(dist, asset))).length / 1024 });
+
+const heaviestLocale = localeChunks
+  .map((chunk) => weigh(`assets/${chunk}`))
+  .sort((a, b) => b.size - a.size)[0];
+
+const rows = [...assets.map(weigh), { ...heaviestLocale, note: "one language, the largest" }].sort(
+  (a, b) => b.size - a.size,
+);
+const total = rows.reduce((sum, row) => sum + row.size, 0);
+
+for (const row of rows) {
+  const note = row.note ? `  (${row.note})` : "";
+  console.log(`  ${row.size.toFixed(1).padStart(7)} kB  ${row.asset}${note}`);
+}
 console.log(`  ${total.toFixed(1).padStart(7)} kB  first load, gzipped (budget ${BUDGET} kB)`);
 
 if (total > BUDGET) {

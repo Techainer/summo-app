@@ -2347,6 +2347,16 @@ async fn onboarding(
         "needs_attention": needs_attention,
         "checks": status.checks,
         "hardware": status.hardware,
+        // Absent for as long as it has existed, which made every build claim it could not
+        // transcribe. The interface reads this field to decide between offering the model
+        // catalogue and saying "this build has no recognition" — and a missing field is a falsy
+        // one, so a release binary compiled *with* recognition greeted every new user with the
+        // apology written for the small tarball, and never offered a model at all.
+        //
+        // The field was computed, documented at length and covered by unit tests on the Rust side;
+        // nothing ever put it on the wire. Hand-written JSON is where that happens, which is why
+        // the test below asserts on this response rather than on `Status`.
+        "recognition": status.recognition,
     })))
 }
 
@@ -4576,6 +4586,53 @@ mod tests {
         let dir = paths.audio_for(&summo_core::MeetingId::from(meeting.to_string()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(format!("{lane}.opus")), vec![9u8; len]).unwrap();
+    }
+
+    /// Setup reads this response, and a field it does not find is a field that reads as `false`.
+    ///
+    /// `recognition` was computed, documented and unit-tested on `Status`, and left out of the
+    /// hand-written JSON that carries it — so every build, including the release ones compiled
+    /// with recognition, told a first-time user that this build cannot transcribe and never
+    /// offered a model. Nothing caught it: the Rust tests assert on the struct, and the browser
+    /// suite ran against a binary that genuinely has no recognition, where the wrong answer and
+    /// the right one are the same word.
+    ///
+    /// So this asserts on the wire, and on presence rather than on value — the value depends on
+    /// which features this test was compiled with, and the bug was never the value.
+    #[tokio::test]
+    async fn setup_is_told_whether_this_build_can_transcribe() {
+        let (_tmp, server) = running().await;
+
+        let body: serde_json::Value = client()
+            .get(format!("http://{}/onboarding", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+
+        assert_eq!(
+            body["recognition"].as_bool(),
+            Some(cfg!(feature = "models")),
+            "the interface decides between a model catalogue and an apology from this field: {body}"
+        );
+
+        // The rest of what the screen reads, in the same place, for the same reason.
+        for field in [
+            "acknowledged",
+            "can_record",
+            "fresh",
+            "should_prompt",
+            "checks",
+            "hardware",
+        ] {
+            assert!(
+                !body[field].is_null(),
+                "{field} is missing from /onboarding"
+            );
+        }
     }
 
     #[tokio::test]

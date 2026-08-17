@@ -1,6 +1,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 
 import { useT } from "../../i18n/context";
+import { cn } from "../../lib/cn";
 import {
   detectBrowser,
   detectPlatform,
@@ -110,8 +111,22 @@ export function Permissions({ compact = false }: { compact?: boolean }) {
   const system = systemAudio(platform);
 
   return (
-    <section className="border-line bg-bg-raised rounded-2xl border p-5">
-      <h2 className="font-medium">{t("permissions.title")}</h2>
+    <section
+      className={cn(
+        "border-line bg-bg-raised rounded-[var(--radius-card)] border p-5 shadow-[var(--shadow-card)]",
+        // Each row draws a rule above itself to separate it from the one before. With no heading
+        // there is nothing before the first one, and the rule becomes a line across the top of the
+        // card for no reason.
+        compact &&
+          "[&>div:first-of-type]:mt-0 [&>div:first-of-type]:border-t-0 [&>div:first-of-type]:pt-0",
+      )}
+    >
+      {/* Setup puts its own numbered heading above this panel, and two headings saying the same
+          thing one line apart is how a screen reads as assembled rather than designed. Settings has
+          no such heading, so there it stays. */}
+      {!compact && (
+        <h2 className="text-body font-semibold tracking-tight">{t("permissions.title")}</h2>
+      )}
 
       <Row
         testId="permission-mic"

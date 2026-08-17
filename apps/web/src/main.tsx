@@ -4,6 +4,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { AppI18n } from "./i18n/AppI18n";
+import { read } from "./i18n/context";
+import { BUILT_IN_CODES, detectLocale, ensure } from "./i18n";
 import { REDUCED } from "./lib/motion";
 import { EngineProvider } from "./lib/engine-provider";
 import { router, warmScreens } from "./router";
@@ -11,6 +13,23 @@ import "./styles/theme.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");
+
+/**
+ * The language file, started before React is.
+ *
+ * The four catalogues used to be in this chunk, which meant every user downloaded three languages
+ * they cannot read before anything appeared. They are separate files now, and one of them has to
+ * arrive before the interface can name a single button — so the fetch begins here, at module
+ * scope, rather than in the effect that discovers it is needed.
+ *
+ * What that buys is the difference between two waits and none: this runs while the shell is still
+ * starting its engine, which takes seconds, and the catalogue is a few kB from the same origin.
+ *
+ * A best guess, deliberately. The user's own locale files are not known until the daemon answers,
+ * so a saved choice pointing at one of those preloads Vietnamese instead — which is exactly what
+ * that catalogue is layered on anyway.
+ */
+void ensure(detectLocale(BUILT_IN_CODES, read()));
 
 /**
  * The other screens, once this one is on the glass.
