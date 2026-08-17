@@ -1,3 +1,7 @@
 dist
 src-tauri/target
 pnpm-lock.yaml
+
+# Third-party animation data, kept exactly as Google published it: reformatting vendor assets
+# makes every future refresh a diff of whitespace. See public/stickers/LICENSE.md.
+public/stickers/*.json

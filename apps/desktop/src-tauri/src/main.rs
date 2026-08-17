@@ -322,9 +322,8 @@ fn menu_words(language: &str) -> MenuWords {
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<()> {
     let w = menu_words(&chosen_language(app));
 
-    let item = |id: &str, label: &str, accel: Option<&str>| {
-        MenuItem::with_id(app, id, label, true, accel)
-    };
+    let item =
+        |id: &str, label: &str, accel: Option<&str>| MenuItem::with_id(app, id, label, true, accel);
 
     let file = Submenu::with_items(
         app,
