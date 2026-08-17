@@ -1,9 +1,11 @@
+import { Check, Cpu, Languages, MonitorSmartphone, ShieldCheck } from "lucide-react";
 import { m } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { useI18n } from "../../i18n/context";
+import { cn } from "../../lib/cn";
 import { useErrorText } from "../../lib/errors";
-import { METER } from "../../lib/motion";
+import { METER, listItem, stagger } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
 import {
   OnboardingClient,
@@ -19,7 +21,7 @@ import {
   type Recommended,
   type Status,
 } from "../../lib/onboarding";
-import { Button } from "../ui";
+import { Button, Card, CardBody, PageGlow, Sticker } from "../ui";
 import { load as loadCapture, save as saveCapture } from "../../lib/capture";
 import { languageName, rememberLanguage } from "../../lib/languages";
 import { Permissions } from "./Permissions";
@@ -173,195 +175,307 @@ export function Setup({ onDone }: { onDone: () => void }) {
   const later = optional(status);
   const selected = models.find((m) => m.id === chosen);
 
+  // Which numbered card is which depends on the build. A binary with no recognition has no language
+  // question and no model to choose, so numbering the permission card "3" there would be counting
+  // two steps that are not on the screen.
+  const asks = status.recognition;
+
   return (
-    <div className="mx-auto mt-12 w-full max-w-2xl px-6 pb-16">
-      <h1 className="text-2xl font-semibold">{t("setup.title")}</h1>
-      <p className="text-fg-dim mt-2">{t("setup.promise")}</p>
-
-      {error && (
-        <p role="alert" className="text-danger mt-4 text-sm">
-          {error}
-        </p>
-      )}
-
-      {/* Asked before the models, because it decides them. A picker below a list of models would
-          be a question asked after the answer — and not asked at all in a build with no
-          recognition, where it would decide nothing and its own hint would be describing a list
-          that is not there. */}
-      <section
-        hidden={!status.recognition}
-        className="border-line bg-bg-raised mt-8 rounded-2xl border p-4"
+    <div className="relative h-full overflow-y-auto">
+      <PageGlow />
+      <m.div
+        initial="hidden"
+        animate="shown"
+        transition={stagger(5)}
+        className="mx-auto w-full max-w-2xl px-5 pt-10 pb-16 sm:px-8"
       >
-        <label className="flex flex-wrap items-center gap-3">
-          <span className="font-medium">{t("setup.spoken")}</span>
-          <select
-            value={spoken}
-            aria-label={t("setup.spoken")}
-            onChange={(event) => setSpoken(event.target.value)}
-            className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-9 rounded-[var(--radius-card)] border px-2 text-sm transition-colors focus:outline-none"
-          >
-            {/* The interface languages first — the overwhelmingly likely answers — then everything
-                the registry can serve, which is where a Japanese speaker reading Vietnamese finds
-                their language. */}
-            {SPOKEN_FIRST.map((code) => (
-              <option key={code} value={code}>
-                {languageName(code, locale)}
-              </option>
-            ))}
-            {models.length > 0 && <option disabled>──────────</option>}
-            {OTHER_SPOKEN.filter((code) => !SPOKEN_FIRST.includes(code)).map((code) => (
-              <option key={code} value={code}>
-                {languageName(code, locale)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="text-fg-dim text-meta mt-2">{t("setup.spoken_hint")}</p>
-      </section>
+        {/* The greeting, and the one sentence that is the entire argument for this product.
 
-      {/* A build that cannot transcribe says so, instead of selling a catalogue.
-          
-          `--no-models` is a real shape — the small tarball, and any build on a platform ONNX
-          Runtime has no binaries for — and until this was here the screen offered models, took the
-          download, and left the user with hundreds of megabytes and a recording that refused to
-          start. There is nothing to choose on this screen in that build; the way out is a different
-          download, not a different model. */}
-      {stuck && !status.recognition ? (
-        <section className="mt-8">
-          <h2 className="text-base font-medium">{t("setup.no_recognition")}</h2>
-          <p className="text-fg-dim mt-1 text-sm">{t("setup.no_recognition_hint")}</p>
-        </section>
-      ) : stuck ? (
-        <section className="mt-8">
-          <h2 className="text-base font-medium">{t("setup.pick_model")}</h2>
-          <p className="text-fg-dim mt-1 text-sm">
-            {t("setup.machine", {
-              cores: status.hardware.cores,
-              ram: Math.round(status.hardware.total_ram_mb / 1024),
-            })}
-          </p>
-
-          {models.length === 0 ? (
-            <p className="text-fg-faint mt-4 text-sm">{t("setup.no_models")}</p>
-          ) : (
-            <ul className="mt-4 space-y-2">
-              {models.map((model) => {
-                const job = installs.find((i) => i.model === model.id);
-                const pct = job ? percent(job) : null;
-                return (
-                  <li key={model.id}>
-                    <label
-                      className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${
-                        model.id === chosen
-                          ? "border-accent bg-accent-soft"
-                          : "border-line bg-bg-soft"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="model"
-                        value={model.id}
-                        checked={model.id === chosen}
-                        onChange={() => setChosen(model.id)}
-                        className="mt-1"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-baseline justify-between gap-3">
-                          <span className="font-medium">{model.name}</span>
-                          <span className="text-fg-faint text-meta">
-                            {model.installed ? t("setup.installed") : size(model.size_bytes)}
-                          </span>
-                        </span>
-                        <span className="text-fg-dim text-meta mt-0.5 block">{model.reason}</span>
-                        {model.license && (
-                          <span className="text-fg-faint text-micro mt-0.5 block">
-                            {model.license}
-                            {needsConsent(model) ? ` · ${t("setup.upstream")}` : ""}
-                          </span>
-                        )}
-                        {job && (
-                          <span className="bg-line mt-2 block h-1 overflow-hidden rounded-full">
-                            <m.span
-                              className="bg-accent block h-full"
-                              animate={
-                                pct === null ? { x: ["-100%", "100%"] } : { width: `${pct}%` }
-                              }
-                              transition={
-                                pct === null
-                                  ? {
-                                      repeat: Infinity,
-                                      duration: 1.2,
-                                      ease: "linear",
-                                    }
-                                  : METER
-                              }
-                              style={pct === null ? { width: "40%" } : undefined}
-                            />
-                          </span>
-                        )}
-                        {job?.error && (
-                          <span className="text-danger text-micro mt-1 block">{job.error}</span>
-                        )}
-                      </span>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          {selected && needsConsent(selected) && (
-            <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-3 rounded-xl border p-3">
-              {t("setup.upstream_note")}
+            A drawing beside it rather than above it: the first screen of an app is where a person
+            decides whether it was built by people who care, and a bare heading on an empty page is
+            the same first impression the rest of this interface was redrawn to stop making. */}
+        <m.header variants={listItem} className="flex items-start gap-4 sm:gap-5">
+          <Sticker name="wave" size={84} className="hidden sm:block" />
+          <div className="min-w-0 flex-1">
+            <Sticker name="wave" size={56} className="mb-3 sm:hidden" />
+            <h1 className="text-display font-semibold tracking-tight text-balance">
+              {t("setup.title")}
+            </h1>
+            <p className="text-fg-dim mt-2 text-pretty">{t("setup.promise")}</p>
+            <p className="border-accent/25 bg-accent-soft text-accent text-micro mt-3 inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border px-2.5 py-1 font-medium">
+              <ShieldCheck aria-hidden="true" className="size-3.5" />
+              {t("setup.local")}
             </p>
-          )}
+          </div>
+        </m.header>
 
-          <Button className="mt-4" onClick={() => void install()} disabled={!chosen || downloading}>
-            {downloading ? t("setup.downloading") : t("setup.install")}
+        {error && (
+          <m.p
+            variants={listItem}
+            role="alert"
+            className="border-rec/30 bg-rec-soft text-rec text-meta mt-6 rounded-[var(--radius-card)] border px-3 py-2"
+          >
+            {error}
+          </m.p>
+        )}
+
+        {/* Asked before the models, because it decides them. A picker below a list of models would
+            be a question asked after the answer — and not asked at all in a build with no
+            recognition, where it would decide nothing and its own hint would be describing a list
+            that is not there. */}
+        {asks && (
+          <Step index={1} icon={Languages} title={t("setup.spoken")} done>
+            <label className="mt-1 block">
+              <span className="sr-only">{t("setup.spoken")}</span>
+              <select
+                value={spoken}
+                aria-label={t("setup.spoken")}
+                onChange={(event) => setSpoken(event.target.value)}
+                className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-10 w-full rounded-[var(--radius-card)] border px-3 text-sm transition-colors focus:outline-none sm:w-auto sm:min-w-56"
+              >
+                {/* The interface languages first — the overwhelmingly likely answers — then
+                    everything the registry can serve, which is where a Japanese speaker reading
+                    Vietnamese finds their language. */}
+                {SPOKEN_FIRST.map((code) => (
+                  <option key={code} value={code}>
+                    {languageName(code, locale)}
+                  </option>
+                ))}
+                {models.length > 0 && <option disabled>──────────</option>}
+                {OTHER_SPOKEN.filter((code) => !SPOKEN_FIRST.includes(code)).map((code) => (
+                  <option key={code} value={code}>
+                    {languageName(code, locale)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="text-fg-dim text-meta mt-2">{t("setup.spoken_hint")}</p>
+          </Step>
+        )}
+
+        {/* A build that cannot transcribe says so, instead of selling a catalogue.
+
+            `--no-models` is a real shape — the small tarball, and any build on a platform ONNX
+            Runtime has no binaries for — and until this was here the screen offered models, took
+            the download, and left the user with hundreds of megabytes and a recording that refused
+            to start. There is nothing to choose on this screen in that build; the way out is a
+            different download, not a different model. */}
+        {stuck && !asks ? (
+          <m.section variants={listItem} className="mt-6">
+            <Card>
+              <CardBody className="pt-5">
+                <h2 className="text-body font-semibold">{t("setup.no_recognition")}</h2>
+                <p className="text-fg-dim mt-1.5 text-sm">{t("setup.no_recognition_hint")}</p>
+              </CardBody>
+            </Card>
+          </m.section>
+        ) : stuck ? (
+          <Step index={2} icon={Cpu} title={t("setup.pick_model")} done={false}>
+            <p className="text-fg-dim text-meta">
+              {t("setup.machine", {
+                cores: status.hardware.cores,
+                ram: Math.round(status.hardware.total_ram_mb / 1024),
+              })}
+            </p>
+
+            {models.length === 0 ? (
+              <p className="text-fg-faint mt-4 text-sm">{t("setup.no_models")}</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {models.map((model) => {
+                  const job = installs.find((i) => i.model === model.id);
+                  const pct = job ? percent(job) : null;
+                  const picked = model.id === chosen;
+                  return (
+                    <li key={model.id}>
+                      {/* A native radio, styled rather than replaced. `accent-color` gives the
+                          platform's own control in the theme's colour, which keeps the focus ring,
+                          the arrow keys and the screen-reader announcement that a hand-drawn
+                          indicator would have had to reimplement. */}
+                      <label
+                        className={cn(
+                          "flex cursor-pointer gap-3 rounded-[var(--radius-card)] border p-3 transition-colors",
+                          picked
+                            ? "border-accent bg-accent-soft"
+                            : "border-line bg-bg-soft hover:border-line-strong",
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="model"
+                          value={model.id}
+                          checked={picked}
+                          onChange={() => setChosen(model.id)}
+                          className="mt-1 size-4 shrink-0 [accent-color:var(--color-accent)]"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-baseline justify-between gap-3">
+                            <span className="font-medium">{model.name}</span>
+                            <span className="text-fg-faint text-meta shrink-0">
+                              {model.installed ? t("setup.installed") : size(model.size_bytes)}
+                            </span>
+                          </span>
+                          <span className="text-fg-dim text-meta mt-0.5 block">{model.reason}</span>
+                          {model.license && (
+                            <span className="text-fg-faint text-micro mt-0.5 block">
+                              {model.license}
+                              {needsConsent(model) ? ` · ${t("setup.upstream")}` : ""}
+                            </span>
+                          )}
+                          {job && (
+                            <span className="bg-line mt-2 block h-1 overflow-hidden rounded-full">
+                              <m.span
+                                className="bg-accent block h-full"
+                                animate={
+                                  pct === null ? { x: ["-100%", "100%"] } : { width: `${pct}%` }
+                                }
+                                transition={
+                                  pct === null
+                                    ? {
+                                        repeat: Infinity,
+                                        duration: 1.2,
+                                        ease: "linear",
+                                      }
+                                    : METER
+                                }
+                                style={pct === null ? { width: "40%" } : undefined}
+                              />
+                            </span>
+                          )}
+                          {job?.error && (
+                            <span className="text-danger text-micro mt-1 block">{job.error}</span>
+                          )}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {selected && needsConsent(selected) && (
+              <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-3 rounded-[var(--radius-card)] border p-3">
+                {t("setup.upstream_note")}
+              </p>
+            )}
+
+            <Button
+              className="mt-4"
+              onClick={() => void install()}
+              disabled={!chosen || downloading}
+            >
+              {downloading ? t("setup.downloading") : t("setup.install")}
+            </Button>
+          </Step>
+        ) : (
+          <m.section variants={listItem} className="mt-6">
+            <div className="border-accent/30 bg-accent-soft flex items-start gap-3 rounded-[var(--radius-card)] border p-4">
+              <span className="bg-accent text-accent-fg mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full">
+                <Check aria-hidden="true" className="size-4" />
+              </span>
+              <span>
+                <span className="block font-medium">{t("setup.ready")}</span>
+                <span className="text-fg-dim mt-1 block text-sm">{t("setup.ready_hint")}</span>
+              </span>
+            </div>
+          </m.section>
+        )}
+
+        {/* After the model, before the "later" list. The model is the one thing that blocks a
+            recording *inside* Summo; the microphone is the one thing that blocks it outside, and a
+            first run that installs 73 MB and then fails on a permission has wasted the download and
+            the trust. Compact here: the system-audio note belongs in Settings, not in the way of
+            somebody who has not recorded anything yet. */}
+        <Step
+          index={asks ? 3 : 1}
+          icon={MonitorSmartphone}
+          title={t("setup.permission")}
+          done={false}
+          bare
+        >
+          <Permissions compact />
+        </Step>
+
+        {later.length > 0 && (
+          <m.section variants={listItem} className="mt-6">
+            <h2 className="text-fg-faint text-micro font-medium tracking-wide uppercase">
+              {t("setup.later")}
+            </h2>
+            <ul className="text-fg-dim mt-2 space-y-1 text-sm">
+              {later.map((check) => (
+                <li key={check.step}>
+                  <b className="text-fg font-medium">{t(`setup.step_${check.step}`)}</b> —{" "}
+                  {t(`setup.why_${check.step}`)}
+                </li>
+              ))}
+            </ul>
+          </m.section>
+        )}
+
+        <m.div variants={listItem} className="mt-8 flex flex-wrap gap-2">
+          <Button onClick={() => void finish()} disabled={!status.can_record}>
+            {t("setup.start")}
           </Button>
-        </section>
-      ) : (
-        <section className="border-accent/30 bg-accent-soft mt-8 rounded-xl border p-4">
-          <p className="font-medium">{t("setup.ready")}</p>
-          <p className="text-fg-dim mt-1 text-sm">{t("setup.ready_hint")}</p>
-        </section>
-      )}
-
-      {/* After the model, before the "later" list. The model is the one thing that blocks a
-          recording *inside* Summo; the microphone is the one thing that blocks it outside, and a
-          first run that installs 73 MB and then fails on a permission has wasted the download and
-          the trust. Compact here: the system-audio note belongs in Settings, not in the way of
-          somebody who has not recorded anything yet. */}
-      <div className="mt-8">
-        <Permissions compact />
-      </div>
-
-      {later.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-base font-medium">{t("setup.later")}</h2>
-          <ul className="text-fg-dim mt-2 space-y-1 text-sm">
-            {later.map((check) => (
-              <li key={check.step}>
-                <b className="text-fg font-medium">{t(`setup.step_${check.step}`)}</b> —{" "}
-                {t(`setup.why_${check.step}`)}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <div className="mt-10 flex gap-2">
-        <Button onClick={() => void finish()} disabled={!status.can_record}>
-          {t("setup.start")}
-        </Button>
-        {/* Available even while blocked: someone who wants to look around before downloading half
-            a gigabyte should be able to. It acknowledges as well — a welcome screen that returns on
-            every launch after being dismissed is nagging, and the banner still says a model is
-            missing. */}
-        <Button variant="ghost" onClick={() => void finish()}>
-          {t("setup.skip")}
-        </Button>
-      </div>
+          {/* Available even while blocked: someone who wants to look around before downloading half
+              a gigabyte should be able to. It acknowledges as well — a welcome screen that returns
+              on every launch after being dismissed is nagging, and the banner still says a model is
+              missing. */}
+          <Button variant="ghost" onClick={() => void finish()}>
+            {t("setup.skip")}
+          </Button>
+        </m.div>
+      </m.div>
     </div>
+  );
+}
+
+/**
+ * One numbered thing to do.
+ *
+ * The screen used to be four headings and a rule between them, which is a document rather than a
+ * flow: nothing said how many decisions there were, which one was answered, or whether the third
+ * was even required. A number in a circle answers all three at a glance, and a tick replacing it
+ * says the answer has been given.
+ *
+ * `bare` is for a card that already draws its own rows — the permission panel — so it gets the
+ * number and the heading without a second border around what it puts inside.
+ */
+function Step({
+  index,
+  icon: Icon,
+  title,
+  done,
+  bare = false,
+  children,
+}: {
+  index: number;
+  icon: typeof Cpu;
+  title: string;
+  done: boolean;
+  bare?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <m.section variants={listItem} className="mt-6">
+      <div className="mb-2.5 flex items-center gap-2.5">
+        <span
+          className={cn(
+            "text-micro flex size-6 shrink-0 items-center justify-center rounded-full font-semibold",
+            done ? "bg-accent text-accent-fg" : "bg-bg-raised border-line text-fg-dim border",
+          )}
+        >
+          {done ? <Check aria-hidden="true" className="size-3.5" /> : index}
+        </span>
+        <Icon aria-hidden="true" className="text-fg-faint size-4" />
+        <h2 className="text-body font-semibold tracking-tight">{title}</h2>
+      </div>
+      {bare ? (
+        children
+      ) : (
+        <Card>
+          <CardBody className="pt-4">{children}</CardBody>
+        </Card>
+      )}
+    </m.section>
   );
 }

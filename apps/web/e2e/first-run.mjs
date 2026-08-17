@@ -111,19 +111,36 @@ if (!/welcome/i.test(heading)) fail(`expected a welcome screen, got ${JSON.strin
 const setupText = await page.locator("main").innerText();
 if (!/never leaves/i.test(setupText)) fail("setup did not say the audio never leaves the machine");
 
-// Setup has to say where recognition stands, and there are two honest answers.
+// Setup has to say where recognition stands, and there are two honest answers — but only one of
+// them is right for the binary under test, and this used to accept either.
 //
-// This binary is built `--features serve,bundled` — no `models` — so it *cannot* transcribe, and
-// the screen says so instead of offering a catalogue of models it could not load. A build with
-// recognition offers the catalogue. Either is correct; a screen that says neither is the bug this
-// line is here for, and it is the exact shape the Android app shipped in: a model catalogue on a
-// build that could not use one.
+// That indifference hid a shipped bug for as long as the check existed. The daemon computed
+// whether the build can transcribe and never put the field in its JSON reply, so the screen took
+// the missing field for `false` and told *every* user — including everyone running a release
+// binary compiled with recognition — that this build cannot transcribe. Both binaries produced the
+// apology, and a check that accepts both answers could not tell them apart.
+//
+// So the daemon is asked directly, and the screen is held to what it said.
+const handshake = await page.evaluate(() => globalThis.__SUMMO__);
+const status = await fetch(`${url}onboarding`, {
+  headers: { authorization: `Bearer ${handshake.token}` },
+}).then((r) => r.json());
+
+if (typeof status.recognition !== "boolean") {
+  fail("/onboarding did not say whether this build can transcribe");
+}
+
 const noRecognition = /cannot recognise speech/i.test(setupText);
-if (!noRecognition && !/speech model/i.test(setupText)) {
-  fail("setup neither offered a speech model nor said this build has no recognition");
+const offersModel = /speech model/i.test(setupText);
+
+if (status.recognition && !offersModel) {
+  fail("this build can transcribe, and setup did not offer a model");
+}
+if (status.recognition === false && !noRecognition) {
+  fail("this build cannot transcribe, and setup did not say so");
 }
 console.log(
-  `setup: ${noRecognition ? "no recognition in this build, and it says so" : "offers a model"}`,
+  `setup: ${status.recognition ? "offers a model" : "no recognition in this build, and it says so"}`,
 );
 console.log(`setup: ${setupText.split("\n").slice(0, 2).join(" · ")}`);
 

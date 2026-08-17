@@ -10,7 +10,17 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { I18nContext, STORAGE_KEY, read, type Props, type Value } from "./context";
-import { BUILT_IN_LANGUAGES, catalogFor, detectLocale, translator, type Language } from "./index";
+import {
+  BUILT_IN_LANGUAGES,
+  catalogFor,
+  detectLocale,
+  ensure,
+  mergeCatalogs,
+  ready,
+  translator,
+  type Catalog,
+  type Language,
+} from "./index";
 
 export function I18nProvider({ children, extra, locale: forced }: Props) {
   const languages = useMemo<Language[]>(() => {
@@ -40,8 +50,37 @@ export function I18nProvider({ children, extra, locale: forced }: Props) {
       : locale;
   const active = forced ?? restored;
 
+  /**
+   * The shipped strings for this locale, once the file holding them has arrived.
+   *
+   * State rather than a call in the render, because the catalogs are a module-level cache that
+   * React has nothing to subscribe to. `null` is the one state a screen must not be painted in —
+   * see the gate at the bottom — and it lasts as long as one fetch of a few kB.
+   *
+   * Set from the cache when it is already warm, which is the ordinary case: `main.tsx` starts the
+   * fetch before React mounts and the engine handshake in front of this takes far longer.
+   */
+  const [shipped, setShipped] = useState<Catalog | null>(() =>
+    ready(active) ? catalogFor(active) : null,
+  );
+
+  useEffect(() => {
+    let live = true;
+    // Resolves immediately when the cache is warm, and resolves *anyway* when the fetch failed —
+    // so this always reaches a catalog, even if that catalog is empty. A language file that will
+    // not load leaves key names on screen, which is visibly wrong; waiting forever leaves nothing.
+    void ensure(active).then(() => {
+      if (live) setShipped(catalogFor(active));
+    });
+    return () => {
+      live = false;
+    };
+  }, [active]);
+
   const value = useMemo<Value>(() => {
-    const catalog = catalogFor(active, extra?.[active]?.catalog);
+    // The user's own file on top, which is where a half-translated contributed locale gets the
+    // rest of its strings from.
+    const catalog = mergeCatalogs(shipped ?? {}, extra?.[active]?.catalog ?? {});
     const base = translator(active, catalog, (key) => {
       // Once per key per session; the translator itself dedupes.
       console.warn(`[i18n] missing key: ${key}`);
@@ -50,21 +89,32 @@ export function I18nProvider({ children, extra, locale: forced }: Props) {
       ...base,
       languages,
       setLocale: (next: string) => {
-        setLocaleState(next);
         try {
           window.localStorage.setItem(STORAGE_KEY, next);
         } catch {
           // Private browsing and locked-down webviews both throw here. The choice still applies to
           // this session; it just will not be remembered.
         }
+        // Fetched *before* the switch, not after. Setting the locale first would render one frame
+        // against a catalog that is not there yet — a flash of key names, or of Vietnamese, on the
+        // way to the language somebody just chose. The chunk is a few kB from the same origin, so
+        // what this costs is imperceptible and what it buys is that the screen changes once.
+        void ensure(next).then(() => setLocaleState(next));
       },
     };
-  }, [active, extra, languages]);
+  }, [active, extra, languages, shipped]);
 
   useEffect(() => {
     // Screen readers announce in the wrong language without this, and CSS `:lang()` cannot match.
     document.documentElement.lang = active;
   }, [active]);
+
+  // Nothing renders against a catalog that has not arrived. An app painted from an empty one would
+  // show its own key names — `nav.record`, `meeting.stop` — and replace them a frame later, which
+  // reads as a glitch rather than as loading.
+  //
+  // After every hook, never before one.
+  if (shipped === null) return null;
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
