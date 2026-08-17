@@ -388,29 +388,6 @@
     "view": "View",
     "record": "Record"
   },
-  "time": {
-    "today": "Today",
-    "yesterday": "Yesterday",
-    "week": "Week {week}, {year}",
-    "minutes_one": "{count} minute",
-    "minutes_other": "{count} minutes",
-    "seconds_one": "{count} second",
-    "seconds_other": "{count} seconds",
-    "hours_one": "{count} hour",
-    "hours_other": "{count} hours",
-    "hours_minutes": "{hours}h {minutes}m",
-    "days_one": "{count} day",
-    "days_other": "{count} days"
-  },
-  "weekday": {
-    "0": "Sunday",
-    "1": "Monday",
-    "2": "Tuesday",
-    "3": "Wednesday",
-    "4": "Thursday",
-    "5": "Friday",
-    "6": "Saturday"
-  },
   "common": {
     "cancel": "Cancel",
     "save": "Save",

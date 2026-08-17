@@ -388,29 +388,6 @@
     "view": "Xem",
     "record": "Ghi"
   },
-  "time": {
-    "today": "Hôm nay",
-    "yesterday": "Hôm qua",
-    "week": "Tuần {week}, {year}",
-    "minutes_one": "{count} phút",
-    "minutes_other": "{count} phút",
-    "seconds_one": "{count} giây",
-    "seconds_other": "{count} giây",
-    "hours_one": "{count} giờ",
-    "hours_other": "{count} giờ",
-    "hours_minutes": "{hours} giờ {minutes} phút",
-    "days_one": "{count} ngày",
-    "days_other": "{count} ngày"
-  },
-  "weekday": {
-    "0": "Chủ nhật",
-    "1": "Thứ hai",
-    "2": "Thứ ba",
-    "3": "Thứ tư",
-    "4": "Thứ năm",
-    "5": "Thứ sáu",
-    "6": "Thứ bảy"
-  },
   "common": {
     "cancel": "Huỷ",
     "save": "Lưu",

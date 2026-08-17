@@ -388,29 +388,6 @@
     "view": "查看",
     "record": "录音"
   },
-  "time": {
-    "today": "今天",
-    "yesterday": "昨天",
-    "week": "{year}年第{week}周",
-    "minutes_one": "{count}分钟",
-    "minutes_other": "{count}分钟",
-    "seconds_one": "{count}秒",
-    "seconds_other": "{count}秒",
-    "hours_one": "{count}小时",
-    "hours_other": "{count}小时",
-    "hours_minutes": "{hours}小时{minutes}分",
-    "days_one": "{count}天",
-    "days_other": "{count}天"
-  },
-  "weekday": {
-    "0": "星期日",
-    "1": "星期一",
-    "2": "星期二",
-    "3": "星期三",
-    "4": "星期四",
-    "5": "星期五",
-    "6": "星期六"
-  },
   "common": {
     "cancel": "取消",
     "save": "保存",
