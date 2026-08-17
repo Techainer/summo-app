@@ -8,13 +8,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 
-import { daemon } from "./daemon.mjs";
+import { RECENT, daemon } from "./daemon.mjs";
 
 const engine = await daemon(process.argv, { name: "draft" });
 const { url: appUrl, port, token, home } = engine;
 const meetingId = process.argv[5] ?? "01E2E0";
 const notePath =
-  process.argv[6] ?? (home ? `${home}/vault/meetings/2026-08-10-hop-dau-tuan.md` : undefined);
+  process.argv[6] ?? (home ? `${home}/vault/meetings/${RECENT}-hop-dau-tuan.md` : undefined);
 
 // This test confirms the draft, which is what removes the marker — so it seeds its own. Without
 // that it passes once and then reports an empty screen forever.
