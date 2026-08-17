@@ -69,10 +69,40 @@ async function cache(url, sha256) {
   return at;
 }
 
-async function download(url) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`mirror: ${url} answered ${response.status}`);
-  return response.arrayBuffer();
+/**
+ * Fetch the bytes, allowing for the fact that the other end is a stranger.
+ *
+ * The cache above means this runs at most once per model per machine — but "at most once" is still
+ * once, and on a fresh CI runner that once is an unauthenticated request to github.com. It answers
+ * `429` when several jobs share an address, and it has answered `404` for the same URL that works a
+ * minute later. Either killed the whole browser run, on a suite about installing models, over a
+ * screen with nothing wrong with it. Which is the failure this file was written to stop; it just
+ * stopped it for the tenth download and not for the first.
+ *
+ * So: retried, with a widening gap. Anything in the 400s that is not `429` is left alone — a
+ * genuinely wrong URL should fail on the first attempt and say so, rather than three times slowly.
+ */
+async function download(url, allowed = 4) {
+  let last = "";
+  let tried = 0;
+  for (let attempt = 0; attempt < allowed; attempt += 1) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 2000 * 2 ** (attempt - 1)));
+    tried += 1;
+    try {
+      const response = await fetch(url);
+      if (response.ok) return await response.arrayBuffer();
+      last = `answered ${response.status}`;
+      const retryable = response.status === 429 || response.status >= 500;
+      // `404` from GitHub raw under an abuse limit is indistinguishable from a moved file, so it is
+      // retried once and then believed.
+      if (!retryable && !(response.status === 404 && attempt === 0)) break;
+    } catch (e) {
+      last = `could not be reached (${e.message})`;
+    }
+  }
+  // The count that happened, not the count allowed. A message saying "after 4 attempts" for a URL
+  // asked twice sends whoever reads it looking for three minutes of retries that never ran.
+  throw new Error(`mirror: ${url} ${last} after ${tried} ${tried === 1 ? "attempt" : "attempts"}`);
 }
 
 /**
