@@ -89,18 +89,6 @@ jobs:
           echo "spctl exit: $?"
           exit 0
 
-      - name: Try to open it the way a person double-clicks
-        run: |
-          set +e
-          # Not `open -W`: that waits for the app to *exit*, so an app that opens correctly hangs
-          # the step until the job times out — which is what the first run of this did.
-          open /Applications/Summo.app
-          echo "open exit: $?"
-          sleep 8
-          echo "--- did anything start?"
-          pgrep -fl summo || echo "nothing running"
-          exit 0
-
       # Opening it is not the same as it working.
       #
       # `open` returns as soon as launchd has the app, and the step above reports whatever is
@@ -114,16 +102,30 @@ jobs:
       # Mac does, and a red tick against a published tag helps nobody. `scripts/mac-signing.sh`
       # is the check that fails a build.
       - name: Does the daemon inside it start, on a copy that was downloaded
+        timeout-minutes: 6
         run: |
           set +e
-          # The copy the steps above opened is still running, and two daemons racing for a port
-          # would be reported as this one failing.
-          pkill -f summo-desktop; pkill -f summo-engine; sleep 1
+          # Before anything opens a window. `open` hands the app to launchd, and on a runner with
+          # no logged-in session that step has sat until the job's own timeout killed it — taking
+          # this check with it, on the run that was meant to produce the evidence.
           chmod +x scripts/*.sh
           ./scripts/mac-signing.sh /Applications/Summo.app
           echo "mac-signing exit: $?"
           ./scripts/smoke-desktop.sh /Applications/Summo.app
           echo "smoke exit: $?"
+          exit 0
+
+      - name: Try to open it the way a person double-clicks
+        timeout-minutes: 3
+        run: |
+          set +e
+          # Not `open -W`: that waits for the app to *exit*, so an app that opens correctly hangs
+          # the step until the job times out — which is what the first run of this did.
+          open /Applications/Summo.app
+          echo "open exit: $?"
+          sleep 8
+          echo "--- did anything start?"
+          pgrep -fl summo || echo "nothing running"
           exit 0
 
       - name: What the system logged about it
@@ -137,6 +139,7 @@ jobs:
       # starts and the quarantined one does not, the terminal line is load-bearing and the download
       # cannot be opened from Finder at all.
       - name: And with the quarantine flag removed
+        timeout-minutes: 4
         run: |
           set +e
           xattr -dr com.apple.quarantine /Applications/Summo.app
