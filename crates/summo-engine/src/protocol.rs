@@ -98,7 +98,11 @@ impl SessionSpec {
     /// Reject a specification that cannot produce a working session.
     pub fn validate(&self) -> Result<()> {
         if self.live_model.trim().is_empty() {
-            return Err(Error::Config("session needs a live model".into()));
+            // Coded, because this is the one a *new user* hits: press record before installing a
+            // model and the app said `configuration error: session needs a live model` — English,
+            // raw, in a Vietnamese interface, on somebody's first minute. A code lets the screen
+            // say what to do about it instead.
+            return Err(Error::msg("session.no_model", "session needs a live model"));
         }
         if self.lanes.is_empty() {
             return Err(Error::Config("session needs at least one lane".into()));

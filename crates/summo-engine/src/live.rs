@@ -307,6 +307,7 @@ impl LiveTranslator {
                 Err(e) => vec![Event::Error {
                     message: format!("không dịch được: {e}"),
                     transient: true,
+                    code: None,
                 }],
             };
             let _ = tx.send(events);

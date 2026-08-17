@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChartNoAxesColumn,
   Library,
+  LifeBuoy,
   ListChecks,
   Maximize2,
   Menu,
@@ -43,7 +44,7 @@ import type { Page } from "./Sidebar";
 import { useIsNarrow } from "../../lib/breakpoint";
 import { useEngine } from "../../lib/engine-context";
 import { deviceWarning } from "../../lib/session";
-import { DOCS, ISSUES } from "../../lib/menu";
+import { ISSUES } from "../../lib/menu";
 import { inShell, isMac } from "../../lib/shell";
 
 /**
@@ -102,6 +103,10 @@ const NAV: { key: string; labelKey: string; icon: LucideIcon; group?: "work" | "
   { key: "/agents", labelKey: "nav.agents", icon: Bot, group: "setup" },
   { key: "/models", labelKey: "nav.models", icon: Package, group: "setup" },
   { key: "/settings", labelKey: "nav.settings", icon: Settings, group: "setup" },
+  // Last, because it is where somebody goes when something else did not work — and it has to be
+  // somewhere they can see, rather than only behind a menu two of the three platforms draw
+  // differently.
+  { key: "/help", labelKey: "nav.help", icon: LifeBuoy, group: "setup" },
 ];
 
 /**
@@ -217,7 +222,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
           setShortcutsOpen(true);
           break;
         case "docs":
-          window.open(DOCS, "_blank", "noopener,noreferrer");
+          // Inside the app, not a browser tab. The README is a button at the bottom of it, which is
+          // the right order: the person asking "where is my data" wants a paragraph and a link to
+          // the storage screen, not a repository.
+          void navigate({ to: "/help" });
           break;
         case "issue":
           window.open(ISSUES, "_blank", "noopener,noreferrer");
@@ -716,7 +724,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
       <StatusBar
         stat={engine.stat}
         speakers={speakersOf(engine.transcript.segments)}
-        notice={engine.notice}
+        notice={engine.notice ? say(engine.notice) : null}
         connection={engine.session.connection}
         device={engine.session.deviceLabel}
       />

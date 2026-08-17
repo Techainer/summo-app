@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 
+import type { Failure } from "./errors";
 import type { LibraryClient } from "./library";
 import type { PeopleClient } from "./people";
 import type { SessionState } from "./session";
@@ -31,7 +32,8 @@ export interface EngineValue {
   elapsed: number;
   level: number;
   stat: Stat | null;
-  notice: string | null;
+  /** What the socket last said, unsaid: the screen translates it. See `EngineProvider`. */
+  notice: Failure | null;
   dismissNotice: () => void;
   start: () => Promise<void>;
   stop: () => void;

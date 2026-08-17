@@ -3779,6 +3779,7 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
             return vec![Event::Error {
                 message: format!("malformed command: {e}"),
                 transient: false,
+                code: None,
             }];
         }
     };
@@ -3811,6 +3812,7 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
                      `summo setup` to install what this machine needs."
                 ),
                 transient: false,
+                code: None,
             }]
         }
         Command::ModelLoad { id } | Command::ModelSwap { id, .. } => vec![Event::Error {
@@ -3819,6 +3821,7 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
                  Rebuild with `--features models`."
             ),
             transient: false,
+            code: None,
         }],
     }
 }
@@ -4132,6 +4135,7 @@ fn handle_audio_with_models(
         return vec![Event::Error {
             message: "audio received before the session was started".into(),
             transient: true,
+            code: None,
         }];
     };
 

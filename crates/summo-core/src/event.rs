@@ -43,7 +43,19 @@ pub enum Event {
     /// Human-readable notice (model switched, denoise toggled, …).
     Info { text: String },
     /// Recoverable failure. Fatal errors close the connection instead.
-    Error { message: String, transient: bool },
+    ///
+    /// `code` is the same stable key an HTTP failure carries, so the interface can translate this
+    /// the way it translates everything else. Without it the socket was the one path whose failures
+    /// arrived as the daemon's own English and went straight to the status bar — `session needs a
+    /// live model`, under a Vietnamese interface, the first time somebody pressed record.
+    Error {
+        message: String,
+        transient: bool,
+        /// Owned rather than `&'static str`: this is a wire type, and a borrowed field cannot be
+        /// deserialised from a temporary — which is exactly what the round-trip test does.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
+    },
 }
 
 impl Event {
@@ -57,6 +69,7 @@ impl Event {
         Self::Error {
             message: err.to_string(),
             transient: err.is_transient(),
+            code: err.code().map(str::to_string),
         }
     }
 

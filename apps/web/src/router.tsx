@@ -44,6 +44,7 @@ const screens = {
   analytics: () => import("./screens/AnalyticsScreen"),
   models: () => import("./screens/ModelsScreen"),
   settings: () => import("./screens/SettingsScreen"),
+  help: () => import("./screens/HelpScreen"),
 };
 
 /**
@@ -233,6 +234,17 @@ const settingsRoute = createRoute({
     isSection(search.section) ? { section: search.section } : {},
 });
 
+/// The manual, in the app.
+///
+/// Everything Summo knew about itself lived on GitHub or in a comment. **Help → Documentation**
+/// opened a browser, which is an answer for a developer and not for somebody who has just been
+/// asked to allow a microphone.
+const helpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/help",
+  component: lazyRouteComponent(screens.help, "HelpScreen"),
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   recordRoute,
@@ -248,6 +260,7 @@ const routeTree = rootRoute.addChildren([
   analyticsRoute,
   modelsRoute,
   settingsRoute,
+  helpRoute,
 ]);
 
 export const router = createRouter({
