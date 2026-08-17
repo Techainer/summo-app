@@ -81,15 +81,29 @@ Một cửa sổ, một icon ở khay hệ thống, và `⌘⇧R` gọi được
 mà lệnh ở trên chạy — và nếu đã có một cái đang chạy thì dùng luôn thay vì tranh nhau — nên hai
 đường là cùng một sản phẩm, cùng một vault, dùng đường nào cũng được.
 
-Bản phát hành có kèm installer bên cạnh tarball. **Chúng chưa được ký số**, và macOS khó tính hơn
-những gì câu này từng thừa nhận. App được ký ad-hoc — đó là thứ khiến máy Apple Silicon chịu chạy nó:
-một binary arm64 hoàn toàn không ký sẽ bị từ chối thẳng với thông báo "Summo is damaged and can't be
-opened" chứ không phải một cảnh báo. Nhưng không có chứng chỉ Apple đứng sau, nên bản tải về vẫn
-mang cờ kiểm dịch của Gatekeeper. Gỡ bằng một dòng:
+Bản phát hành có kèm installer bên cạnh tarball. **Chúng chưa mua chứng chỉ Apple**, và đây là điều
+đã được *đo* chứ không phải phỏng đoán — `.github/workflows/gatekeeper.yml` tải chính bản `.dmg` đã
+phát hành, đánh dấu nó đúng như trình duyệt đánh dấu file tải về, rồi hỏi macOS:
+
+```
+Signature=adhoc
+/Applications/Summo.app: rejected      (spctl, macOS 26.5)
+```
+
+`rejected`, không phải "cảnh báo rồi cho đi tiếp". Chữ ký ad-hoc đủ để nhân Apple Silicon chịu *nạp*
+binary — không có nó thì máy từ chối thẳng với "Summo is damaged and can't be opened" — nhưng
+Gatekeeper vẫn chặn bản tải về, vì không có chứng chỉ Apple đứng sau. Một dòng, một lần:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Summo.app
 ```
+
+Dòng này in sẵn trong cửa sổ của `.dmg`, ngay cạnh chỗ kéo thả, nên không phải đi tìm ở đâu cả.
+
+**Không có cách miễn phí nào bỏ được nó.** Đường chính thức của Apple là Developer ID + notarize,
+99 đô một năm. Phần việc phía Summo đã làm xong và đang chờ: đặt bốn secret (`APPLE_CERTIFICATE`,
+`APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID`)
+là bản tag kế tiếp tự ký và tự notarize — xem `.github/workflows/release.yml`.
 
 Windows hiện cảnh báo SmartScreen và vẫn cho bạn đi tiếp. Tarball không gặp cả hai vấn đề đó, và là
 thứ nên dùng nếu bạn quan tâm.
