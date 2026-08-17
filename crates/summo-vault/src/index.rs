@@ -193,6 +193,35 @@ pub struct MeetingIndex {
 }
 
 impl MeetingIndex {
+    /// The documents in a vault: the recordings and the notes, and nothing else.
+    ///
+    /// **Use this to resolve a document by id.** Not `scan(vault)`, which is a different index of
+    /// the same directory and disagrees with this one twice over.
+    ///
+    /// It disagrees about *what exists*: the vault root also holds `agents/`, `templates/` and
+    /// `comments/`, which are machinery, and a scan of the root reads them as documents somebody
+    /// wrote. That one is old and was fixed here once already — see [`crate::report::between`],
+    /// which used to put `AGENT`, `Memory` and `Tasks` on the home screen as meetings the user had
+    /// failed to summarise.
+    ///
+    /// And it disagrees about *what a document is called*, which is worse because it is silent. A
+    /// file with no `id:` in its frontmatter — what anybody typing in Obsidian leaves behind — is
+    /// given one by [`adopted_id`], which hashes the path **relative to the root that was scanned**.
+    /// So the same note is `adopted-eba41…` to the library, which scans `meetings/` and `notes/`,
+    /// and `adopted-9c07…` to anything scanning the vault root. Every by-id lookup on the second
+    /// list therefore missed: exporting such a note, summarising it, translating it and asking for
+    /// its draft all answered "no meeting with id adopted-eba41…" — about a note the library had
+    /// just listed, opened and let the user rename.
+    ///
+    /// A missing folder is not an error: a vault with no notes yet is normal.
+    pub fn of_vault(vault: impl AsRef<Path>) -> Result<Self> {
+        let vault = vault.as_ref();
+        Self::scan_all([
+            vault.join("meetings").as_path(),
+            vault.join("notes").as_path(),
+        ])
+    }
+
     /// Read every `.md` under `dir`, newest first.
     ///
     /// A missing directory is an empty vault, not an error: a fresh install has not recorded
@@ -876,14 +905,92 @@ pub fn load(entry: &MeetingEntry) -> Result<MeetingDoc> {
 /// that the library then disagrees with.
 pub fn open(vault: &Path, path: &Path) -> Result<MeetingDoc> {
     let text = std::fs::read_to_string(path).map_err(|e| Error::io(path, e))?;
-    let relative = path.strip_prefix(vault).unwrap_or(path);
     let meta = std::fs::metadata(path).ok();
-    MeetingDoc::adopt(&text, adopted_id(relative), modified_at(meta.as_ref()))
+    MeetingDoc::adopt(
+        &text,
+        adopted_id(&listed_as(vault, path)),
+        modified_at(meta.as_ref()),
+    )
+}
+
+/// The path an id is derived from: the one the listing derived it from.
+///
+/// The comment above states the invariant and the code under it did not hold: the listing scans
+/// `meetings/` and `notes/`, so a note is `y-tuong-gia.md` to it, while this stripped only the vault
+/// root and made the same file `notes/y-tuong-gia.md` — a different string, a different hash, a
+/// different id. Opening a note by the id the library gave produced a document that reported a
+/// different id of its own, which is the failure the comment warns about, written down and then
+/// walked into.
+fn listed_as(vault: &Path, path: &Path) -> PathBuf {
+    for folder in ["meetings", "notes"] {
+        if let Ok(relative) = path.strip_prefix(vault.join(folder)) {
+            return relative.to_path_buf();
+        }
+    }
+    path.strip_prefix(vault).unwrap_or(path).to_path_buf()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The id a document has when it is listed, and the id it has when it is opened, are the same
+    /// id. They were not: the listing scans `meetings/` and `notes/`, `open` stripped only the
+    /// vault root, and a note somebody wrote in Obsidian — no `id:` in its frontmatter, which is
+    /// what every other editor leaves behind — was called one thing by the library and another by
+    /// everything that opened it. Exporting it, summarising it, translating it and asking for its
+    /// draft all answered "no meeting with id …" about a note the library had just listed.
+    #[test]
+    fn a_document_is_called_the_same_thing_listed_and_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = dir.path();
+        std::fs::create_dir_all(vault.join("notes")).unwrap();
+        std::fs::create_dir_all(vault.join("meetings")).unwrap();
+        // No frontmatter at all, so both sides have to invent the same id.
+        std::fs::write(
+            vault.join("notes/y-tuong-gia.md"),
+            "# Ý tưởng giá\n\nBán 3 đô.\n",
+        )
+        .unwrap();
+        std::fs::write(
+            vault.join("meetings/hop.md"),
+            "# Họp\n\n## Transcript\n**[00:00:01] Bạn** — Chào\n",
+        )
+        .unwrap();
+
+        let index = MeetingIndex::of_vault(vault).expect("index");
+        assert_eq!(index.entries().len(), 2, "{:?}", index.entries());
+
+        for entry in index.entries() {
+            let doc = crate::open(vault, &entry.path).expect("open");
+            assert_eq!(
+                doc.frontmatter.id,
+                entry.id,
+                "{} is listed as {} and opens as {}",
+                entry.path.display(),
+                entry.id,
+                doc.frontmatter.id
+            );
+        }
+    }
+
+    /// The machinery is not somebody's writing. A scan of the vault root reads `agents/AGENTS.md`
+    /// as a document the user failed to summarise, which is what the home screen used to show.
+    #[test]
+    fn the_vault_index_holds_documents_and_not_the_machinery() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = dir.path();
+        for folder in ["notes", "meetings", "agents/coordinator", "templates"] {
+            std::fs::create_dir_all(vault.join(folder)).unwrap();
+        }
+        std::fs::write(vault.join("notes/mot.md"), "# Một\n").unwrap();
+        std::fs::write(vault.join("agents/coordinator/AGENT.md"), "# Điều phối\n").unwrap();
+        std::fs::write(vault.join("templates/weekly.md"), "## Tóm tắt\n").unwrap();
+
+        let index = MeetingIndex::of_vault(vault).expect("index");
+        let titles: Vec<&str> = index.entries().iter().map(|e| e.title.as_str()).collect();
+        assert_eq!(titles, vec!["Một"]);
+    }
 
     /// A note and a meeting are the same document; the transcript is what tells them apart, and
     /// listing has to work that out from the head of the file alone.

@@ -302,7 +302,7 @@ fn summary_line(report: &summo_vault::report::Report) -> String {
 /// that made exactly the case worth nudging about invisible.
 fn unread_drafts(paths: &Paths) -> Result<Vec<String>> {
     let vault = paths.vault();
-    let index = summo_vault::index::MeetingIndex::scan(&vault)?;
+    let index = summo_vault::index::MeetingIndex::of_vault(&vault)?;
 
     let mut out = Vec::new();
     for entry in index.entries() {

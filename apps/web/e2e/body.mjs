@@ -266,6 +266,44 @@ const open = async (route) => {
   }
 }
 
+// ---- a note nobody gave an id to is still a document -----------------------
+{
+  // What every other editor leaves behind: no frontmatter at all. The library invents an id for it
+  // by hashing the path *relative to the folder it scanned* — and everything that opened a document
+  // by id scanned a different folder, so it hashed a different string and answered "no meeting with
+  // id …" about a note the library had just listed, opened and let the user rename.
+  writeFileSync(join(engine.home, "vault/notes/obsidian.md"), "# Ý tưởng khác\n\nBán theo năm.\n");
+  const view = await (await fetch(`${engine.url}/library?token=${engine.token}`)).json();
+  const note = view.groups
+    .flatMap((group) => group.meetings)
+    .find((entry) => entry.title === "Ý tưởng khác");
+  if (!note) problems.push("a note with no frontmatter was not listed at all");
+  else {
+    for (const [what, path] of [
+      ["opened", `/meetings/${note.id}`],
+      ["asked for its draft", `/meetings/${note.id}/draft`],
+      ["exported", `/meetings/${note.id}/subtitles?format=md`],
+    ]) {
+      const response = await fetch(
+        `${engine.url}${path}${path.includes("?") ? "&" : "?"}token=${engine.token}`,
+      );
+      if (!response.ok) {
+        problems.push(
+          `a note the library lists as ${note.id} cannot be ${what}: ${response.status}`,
+        );
+      } else if (what === "exported") {
+        const text = await response.text();
+        // And it agrees with itself about what it is called.
+        if (!text.includes(note.id)) {
+          problems.push(
+            `exporting it produced a document calling itself something else: ${text.slice(0, 120)}`,
+          );
+        }
+      }
+    }
+  }
+}
+
 // ---- a typed note is not a meeting ----------------------------------------
 {
   const report = await (

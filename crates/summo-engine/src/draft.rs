@@ -163,8 +163,7 @@ fn clear_sidecar(paths: &Paths, meeting: &MeetingId) {
 
 /// The unapproved summary of a meeting, if there is one.
 pub fn load(paths: &Paths, meeting: &MeetingId) -> Result<Option<Draft>> {
-    let (_, markdown) = read_note(paths, meeting)?;
-    let doc = MeetingDoc::parse(&markdown)?;
+    let (_, doc) = read_note(paths, meeting)?;
 
     let sections: Vec<Section> = doc
         .sections
@@ -191,8 +190,7 @@ pub fn load(paths: &Paths, meeting: &MeetingId) -> Result<Option<Draft>> {
 
 /// Remove every unapproved section, leaving anything a human wrote.
 pub fn discard(paths: &Paths, meeting: &MeetingId) -> Result<bool> {
-    let (path, markdown) = read_note(paths, meeting)?;
-    let mut doc = MeetingDoc::parse(&markdown)?;
+    let (path, mut doc) = read_note(paths, meeting)?;
 
     let headings = summo_vault::pending::in_document(&doc);
     if headings.is_empty() {
@@ -212,8 +210,7 @@ pub fn discard(paths: &Paths, meeting: &MeetingId) -> Result<bool> {
 /// One gesture for the whole summary. Reviewing is reading it once and saying yes; approving four
 /// sections separately turns a two-second job into four.
 pub fn confirm(paths: &Paths, meeting: &MeetingId) -> Result<Vec<String>> {
-    let (path, markdown) = read_note(paths, meeting)?;
-    let mut doc = MeetingDoc::parse(&markdown)?;
+    let (path, mut doc) = read_note(paths, meeting)?;
 
     let approved = summo_vault::pending::approve_all(&mut doc);
     if approved.is_empty() {
@@ -228,8 +225,7 @@ pub fn confirm(paths: &Paths, meeting: &MeetingId) -> Result<Vec<String>> {
 
 /// Write sections into the note, marked as the agent's and unapproved.
 fn put(paths: &Paths, meeting: &MeetingId, sections: &[Section]) -> Result<()> {
-    let (path, markdown) = read_note(paths, meeting)?;
-    let mut doc = MeetingDoc::parse(&markdown)?;
+    let (path, mut doc) = read_note(paths, meeting)?;
     for section in sections {
         summo_vault::pending::set_draft(&mut doc, &section.heading, section.body.trim());
     }
@@ -243,8 +239,7 @@ pub async fn generate(
     meeting: &MeetingId,
     template_id: Option<&str>,
 ) -> Result<Draft> {
-    let (_, markdown) = read_note(paths, meeting)?;
-    let doc = MeetingDoc::parse(&markdown)?;
+    let (_, doc) = read_note(paths, meeting)?;
     let transcript = prompt::render_transcript(&doc.transcript);
     if transcript.chars().count() < 400 {
         return Err(Error::Other(
@@ -366,8 +361,7 @@ pub async fn chat(
     let mut draft = load(paths, meeting)?
         .ok_or_else(|| Error::Other(format!("no draft for meeting {meeting}")))?;
 
-    let (_, markdown) = read_note(paths, meeting)?;
-    let doc = MeetingDoc::parse(&markdown)?;
+    let (_, doc) = read_note(paths, meeting)?;
     let transcript = prompt::render_transcript(&doc.transcript);
     let language = language(paths, "");
 
@@ -396,17 +390,25 @@ pub async fn chat(
     Ok(draft)
 }
 
-fn read_note(paths: &Paths, meeting: &MeetingId) -> Result<(std::path::PathBuf, String)> {
+/// One document, by the id the library gave it.
+///
+/// Through `summo_vault::open` rather than `MeetingDoc::parse`, which is the difference between
+/// reading a file somebody wrote and refusing it. `open`'s own comment counted the doors that were
+/// still shut — "`summo summarize`, `summo export`, `summo dub`, the daemon's summariser" — and
+/// this was a fifth: every draft operation parsed the markdown itself, so a note written in any
+/// other editor, with no frontmatter for a parser to find, answered 400 to the screen that had
+/// just opened it.
+fn read_note(paths: &Paths, meeting: &MeetingId) -> Result<(std::path::PathBuf, MeetingDoc)> {
     let vault = paths.vault();
-    let index = summo_vault::index::MeetingIndex::scan(&vault)?;
+    let index = summo_vault::index::MeetingIndex::of_vault(&vault)?;
     let entry = index
         .entries()
         .iter()
         .find(|e| &e.id == meeting)
         .ok_or_else(|| Error::Other(format!("no meeting with id {meeting}")))?;
     let path = vault.join(&entry.path);
-    let markdown = std::fs::read_to_string(&path).map_err(|e| Error::io(&path, e))?;
-    Ok((path, markdown))
+    let doc = summo_vault::open(&vault, &path)?;
+    Ok((path, doc))
 }
 
 fn language(paths: &Paths, from_template: &str) -> String {
