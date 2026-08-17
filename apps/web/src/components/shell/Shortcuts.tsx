@@ -48,9 +48,13 @@ export function Shortcuts({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
       {/* A backdrop that closes it. A sheet with no way out but one small button is a sheet people
           get stuck in. */}
+      {/* Hidden from the reading order, deliberately. It is a second control with the same name as
+          the real close button, which is a screen reader announcing "Đóng, Đóng"; clicking outside
+          is a pointer convenience, and Escape and the button below are the reachable ways out. */}
       <button
         type="button"
-        aria-label={t("common.dismiss")}
+        aria-hidden="true"
+        tabIndex={-1}
         onClick={onClose}
         className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
       />

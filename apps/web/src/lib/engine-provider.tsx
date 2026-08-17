@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { DEV_HANDSHAKE, EngineContext, IDLE, type EngineValue, type Stat } from "./engine-context";
 import type { Handshake } from "./engine";
+import type { Failure } from "./errors";
 import { LibraryClient } from "./library";
 import { PeopleClient } from "./people";
 import type { Event } from "./protocol";
@@ -24,7 +25,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const [elapsed, setElapsed] = useState(0);
   const [level, setLevel] = useState(0);
   const [stat, setStat] = useState<Stat | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // Kept as a `Failure`, not a sentence. This provider sits *outside* the one that holds the
+  // language — translating here called `useI18n` where there is none — and the raw shape is the
+  // right thing to keep anyway: state holds what happened, the screen decides how to say it.
+  const [notice, setNotice] = useState<Failure | null>(null);
 
   const timer = useRef<number | null>(null);
 
@@ -38,10 +42,13 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         });
         break;
       case "error":
-        setNotice(event.message);
+        // With its code, so the status bar can say it in the reader's language. This used to put
+        // the daemon's own sentence on screen — `session needs a live model`, in English, under a
+        // Vietnamese interface, the first time anybody pressed record without a model.
+        setNotice({ error: event.message, ...(event.code ? { code: event.code } : {}) });
         break;
       case "info":
-        setNotice(event.text);
+        setNotice({ error: event.text });
         break;
       default:
         setTranscript((state) => apply(state, event));

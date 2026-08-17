@@ -27,6 +27,15 @@ export interface Failure {
   code?: string;
 }
 
+/**
+ * The code the fallback carries, so a failure with no message of its own can still be translated.
+ *
+ * `messageOf` and `failureFrom` are pure functions with no translator, and what they returned when
+ * they had nothing — the string `unknown error` — went to the screen exactly like that. On the
+ * first-run screen of a Vietnamese app.
+ */
+export const UNKNOWN = "unknown";
+
 /** Pull a failure out of a response body, whatever shape it turned out to be. */
 export function failureFrom(body: unknown, status?: number): Failure {
   if (typeof body === "object" && body !== null) {
@@ -40,7 +49,7 @@ export function failureFrom(body: unknown, status?: number): Failure {
   }
   // A body that is not an error object at all — an HTML error page from a proxy, an empty 502.
   // Saying the status beats saying "[object Object]".
-  return { error: status ? `HTTP ${status}` : "unknown error" };
+  return status ? { error: `HTTP ${status}` } : { error: "unknown error", code: UNKNOWN };
 }
 
 /**
@@ -110,7 +119,26 @@ export function describeError(thrown: unknown, t: Translator): string {
   if (thrown instanceof DaemonError) {
     return explain({ error: thrown.message, ...(thrown.code ? { code: thrown.code } : {}) }, t);
   }
-  return messageOf(thrown);
+  // A `Failure` that was never thrown. The recording session holds one — `{ code, error }` off a
+  // WebSocket event — and handed it straight to this, which understood `Error` and `string` and
+  // nothing else. So every session failure rendered as the fallback: a red bar reading
+  // `unknown error`, on the first-run screen, with the real reason discarded one field away.
+  if (isFailure(thrown)) return explain(thrown, t);
+  const message = messageOf(thrown);
+  // The last resort, translated. Something threw with nothing in it — a rejected promise with no
+  // reason, an aborted fetch — and the honest sentence for that is still a sentence in the reader's
+  // language rather than two English words.
+  return message === "unknown error" ? explain({ error: message, code: UNKNOWN }, t) : message;
+}
+
+/** Whether this is a `Failure` the daemon or the session put together, rather than a thrown error. */
+function isFailure(value: unknown): value is Failure {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Failure).error === "string" &&
+    (value as Failure).error.length > 0
+  );
 }
 
 /**

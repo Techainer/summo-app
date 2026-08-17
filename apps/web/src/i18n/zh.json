@@ -40,7 +40,8 @@
     "minimise": "最小化",
     "maximise": "最大化",
     "restore": "还原",
-    "close": "关闭"
+    "close": "关闭",
+    "help": "帮助"
   },
   "record": {
     "source": "来源",
@@ -578,7 +579,11 @@
     "mic_busy": "麦克风正被其他应用占用。",
     "mic_gone": "该麦克风已不可用。请在设置中选择其他设备。",
     "mic_failed": "无法打开麦克风。",
-    "engine_silent": "识别引擎没有响应。Summo 还在运行吗？"
+    "engine_silent": "识别引擎没有响应。Summo 还在运行吗？",
+    "unknown": "出错了，但没有给出原因。请重试，或在设置 › 关于中查看日志。",
+    "session.no_model": "尚未安装语音模型，无法录制。请在模型页面安装一个。",
+    "session_refused": "无法开始录制。请检查设置 › 录音中的麦克风，以及模型页面中的模型。",
+    "session_offline": "无法连接识别引擎。请重启 Summo。"
   },
   "agents": {
     "title": "智能体",
@@ -827,5 +832,33 @@
     "tasks": "任务",
     "analytics": "统计",
     "this": "本卡片"
+  },
+  "help": {
+    "title": "帮助 🛟",
+    "lead": "最常见的问题，每条都配了可直接执行的按钮。",
+    "privacy_q": "Does my audio go anywhere?",
+    "privacy_a": "No. Speech recognition and speaker separation run on models on your machine — pull the network cable and recording still works. Two things need the network: summarising and asking questions, because they call a language model, and you choose that endpoint in Settings (it can be Ollama on this same machine). Translation runs on a model inside the app.",
+    "record_q": "Do I need a bot in the meeting?",
+    "record_a": "No. Summo captures the microphone and the system audio on your own machine, so it works with Zoom, Meet, Teams, a phone call, or people in a room — anything your computer can hear. Press record, talk, press stop.",
+    "go_record": "Open the recorder",
+    "models_q": "What is a model, and which do I need?",
+    "models_a": "The model is the part that listens and writes words. Start with the one the Models screen recommends: it measures your machine and says which will keep up with live audio. Install a larger one later if you want a more accurate pass after the meeting.",
+    "go_models": "Open Models",
+    "files_q": "Where is my data?",
+    "files_a": "In ~/.summo/vault, as ordinary Markdown. Open it in Obsidian, grep it, put it in git, back it up. Summo reads those same files back, so editing them elsewhere is fine. Recordings live in ~/.summo/audio and you set how long they are kept.",
+    "go_storage": "See storage and retention",
+    "assistant_q": "What does the assistant answer from?",
+    "assistant_a": "Only what is in your vault. Every answer carries a citation pointing at the meeting and the timestamp it came from; click it and you land there to check. If the vault does not contain the answer, it says so.",
+    "go_assistant": "Open Ask",
+    "translate_q": "Can it translate, and does that need the network?",
+    "translate_a": "Yes, 46 languages, on a model inside the app — no Ollama, no network. Translate as you record from Settings; translate a recording you already have from the “Export & translate” card on the meeting.",
+    "go_translation": "Translation settings",
+    "shortcuts_q": "Are there keyboard shortcuts?",
+    "shortcuts_a": "Press ? anywhere for the full list. The two worth remembering: ⌘K (Ctrl+K) searches and jumps to anything, and ⌘⇧R starts and stops recording even when the window is hidden.",
+    "stuck_q": "Recording will not start, or something failed",
+    "stuck_a": "Three places, in order: Settings › Recording for the microphone permission and the device; Models to check a speech model is installed; Settings › Intelligence and “Test connection” if the failure was about summarising or asking. If it still will not go, report it with the sentence the app showed you.",
+    "more": "更多",
+    "readme": "完整文档",
+    "issue": "报告问题"
   }
 }

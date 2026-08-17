@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { translator } from "../i18n";
-import { explain, failureFrom, messageOf } from "./errors";
+import { describeError, explain, failureFrom, messageOf } from "./errors";
 
 const t = translator("en", {
   "errors.import.no_audio": "That file has no audio in it.",
@@ -77,5 +77,37 @@ describe("messageOf", () => {
     expect(messageOf(undefined)).toBe("unknown error");
     expect(messageOf(null)).toBe("unknown error");
     expect(messageOf("")).toBe("unknown error");
+  });
+});
+
+// The recording session holds a `Failure` rather than throwing one, and handed it to `describeError`
+// — which understood `Error` and `string` and nothing else, so every session failure rendered as
+// `unknown error` on screen with the real reason one field away.
+describe("a failure that was never thrown", () => {
+  const t = {
+    t: (key: string) =>
+      ({
+        "errors.session_refused": "Không bắt đầu ghi được.",
+        "errors.unknown": "Có gì đó hỏng mà app không đọc được lý do.",
+      })[key] ?? key,
+    has: (key: string) => ["errors.session_refused", "errors.unknown"].includes(key),
+  } as unknown as Parameters<typeof describeError>[1];
+
+  it("is read, not discarded", () => {
+    expect(describeError({ error: "session needs a live model" }, t)).toBe(
+      "session needs a live model",
+    );
+  });
+
+  it("is translated when it carries a code", () => {
+    expect(describeError({ code: "session_refused", error: "refused" }, t)).toBe(
+      "Không bắt đầu ghi được.",
+    );
+  });
+
+  // An object with no `error` string is not a failure at all — it is whatever else was thrown — and
+  // the last-resort sentence is still a sentence in the reader's language.
+  it("still says something readable for something with no message at all", () => {
+    expect(describeError({}, t)).toBe("Có gì đó hỏng mà app không đọc được lý do.");
   });
 });

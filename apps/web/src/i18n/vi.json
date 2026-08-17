@@ -40,7 +40,8 @@
     "minimise": "Thu nhỏ",
     "maximise": "Phóng to",
     "restore": "Khôi phục",
-    "close": "Đóng"
+    "close": "Đóng",
+    "help": "Trợ giúp"
   },
   "record": {
     "source": "Nguồn",
@@ -578,7 +579,11 @@
     "mic_busy": "Micro đang bị ứng dụng khác chiếm.",
     "mic_gone": "Micro đó không còn nữa. Chọn cái khác trong cài đặt.",
     "mic_failed": "Không mở được micro.",
-    "engine_silent": "Engine nhận dạng không trả lời. Summo còn đang chạy không?"
+    "engine_silent": "Engine nhận dạng không trả lời. Summo còn đang chạy không?",
+    "unknown": "Có gì đó hỏng mà app không đọc được lý do. Thử lại, hoặc mở Cài đặt › Giới thiệu để xem log.",
+    "session.no_model": "Chưa cài mô hình nhận dạng nào, nên chưa ghi được. Mở màn hình Mô hình và cài một cái.",
+    "session_refused": "Không bắt đầu ghi được. Xem lại micro trong Cài đặt › Ghi âm và mô hình trong màn hình Mô hình.",
+    "session_offline": "Không nói chuyện được với engine nhận dạng. Thử mở lại Summo."
   },
   "agents": {
     "title": "Agent",
@@ -827,5 +832,33 @@
     "tasks": "Việc cần làm",
     "analytics": "Thống kê",
     "this": "Bảng này"
+  },
+  "help": {
+    "title": "Trợ giúp 🛟",
+    "lead": "Những câu người ta hỏi nhiều nhất, kèm nút bấm để làm luôn.",
+    "privacy_q": "Âm thanh của tôi có bị gửi đi đâu không?",
+    "privacy_a": "Không. Nhận dạng giọng nói và tách người nói chạy bằng model nằm trên máy bạn — rút mạng vẫn ghi và vẫn ra chữ. Chỉ hai việc cần mạng: tóm tắt và hỏi đáp, vì chúng gọi tới một mô hình ngôn ngữ, và endpoint đó do bạn chọn trong Cài đặt (có thể là Ollama chạy ngay trên máy). Dịch chạy bằng model trong app, không cần mạng.",
+    "record_q": "Có cần bot vào phòng họp không?",
+    "record_a": "Không. Summo thu micro và âm thanh hệ thống ngay trên máy bạn, nên nó chạy với Zoom, Meet, Teams, cuộc gọi điện thoại hay họp trực tiếp — mọi thứ máy bạn nghe được. Bấm Ghi, nói, bấm dừng.",
+    "go_record": "Mở màn hình Ghi",
+    "models_q": "Model là gì, tôi cần cài cái nào?",
+    "models_a": "Model là phần nghe và viết ra chữ. Bản đầu tiên nên cài model tiếng Việt mà màn hình Mô hình gợi ý — nó đo máy bạn rồi nói cái nào chạy kịp thời gian thực. Muốn chính xác hơn thì cài thêm bản lớn để chạy lại sau buổi họp.",
+    "go_models": "Mở màn hình Mô hình",
+    "files_q": "Dữ liệu của tôi nằm ở đâu?",
+    "files_a": "Trong ~/.summo/vault, là file Markdown thường. Mở bằng Obsidian, grep, đưa vào git, sao lưu — tuỳ bạn. Summo đọc lại chính những file đó, nên sửa bằng editor khác cũng không sao. Bản ghi âm nằm trong ~/.summo/audio và bạn đặt được thời hạn giữ.",
+    "go_storage": "Xem dung lượng và thời hạn giữ",
+    "assistant_q": "Trợ lý trả lời dựa trên cái gì?",
+    "assistant_a": "Chỉ dựa trên những gì có trong kho của bạn. Mỗi câu trả lời kèm trích dẫn chỉ đúng buổi họp và mốc thời gian, bấm vào là nhảy tới chỗ đó để bạn tự kiểm. Không tìm thấy thì nó nói không tìm thấy.",
+    "go_assistant": "Mở Hỏi đáp",
+    "translate_q": "Dịch được không, có cần mạng không?",
+    "translate_a": "Được, 46 ngôn ngữ, bằng model chạy trong chính app — không cần Ollama, không cần mạng. Dịch trực tiếp trong lúc ghi thì bật ở Cài đặt; dịch cả một buổi đã ghi rồi thì mở buổi đó và dùng thẻ “Xuất & dịch”.",
+    "go_translation": "Cài đặt dịch",
+    "shortcuts_q": "Có phím tắt nào?",
+    "shortcuts_a": "Bấm ? ở bất cứ đâu để mở bảng phím tắt. Đáng nhớ nhất: ⌘K (hoặc Ctrl+K) tìm và nhảy tới mọi thứ, và ⌘⇧R ghi/dừng kể cả khi app đang ẩn.",
+    "stuck_q": "Ghi không được, hoặc app báo lỗi thì làm gì?",
+    "stuck_a": "Ba chỗ theo thứ tự: Cài đặt › Ghi âm xem micro có được cấp quyền và đúng thiết bị chưa; màn hình Mô hình xem đã cài model nhận dạng chưa; Cài đặt › Trí tuệ bấm “Kiểm tra kết nối” nếu lỗi liên quan tới tóm tắt hay hỏi đáp. Vẫn không xong thì báo lỗi kèm dòng chữ app hiện ra.",
+    "more": "Còn nữa",
+    "readme": "Tài liệu đầy đủ",
+    "issue": "Báo lỗi"
   }
 }

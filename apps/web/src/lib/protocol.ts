@@ -45,7 +45,9 @@ export type Event =
   | { kind: "progress"; id: string; pct: number; stage: string; eta_s?: number }
   | { kind: "stat"; rtf: number; rss_mb: number; queue_ms: number }
   | { kind: "info"; text: string }
-  | { kind: "error"; message: string; transient: boolean };
+  // `code` is the stable key an HTTP failure carries, now on the socket too: it is what lets the
+  // status bar say the failure in the reader's language instead of repeating the daemon's English.
+  | { kind: "error"; message: string; transient: boolean; code?: string };
 
 export interface SessionSpec {
   /** Empty means "whatever the settings say"; the daemon resolves it. */

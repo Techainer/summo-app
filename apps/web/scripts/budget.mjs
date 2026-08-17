@@ -30,13 +30,18 @@ import { join } from "node:path";
  * Twelve kB of headroom is deliberate. A dependency bump moving a few kB should not fail a build
  * that changed nothing; a new screen imported eagerly should.
  *
- * 225 against a measured 221. The four kB is the empty states: five screens that showed grey text
- * or a wall of zeros now draw a picture, a sentence and a button, in four languages. The stickers
- * themselves are *not* in it — the drawings and the Lottie player are both behind `import()`, and
- * the animations are static files fetched only when one is on screen. Raising this is the answer
- * the message below offers, taken on purpose and written down.
+ * 234 against a measured 230. The last nine kB are text: the empty states, and then the in-app
+ * manual — a paragraph per question, times four languages, because `i18n/index.ts` imports all four
+ * locale files and every user therefore carries three languages they cannot read.
+ *
+ * That is the thing to fix, and it is worth more than it costs to raise this: splitting the locales
+ * so only the chosen one is in the entry chunk takes about fifteen kB *out*, and it makes every
+ * future sentence cost a quarter of what it costs today. It is not done here because `t()` is
+ * synchronous from the first render and making it asynchronous is a change to every screen, which
+ * is not a thing to do at the end of a long day. Written down so it is a decision rather than a
+ * drift.
  */
-const BUDGET = 225;
+const BUDGET = 234;
 
 const dist = join(import.meta.dirname, "..", "dist");
 const html = readFileSync(join(dist, "index.html"), "utf8");

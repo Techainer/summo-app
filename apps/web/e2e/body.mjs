@@ -304,6 +304,50 @@ const open = async (route) => {
   }
 }
 
+// ---- the manual is in the app, and the failures speak the reader's language ----
+{
+  await open("/help");
+  const main = page.locator("main");
+  if ((await main.getByText("Trợ giúp").count()) === 0) problems.push("there is no help screen");
+  const questions = main.locator("button[aria-expanded]");
+  if ((await questions.count()) < 6) {
+    problems.push(`the manual has ${await questions.count()} questions in it`);
+  }
+
+  // `?` opens the shortcut sheet from anywhere, which is the only place the keys are written down.
+  await page.keyboard.press("?");
+  await page.waitForTimeout(500);
+  if ((await page.getByRole("dialog").count()) === 0) {
+    problems.push("? did not open the shortcuts");
+  } else {
+    await page.getByRole("button", { name: "Đóng" }).click();
+  }
+
+  // Pressing record with no model installed. This used to answer `unknown error` in a red bar and
+  // `configuration error: session needs a live model` at the bottom — two English strings for one
+  // thing, on the screen a new user is standing on.
+  await open("/");
+  await page
+    .getByRole("button", { name: /Bắt đầu ghi|Ghi$/ })
+    .first()
+    .click();
+  await page.waitForTimeout(2000);
+  const said = await page.locator("body").innerText();
+  for (const raw of ["unknown error", "session needs a live model", "configuration error"]) {
+    if (said.includes(raw)) {
+      const at = said.indexOf(raw);
+      problems.push(
+        `a failure spoke English at the user: ${raw} — in "${said.slice(Math.max(0, at - 90), at + 60).replace(/\s+/g, " ")}"`,
+      );
+    }
+  }
+  if (!/mô hình nhận dạng/i.test(said)) {
+    problems.push(
+      `recording with no model said something else: ${said.replace(/\s+/g, " ").slice(0, 200)}`,
+    );
+  }
+}
+
 // ---- a typed note is not a meeting ----------------------------------------
 {
   const report = await (
