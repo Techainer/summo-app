@@ -203,11 +203,31 @@ jobs:
       # to replace.
       - name: Use the Developer ID, if there is one
         if: runner.os == 'macOS' && env.APPLE_SIGNING_IDENTITY != ''
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           config=apps/desktop/src-tauri/tauri.conf.json
           jq --arg id "$APPLE_SIGNING_IDENTITY" '.bundle.macOS.signingIdentity = $id' "$config" > "$config.tmp"
           mv "$config.tmp" "$config"
           jq '.bundle.macOS.signingIdentity' "$config"
+
+          # Handed to the build step through the environment file rather than set on it directly.
+          # An `env:` block on that step would define these on *every* run, and an empty
+          # `APPLE_CERTIFICATE` is not the same as an absent one: Tauri sees a certificate, runs
+          # `security import` on nothing, and the build dies with "failed to import keychain
+          # certificate". Which is what v0.2.3 did — the comment above this used to claim Tauri
+          # treated empty as absent, and nobody had run it.
+          {
+            echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE"
+            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
+            echo "APPLE_ID=$APPLE_ID"
+            echo "APPLE_PASSWORD=$APPLE_PASSWORD"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+          } >> "$GITHUB_ENV"
 
       - name: Build the installers
         # AppImage's tooling is itself an AppImage, and mounting one needs FUSE, which the runner
@@ -215,16 +235,10 @@ jobs:
         # linuxdeploy". The variable is the AppImage runtime's own answer: unpack and run instead
         # of mounting. Harmless everywhere else.
         #
-        # The Apple variables are empty on a repository with no certificate, and Tauri treats an
-        # empty one as absent — so this is the same build it has always been until the day somebody
-        # sets them, and a notarised one from that day on.
+        # The Apple variables are *not* here: the step above puts them in the environment file, and
+        # only when there is a certificate to put there. See the note it carries.
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm -C apps/desktop exec tauri build
 
       # Started, before it is offered to anybody.
