@@ -18,6 +18,7 @@ import { GENTLE, listItem } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
 import { Button } from "../ui";
 import { useRefresh } from "../../lib/use-load";
+import { X } from "lucide-react";
 
 /**
  * The conversation about a meeting, beside the meeting.
@@ -151,7 +152,7 @@ export function Comments({
                     // thread that looks like a list of things to get rid of.
                     className="text-fg-faint hover:text-danger opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
                   >
-                    ✕
+                    <X aria-hidden="true" className="size-3.5" />
                   </button>
                 </div>
 

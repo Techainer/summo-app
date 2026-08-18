@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useT } from "../../i18n/context";
 import { cn } from "../../lib/cn";
 import { Spinner } from "./Button";
+import { Check } from "lucide-react";
 
 /**
  * States a task or a job can be in.
@@ -38,7 +39,7 @@ const LABELS: Record<Status, string> = {
 const ICONS: Record<Status, ReactNode> = {
   todo: null,
   running: <Spinner className="size-3 border-[1.5px]" />,
-  done: <span aria-hidden="true">✓</span>,
+  done: <Check aria-hidden="true" className="size-3" />,
   blocked: <span aria-hidden="true">◷</span>,
   failed: <span aria-hidden="true">!</span>,
 };

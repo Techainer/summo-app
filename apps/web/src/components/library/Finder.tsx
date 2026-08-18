@@ -1,4 +1,4 @@
-import { FolderOpen, Inbox } from "lucide-react";
+import { FolderOpen, Inbox, X } from "lucide-react";
 import { useMemo } from "react";
 
 import { useT } from "../../i18n/context";
@@ -222,7 +222,7 @@ export function ColourPicker({
           chosen === null ? "border-fg-faint bg-bg-soft" : "border-line hover:border-line-strong",
         )}
       >
-        <span aria-hidden="true">✕</span>
+        <X aria-hidden="true" className="size-3.5" />
       </button>
       {palette.map((name) => (
         <button

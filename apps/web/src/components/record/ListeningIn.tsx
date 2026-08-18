@@ -12,6 +12,7 @@ import {
   ready,
 } from "../../lib/languages";
 import { useLoad } from "../../lib/use-load";
+import { X } from "lucide-react";
 
 /**
  * What the recording is listening for, said out loud while it records.
@@ -109,7 +110,7 @@ export function ListeningIn() {
             className="text-fg-faint ms-auto"
             aria-label={t("common.dismiss")}
           >
-            ✕
+            <X aria-hidden="true" className="size-3.5" />
           </button>
         </>
       ) : (

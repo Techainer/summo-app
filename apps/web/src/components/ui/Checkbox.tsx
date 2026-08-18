@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
+import { Check } from "lucide-react";
 
 /**
  * A real checkbox, hidden and painted through its own label.
@@ -54,7 +55,7 @@ export function Checkbox({
       >
         {/* A descendant of the box, not a sibling of the input, so `peer-checked:` cannot reach it
             — that variant compiles to a sibling combinator. `group-has-[:checked]:` can. */}
-        <span className="opacity-0 transition-opacity group-has-[:checked]:opacity-100">✓</span>
+        <span className="text-accent-fg opacity-0 transition-opacity group-has-[:checked]:opacity-100"><Check aria-hidden="true" className="size-3" /></span>
       </span>
       {children}
     </label>

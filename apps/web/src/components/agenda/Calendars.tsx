@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
@@ -197,7 +197,7 @@ export function CalendarSources({ onChange }: { onChange: () => void }) {
                 onClick={() => void remove(subscription.name)}
                 className="text-fg-faint hover:text-danger"
               >
-                ✕
+                <X aria-hidden="true" className="size-3.5" />
               </button>
             </li>
           ))}
@@ -221,7 +221,7 @@ export function CalendarSources({ onChange }: { onChange: () => void }) {
                 onClick={() => void remove(file.name)}
                 className="text-fg-faint hover:text-danger"
               >
-                ✕
+                <X aria-hidden="true" className="size-3.5" />
               </button>
             </li>
           ))}

@@ -1,4 +1,4 @@
-import { AudioLines } from "lucide-react";
+import { AudioLines, X } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { useCallback, useState } from "react";
@@ -325,7 +325,7 @@ export function People({ client }: Props) {
                 title={t("people.remove")}
                 onClick={() => void forget(person)}
               >
-                ✕
+                <X aria-hidden="true" className="size-3.5" />
               </button>
             </m.li>
           ))}

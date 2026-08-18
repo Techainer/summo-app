@@ -6,6 +6,7 @@ import { useT } from "../../i18n/context";
 import { GENTLE, collapse } from "../../lib/motion";
 import { useEngine } from "../../lib/engine-context";
 import { NudgeClient, POLL_MS, iconFor, notify, type Nudge, type Reason } from "../../lib/nudges";
+import { X } from "lucide-react";
 
 /**
  * Which one speaks first, when several are due at once.
@@ -156,7 +157,7 @@ export function NudgeBar() {
               aria-label={t("nudge.dismiss", { title: nudge.title })}
               className="text-fg-faint hover:text-fg rounded-lg px-2 py-1"
             >
-              ✕
+              <X aria-hidden="true" className="size-3.5" />
             </button>
           </div>
         </m.div>
