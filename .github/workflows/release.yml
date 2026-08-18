@@ -303,10 +303,16 @@ jobs:
           # the behaviour.
           ./scripts/mac-signing.sh "${HOME}/Applications/Summo.app"
 
-          # And marked the way a browser marks a download, because that is the copy that broke.
-          # Quarantine is the whole of Gatekeeper, and a bundle built locally has never carried it
-          # — which is why every macOS check this project has ever run has been run on the one
-          # copy in the world that macOS trusts.
+          # And marked the way a browser marks a download, which is closer to the copy people get
+          # than a freshly built one — a bundle built locally has never carried
+          # `com.apple.quarantine`, and quarantine is the whole of Gatekeeper.
+          #
+          # It does *not* reproduce the failure above, and that is worth writing down rather than
+          # leaving as a plausible story: `gatekeeper.yml` ran the broken `v0.2.6` on a runner, with
+          # the flag set, and the daemon started anyway. Library validation is enforced by the
+          # machine, and this one does not enforce it the way the machine that reported the bug
+          # does. So the check that catches this is the static one above; this is here because it
+          # is a truer version of the same run, not because it is the guard.
           xattr -w -r com.apple.quarantine \
             "0083;00000000;Safari;F1B2C3D4-0000-0000-0000-000000000000" \
             "${HOME}/Applications/Summo.app"

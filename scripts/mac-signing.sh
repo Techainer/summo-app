@@ -4,9 +4,9 @@
 #
 #   ./scripts/mac-signing.sh apps/desktop/src-tauri/target/release/bundle/macos/Summo.app
 #
-# The smoke test starts the app and is not enough, because the machine that builds a bundle is the
-# one machine that runs it leniently. `v0.2.6` started on the runner that built it, was published,
-# and died on the first Mac it reached:
+# The smoke test starts the app and cannot see this. `v0.2.6` started on the runner that built it,
+# started again on a second runner with the download flag on it, and died on the first real Mac it
+# reached:
 #
 #   dyld: Library not loaded: @rpath/libonnxruntime.1.17.1.dylib
 #     Reason: … not valid for use in process: mapping process and mapped file (non-platform)
@@ -17,9 +17,12 @@
 # signature is ad-hoc and has no team, so the rule permitted nothing but macOS itself — and the two
 # libraries the daemon cannot start without sit in `Contents/Resources/lib`.
 #
-# That is a property of the signature rather than of the run, so this reads it instead of hoping to
-# provoke it. Deterministic, a few seconds, and it would have failed on `v0.2.0` — the first bundle
-# that ever shipped — while every behavioural check we had said the app was fine.
+# Whether that rule is *enforced* turns out to depend on the machine — a GitHub runner loads the
+# library and a user's laptop refuses it — so no amount of starting the app on a build machine can
+# be trusted to show it. What does not vary is the signature itself, so this reads that: the
+# permission is either in the bundle or it is not. Deterministic, a few seconds, and it would have
+# failed on `v0.2.0`, the first bundle that ever shipped, while every behavioural check said the
+# app was fine.
 #
 # Written for the bash macOS ships, which is 3.2: no `mapfile`, no associative arrays.
 set -euo pipefail
