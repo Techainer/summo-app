@@ -27,7 +27,7 @@
  * down on this side.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -304,6 +304,58 @@ for (const shot of SHOTS) {
   console.log("cai-dat-lan-dau.webp — the first-run setup screen");
   await context.close();
   fresh.stop();
+}
+
+// The social card.
+//
+// It was a crop of the home screen — a picture with no words on it, which is what a link to this
+// product looks like in every chat app, timeline and search result that renders one. A card should
+// say the name and the claim, because that is the whole of what a reader gets before deciding
+// whether to click.
+//
+// Composed here rather than drawn by hand in an image editor: it is made of the same screenshot
+// that was just taken, so it cannot go stale on its own.
+{
+  // Inlined rather than linked. A page built with `setContent` has no origin, so a `file://`
+  // image on it is refused and lands as a broken-image icon in the middle of the card — which is
+  // exactly what the first run of this produced.
+  const shot = `data:image/webp;base64,${readFileSync(join(OUT, "trang-chinh.webp")).toString("base64")}`;
+  const context = await browser.newContext({
+    viewport: { width: 1200, height: 630 },
+    deviceScaleFactor: 1,
+  });
+  const page = await context.newPage();
+  await page.setContent(`
+    <html><body style="margin:0">
+      <div style="width:1200px;height:630px;display:flex;flex-direction:column;
+                  background:#f7f6f4;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;
+                  color:#17161a;overflow:hidden">
+        <div style="padding:52px 60px 0">
+          <div style="display:flex;align-items:center;gap:10px;font-size:21px;font-weight:600">
+            <span style="display:inline-flex;gap:3px;align-items:flex-end;height:22px">
+              <span style="width:4px;height:11px;background:#0f7350;border-radius:2px"></span>
+              <span style="width:4px;height:22px;background:#0f7350;border-radius:2px"></span>
+              <span style="width:4px;height:16px;background:#0f7350;border-radius:2px"></span>
+            </span>
+            Summo
+          </div>
+          <div style="margin-top:26px;font-size:52px;line-height:1.06;font-weight:600;
+                      letter-spacing:-0.02em;max-width:660px">
+            Ghi chú cuộc họp<br><span style="color:#0f7350">chạy trên máy bạn.</span>
+          </div>
+          <div style="margin-top:18px;font-size:20px;color:#56545e;max-width:600px">
+            Nhận dạng giọng nói và tách người nói chạy cục bộ. Mã nguồn mở, AGPL-3.0.
+          </div>
+        </div>
+        <img src="${shot}" style="position:absolute;left:640px;top:180px;width:820px;
+             border-radius:16px;border:1px solid #e6e3de;box-shadow:0 24px 60px -20px #17161a40">
+      </div>
+    </body></html>`);
+  await page.waitForTimeout(600);
+  const png = join(OUT, "og.png");
+  await page.screenshot({ path: png });
+  console.log("og.png — 1200×630");
+  await context.close();
 }
 
 await browser.close();

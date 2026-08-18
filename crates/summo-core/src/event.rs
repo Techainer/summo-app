@@ -36,8 +36,6 @@ pub enum Event {
     },
     /// Offline diarization corrected a live label; the UI relabels in place.
     SpeakerRename { from: SpeakerId, to: SpeakerId },
-    /// Download / load progress for a model.
-    Progress(ModelProgress),
     /// Periodic performance sample driving the HUD.
     Stat(Stat),
     /// Human-readable notice (model switched, denoise toggled, …).
@@ -87,30 +85,6 @@ impl Event {
     pub fn lane(&self) -> Option<crate::segment::Lane> {
         self.segment().map(|s| s.lane)
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ModelProgress {
-    pub id: String,
-    /// 0..=100.
-    pub pct: u8,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub eta_s: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bytes_done: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bytes_total: Option<u64>,
-    pub stage: ProgressStage,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProgressStage {
-    Resolving,
-    Downloading,
-    Verifying,
-    Loading,
-    Ready,
 }
 
 /// Performance sample for the HUD. Cheap to compute and emitted about once a second — this is what
@@ -171,14 +145,6 @@ mod tests {
                 from: SpeakerId::auto(0),
                 to: SpeakerId::auto(1),
             },
-            Event::Progress(ModelProgress {
-                id: "gipformer-65m".into(),
-                pct: 42,
-                eta_s: Some(31),
-                bytes_done: Some(10),
-                bytes_total: Some(100),
-                stage: ProgressStage::Downloading,
-            }),
             Event::Stat(Stat {
                 rtf: 0.03,
                 rss_mb: 312,

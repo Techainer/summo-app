@@ -42,7 +42,6 @@ export type Event =
   | ({ kind: "revise" } & Segment)
   | { kind: "translation"; seq: number; lang: string; text: string }
   | { kind: "speaker_rename"; from: string; to: string }
-  | { kind: "progress"; id: string; pct: number; stage: string; eta_s?: number }
   | { kind: "stat"; rtf: number; rss_mb: number; queue_ms: number }
   | { kind: "info"; text: string }
   // `code` is the stable key an HTTP failure carries, now on the socket too: it is what lets the
