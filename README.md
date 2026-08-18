@@ -201,6 +201,7 @@ search, in-process translation and the capture stages respectively — see `crat
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 - [SECURITY.md](SECURITY.md) — what the product promises, and where to report a hole in one
 - [docs/adr/](docs/adr/) — the decisions that shaped this, and what would reopen each of them
+- [docs/secrets.md](docs/secrets.md) — which secrets this repository takes, and what each one buys
 
 ## Licence
 

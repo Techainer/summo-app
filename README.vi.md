@@ -205,6 +205,7 @@ mươi crate.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 - [SECURITY.md](SECURITY.md) — sản phẩm cam kết những gì, và báo lỗ hổng ở đâu
 - [docs/adr/](docs/adr/) — những quyết định định hình dự án, và điều gì sẽ mở lại từng quyết định đó
+- [docs/secrets.md](docs/secrets.md) — repo cần secret nào, và không có thì mất gì
 
 ## Giấy phép
 
