@@ -108,6 +108,7 @@ jobs:
       - name: First run
         if: runner.os == 'Linux'
         run: |
+          ./scripts/apt.sh
           pnpm -C apps/web exec playwright install --with-deps chromium
           node apps/web/e2e/first-run.mjs \
             "dist/summo-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)-${{ matrix.target }}/summo"

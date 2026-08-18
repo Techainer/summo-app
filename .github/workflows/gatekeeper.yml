@@ -89,6 +89,29 @@ jobs:
           echo "spctl exit: $?"
           exit 0
 
+      # What macOS will actually say, from macOS.
+      #
+      # `spctl --assess` answers `rejected` for anything not notarised, and that is where the
+      # reading used to stop — from which the download page concluded a terminal command was
+      # required. It is not the same question. `rejected` decides whether the app opens *without
+      # asking*; a validly signed app that is rejected still gets the "Open Anyway" button in
+      # System Settings, and only a *broken* signature produces "is damaged", where that button
+      # does not appear and there is no way through but the terminal.
+      #
+      # `syspolicy_check` is the tool that distinguishes them, and it ships with macOS.
+      - name: What the dialog will say
+        timeout-minutes: 4
+        run: |
+          set +e
+          echo "--- syspolicy_check distribution"
+          syspolicy_check distribution /Applications/Summo.app 2>&1
+          echo "--- syspolicy_check notary"
+          syspolicy_check notary-submission /Applications/Summo.app 2>&1
+          echo "--- is the signature itself valid? (the difference between 'unverified' and 'damaged')"
+          codesign --verify --deep --strict --verbose=2 /Applications/Summo.app 2>&1
+          echo "codesign --verify exit: $?"
+          exit 0
+
       # Opening it is not the same as it working.
       #
       # `open` returns as soon as launchd has the app, and the step above reports whatever is

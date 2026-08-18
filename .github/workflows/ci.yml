@@ -628,6 +628,10 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      # `--with-deps` runs its own `apt-get`, and that is the call that spent forty-four minutes
+      # on a mirror that was not answering. It cannot be handed flags, so the machine is configured
+      # first and it inherits the timeouts.
+      - run: ./scripts/apt.sh
       - run: pnpm -C apps/web exec playwright install --with-deps chromium
       # The model blobs the catalogue suite installs, kept between runs.
       #
