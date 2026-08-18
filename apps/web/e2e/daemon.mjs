@@ -203,7 +203,12 @@ function libraries() {
   };
 }
 
-export async function boot({ name = "e2e", seed = true, registry = REGISTRY, onboarded = true } = {}) {
+export async function boot({
+  name = "e2e",
+  seed = true,
+  registry = REGISTRY,
+  onboarded = true,
+} = {}) {
   const home = join("/tmp", `summo-${name}-${process.pid}`);
   rmSync(home, { recursive: true, force: true });
   mkdirSync(home, { recursive: true });
