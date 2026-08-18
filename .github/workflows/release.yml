@@ -448,3 +448,38 @@ jobs:
         with:
           files: apps/mobile/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           draft: true
+
+  # Tell the marketing site there is something new to point at.
+  #
+  # `summo.techainer.com` names the actual files — `Summo_0.2.6_aarch64.dmg`, with its size — rather
+  # than sending people to a list of twenty. It reads that list when it builds, and it builds when
+  # its own repository changes, which is not when a release happens. So without this the download
+  # button spends the days between a release and the next copy edit offering the version before.
+  #
+  # A deploy hook is a URL that starts a build and nothing else: no token, no scope, no access to
+  # anything. `SITE_DEPLOY_HOOK` is not set in every fork of this repository and does not need to be
+  # — the site then shows the release it was built with, and says which one that is.
+  #
+  # Last, and never fatal. A release that is built, signed, smoke-tested and published is not a
+  # failed release because a static site did not rebuild.
+  site:
+    needs: [bundle, installers]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rebuild the download page
+        env:
+          HOOK: ${{ secrets.SITE_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "no SITE_DEPLOY_HOOK set — the site will show the release it was last built with"
+            exit 0
+          fi
+          # The URL *is* the credential, so it is handed over on standard input rather than as an
+          # argument: an argument is in the process list for as long as the request takes, and in
+          # any shell trace that gets turned on later.
+          if printf 'url = "%s"\n' "$HOOK" | curl -fsS -X POST --config - > /dev/null; then
+            echo "asked the site to rebuild"
+          else
+            echo "the site did not take the hook; it will rebuild on its next push"
+          fi
