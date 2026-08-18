@@ -49,7 +49,7 @@ jobs:
       # never open a microphone — and the failure names `alsa-sys`, not a crate anybody wrote.
 
       - name: System dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: ./scripts/apt.sh libasound2-dev
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
@@ -144,7 +144,7 @@ jobs:
       - run: rustup target add ${{ matrix.target }}
       - name: System dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: ./scripts/apt.sh libasound2-dev
       # `audiopus_sys` cannot find a system Opus on a runner, so it builds the bundled copy — and
       # that starts with `autogen.sh`, which needs autotools. Without them the build script panics
       # with `autoreconf: command not found`, several hundred crates in.
@@ -180,7 +180,7 @@ jobs:
       - run: rustup target add ${{ matrix.target }}
       - name: System dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: ./scripts/apt.sh libasound2-dev
       # `audiopus_sys` cannot find a system Opus on a runner, so it builds the bundled copy — and
       # that starts with `autogen.sh`, which needs autotools. Without them the build script panics
       # with `autoreconf: command not found`, several hundred crates in.
@@ -395,8 +395,7 @@ jobs:
             ~/AppData/Local/ort.pyke.io
       - name: System libraries Tauri links against
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+          ./scripts/apt.sh libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
             librsvg2-dev libasound2-dev
       # The sidecar is the daemon with the interface compiled into it, so the interface has to be
       # built before it. On a developer's machine `apps/web/dist` is already there from the last
@@ -447,8 +446,7 @@ jobs:
             ~/.cache/ort.pyke.io
       - name: System libraries Tauri links against
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+          ./scripts/apt.sh libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
             librsvg2-dev libasound2-dev patchelf
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -503,7 +501,7 @@ jobs:
       # download.
       - name: The app starts, and its daemon answers
         run: |
-          sudo apt-get install -y xvfb
+          ./scripts/apt.sh xvfb
           ./scripts/smoke-desktop.sh \
             "$(find apps/desktop/src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -1)"
 
@@ -565,7 +563,7 @@ jobs:
       # `summo-mt` alone needs nothing from the system; `summo-engine` below pulls cpal, which wants
       # the ALSA headers to build even where no microphone is ever opened.
       - name: System dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+        run: ./scripts/apt.sh libasound2-dev
       # The engine has one `LocalModel` arm per runtime, each behind its own feature, so the
       # combination the release ships — ONNX in, llama.cpp out — is a build nothing else covers.
       # It broke twice while being written: an unused `source` parameter, and a `no_runtime` helper
@@ -620,7 +618,7 @@ jobs:
       # daemon starts and dies with `libopus.so.0: cannot open shared object file`, and the harness
       # reports it as "the daemon did not come up".
       - name: System dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libopus-dev
+        run: ./scripts/apt.sh libasound2-dev libopus-dev
       - run: pnpm install --frozen-lockfile
       # Chromium is ~130 MB, downloaded on every run of this job. Keyed on the Playwright version,
       # because a cached browser from an older Playwright is a browser it refuses to launch.

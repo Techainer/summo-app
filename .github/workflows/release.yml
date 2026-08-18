@@ -64,7 +64,7 @@ jobs:
       # never opens a microphone on CI.
       - name: System dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev autoconf automake libtool
+        run: ./scripts/apt.sh libasound2-dev autoconf automake libtool
 
       # Opus is built from source and linked in (`OPUS_STATIC=1` in `bundle.sh`), so the tarball
       # does not depend on a libopus that happens to be installed on the build machine. Building it
@@ -174,8 +174,7 @@ jobs:
       - name: System dependencies
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+          ./scripts/apt.sh libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
             librsvg2-dev libasound2-dev autoconf automake libtool patchelf
       - name: Autotools, for building Opus from source
         if: runner.os == 'macOS'
@@ -258,7 +257,7 @@ jobs:
       - name: The app starts, and its daemon answers
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y xvfb
+          ./scripts/apt.sh xvfb
           ./scripts/smoke-desktop.sh \
             "$(find apps/desktop/src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -1)"
 
