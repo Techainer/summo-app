@@ -435,7 +435,53 @@ jobs:
           echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - run: pnpm -C apps/mobile exec tauri android init --skip-targets-install
+
+      # `init` regenerates the Gradle project from Tauri's templates, and the signing plumbing is
+      # something this repository added to `app/build.gradle.kts` by hand. If a future version of
+      # the template wins that argument, the build carries on happily and produces an unsigned
+      # `.apk` — which installs on nothing, and which the job would have published because a secret
+      # existed. Cheaper to notice here than in a bug report from someone whose phone refused it.
+      - name: The signing plumbing survived `init`
+        run: |
+          gradle=apps/mobile/src-tauri/gen/android/app/build.gradle.kts
+          if ! grep -q "ANDROID_KEYSTORE" "$gradle"; then
+            echo "::warning::tauri android init overwrote the signing config; restoring the committed one"
+            git checkout -- "$gradle"
+          fi
+
       - run: pnpm -C apps/mobile exec tauri android build --apk --target aarch64
+
+      # Whether the file is signed, asked of the file.
+      #
+      # `steps.key.outputs.signed` only ever meant "a secret was set", and the Publish step below
+      # used it as though it meant "the artefact is installable". Those are the same thing exactly
+      # as long as every link between them works, which is the assumption that has broken on every
+      # other platform in this workflow at least once.
+      - name: Is the .apk actually signed
+        id: apk
+        run: |
+          apk="$(find apps/mobile/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' | head -1)"
+          if [ -z "$apk" ]; then
+            echo "no .apk was produced" >&2
+            exit 1
+          fi
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -1)"
+          if "$apksigner" verify --print-certs "$apk"; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "$apk is signed"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "$apk is NOT signed — a phone will refuse to install it"
+          fi
+
+      # A repository with a key that produced an unsigned build is broken, and quietly publishing
+      # nothing is how it would stay broken. Say so and fail.
+      - name: A key was configured, so the build must have used it
+        if: steps.key.outputs.signed == 'true' && steps.apk.outputs.signed != 'true'
+        run: |
+          echo "ANDROID_KEYSTORE_BASE64 is set and the .apk came out unsigned." >&2
+          echo "The keystore reached the runner and the Gradle build did not use it." >&2
+          exit 1
 
       - uses: actions/upload-artifact@v4
         with:
@@ -443,7 +489,7 @@ jobs:
           path: apps/mobile/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
 
       - name: Publish
-        if: startsWith(github.ref, 'refs/tags/') && steps.key.outputs.signed == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && steps.apk.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: apps/mobile/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
