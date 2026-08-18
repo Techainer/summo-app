@@ -86,22 +86,29 @@ and this is measured rather than assumed: `.github/workflows/gatekeeper.yml` dow
 
 ```
 Signature=adhoc
-/Applications/Summo.app: rejected      (spctl, macOS 26.5)
+/Applications/Summo.app: rejected            (spctl)
+/Applications/Summo.app: valid on disk       (codesign --verify --deep --strict)
+/Applications/Summo.app: satisfies its Designated Requirement
+Adhoc Signed App — Severity: Warning         (syspolicy_check, macOS 26.5)
+Notary Ticket Missing
 ```
 
-`rejected` — not "warned about and let through". The ad-hoc signature is what keeps Apple Silicon
-willing to *load* the binary at all; without one the kernel refuses it outright with "Summo is
-damaged and can't be opened". Gatekeeper still stops the downloaded copy, because nothing vouches
-for it. One line, once:
+Those lines say two different things, and this README used to read only the first. `rejected` means
+**will not open on its own**, not **cannot be opened**: the signature is valid and satisfies its
+Designated Requirement, so macOS shows the "cannot verify the developer" dialog and leaves an **Open
+Anyway** button in System Settings › Privacy & Security. One press, once.
+
+Only a *broken* signature produces "Summo is damaged and can't be opened" — and there no button
+appears and a terminal is the only way through. v0.2.0 was exactly that, because it was not signed
+at all; the instruction to open Terminal was written for it and outlived its cause.
+
+If you would rather type than click, this does the same thing:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Summo.app
 ```
 
-That line is printed inside the `.dmg` window, beside the icon you drag, so nobody has to find this
-page to get past it.
-
-**There is no free way around it.** Apple's path is a Developer ID plus notarisation, $99 a year.
+**There is no free way to remove the step entirely.** Apple's path is a Developer ID plus notarisation, $99 a year.
 Everything on this side of it is done and waiting: set four secrets — `APPLE_CERTIFICATE`,
 `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, and `APPLE_ID`/`APPLE_PASSWORD`/
 `APPLE_TEAM_ID` — and the next tag signs and notarises itself. See `.github/workflows/release.yml`.

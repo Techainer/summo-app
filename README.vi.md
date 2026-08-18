@@ -87,20 +87,29 @@ phát hành, đánh dấu nó đúng như trình duyệt đánh dấu file tải
 
 ```
 Signature=adhoc
-/Applications/Summo.app: rejected      (spctl, macOS 26.5)
+/Applications/Summo.app: rejected            (spctl)
+/Applications/Summo.app: valid on disk       (codesign --verify --deep --strict)
+/Applications/Summo.app: satisfies its Designated Requirement
+Adhoc Signed App — Severity: Warning         (syspolicy_check, macOS 26.5)
+Notary Ticket Missing
 ```
 
-`rejected`, không phải "cảnh báo rồi cho đi tiếp". Chữ ký ad-hoc đủ để nhân Apple Silicon chịu *nạp*
-binary — không có nó thì máy từ chối thẳng với "Summo is damaged and can't be opened" — nhưng
-Gatekeeper vẫn chặn bản tải về, vì không có chứng chỉ Apple đứng sau. Một dòng, một lần:
+Bốn dòng đó nói hai chuyện khác nhau, và trước đây README này chỉ đọc dòng đầu. `rejected` nghĩa là
+**không tự mở**, không phải **không mở được**: chữ ký vẫn hợp lệ và đúng Designated Requirement, nên
+macOS hiện hộp thoại "không xác minh được nhà phát triển" và để lại nút **Mở dù sao** trong Cài đặt
+hệ thống › Quyền riêng tư & Bảo mật. Bấm một lần, xong vĩnh viễn.
+
+Chỉ khi chữ ký *hỏng* mới ra "Summo is damaged and can't be opened" — lúc đó không có nút nào cả và
+Terminal là đường duy nhất. Bản v0.2.0 đúng là như vậy, vì nó hoàn toàn không được ký; câu chữ dặn
+người dùng mở Terminal ra đời từ đó và ở lại lâu hơn nguyên nhân của nó.
+
+Nếu bạn thích gõ hơn là bấm, dòng này làm cùng việc:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Summo.app
 ```
 
-Dòng này in sẵn trong cửa sổ của `.dmg`, ngay cạnh chỗ kéo thả, nên không phải đi tìm ở đâu cả.
-
-**Không có cách miễn phí nào bỏ được nó.** Đường chính thức của Apple là Developer ID + notarize,
+**Không có cách miễn phí nào bỏ hẳn bước đó.** Đường chính thức của Apple là Developer ID + notarize,
 99 đô một năm. Phần việc phía Summo đã làm xong và đang chờ: đặt bốn secret (`APPLE_CERTIFICATE`,
 `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID`)
 là bản tag kế tiếp tự ký và tự notarize — xem `.github/workflows/release.yml`.
