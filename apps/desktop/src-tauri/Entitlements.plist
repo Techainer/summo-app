@@ -1,18 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  What a signed build is allowed to do. Ignored entirely until somebody signs one — there is no
-  Apple certificate in this repository and there should not be — and wrong to leave until then,
-  because the hardened runtime a notarised app must use denies microphone input by default. The
-  first signed build would install, open, and be unable to record, and the cause would be a file
-  that did not exist.
+  What this build is allowed to do.
+
+  Not "ignored until somebody signs one", which is what this file used to say and what made the
+  macOS build unusable for four releases. Tauri signs the bundle ad-hoc (`signingIdentity: "-"`)
+  and it signs it with the *hardened runtime*, so these entitlements are embedded in every copy
+  that ships and they are enforced.
 
   Deliberately short. An app that promises audio never leaves the machine should not be asking for
   the network, the camera, or a user's documents.
 -->
 <plist version="1.0">
   <dict>
+    <!--
+      The microphone. The hardened runtime denies audio input by default, so without this a signed
+      build installs, opens, and cannot record.
+    -->
     <key>com.apple.security.device.audio-input</key>
+    <true/>
+
+    <!--
+      The daemon has to be allowed to load the two libraries shipped beside it, and under the
+      hardened runtime it is not allowed to by default.
+
+      Library validation says a process may load only libraries signed by the *same team* as
+      itself, or by Apple. An ad-hoc signature has no team, so "the same team" matches nothing that
+      is not part of macOS — and `Contents/Resources/lib` holds ONNX Runtime and sherpa-onnx, which
+      are neither. The result on a user's machine was total, and it named a library rather than a
+      policy:
+
+        dyld[16202]: Library not loaded: @rpath/libonnxruntime.1.17.1.dylib
+          Reason: … code signature in '…/Contents/Resources/lib/libonnxruntime.1.17.1.dylib'
+          not valid for use in process: mapping process and mapped file (non-platform) have
+          different Team IDs
+
+      Both files are ours: staged by `scripts/sidecar.sh` from the build, ad-hoc signed there, and
+      sealed into the bundle. The check being switched off is one that could only ever have said no
+      to them.
+
+      This stays true of a notarised build. Apple allows this exception under a Developer ID, and
+      Tauri does not sign what is under `Resources/`, so a certificate would leave the libraries
+      carrying our ad-hoc signature and the same rule would refuse them for the same reason.
+    -->
+    <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
   </dict>
 </plist>

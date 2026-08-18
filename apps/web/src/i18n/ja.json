@@ -131,7 +131,7 @@
     "no_transcript": "まだ何も話されていません。"
   },
   "export": {
-    "title": "書き出しと翻訳 📤",
+    "title": "書き出しと翻訳",
     "subtitle": "ダウンロード、または全体を翻訳",
     "language": "言語",
     "original": "原文",
@@ -163,7 +163,7 @@
     "agent": "エージェント"
   },
   "tasks": {
-    "title": "タスク ✅",
+    "title": "タスク",
     "kind": "種類",
     "mine": "人",
     "agent": "エージェント",
@@ -224,7 +224,7 @@
     "empty": "会議はまだありません。",
     "meetings_one": "{count}件の会議",
     "meetings_other": "{count}件の会議",
-    "heading": "保存したすべて 📚",
+    "heading": "保存したすべて",
     "loading": "保管庫を読んでいます…",
     "no_content": "まだ何もありません。",
     "recorded": "録音",
@@ -256,13 +256,13 @@
     "empty_hint": "会議が始まったら録音、または手元のファイルを取り込んでください。すべてこの端末に残ります。"
   },
   "analytics": {
-    "title": "統計 📊",
+    "title": "統計",
     "range": "期間",
     "last_7": "直近7日",
     "last_30": "直近30日",
     "time": "時間",
-    "time_with": "一緒にいた時間 🤝",
-    "tags": "よく使うタグ 🏷️",
+    "time_with": "一緒にいた時間",
+    "tags": "よく使うタグ",
     "tags_count": "タグ {count} 件",
     "tag_uses": "{count} 回",
     "decisions": "決定事項",
@@ -656,11 +656,11 @@
     "subheading": "録音・記述・質問したものすべてを、この端末に。",
     "capture_hint": "押すと録音が始まります。すべてここで動きます。",
     "write": "書く",
-    "waiting": "あなた待ち ⏳",
+    "waiting": "あなた待ち",
     "all_clear": "待っているものはありません。",
     "overdue": "期限切れ",
     "no_summary": "要約なし",
-    "recent": "最近 🕘",
+    "recent": "最近",
     "see_all": "すべて見る",
     "ask": "質問",
     "assistant_hint": "録音したことも書いたことも聞けます。答えには出典が付きます。",
@@ -802,7 +802,7 @@
     "issue": "問題を報告"
   },
   "shortcuts": {
-    "title": "キーボードショートカット ⌨️",
+    "title": "キーボードショートカット ⌨",
     "lead": "? を押すといつでもこの一覧が開きます。",
     "search": "検索、またはどこへでも移動",
     "record": "録音の開始・停止",
@@ -817,7 +817,7 @@
     "this": "この一覧"
   },
   "help": {
-    "title": "ヘルプ 🛟",
+    "title": "ヘルプ",
     "lead": "よくある質問と、その場で実行できるボタン。",
     "privacy_q": "Does my audio go anywhere?",
     "privacy_a": "No. Speech recognition and speaker separation run on models on your machine — pull the network cable and recording still works. Two things need the network: summarising and asking questions, because they call a language model, and you choose that endpoint in Settings (it can be Ollama on this same machine). Translation runs on a model inside the app.",

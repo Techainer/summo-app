@@ -131,7 +131,7 @@
     "no_transcript": "还没有人说话。"
   },
   "export": {
-    "title": "导出与翻译 📤",
+    "title": "导出与翻译",
     "subtitle": "下载，或翻译整场会议",
     "language": "语言",
     "original": "原文",
@@ -163,7 +163,7 @@
     "agent": "智能体"
   },
   "tasks": {
-    "title": "任务 ✅",
+    "title": "任务",
     "kind": "类型",
     "mine": "人",
     "agent": "智能体",
@@ -224,7 +224,7 @@
     "empty": "还没有会议。",
     "meetings_one": "{count}场会议",
     "meetings_other": "{count}场会议",
-    "heading": "你保存的一切 📚",
+    "heading": "你保存的一切",
     "loading": "正在读取仓库…",
     "no_content": "这里还是空的。",
     "recorded": "已录制",
@@ -256,13 +256,13 @@
     "empty_hint": "会议开始时按下录制，或直接导入已有的文件。所有内容都留在你的电脑上。"
   },
   "analytics": {
-    "title": "统计 📊",
+    "title": "统计",
     "range": "时间范围",
     "last_7": "最近7天",
     "last_30": "最近30天",
     "time": "时长",
-    "time_with": "与谁共处 🤝",
-    "tags": "常用标签 🏷️",
+    "time_with": "与谁共处",
+    "tags": "常用标签",
     "tags_count": "{count} 个标签",
     "tag_uses": "{count} 次",
     "decisions": "决定",
@@ -656,11 +656,11 @@
     "subheading": "你录下的、写下的、问过的，都留在这台机器上。",
     "capture_hint": "按下开始录音，全部在本机运行。",
     "write": "写",
-    "waiting": "等你处理 ⏳",
+    "waiting": "等你处理",
     "all_clear": "没有待办。",
     "overdue": "已逾期",
     "no_summary": "未生成摘要",
-    "recent": "最近 🕘",
+    "recent": "最近",
     "see_all": "查看全部",
     "ask": "提问",
     "assistant_hint": "录过的、写过的都能问，答案会注明出处。",
@@ -802,7 +802,7 @@
     "issue": "报告问题"
   },
   "shortcuts": {
-    "title": "键盘快捷键 ⌨️",
+    "title": "键盘快捷键 ⌨",
     "lead": "随时按 ? 可再次打开。",
     "search": "搜索或跳转到任意位置",
     "record": "开始或停止录制",
@@ -817,7 +817,7 @@
     "this": "本卡片"
   },
   "help": {
-    "title": "帮助 🛟",
+    "title": "帮助",
     "lead": "最常见的问题，每条都配了可直接执行的按钮。",
     "privacy_q": "Does my audio go anywhere?",
     "privacy_a": "No. Speech recognition and speaker separation run on models on your machine — pull the network cable and recording still works. Two things need the network: summarising and asking questions, because they call a language model, and you choose that endpoint in Settings (it can be Ollama on this same machine). Translation runs on a model inside the app.",

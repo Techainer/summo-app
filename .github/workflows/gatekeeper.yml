@@ -23,6 +23,10 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
+      # For the scripts. This job used to need nothing but `gh`, and now it runs the same two
+      # checks the release job runs, against the published copy rather than the built one.
+      - uses: actions/checkout@v4
+
       - name: macOS version
         run: sw_vers
 
@@ -85,7 +89,34 @@ jobs:
           echo "spctl exit: $?"
           exit 0
 
+      # Opening it is not the same as it working.
+      #
+      # `open` returns as soon as launchd has the app, and the step above reports whatever is
+      # running eight seconds later — which is the window. The window then starts the daemon, and
+      # the daemon is where a downloaded copy of `v0.2.6` died: the hardened runtime turns on
+      # library validation, an ad-hoc signature has no team, and library validation lets a process
+      # with no team load nothing that is not part of macOS. Both libraries the daemon needs are
+      # in the bundle.
+      #
+      # Reported rather than fatal, like everything else here: this workflow exists to say what a
+      # Mac does, and a red tick against a published tag helps nobody. `scripts/mac-signing.sh`
+      # is the check that fails a build.
+      - name: Does the daemon inside it start, on a copy that was downloaded
+        timeout-minutes: 6
+        run: |
+          set +e
+          # Before anything opens a window. `open` hands the app to launchd, and on a runner with
+          # no logged-in session that step has sat until the job's own timeout killed it — taking
+          # this check with it, on the run that was meant to produce the evidence.
+          chmod +x scripts/*.sh
+          ./scripts/mac-signing.sh /Applications/Summo.app
+          echo "mac-signing exit: $?"
+          ./scripts/smoke-desktop.sh /Applications/Summo.app
+          echo "smoke exit: $?"
+          exit 0
+
       - name: Try to open it the way a person double-clicks
+        timeout-minutes: 3
         run: |
           set +e
           # Not `open -W`: that waits for the app to *exit*, so an app that opens correctly hangs
@@ -108,6 +139,7 @@ jobs:
       # starts and the quarantined one does not, the terminal line is load-bearing and the download
       # cannot be opened from Finder at all.
       - name: And with the quarantine flag removed
+        timeout-minutes: 4
         run: |
           set +e
           xattr -dr com.apple.quarantine /Applications/Summo.app

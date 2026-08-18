@@ -131,7 +131,7 @@
     "no_transcript": "Chưa có ai nói gì."
   },
   "export": {
-    "title": "Xuất & dịch 📤",
+    "title": "Xuất & dịch",
     "subtitle": "tải về, hoặc dịch cả buổi",
     "language": "Ngôn ngữ",
     "original": "Bản gốc",
@@ -163,7 +163,7 @@
     "agent": "Agent"
   },
   "tasks": {
-    "title": "Việc cần làm ✅",
+    "title": "Việc cần làm",
     "kind": "Loại việc",
     "mine": "Của mọi người",
     "agent": "Của agent",
@@ -224,7 +224,7 @@
     "empty": "Chưa có buổi họp nào.",
     "meetings_one": "{count} buổi họp",
     "meetings_other": "{count} buổi họp",
-    "heading": "Mọi thứ bạn đã lưu 📚",
+    "heading": "Mọi thứ bạn đã lưu",
     "loading": "Đang đọc kho họp…",
     "no_content": "Chưa có nội dung.",
     "recorded": "Đã ghi",
@@ -256,13 +256,13 @@
     "empty_hint": "Bấm ghi khi buổi họp bắt đầu, hoặc kéo một file có sẵn vào. Mọi thứ nằm lại trên máy bạn."
   },
   "analytics": {
-    "title": "Thống kê 📊",
+    "title": "Thống kê",
     "range": "Khoảng thời gian",
     "last_7": "7 ngày qua",
     "last_30": "30 ngày",
     "time": "Thời gian",
-    "time_with": "Thời gian với ai 🤝",
-    "tags": "Thẻ hay dùng 🏷️",
+    "time_with": "Thời gian với ai",
+    "tags": "Thẻ hay dùng",
     "tags_count": "{count} thẻ",
     "tag_uses": "{count} lần",
     "decisions": "Quyết định",
@@ -656,11 +656,11 @@
     "subheading": "Mọi thứ bạn ghi, viết và hỏi — giữ trên máy này.",
     "capture_hint": "Bấm để ghi. Mọi thứ chạy ở đây.",
     "write": "Viết",
-    "waiting": "Đang chờ bạn ⏳",
+    "waiting": "Đang chờ bạn",
     "all_clear": "Không có gì chờ.",
     "overdue": "quá hạn",
     "no_summary": "chưa tóm tắt",
-    "recent": "Gần đây 🕘",
+    "recent": "Gần đây",
     "see_all": "Xem tất cả",
     "ask": "Hỏi",
     "assistant_hint": "Hỏi bất cứ điều gì bạn đã ghi hoặc đã viết — câu trả lời luôn nói rõ lấy từ đâu.",
@@ -802,7 +802,7 @@
     "issue": "Báo lỗi"
   },
   "shortcuts": {
-    "title": "Phím tắt ⌨️",
+    "title": "Phím tắt ⌨",
     "lead": "Bấm ? bất cứ lúc nào để mở lại bảng này.",
     "search": "Tìm hoặc nhảy tới bất kỳ đâu",
     "record": "Bắt đầu hoặc dừng ghi",
@@ -817,7 +817,7 @@
     "this": "Bảng này"
   },
   "help": {
-    "title": "Trợ giúp 🛟",
+    "title": "Trợ giúp",
     "lead": "Những câu người ta hỏi nhiều nhất, kèm nút bấm để làm luôn.",
     "privacy_q": "Âm thanh của tôi có bị gửi đi đâu không?",
     "privacy_a": "Không. Nhận dạng giọng nói và tách người nói chạy bằng model nằm trên máy bạn — rút mạng vẫn ghi và vẫn ra chữ. Chỉ hai việc cần mạng: tóm tắt và hỏi đáp, vì chúng gọi tới một mô hình ngôn ngữ, và endpoint đó do bạn chọn trong Cài đặt (có thể là Ollama chạy ngay trên máy). Dịch chạy bằng model trong app, không cần mạng.",
