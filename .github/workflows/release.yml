@@ -468,6 +468,14 @@ jobs:
             echo "no .apk was produced" >&2
             exit 1
           fi
+
+          # Gradle calls it `app-universal-release.apk`, which is what somebody would find in their
+          # Downloads folder next to `Summo_0.2.9_aarch64.dmg`. Named the way the other platforms
+          # are named, so a person can tell what it is and which version they have.
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          named="$(dirname "$apk")/Summo_${version}_arm64.apk"
+          mv "$apk" "$named"
+          apk="$named"
           apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -1)"
           if "$apksigner" verify --print-certs "$apk"; then
             echo "signed=true" >> "$GITHUB_OUTPUT"
