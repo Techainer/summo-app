@@ -107,6 +107,9 @@ jobs:
       # is the one workflow whose failures nobody sees until they need it.
       - name: First run
         if: runner.os == 'Linux'
+        # Bounded: `playwright install --with-deps` runs its own `apt-get`, and that call has sat
+        # for more than half an hour on a mirror that was not answering.
+        timeout-minutes: 20
         run: |
           ./scripts/apt.sh
           pnpm -C apps/web exec playwright install --with-deps chromium

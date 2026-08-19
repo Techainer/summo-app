@@ -37,11 +37,22 @@
 set -euo pipefail
 
 # Timeouts and retries, for every apt on this machine from here on — ours and everybody else's.
+# Five seconds and no retries.
+#
+# Fifteen with two retries was the first attempt, and it is still far too generous: the runner
+# image lists about twenty index files, and a mirror that hangs rather than refusing costs
+# 20 × 15 × 3 = fifteen minutes before apt gives up on it. `playwright install --with-deps` was
+# still sitting there thirty-four minutes in.
+#
+# There is nothing to lose by being impatient. A mirror that cannot answer in five seconds is not
+# one worth waiting for, and every package these workflows need is already in the index the image
+# shipped with — the network is the fallback here, not the path.
 sudo tee /etc/apt/apt.conf.d/99-summo-timeouts > /dev/null <<'CONF'
-Acquire::http::Timeout "15";
-Acquire::https::Timeout "15";
-Acquire::ftp::Timeout "15";
-Acquire::Retries "2";
+Acquire::http::Timeout "5";
+Acquire::https::Timeout "5";
+Acquire::ftp::Timeout "5";
+Acquire::http::ConnectionAttemptDelayMsec "100";
+Acquire::Retries "0";
 CONF
 
 # Configuration only. Called this way before `playwright install --with-deps`, which installs its
@@ -60,5 +71,5 @@ if install "$@"; then
 fi
 
 echo "apt: that needed a fresher index" >&2
-sudo timeout 240 apt-get update || echo "apt: update did not finish; trying the install anyway" >&2
+sudo timeout 120 apt-get update || echo "apt: update did not finish; trying the install anyway" >&2
 install "$@"
