@@ -159,6 +159,15 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     [controller],
   );
 
+  // Debounced by the editor, not here: this is the save, and the daemon writes the file the moment
+  // it arrives.
+  const notes = useCallback(
+    (text: string) => {
+      controller?.notes(text);
+    },
+    [controller],
+  );
+
   const stop = useCallback(() => {
     if (timer.current !== null) window.clearInterval(timer.current);
     timer.current = null;
@@ -204,6 +213,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       stop,
       toggle,
       retune,
+      notes,
     }),
     [
       library,
@@ -219,6 +229,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       stop,
       toggle,
       retune,
+      notes,
     ],
   );
 

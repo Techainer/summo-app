@@ -30,7 +30,30 @@ pub enum SessionStatus {
         language: Option<String>,
         /// Utterances committed so far.
         segments: u64,
+        /// The document this session is writing into.
+        ///
+        /// The id has always existed — it is minted when the recording starts and the file is
+        /// named after it — and it has never left the daemon, so the interface could not open the
+        /// meeting it was in the middle of. That is why recording had a screen of its own with a
+        /// transcript and nowhere to type: there was no way to point at the page.
+        ///
+        /// `Option`, because a build without the `models` feature accepts a session and has no
+        /// pipeline to write one — there is genuinely no document, and saying so is better than an
+        /// id that leads nowhere.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        meeting: Option<summo_core::MeetingId>,
     },
+}
+
+impl SessionStatus {
+    /// The document a running session is writing into, if there is one.
+    #[must_use]
+    pub fn meeting(&self) -> Option<&summo_core::MeetingId> {
+        match self {
+            Self::Recording { meeting, .. } => meeting.as_ref(),
+            Self::Idle => None,
+        }
+    }
 }
 
 impl SessionStatus {
@@ -143,7 +166,7 @@ impl EngineState {
     ///
     /// Two concurrent sessions would fight over the microphone and interleave their events on one
     /// socket, so this is a hard error rather than a silent replacement.
-    pub fn begin(&self, spec: &SessionSpec) -> Result<()> {
+    pub fn begin(&self, spec: &SessionSpec, meeting: Option<summo_core::MeetingId>) -> Result<()> {
         let mut status = self.inner.status.write();
         if status.is_recording() {
             return Err(Error::Other("a recording is already in progress".into()));
@@ -154,6 +177,7 @@ impl EngineState {
             refine_model: spec.refine_model.clone(),
             language: spec.language.clone(),
             segments: 0,
+            meeting,
         };
         Ok(())
     }
@@ -224,7 +248,7 @@ mod tests {
         let mut spec = SessionSpec::new("gipformer-65m");
         spec.refine_model = Some("whisper-large-v3".into());
 
-        state.begin(&spec).unwrap();
+        state.begin(&spec, None).unwrap();
 
         let SessionStatus::Recording {
             live_model,
@@ -243,14 +267,14 @@ mod tests {
         // Two sessions would fight over the microphone and interleave events on one socket.
         let (_tmp, state) = state();
         let spec = SessionSpec::new("m");
-        state.begin(&spec).unwrap();
-        assert!(state.begin(&spec).is_err());
+        state.begin(&spec, None).unwrap();
+        assert!(state.begin(&spec, None).is_err());
     }
 
     #[test]
     fn progress_accumulates_while_recording() {
         let (_tmp, state) = state();
-        state.begin(&SessionSpec::new("m")).unwrap();
+        state.begin(&SessionSpec::new("m"), None).unwrap();
         state.advance(1.5, 1);
         state.advance(2.0, 2);
 
@@ -277,7 +301,7 @@ mod tests {
     fn stopping_twice_is_not_an_error() {
         // A client that reconnects after a dropped socket cannot know whether its stop arrived.
         let (_tmp, state) = state();
-        state.begin(&SessionSpec::new("m")).unwrap();
+        state.begin(&SessionSpec::new("m"), None).unwrap();
         assert!(state.end().is_recording());
         assert_eq!(state.end(), SessionStatus::Idle);
     }
@@ -286,16 +310,16 @@ mod tests {
     fn a_session_can_start_again_after_stopping() {
         let (_tmp, state) = state();
         let spec = SessionSpec::new("m");
-        state.begin(&spec).unwrap();
+        state.begin(&spec, None).unwrap();
         state.end();
-        assert!(state.begin(&spec).is_ok());
+        assert!(state.begin(&spec, None).is_ok());
     }
 
     #[test]
     fn clones_share_one_state() {
         let (_tmp, state) = state();
         let handle = state.clone();
-        state.begin(&SessionSpec::new("m")).unwrap();
+        state.begin(&SessionSpec::new("m"), None).unwrap();
         assert!(
             handle.status().is_recording(),
             "handlers must see the same session"

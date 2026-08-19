@@ -102,13 +102,23 @@ pub fn list(paths: &Paths) -> Result<Vec<crate::index::MeetingEntry>> {
 
 /// Find one note's file by id.
 pub fn find(paths: &Paths, id: &MeetingId) -> Result<PathBuf> {
-    let dir = dir(paths);
-    let index = crate::index::MeetingIndex::scan(&dir)?;
+    // The whole vault, not `notes/`.
+    //
+    // Everything here is a note: a recording is a note with a transcript in it, and the editor a
+    // person types into is the same editor either way. Looking only in `notes/` meant the note
+    // routes answered `404` for a document filed under `meetings/` — which the interface hits the
+    // moment somebody opens a meeting that has not been transcribed yet, and which showed up as a
+    // failed request in the console on the first second of every recording.
+    //
+    // Filed under two directories and read as one, which is what `MeetingIndex::of_vault` is for
+    // and what ten other callers already do.
+    let vault = paths.vault();
+    let index = crate::index::MeetingIndex::of_vault(&vault)?;
     index
         .entries()
         .iter()
         .find(|entry| &entry.id == id)
-        .map(|entry| dir.join(&entry.path))
+        .map(|entry| vault.join(&entry.path))
         .ok_or_else(|| Error::msg("note.not_found", format!("không có ghi chú nào tên {id}")))
 }
 

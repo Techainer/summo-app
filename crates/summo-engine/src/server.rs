@@ -4021,7 +4021,9 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
             if let Err(e) = spec.validate() {
                 return vec![Event::error(&e)];
             }
-            match engine.begin(&spec) {
+            // `None`: this build has no pipeline, so nothing writes a meeting file and there is
+            // no page for the interface to open.
+            match engine.begin(&spec, None) {
                 Ok(()) => vec![Event::info(format!(
                     "session started with {}",
                     spec.live_model
@@ -4033,6 +4035,10 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
             engine.end();
             vec![Event::info("session stopped")]
         }
+        Command::Notes { .. } => vec![Event::error(&summo_core::Error::Other(
+            "this build has no recording pipeline, so there is no meeting to write notes into"
+                .into(),
+        ))],
         Command::ModelPull { id } => {
             // Downloading is a long, cancellable, resumable operation with its own progress
             // reporting, and it does not belong on a socket that is also carrying live audio.
@@ -4098,10 +4104,14 @@ fn handle_command_with_models(
             // live model is exactly what validation refuses. Resolving afterwards would mean the
             // interface — which deliberately names no model — could never start a recording at all.
             let spec = resolve_models(&spec, engine);
-            if let Err(e) = engine.begin(&spec) {
+            // Minted here rather than inside `start_session`, so the status carries it from the
+            // first moment a client can ask. Otherwise there is a window — model loading, which
+            // takes seconds — where the app is told it is recording and cannot be told into what.
+            let meeting = summo_core::MeetingId::new();
+            if let Err(e) = engine.begin(&spec, Some(meeting.clone())) {
                 return (vec![Event::error(&e)], session);
             }
-            match start_session(&spec, engine) {
+            match start_session(&spec, meeting, engine) {
                 Ok(active) => {
                     let path = active.recorder.path().display().to_string();
                     (
@@ -4119,6 +4129,32 @@ fn handle_command_with_models(
                     (vec![Event::error(&e)], None)
                 }
             }
+        }
+        // What the user is typing while the meeting runs, into the same file the transcript is
+        // going into. Through the recorder, because the recorder holds the whole document in
+        // memory and rewrites it on every autosave — anything else writing to that path would be
+        // overwritten within ten seconds.
+        //
+        // Saved immediately rather than left to the autosave: this arrives debounced already, and
+        // a person who typed a sentence and closed the laptop should not lose it to a timer.
+        Command::Notes { text } => {
+            let mut session = session;
+            let Some(active) = session.as_mut() else {
+                return (
+                    vec![Event::error(&summo_core::Error::Other(
+                        "nothing is recording, so there is no meeting to write notes into".into(),
+                    ))],
+                    session,
+                );
+            };
+            active
+                .recorder
+                .set_section(summo_vault::meeting::NOTES_HEADING, text);
+            let events = match active.recorder.save() {
+                Ok(()) => Vec::new(),
+                Err(e) => vec![Event::error(&e)],
+            };
+            (events, session)
         }
         Command::SessionStop => {
             let mut events = Vec::new();
@@ -4278,6 +4314,7 @@ fn handle_command_with_models(
 #[cfg(feature = "models")]
 fn start_session(
     spec: &crate::protocol::SessionSpec,
+    id: summo_core::MeetingId,
     engine: &EngineState,
 ) -> summo_core::Result<ActiveSession> {
     use time::OffsetDateTime;
@@ -4303,8 +4340,6 @@ fn start_session(
     if let Some(refine) = &spec.refine_model {
         models.push(("refine".to_string(), refine.clone()));
     }
-
-    let id = summo_core::MeetingId::new();
 
     // Read the setting at the start of the meeting rather than per frame: changing it mid-recording
     // would leave a file with a hole in it, which is worse than either answer.
@@ -6707,7 +6742,7 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
     fn audio_frames_advance_the_clock() {
         let (_tmp, engine) = engine();
         engine
-            .begin(&crate::protocol::SessionSpec::new("m"))
+            .begin(&crate::protocol::SessionSpec::new("m"), None)
             .unwrap();
 
         let frame = crate::protocol::encode_frame(
@@ -6727,7 +6762,7 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
     fn a_corrupt_audio_frame_is_reported_and_ignored() {
         let (_tmp, engine) = engine();
         engine
-            .begin(&crate::protocol::SessionSpec::new("m"))
+            .begin(&crate::protocol::SessionSpec::new("m"), None)
             .unwrap();
 
         let events = handle_audio(&[9, 0, 0, 0, 0], &engine);

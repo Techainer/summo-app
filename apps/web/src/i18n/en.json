@@ -128,7 +128,8 @@
     "summary_shape": "Shape",
     "shape_auto": "Choose for me",
     "play_from": "Play from {time}",
-    "no_transcript": "Nothing was said yet."
+    "no_transcript": "Nothing was said yet.",
+    "your_notes": "Your notes"
   },
   "export": {
     "title": "Export & translate",

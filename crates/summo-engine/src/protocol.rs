@@ -19,6 +19,16 @@ pub enum Command {
     SessionStart(Box<SessionSpec>),
     /// End the session, flushing any utterance still open.
     SessionStop,
+    /// What the user has typed into the meeting so far.
+    ///
+    /// The whole section every time, not a diff: the app holds the text and this is a save, so a
+    /// dropped frame costs nothing and there is no order to get wrong.
+    ///
+    /// Over the socket rather than as an HTTP route, because the recorder lives in the socket's own
+    /// task and holds the document in memory. A second writer reaching the file directly would be
+    /// overwritten by the next autosave — silently, and only for the person who typed while the
+    /// meeting was running.
+    Notes { text: String },
     /// Load a model without starting a session, so the first recording is not delayed by it.
     ModelLoad { id: String },
     /// Fetch and install a model from the registry.

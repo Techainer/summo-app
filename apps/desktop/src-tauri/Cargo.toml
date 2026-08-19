@@ -19,7 +19,10 @@ tauri-build = { version = "2", features = [] }
 tokio = { version = "1", features = ["macros"] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+# `image-png`: the tray icon is a PNG embedded in the binary, and without this feature
+# `Image::from_bytes` does not exist — only a raw RGBA constructor, which would mean
+# checking a decoded bitmap into the repository.
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"

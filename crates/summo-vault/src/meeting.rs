@@ -36,6 +36,14 @@ use summo_core::{
 /// Section heading for the transcript body. Everything after it is parsed as utterances.
 const TRANSCRIPT_HEADING: &str = "Transcript";
 
+/// Section heading for what the user typed while the meeting was happening.
+///
+/// Public, and a constant rather than a string in three files, because three parts of the system
+/// have to agree on it exactly: the daemon writes it while recording, the summariser reads it, and
+/// a person opening the file in Obsidian sees it. A typo in any one of them would be a note that
+/// silently stopped reaching the summary.
+pub const NOTES_HEADING: &str = "Ghi chú";
+
 /// Document metadata.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Frontmatter {

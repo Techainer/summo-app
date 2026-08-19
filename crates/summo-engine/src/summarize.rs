@@ -79,7 +79,12 @@ pub async fn run(
         .into_iter()
         .find(|l| !l.is_empty())
         .unwrap_or("the language of the transcript");
-    let messages = prompt::summarize_with(&transcript, &template.instructions(), language);
+    // What the user typed while it was happening, if they typed anything. Read from the
+    // document rather than passed in: whoever asks for a summary — the button, the draft, an
+    // agent — gets the same notes, because they are part of the meeting rather than part of the
+    // request.
+    let notes = doc.section(summo_vault::meeting::NOTES_HEADING);
+    let messages = prompt::summarize_with(&transcript, notes, &template.instructions(), language);
     let response = client.complete(&messages).await?;
 
     let written = apply(&mut doc, &response, template);

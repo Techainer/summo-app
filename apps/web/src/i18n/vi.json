@@ -128,7 +128,8 @@
     "summary_shape": "Mẫu",
     "shape_auto": "Tự chọn",
     "play_from": "Nghe từ {time}",
-    "no_transcript": "Chưa có ai nói gì."
+    "no_transcript": "Chưa có ai nói gì.",
+    "your_notes": "Ghi chú của bạn"
   },
   "export": {
     "title": "Xuất & dịch",

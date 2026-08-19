@@ -15,6 +15,7 @@ export const IDLE: SessionState = {
   error: null,
   deviceLabel: null,
   sampleRate: null,
+  meeting: null,
 };
 
 export interface Stat {
@@ -40,6 +41,14 @@ export interface EngineValue {
   toggle: () => void;
   /** Change the language mid-meeting, without ending it. */
   retune: (language: string) => void;
+  /**
+   * Save what the user has typed into the meeting that is running.
+   *
+   * On the context rather than reached through the session object, because the editor that calls
+   * it is the same editor a finished note uses — it should not have to know whether the document
+   * it is in happens to be recording.
+   */
+  notes: (text: string) => void;
 }
 
 export const EngineContext = createContext<EngineValue | null>(null);

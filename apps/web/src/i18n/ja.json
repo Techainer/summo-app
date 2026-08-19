@@ -128,7 +128,8 @@
     "summary_shape": "形式",
     "shape_auto": "おまかせ",
     "play_from": "{time}から再生",
-    "no_transcript": "まだ何も話されていません。"
+    "no_transcript": "まだ何も話されていません。",
+    "your_notes": "あなたのメモ"
   },
   "export": {
     "title": "書き出しと翻訳",

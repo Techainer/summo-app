@@ -14,6 +14,7 @@ import { EngineClient, type ConnectionState, type Handshake } from "./engine";
 import { Microphone, explainMicrophoneError } from "./microphone";
 import type { Failure } from "./errors";
 import type { Event, SessionSpec } from "./protocol";
+import { url } from "./library";
 
 export interface SessionCallbacks {
   onEvent: (event: Event) => void;
@@ -35,6 +36,16 @@ export interface SessionState {
   deviceLabel: string | null;
   /** The device's real rate. Below 16 kHz means a headset in telephony mode. */
   sampleRate: number | null;
+  /**
+   * The document this recording is writing into.
+   *
+   * A meeting is a note with a transcript in it, and this is which note. Without it the app knew a
+   * recording was running and could not say into what, so recording had a screen of its own with a
+   * transcript on it and nowhere to type — the one thing somebody in a meeting most wants to do.
+   *
+   * `null` while starting, and on a build with no recognition, where there is genuinely no file.
+   */
+  meeting: string | null;
 }
 
 export const NARROWBAND_HZ = 16000;
@@ -48,6 +59,7 @@ export class Session {
     error: null,
     deviceLabel: null,
     sampleRate: null,
+    meeting: null,
   };
 
   constructor(
@@ -126,6 +138,40 @@ export class Session {
       deviceLabel: this.microphone.deviceLabel,
       sampleRate: this.microphone.sampleRate,
     });
+
+    // Which document this is going into, asked of the daemon rather than parsed out of the log
+    // line it prints. Not awaited: recording has already started, and the page it opens is a
+    // convenience — a session that records perfectly while this request is in flight is a session
+    // that recorded perfectly.
+    void this.findMeeting();
+  }
+
+  /**
+   * Ask what the daemon is writing into, briefly.
+   *
+   * The id is minted before the session begins, so the first answer is usually the right one. It is
+   * polled anyway because `start` returns as soon as the microphone is open, and on a slow machine
+   * the daemon may still be loading a model — three attempts over a second and a half, then give
+   * up, because a missing id costs the live view and nothing else.
+   */
+  private async findMeeting(): Promise<void> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (!this.state.recording) return;
+      try {
+        const response = await fetch(url(this.handshake, "/status"));
+        if (response.ok) {
+          const body = (await response.json()) as { meeting?: string };
+          if (body.meeting) {
+            this.update({ meeting: body.meeting });
+            return;
+          }
+        }
+      } catch {
+        // The status endpoint being briefly unreachable is not worth a banner: the socket is the
+        // thing carrying the meeting, and it is up.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
   }
 
   /**
@@ -148,12 +194,28 @@ export class Session {
     // Stop the daemon's session before closing the socket, so it flushes the open utterance and
     // writes the file rather than treating the disconnect as an abandoned recording.
     this.client?.send({ cmd: "session_stop" });
+    // The meeting stays: the page the user is looking at is the one that was just recorded, and
+    // clearing it here would close the document out from under them at the moment they want to
+    // read it.
     this.update({ recording: false });
 
     // Give the daemon a moment to answer with the saved path before the socket goes.
     const client = this.client;
     this.client = null;
     setTimeout(() => client?.close(), 2000);
+  }
+
+  /**
+   * What the user has typed into the meeting so far.
+   *
+   * The whole section every time, because this is a save rather than a diff — the app owns the
+   * text and the daemon owns the file. Silently ignored when nothing is recording: the editor is
+   * the same editor a finished note uses, and it saves through the notes API once the meeting has
+   * ended.
+   */
+  notes(text: string): void {
+    if (!this.state.recording) return;
+    this.client?.send({ cmd: "notes", text });
   }
 
   /** Audio frames buffered because the socket is down. Surfaced in the status bar. */

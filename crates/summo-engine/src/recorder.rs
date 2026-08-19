@@ -60,13 +60,26 @@ impl Recorder {
         let doc = MeetingDoc::new(frontmatter, title);
         let path = unique_path(&dir, &meeting_stem(date, title));
 
-        Ok(Self {
+        let mut recorder = Self {
             doc,
             path,
             last_save: Instant::now(),
             dirty: true,
             saves: 0,
-        })
+        };
+
+        // Written now, empty, rather than at the first autosave ten seconds later.
+        //
+        // A meeting is a document from the moment it starts. The interface opens it as soon as
+        // recording begins — that is where the user types their own notes — and a page that
+        // answers `no meeting with id …` for the first ten seconds of every recording is a page
+        // nobody can type into at the point they most want to.
+        //
+        // It is also what a crash should leave behind. Before this, a daemon that died nine
+        // seconds in left nothing at all: no file, no frontmatter, no evidence the meeting had
+        // happened.
+        recorder.save()?;
+        Ok(recorder)
     }
 
     #[must_use]
@@ -360,21 +373,44 @@ mod tests {
             rec.maybe_save().unwrap(),
             "should save once the interval has passed"
         );
-        assert_eq!(rec.save_count(), 1);
+        // Two: the empty document written when the recording started, and this one. Starting
+        // writes the file so the interface can open the meeting immediately — see `start`.
+        assert_eq!(rec.save_count(), 2);
     }
 
     #[test]
     fn an_idle_meeting_does_not_rewrite_the_same_bytes() {
         let tmp = tempfile::tempdir().unwrap();
         let mut rec = recorder(tmp.path());
-        rec.save().unwrap();
+        // `start` has already written once; this is the state a meeting sits in between
+        // utterances.
+        let after_start = rec.save_count();
 
         rec.last_save = Instant::now() - AUTOSAVE_INTERVAL - Duration::from_millis(1);
         assert!(
             !rec.maybe_save().unwrap(),
             "nothing changed, so nothing should be written"
         );
-        assert_eq!(rec.save_count(), 1);
+        assert_eq!(rec.save_count(), after_start);
+    }
+
+    /// The file exists before anybody has said anything.
+    ///
+    /// The interface opens the meeting the moment recording starts — that is where the user types
+    /// their own notes — and for the first ten seconds of every recording the page answered
+    /// `no meeting with id …`, because the document lived only in the daemon's memory until the
+    /// first autosave.
+    #[test]
+    fn a_meeting_is_on_disk_from_the_moment_it_starts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let rec = recorder(tmp.path());
+        assert!(
+            rec.path().is_file(),
+            "no file at {} right after start",
+            rec.path().display()
+        );
+        let written = std::fs::read_to_string(rec.path()).unwrap();
+        assert!(written.contains("id:"), "no frontmatter: {written}");
     }
 
     #[test]

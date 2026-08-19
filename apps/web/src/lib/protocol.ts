@@ -63,6 +63,10 @@ export interface SessionSpec {
 export type Command =
   | ({ cmd: "session_start" } & SessionSpec)
   | { cmd: "session_stop" }
+  // What the user has typed into the meeting so far — the whole section, not a diff. Over the
+  // socket because the daemon's recorder holds the document in memory and rewrites it on every
+  // autosave; a second writer reaching the file would be overwritten within ten seconds.
+  | { cmd: "notes"; text: string }
   // Empty `id` means "whatever the settings resolve to", the same as `session_start`.
   | { cmd: "model_load"; id?: string }
   | { cmd: "model_pull"; id: string }
