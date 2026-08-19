@@ -113,18 +113,25 @@ impl Downloader {
 
         let mut last_err = None;
         let urls: Vec<&String> = std::iter::once(&entry.url).chain(&entry.mirror).collect();
+        // Addresses this round gave up on for good — a 404, a checksum mismatch, anything that
+        // will still be true in ten seconds. Retrying those is time spent proving the same thing.
+        let mut dead = vec![false; urls.len()];
 
-        for url in urls {
-            for attempt in 0..=self.max_retries {
+        // Every address once, then every address again. This loop used to be the other way round:
+        // four attempts at the first URL before the second was tried at all. Every manifest's `url`
+        // is `huggingface.co`, which Vietnamese consumer ISPs block, so the common case was four
+        // connect timeouts — a minute of nothing — before reaching a mirror that answers straight
+        // away. The retries are for a flaky connection; the mirrors are for a blocked one, and
+        // waiting out the first before using the second treats a block as if it were flakiness.
+        for round in 0..=self.max_retries {
+            for (index, url) in urls.iter().enumerate() {
+                if dead[index] {
+                    continue;
+                }
                 match self.try_one(url, entry, &partial, &mut on_progress).await {
                     Ok(()) => {
                         self.promote(&partial, dest).await?;
                         return Ok(());
-                    }
-                    Err(e) if e.is_transient() && attempt < self.max_retries => {
-                        let backoff = Duration::from_millis(500 * u64::from(attempt + 1));
-                        tracing::warn!(url, attempt, error = %e, "download failed, retrying");
-                        tokio::time::sleep(backoff).await;
                     }
                     Err(e) => {
                         // A checksum mismatch means the partial file is poisoned; drop it so the
@@ -132,11 +139,17 @@ impl Downloader {
                         if matches!(e, Error::ChecksumMismatch { .. }) {
                             tokio::fs::remove_file(&partial).await.ok();
                         }
-                        tracing::warn!(url, error = %e, "source failed, trying next mirror");
+                        dead[index] = !e.is_transient();
+                        tracing::warn!(url, round, error = %e, "source failed, trying the next one");
                         last_err = Some(e);
-                        break;
                     }
                 }
+            }
+            if dead.iter().all(|&gone| gone) {
+                break;
+            }
+            if round < self.max_retries {
+                tokio::time::sleep(Duration::from_millis(500 * u64::from(round + 1))).await;
             }
         }
 
@@ -386,6 +399,79 @@ mod tests {
         let mut calls = 0;
         dl.fetch(&entry, &dest, |_| calls += 1).await.unwrap();
         assert_eq!(calls, 1, "should report completion without transferring");
+    }
+
+    /// A listener that accepts and hangs up, counting how many times it was asked.
+    ///
+    /// The closest a test can get to a blocked host without waiting for a real connect timeout: the
+    /// connection is made and then broken, which reqwest reports the same way it reports the rest
+    /// of a network going wrong.
+    async fn refuses() -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::sync::{Arc, atomic::AtomicUsize};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/model.bin", listener.local_addr().unwrap());
+        let hits = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&hits);
+        tokio::spawn(async move {
+            loop {
+                let Ok((stream, _)) = listener.accept().await else {
+                    return;
+                };
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                drop(stream);
+            }
+        });
+        (url, hits)
+    }
+
+    /// A listener that answers one GET with `payload`.
+    async fn serves(payload: Vec<u8>) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/model.bin", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let mut scratch = [0_u8; 1024];
+                let _ = stream.read(&mut scratch).await;
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                    payload.len()
+                );
+                let _ = stream.write_all(head.as_bytes()).await;
+                let _ = stream.write_all(&payload).await;
+                let _ = stream.flush().await;
+            }
+        });
+        url
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn every_mirror_is_tried_before_any_url_is_retried() {
+        let tmp = tempfile::tempdir().unwrap();
+        let payload = b"weights".repeat(64).to_vec();
+
+        let (blocked, hits) = refuses().await;
+        let working = serves(payload.clone()).await;
+
+        // The shape of a real manifest on a Vietnamese connection: the canonical address is
+        // unreachable and a mirror is fine.
+        let mut entry = entry_for(&payload, blocked);
+        entry.mirror = vec![working];
+
+        let dl = Downloader::new(tmp.path().join("staging"))
+            .unwrap()
+            .with_max_retries(3);
+        let dest = tmp.path().join("out.bin");
+        dl.fetch(&entry, &dest, |_| {}).await.unwrap();
+
+        assert_eq!(tokio::fs::read(&dest).await.unwrap(), payload);
+        assert_eq!(
+            hits.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "the blocked address should be tried once and then left alone, not retried four times \
+             before the mirror is reached"
+        );
     }
 
     #[tokio::test]

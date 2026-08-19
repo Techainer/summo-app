@@ -44,8 +44,7 @@
       "binaries/summo-engine"
     ],
     "resources": {
-      "binaries/lib/*": "lib/",
-      "binaries/models/**/*": "models/"
+      "binaries/lib/*": "lib/"
     },
     "shortDescription": "Meeting notes that run on your machine",
     "longDescription": "Speech recognition and speaker attribution run locally. Audio never leaves the device.",

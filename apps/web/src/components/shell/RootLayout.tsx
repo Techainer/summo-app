@@ -69,6 +69,7 @@ import { SCHEMES, choose as chooseScheme, read as readScheme, type Scheme } from
 import { usePaletteShortcut } from "../../lib/use-palette-shortcut";
 import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
+import { QuickPrefs } from "./QuickPrefs";
 import { WindowControls } from "./WindowControls";
 import { NudgeBar } from "./NudgeBar";
 import { Unreachable } from "./Unreachable";
@@ -675,6 +676,9 @@ export function RootLayout({ children }: { children: ReactNode }) {
           <span className="hidden sm:flex">
             <Waveform level={engine.level} active={engine.session.recording} />
           </span>
+          {/* Language and light-or-dark. Two clicks away in Settings until now, which is two clicks
+              too many for "this app opened in a language I do not read". */}
+          <QuickPrefs />
           {/* The assistant, from every screen. It was a destination you navigated away to, which
               is the wrong shape for asking about the thing currently on screen. */}
           <button

@@ -434,7 +434,9 @@
     "reason_fast": "Chính xác {accuracy}%, nhanh gấp {times}× thời gian thực trên máy này",
     "reason_slow": "Quá chậm để hiện chữ trực tiếp ở đây (hệ số thời gian thực {rtf}); vẫn dùng được để chạy lại bản ghi sau buổi họp",
     "reason_unmeasured": "Chính xác {accuracy}%, nhưng chưa từng đo trên phần cứng như máy này",
-    "reason_unknown": "Chưa có số đo nào cho máy này"
+    "reason_unknown": "Chưa có số đo nào cho máy này",
+    "language": "Ngôn ngữ",
+    "interface": "Ngôn ngữ giao diện"
   },
   "tour": {
     "title": "Hướng dẫn nhanh",
