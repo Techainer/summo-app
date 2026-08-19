@@ -147,13 +147,58 @@ export function NoteEditor({
     timer.current = window.setTimeout(() => void persist(), SAVE_DEBOUNCE_MS);
   };
 
-  // A note half-typed when the screen closes must not be lost to a timer that never fired.
-  useEffect(
-    () => () => {
-      if (timer.current !== null) window.clearTimeout(timer.current);
-    },
-    [],
-  );
+  /**
+   * A note half-typed when the screen closes must not be lost to a timer that never fired.
+   *
+   * That sentence was the comment on this effect for as long as it has existed, and the body of it
+   * cleared the timer and stopped. So closing a note, navigating away, or quitting inside the
+   * two-second debounce threw away everything typed since the last save — on the one path whose
+   * comment promised it would not, in the app whose pitch is that a note is a file you own.
+   *
+   * Three ways out of an editor, and all three end here:
+   *
+   * - **Unmounting** — clicking another note, pressing Back, closing the pane.
+   * - **The tab going away** — `visibilitychange` to `hidden` is the only event a browser reliably
+   *   delivers when a window is closed, a tab is switched or a phone is locked. `beforeunload` is
+   *   not fired on mobile Safari and is unreliable elsewhere; it is kept as well because on a
+   *   desktop it fires first and a second save of identical text costs nothing.
+   * - **The debounce firing normally**, which is the path that already worked.
+   *
+   * `flush` reads the ref rather than state for the same reason the timer does: it may run from a
+   * listener that closed over an older render.
+   */
+  const flush = useCallback(() => {
+    if (timer.current === null) return;
+    window.clearTimeout(timer.current);
+    timer.current = null;
+    void persist();
+  }, [persist]);
+
+  // Through a ref, so the listeners are attached once.
+  //
+  // With `flush` as the dependency the effect would re-run whenever `persist` changed identity —
+  // and its cleanup calls `flush`, so every such re-render would save mid-sentence and defeat the
+  // debounce it exists to protect. The listeners never change; what they call does.
+  const flushRef = useRef(flush);
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [flush]);
+
+  useEffect(() => {
+    const now = () => flushRef.current();
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") now();
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("beforeunload", now);
+    window.addEventListener("pagehide", now);
+    return () => {
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("beforeunload", now);
+      window.removeEventListener("pagehide", now);
+      now();
+    };
+  }, []);
 
   const remove = async () => {
     try {

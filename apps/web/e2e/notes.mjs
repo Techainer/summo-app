@@ -533,6 +533,51 @@ const id = await (async () => {
   }
 }
 
+// ---- typing and leaving inside the debounce ------------------------------
+//
+// The autosave fires two seconds after the last keystroke. Everything above waits for it, which is
+// why none of it caught this: the cleanup that runs when the editor goes away cleared the pending
+// timer and never saved, so a sentence typed and then navigated away from within two seconds was
+// gone — from the editor whose comment said, in those words, that it must not be.
+//
+// Two seconds is not an unusual amount of time to spend on a sentence before clicking something.
+{
+  const made = await (
+    await fetch(`${engine.url}/notes?token=${engine.token}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Rời đi ngay", body: "" }),
+    })
+  ).json();
+
+  await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}#/pages/${made.id}`, {
+    waitUntil: "networkidle",
+  });
+  const editor = page.locator(".tiptap");
+  await editor.waitFor({ timeout: 10000 });
+  await editor.click();
+  await page.keyboard.type("Chưa kịp lưu đã đi.");
+
+  // Straight out, well inside the two seconds, and *inside the app* — a sidebar click, which is
+  // what a person does. Not `page.goto`: a full page load fires `pagehide`, and a suite that
+  // navigates that way is testing the unload listener rather than the thing that actually happens
+  // when somebody clicks another screen. This distinction is not theoretical — the first version
+  // of this test passed against the broken editor for exactly that reason.
+  await page.waitForTimeout(200);
+  await page
+    .getByRole("navigation", { name: "Màn hình" })
+    .getByRole("button", { name: "Đã lưu", exact: true })
+    .click();
+  await page.waitForTimeout(1500);
+
+  const saved = await (
+    await fetch(`${engine.url}/notes/${made.id}?token=${engine.token}`)
+  ).json();
+  if (!(saved.text ?? "").includes("Chưa kịp lưu đã đi.")) {
+    problems.push(`leaving inside the debounce lost the text: ${JSON.stringify(saved.text)}`);
+  }
+}
+
 await browser.close();
 await engine.stop();
 
