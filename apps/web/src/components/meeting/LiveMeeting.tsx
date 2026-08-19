@@ -26,7 +26,6 @@ import { SAVE_DEBOUNCE_MS } from "../../lib/notes";
  */
 const RichNote = lazy(() => import("../page/RichNote").then((m) => ({ default: m.RichNote })));
 
-
 export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
   const { transcript, notes } = useEngine();
   const t = useT();
@@ -65,7 +64,7 @@ export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
     <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
       <section className="flex min-h-0 flex-col gap-2.5">
         <SectionTitle>{t("meeting.your_notes")}</SectionTitle>
-        <div className="border-line bg-bg-raised min-h-0 flex-1 overflow-y-auto rounded-card border shadow-[var(--shadow-card)]">
+        <div className="border-line bg-bg-raised rounded-card min-h-0 flex-1 overflow-y-auto border shadow-[var(--shadow-card)]">
           {plain ? (
             // The same fallback a note has: an editor that cannot hold something without changing
             // it hands the text back as text rather than quietly rewriting it.

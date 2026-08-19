@@ -333,7 +333,9 @@ export function PageScreen() {
     return (
       <div className="flex h-full min-h-0 flex-col gap-4 p-5">
         {meta}
-        <LiveMeeting initialNotes={detail?.sections.find((s) => s.heading === NOTES_HEADING)?.body ?? ""} />
+        <LiveMeeting
+          initialNotes={detail?.sections.find((s) => s.heading === NOTES_HEADING)?.body ?? ""}
+        />
       </div>
     );
   }

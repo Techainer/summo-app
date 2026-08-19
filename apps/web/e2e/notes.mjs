@@ -570,9 +570,7 @@ const id = await (async () => {
     .click();
   await page.waitForTimeout(1500);
 
-  const saved = await (
-    await fetch(`${engine.url}/notes/${made.id}?token=${engine.token}`)
-  ).json();
+  const saved = await (await fetch(`${engine.url}/notes/${made.id}?token=${engine.token}`)).json();
   if (!(saved.text ?? "").includes("Chưa kịp lưu đã đi.")) {
     problems.push(`leaving inside the debounce lost the text: ${JSON.stringify(saved.text)}`);
   }
