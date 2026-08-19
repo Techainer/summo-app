@@ -53,7 +53,16 @@ OUT="apps/desktop/src-tauri/binaries"
 
 # The models that ship inside the installer, so a fresh install can record without a download.
 # Skipped when they are already there, which is every build after the first.
-bash "$(dirname "$0")/bundle-models.sh"
+#
+# `./scripts/…`, not `$(dirname "$0")/…`: this script has already `cd`-ed to the repository root by
+# the time it gets here, so a path relative to where it was *invoked* points at nothing. Tauri runs
+# it as `bash ../../scripts/sidecar.sh` from `apps/desktop/src-tauri`, which made this
+#
+#     bash: ../../scripts/bundle-models.sh: No such file or directory
+#
+# on every platform in the release job — and not on the machine it was written on, where it was run
+# from the root.
+bash ./scripts/bundle-models.sh
 
 echo "building summo-engine (${PROFILE}, ${FEATURES})"
 cargo build "${CARGO_PROFILE[@]}" --bin summo-engine --features "${FEATURES}"
