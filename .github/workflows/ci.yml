@@ -632,7 +632,11 @@ jobs:
       # on a mirror that was not answering. It cannot be handed flags, so the machine is configured
       # first and it inherits the timeouts.
       - run: ./scripts/apt.sh
+      # Bounded, because this step has twice sat for more than half an hour inside an `apt-get` it
+      # runs itself. Ten minutes is far longer than it has ever legitimately taken; hitting it
+      # means the archive is unreachable, which is worth failing on rather than waiting out.
       - run: pnpm -C apps/web exec playwright install --with-deps chromium
+        timeout-minutes: 10
       # The model blobs the catalogue suite installs, kept between runs.
       #
       # `e2e/mirror.mjs` caches them so a machine that has run the suites once needs no network —
