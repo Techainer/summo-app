@@ -259,8 +259,9 @@ fn execute(
     check(source)?;
     imports.set(job_id, JobState::Extracting);
 
-    let tools = summo_media::probe()?;
-    let info = tools.info(source)?;
+    // No `probe()` here any more. Requiring ffmpeg to *exist* before looking at a file meant an
+    // import failed on a machine that could have decoded it perfectly well in this process.
+    let info = summo_media::info_of(source)?;
     if !info.has_audio {
         return Err(Error::msg(
             "import.no_audio",
@@ -272,7 +273,7 @@ fn execute(
     // stored under it — the file and the note have to agree on which meeting they belong to.
     let id = MeetingId::new();
     let wav_path = audio_path(paths, &id);
-    tools.to_wav(source, &wav_path)?;
+    summo_media::to_wav16(source, &wav_path)?;
 
     let wav = crate::offline::read_wav(&wav_path)?;
     let mut runner = crate::runner::SessionRunner::new(spec, store, hw)?;

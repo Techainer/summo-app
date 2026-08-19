@@ -937,12 +937,12 @@ async fn import(
     }
 
     if dry_run {
-        // ffmpeg is probed here and only here on this path: a dry run should still fail loudly if
-        // the thing that does the decoding is missing.
-        let tools = summo_media::probe()?;
+        // Each file is asked about individually rather than probing ffmpeg once up front: most
+        // formats are decoded in this process now, so a missing ffmpeg is only a problem for the
+        // files that actually need it — and a dry run exists to say which ones those are.
         for file in &files {
             let title = summo_media::title_from(file);
-            match tools.info(file) {
+            match summo_media::info_of(file) {
                 Ok(info) if !info.has_audio => println!("  bỏ qua  {title} — không có âm thanh"),
                 Ok(info) => println!("  sẽ nhập {title} — {}", length_of(info.duration_s)),
                 Err(e) => println!("  lỗi     {title} — {e}"),

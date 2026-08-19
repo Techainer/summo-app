@@ -110,7 +110,10 @@ cpal = "0.16"
 rubato = "0.16"
 rtrb = "0.3"
 hound = "3"
-symphonia = { version = "0.5", features = ["all-codecs"] }
+# `all`, not `all-codecs`. Codecs decode a stream; *formats* are what a file is wrapped in, and
+# `.m4a` and `.mp4` are ISO-BMFF containers — with codecs only, Symphonia refused both with "end of
+# stream", which is every voice memo an iPhone makes and every recording Zoom writes.
+symphonia = { version = "0.5", features = ["all"] }
 
 # --- ml runtime ---
 sherpa-rs = "0.6"
