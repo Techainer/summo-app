@@ -258,7 +258,12 @@ pub async fn generate(
     };
 
     let language = language(paths, &template.language);
-    let messages = prompt::summarize_with(&transcript, &template.instructions(), &language);
+    // What the user typed while it was happening, if they typed anything. Read from the
+    // document rather than passed in: whoever asks for a summary — the button, the draft, an
+    // agent — gets the same notes, because they are part of the meeting rather than part of the
+    // request.
+    let notes = doc.section(summo_vault::meeting::NOTES_HEADING);
+    let messages = prompt::summarize_with(&transcript, notes, &template.instructions(), &language);
     let response = client.complete(&messages).await?;
 
     let sections = Draft::sections_from(&response);

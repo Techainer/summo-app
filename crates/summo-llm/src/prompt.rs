@@ -88,16 +88,60 @@ speech recognition. The transcript contains recognition errors. Never invent fac
 or commitments that are not in the transcript. If something is unclear, say so rather than \
 guessing. Where the transcript supports a claim, cite the timestamp in the form [t=MM:SS].";
 
+/// What to do with the notes a person typed while the meeting was happening.
+///
+/// Added to the ground rules only when there are notes, so a meeting nobody typed in produces
+/// exactly the prompt it always did.
+///
+/// The precedence is the point, and it runs the opposite way to the rest of this file. Everywhere
+/// else the transcript is the authority and the model is told not to stray from it; here a human
+/// wrote something down *during* the meeting, on purpose, and the recogniser did not. When the two
+/// disagree about a date, a name or a decision, the person was right and the recogniser misheard —
+/// that is the ordinary case, not the exception.
+const NOTES_RULES: &str = "The user typed notes during this meeting. They are what a person in the \
+room chose to write down, so they outrank the transcript: where the two disagree about a name, a \
+number, a date or a decision, follow the notes — the transcript is automatic speech recognition and \
+these are the words a human wrote on purpose. Use the transcript for detail, for quotes and for the \
+timestamps you cite, and for anything the notes do not mention. Do not repeat the notes back as a \
+list; write one summary that reads as though the same person wrote it afterwards.";
+
+/// The user's own notes, as their own message.
+///
+/// A separate message rather than glued onto the transcript: a model told "here is the transcript"
+/// and handed two documents will summarise both as though they were said aloud, and a note reading
+/// "ask Ngọc about the budget" would come back as a thing somebody said in the meeting.
+fn notes_messages(notes: Option<&str>) -> Vec<Message> {
+    match notes.map(str::trim).filter(|n| !n.is_empty()) {
+        Some(notes) => vec![Message::user(format!("The user's notes:\n\n{notes}"))],
+        None => Vec::new(),
+    }
+}
+
+fn ground_rules(notes: Option<&str>) -> String {
+    match notes.map(str::trim).filter(|n| !n.is_empty()) {
+        Some(_) => format!("{GROUND_RULES}\n\n{NOTES_RULES}"),
+        None => GROUND_RULES.to_string(),
+    }
+}
+
 /// Build the messages for a summary request.
 #[must_use]
-pub fn summarize(transcript: &str, style: SummaryStyle, language: &str) -> Vec<Message> {
-    vec![
+pub fn summarize(
+    transcript: &str,
+    notes: Option<&str>,
+    style: SummaryStyle,
+    language: &str,
+) -> Vec<Message> {
+    let mut messages = vec![
         Message::system(format!(
-            "{GROUND_RULES}\n\nWrite the summary in {language}.\n\n{}",
+            "{}\n\nWrite the summary in {language}.\n\n{}",
+            ground_rules(notes),
             style.instructions()
         )),
         Message::user(format!("Transcript:\n\n{transcript}")),
-    ]
+    ];
+    messages.extend(notes_messages(notes));
+    messages
 }
 
 /// Build the messages for a summary whose shape comes from a user-written template.
@@ -108,13 +152,21 @@ pub fn summarize(transcript: &str, style: SummaryStyle, language: &str) -> Vec<M
 /// stops a model smoothing a messy transcript into confident fiction, and a user editing a template
 /// must not be able to switch them off by accident.
 #[must_use]
-pub fn summarize_with(transcript: &str, instructions: &str, language: &str) -> Vec<Message> {
-    vec![
+pub fn summarize_with(
+    transcript: &str,
+    notes: Option<&str>,
+    instructions: &str,
+    language: &str,
+) -> Vec<Message> {
+    let mut messages = vec![
         Message::system(format!(
-            "{GROUND_RULES}\n\nWrite the summary in {language}.\n\n{instructions}"
+            "{}\n\nWrite the summary in {language}.\n\n{instructions}",
+            ground_rules(notes)
         )),
         Message::user(format!("Transcript:\n\n{transcript}")),
-    ]
+    ];
+    messages.extend(notes_messages(notes));
+    messages
 }
 
 /// Build the messages for translating a run of utterances.
@@ -483,7 +535,7 @@ mod tests {
         // The failure this guards against is a model turning "maybe Ngọc could look at it" into an
         // action item assigned to Ngọc with a deadline.
         for messages in [
-            summarize("...", SummaryStyle::Standard, "Vietnamese"),
+            summarize("...", None, SummaryStyle::Standard, "Vietnamese"),
             answer("what was decided?", "...", "English"),
         ] {
             let system = &messages[0].content;
@@ -496,13 +548,13 @@ mod tests {
 
     #[test]
     fn summary_styles_differ_in_structure() {
-        let brief = summarize("x", SummaryStyle::Brief, "English")[0]
+        let brief = summarize("x", None, SummaryStyle::Brief, "English")[0]
             .content
             .clone();
-        let standard = summarize("x", SummaryStyle::Standard, "English")[0]
+        let standard = summarize("x", None, SummaryStyle::Standard, "English")[0]
             .content
             .clone();
-        let detailed = summarize("x", SummaryStyle::Detailed, "English")[0]
+        let detailed = summarize("x", None, SummaryStyle::Detailed, "English")[0]
             .content
             .clone();
 
@@ -513,8 +565,56 @@ mod tests {
 
     #[test]
     fn the_summary_language_is_stated_explicitly() {
-        let messages = summarize("x", SummaryStyle::Standard, "Vietnamese");
+        let messages = summarize("x", None, SummaryStyle::Standard, "Vietnamese");
         assert!(messages[0].content.contains("Vietnamese"));
+    }
+
+    /// The notes are in the request, and they outrank the transcript.
+    ///
+    /// Asserted on the messages rather than on a summary, because what a model does with a prompt
+    /// is not something a test can pin down — what *can* be pinned down is that the instruction is
+    /// there and says which of two disagreeing sources wins.
+    #[test]
+    fn notes_are_sent_and_are_said_to_outrank_the_transcript() {
+        let messages = summarize(
+            "we agreed Wednesday",
+            Some("- ship on Thursday"),
+            SummaryStyle::Standard,
+            "Vietnamese",
+        );
+
+        assert!(
+            messages[0].content.contains("outrank"),
+            "the system prompt does not say the notes win: {}",
+            messages[0].content
+        );
+        let sent = messages
+            .iter()
+            .any(|m| m.content.contains("- ship on Thursday"));
+        assert!(sent, "the notes were not sent at all: {messages:?}");
+        // Their own message. Appended to the transcript, a note reading "ask Ngọc about the
+        // budget" comes back as something somebody said out loud.
+        assert!(
+            messages
+                .iter()
+                .all(|m| !(m.content.contains("Transcript:") && m.content.contains("Thursday"))),
+            "the notes were glued onto the transcript: {messages:?}"
+        );
+    }
+
+    /// A meeting nobody typed in produces exactly the prompt it always did.
+    #[test]
+    fn no_notes_changes_nothing() {
+        let plain = summarize("x", None, SummaryStyle::Standard, "Vietnamese");
+        let empty = summarize("x", Some("   \n  "), SummaryStyle::Standard, "Vietnamese");
+        assert_eq!(
+            plain.len(),
+            2,
+            "an extra message with no notes to put in it"
+        );
+        assert_eq!(plain[0].content, empty[0].content);
+        assert_eq!(plain.len(), empty.len());
+        assert!(!plain[0].content.contains("outrank"));
     }
 
     #[test]

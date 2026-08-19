@@ -86,7 +86,10 @@ pub async fn summarize(
 
     let client = args.client()?;
     let transcript = prompt::render_transcript(&doc.transcript);
-    let messages = prompt::summarize(&transcript, style, language);
+    // The same notes the app writes while a meeting runs. Read here too, so `summo summarise` and
+    // the button in the interface produce the same summary from the same file.
+    let notes = doc.section(summo_vault::meeting::NOTES_HEADING);
+    let messages = prompt::summarize(&transcript, notes, style, language);
 
     let mut first = true;
     let summary = client
