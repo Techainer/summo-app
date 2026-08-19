@@ -114,11 +114,31 @@ pub struct Index {
     pub models: Vec<IndexEntry>,
 }
 
+/// How long a source gets to itself before the next one is started as well.
+///
+/// The chain used to be strictly sequential, and that is fine when a blocked address *refuses* a
+/// connection: the failure is instant and the next source is tried immediately. Vietnamese ISPs do
+/// not refuse, they drop — the packets go nowhere and the socket waits for a timeout that the
+/// caller pays in full, twice, before the mirror that works is even dialled. Measured on a machine
+/// where `raw.githubusercontent.com` and `cdn.jsdelivr.net` were routed into a black hole, the
+/// setup screen had not listed a single model after three minutes.
+///
+/// So the sources overlap. The first one still gets a head start, because it is the repository
+/// itself and should win on a normal connection; a source that has not answered in this long has
+/// almost certainly not been reached at all.
+const STAGGER: Duration = Duration::from_millis(1200);
+
 /// Resolves model ids to manifests across an ordered list of sources.
 pub struct Registry {
     sources: Vec<RegistrySource>,
     client: reqwest::Client,
     cache: tokio::sync::Mutex<HashMap<ModelId, Manifest>>,
+    /// The source that answered last, tried first next time.
+    ///
+    /// `recommend` reads the index and then a manifest per model. Without this, every one of those
+    /// requests re-pays the head start of two addresses that this network cannot reach — a fixed
+    /// tax per model, on exactly the connection that can least afford it.
+    preferred: std::sync::Mutex<Option<usize>>,
 }
 
 impl Registry {
@@ -142,13 +162,19 @@ impl Registry {
         }
         let client = reqwest::Client::builder()
             .user_agent(concat!("summo/", env!("CARGO_PKG_VERSION")))
-            .timeout(Duration::from_secs(30))
+            // Two numbers rather than one. The old single 30-second timeout covered the whole
+            // request, so an address that never completes a TCP handshake held the chain for the
+            // full thirty seconds — and the catalogue is a few kilobytes, so a *connection* that
+            // has not been made in five seconds is not slow, it is blocked.
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(20))
             .build()
             .map_err(|e| Error::Registry(format!("cannot build http client: {e}")))?;
         Ok(Self {
             sources,
             client,
             cache: tokio::sync::Mutex::new(HashMap::new()),
+            preferred: std::sync::Mutex::new(None),
         })
     }
 
@@ -157,66 +183,107 @@ impl Registry {
         &self.sources
     }
 
-    /// Fetch and validate a manifest, trying each source in order.
-    pub async fn manifest(&self, id: &ModelId) -> Result<Manifest> {
-        if let Some(hit) = self.cache.lock().await.get(id) {
-            return Ok(hit.clone());
+    /// The order to start sources in: whatever worked last, then the configured order.
+    fn order(&self) -> Vec<usize> {
+        let preferred = self.preferred.lock().ok().and_then(|slot| *slot);
+        let mut order: Vec<usize> = (0..self.sources.len()).collect();
+        if let Some(first) = preferred {
+            order.sort_by_key(|&index| usize::from(index != first));
         }
-
-        let mut last_err = None;
-        for source in &self.sources {
-            match self.read(&source.manifest_location(id), source).await {
-                Ok(body) => match Manifest::parse(&body) {
-                    Ok(manifest) => {
-                        // A manifest that claims a different id than the file it was served as
-                        // would let one model masquerade as another.
-                        if &manifest.id != id {
-                            last_err = Some(Error::InvalidManifest {
-                                id: id.to_string(),
-                                reason: format!("manifest declares id `{}`", manifest.id),
-                            });
-                            continue;
-                        }
-                        self.cache.lock().await.insert(id.clone(), manifest.clone());
-                        return Ok(manifest);
-                    }
-                    Err(e) => {
-                        tracing::warn!(%id, error = %e, "invalid manifest, trying next source");
-                        last_err = Some(e);
-                    }
-                },
-                Err(e) => {
-                    tracing::debug!(%id, error = %e, "source miss");
-                    last_err = Some(e);
-                }
-            }
-        }
-        Err(last_err.unwrap_or_else(|| Error::ModelNotFound(id.to_string())))
+        order
     }
 
-    /// Fetch the catalogue from the first source that has one.
-    pub async fn index(&self) -> Result<Index> {
-        // Every source's failure, not the last one's.
-        //
-        // "Could not reach the model list. Check the network" is what a user in Hanoi was told
-        // when two of three sources were blocked by their ISP — advice that sent them to look at
-        // a router that was working. Which addresses were tried and what each answered is the
-        // difference between that and a person who can see the shape of the problem.
+    fn remember(&self, index: usize) {
+        if let Ok(mut slot) = self.preferred.lock() {
+            *slot = Some(index);
+        }
+    }
+
+    /// Ask every source, one starting every {@link STAGGER}, and take the first good answer.
+    ///
+    /// Not "ask all at once": the first source is the repository itself and the last is a copy of
+    /// it, so a normal connection should still read the repository. The head start is what keeps
+    /// that true, and the overlap is what stops one unreachable address from holding the whole
+    /// chain.
+    ///
+    /// Every failure is collected, not just the last. "Could not reach the model list. Check the
+    /// network" is what a user in Hanoi was told when their network was fine — advice that sent
+    /// them to look at a working router. Which addresses were tried, and what each said, is the
+    /// difference between that and a person who can see the shape of the problem.
+    async fn race<T, Fut>(&self, attempt: impl Fn(usize) -> Fut) -> Result<T>
+    where
+        Fut: std::future::Future<Output = Result<T>>,
+    {
+        use futures::stream::{FuturesUnordered, StreamExt};
+
+        let mut running = FuturesUnordered::new();
+        for (place, index) in self.order().into_iter().enumerate() {
+            let attempt = &attempt;
+            running.push(async move {
+                if place > 0 {
+                    tokio::time::sleep(STAGGER * u32::try_from(place).unwrap_or(u32::MAX)).await;
+                }
+                (index, attempt(index).await)
+            });
+        }
+
         let mut failures = Vec::new();
-        for source in &self.sources {
-            let location = source.index_location();
-            match self.read(&location, source).await {
-                Ok(body) => match serde_json::from_str::<Index>(&body) {
-                    Ok(index) => return Ok(index),
-                    Err(e) => failures.push(format!("{location}: malformed index ({e})")),
-                },
-                Err(e) => failures.push(e.to_string()),
+        while let Some((index, outcome)) = running.next().await {
+            match outcome {
+                Ok(value) => {
+                    self.remember(index);
+                    return Ok(value);
+                }
+                Err(e) => {
+                    tracing::debug!(error = %e, "registry source failed");
+                    failures.push(e.to_string());
+                }
             }
         }
         Err(Error::Registry(format!(
             "no registry source answered:\n  {}",
             failures.join("\n  ")
         )))
+    }
+
+    /// Fetch and validate a manifest from whichever source answers first.
+    pub async fn manifest(&self, id: &ModelId) -> Result<Manifest> {
+        if let Some(hit) = self.cache.lock().await.get(id) {
+            return Ok(hit.clone());
+        }
+
+        let manifest = self
+            .race(|index| async move {
+                let source = &self.sources[index];
+                let body = self.read(&source.manifest_location(id), source).await?;
+                let manifest = Manifest::parse(&body)?;
+                // A manifest that claims a different id than the file it was served as would let
+                // one model masquerade as another. Checked inside the attempt, so a source serving
+                // the wrong thing loses the race rather than winning it.
+                if &manifest.id != id {
+                    return Err(Error::InvalidManifest {
+                        id: id.to_string(),
+                        reason: format!("manifest declares id `{}`", manifest.id),
+                    });
+                }
+                Ok(manifest)
+            })
+            .await?;
+
+        self.cache.lock().await.insert(id.clone(), manifest.clone());
+        Ok(manifest)
+    }
+
+    /// Fetch the catalogue from whichever source answers first.
+    pub async fn index(&self) -> Result<Index> {
+        self.race(|index| async move {
+            let source = &self.sources[index];
+            let location = source.index_location();
+            let body = self.read(&location, source).await?;
+            serde_json::from_str::<Index>(&body)
+                .map_err(|e| Error::Registry(format!("{location}: malformed index ({e})")))
+        })
+        .await
     }
 
     async fn read(&self, location: &str, source: &RegistrySource) -> Result<String> {
@@ -297,6 +364,61 @@ mod tests {
         let error = registry.index().await.unwrap_err().to_string();
         assert!(error.contains("first.invalid"), "{error}");
         assert!(error.contains("second.invalid"), "{error}");
+    }
+
+    /// A listener that accepts a connection and then says nothing, ever.
+    ///
+    /// This is what a blocked address on a Vietnamese ISP looks like from inside the process, and
+    /// it is the case the sequential chain could not survive: nothing fails, so nothing moves on.
+    /// `*.invalid` will not do — it fails DNS instantly, which is the easy version of this problem.
+    async fn silent() -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((stream, _)) = listener.accept().await {
+                // Kept, not dropped: dropping it closes the connection, which is an answer.
+                held.push(stream);
+            }
+        });
+        address
+    }
+
+    /// The bug a user hit on the day 0.3.1 shipped, in the smallest form that reproduces it.
+    ///
+    /// Two sources that never answer in front of one that does. Sequentially that costs two full
+    /// request timeouts before the third address is dialled — on the real chain, with a real ISP
+    /// dropping the packets, the setup screen had listed nothing after three minutes and the app
+    /// was unusable. Overlapped, the third source answers a beat after the first is started.
+    #[tokio::test]
+    async fn a_source_that_never_answers_does_not_hold_up_the_one_that_does() {
+        let (dir, _) = dir_registry();
+        let registry = Registry::with_sources(vec![
+            RegistrySource::Http(silent().await),
+            RegistrySource::Http(silent().await),
+            RegistrySource::Dir(dir.path().to_path_buf()),
+        ])
+        .unwrap();
+
+        let started = std::time::Instant::now();
+        let index = registry.index().await.unwrap();
+        let took = started.elapsed();
+
+        assert!(!index.models.is_empty(), "the good source served nothing");
+        assert!(
+            took < STAGGER * 4,
+            "waited {took:?} for a source that was reachable the whole time"
+        );
+
+        // And the next request goes straight there rather than paying the head start again, which
+        // is what `recommend` needs: an index and then a manifest for every model in it.
+        let again = std::time::Instant::now();
+        registry.index().await.unwrap();
+        assert!(
+            again.elapsed() < STAGGER,
+            "the second lookup did not remember which source answered: {:?}",
+            again.elapsed()
+        );
     }
 
     fn sample_manifest(id: &str) -> String {

@@ -427,7 +427,6 @@
     "start": "开始",
     "skip": "以后再说",
     "fix": "去解决",
-    "spoken": "会议会讲哪种语言？",
     "spoken_hint": "它决定下面推荐哪个模型。随时可改，录音前也可以。",
     "local": "在本机运行",
     "permission": "允许使用麦克风",
@@ -436,7 +435,9 @@
     "reason_unmeasured": "准确率 {accuracy}%，但从未在同类硬件上测过",
     "reason_unknown": "本机没有任何测量数据",
     "language": "语言",
-    "interface": "界面语言"
+    "interface": "界面语言",
+    "listing": "正在获取模型列表…",
+    "none_for_language": "暂时没有支持该语言的模型。请在上方换一种语言，或使用多语言模型。"
   },
   "tour": {
     "title": "快速上手",
