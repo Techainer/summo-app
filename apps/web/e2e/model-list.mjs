@@ -269,7 +269,16 @@ if (recognises) {
 // ---- 4. a language nothing covers is not a network problem ---------------
 {
   const { context, page } = await screen();
-  await page.route(RECOMMEND, (route) => route.fulfill({ json: { lang: "vi", models: [] } }));
+  await page.route(RECOMMEND, (route) =>
+    route.fulfill({
+      json: {
+        lang: "vi",
+        models: [],
+        // The daemon has always computed these and nothing ever showed them.
+        rejected: [{ id: "whisper-tiny", reason: "does not cover vi (covers en)" }],
+      },
+    }),
+  );
   await open(page);
   await welcome(page);
   await page
@@ -278,11 +287,17 @@ if (recognises) {
     .waitFor({ timeout: 20000 })
     .catch(() => problems.push("a language with no models was not named as such"));
 
-  if ((await body(page)).includes(BLOCKED)) {
+  const text = await body(page);
+  if (text.includes(BLOCKED)) {
     problems.push("an empty answer from a reachable daemon was reported as a blocked network");
   }
+  // The dead end this used to be: "no model for this language" and nothing else. The daemon knows
+  // which models it looked at and why each was dropped, and now so does the person reading.
+  if (!text.includes("does not cover vi")) {
+    problems.push("the reasons the candidates were rejected were not shown");
+  }
 
-  console.log("empty: offers to change language, does not blame the ISP");
+  console.log("empty: names the models it rejected and why");
   await context.close();
 }
 

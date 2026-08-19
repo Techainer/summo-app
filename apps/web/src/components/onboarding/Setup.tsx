@@ -20,6 +20,7 @@ import {
   size,
   type Install,
   type Recommended,
+  type Rejected,
   type Status,
 } from "../../lib/onboarding";
 import { Button, Card, CardBody, PageGlow, Sticker } from "../ui";
@@ -115,6 +116,8 @@ export function Setup({ onDone }: { onDone: () => void }) {
   const [listing, setListing] = useState<"loading" | "ok" | "failed">("loading");
   /** What the daemon said when it could not reach it — the addresses it tried, in practice. */
   const [listingError, setListingError] = useState<string | null>(null);
+  /** Why the models that do exist were not offered. Empty is a real answer: nothing existed. */
+  const [rejected, setRejected] = useState<Rejected[]>([]);
   // Bumped to ask again. Without it the only way out of a failed catalogue was to quit the app and
   // open it again, which is a lot to ask of somebody whose wifi came back thirty seconds ago.
   const [attempt, setAttempt] = useState(0);
@@ -141,6 +144,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
       .then((result) => {
         if (cancelled) return;
         setModels(result.models);
+        setRejected(result.rejected ?? []);
         // A `200` with an empty list is two different facts, and the daemon now says which. Without
         // this the screen reads a blocked network as "nothing covers Vietnamese" — which it says to
         // the user in Vietnamese, offering them the choice of picking a different language.
@@ -362,7 +366,23 @@ export function Setup({ onDone }: { onDone: () => void }) {
               // healthy install.
               <p className="text-fg-faint mt-4 text-sm">
                 {listing === "loading" && t("setup.listing")}
-                {listing === "ok" && t("setup.none_for_language")}
+                {listing === "ok" && (
+                  <>
+                    {t("setup.none_for_language")}
+                    {/* The daemon has always computed why each candidate was left out and nothing
+                        ever showed it. "Chưa có mô hình nào" is a dead end; "whisper-tiny does not
+                        cover vi" is something a person can act on — and it is the difference
+                        between a catalogue that arrived and one that did not. */}
+                    {rejected.slice(0, 4).map((one) => (
+                      <span
+                        key={one.id}
+                        className="text-fg-faint text-micro mt-1 block break-words"
+                      >
+                        {one.id} — {one.reason}
+                      </span>
+                    ))}
+                  </>
+                )}
                 {listing === "failed" && (
                   <>
                     {t("setup.no_models")}

@@ -122,6 +122,20 @@ export interface Install {
   error?: string;
 }
 
+/** Why a model was left out — the daemon computes these and nothing ever showed them. */
+export interface Rejected {
+  id: string;
+  reason: string;
+}
+
+export interface Ranking {
+  models: Recommended[];
+  /** Present when the catalogue could not be read: every address tried, and what each said. */
+  registry_error?: string | null;
+  /** Candidates that exist and were excluded, with the reason for each. */
+  rejected?: Rejected[];
+}
+
 export class OnboardingClient {
   constructor(private readonly handshake: Handshake) {}
 
@@ -145,12 +159,8 @@ export class OnboardingClient {
    * Japanese" arrive as the same empty array — and the screen told a Vietnamese user, in an app
    * whose default model is Vietnamese, that no model covers their language.
    */
-  async recommend(
-    lang: string,
-  ): Promise<{ models: Recommended[]; registry_error?: string | null }> {
-    return readJson<{ models: Recommended[]; registry_error?: string | null }>(
-      await fetch(url(this.handshake, "/onboarding/recommend", { lang })),
-    );
+  async recommend(lang: string): Promise<Ranking> {
+    return readJson<Ranking>(await fetch(url(this.handshake, "/onboarding/recommend", { lang })));
   }
 
   async install(id: string): Promise<Install> {
