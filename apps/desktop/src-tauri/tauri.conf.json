@@ -44,7 +44,8 @@
       "binaries/summo-engine"
     ],
     "resources": {
-      "binaries/lib/*": "lib/"
+      "binaries/lib/*": "lib/",
+      "binaries/models/**/*": "models/"
     },
     "shortDescription": "Meeting notes that run on your machine",
     "longDescription": "Speech recognition and speaker attribution run locally. Audio never leaves the device.",
@@ -53,9 +54,18 @@
       "signingIdentity": "-",
       "dmg": {
         "background": "dmg/background.png",
-        "windowSize": { "width": 660, "height": 400 },
-        "appPosition": { "x": 180, "y": 170 },
-        "applicationFolderPosition": { "x": 480, "y": 170 }
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        }
       }
     }
   }

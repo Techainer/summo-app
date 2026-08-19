@@ -17,6 +17,7 @@ pub mod manifest;
 pub mod page;
 pub mod recommend;
 pub mod registry;
+pub mod seed;
 pub mod store;
 pub mod variant;
 

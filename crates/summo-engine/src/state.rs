@@ -62,6 +62,25 @@ struct Inner {
 impl EngineState {
     pub fn new(paths: Paths) -> Result<Self> {
         paths.ensure()?;
+
+        // The models the installer shipped with, on a vault that has never seen any.
+        //
+        // Before this, the first thing a new install did was ask for the network: measure the
+        // machine, list the models, wait for seventy megabytes. On a connection where the registry
+        // is blocked — an ordinary Vietnamese ISP — the screen said "Could not reach the model
+        // list" and there was nothing else to press. An app somebody downloaded should run.
+        //
+        // Never fatal. A daemon that refuses to start because a bundled file is missing is worse
+        // than one that starts and offers to download; the setup screen already knows how to say
+        // that no model is installed.
+        match summo_models::seed::seed(&paths) {
+            Ok(seeded) if !seeded.installed.is_empty() => {
+                tracing::info!(models = ?seeded.installed, "installed the models that shipped with the app");
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "could not install the bundled models"),
+        }
+
         Ok(Self {
             inner: Arc::new(Inner {
                 paths,

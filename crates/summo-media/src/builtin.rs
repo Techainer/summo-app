@@ -36,7 +36,6 @@ use crate::{MediaInfo, TARGET_RATE};
 struct Decoded {
     samples: Vec<f32>,
     rate: u32,
-    channels: u32,
 }
 
 /// Open a file and find its audio track.
@@ -122,7 +121,9 @@ fn decode(path: &Path) -> Result<Decoded> {
 
     let mut samples: Vec<f32> = Vec::new();
     let mut rate = track.codec_params.sample_rate.unwrap_or(0);
-    let mut channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(0);
+    // Read from each decoded packet rather than from the header: a container can declare one thing
+    // and hold another, and the downmix below has to match what actually came out.
+    let mut channels;
     let mut buffer: Option<SampleBuffer<f32>> = None;
 
     loop {
@@ -181,11 +182,7 @@ fn decode(path: &Path) -> Result<Decoded> {
         )));
     }
 
-    Ok(Decoded {
-        samples,
-        rate,
-        channels: channels as u32,
-    })
+    Ok(Decoded { samples, rate })
 }
 
 /// 16 kHz mono, whatever went in.
