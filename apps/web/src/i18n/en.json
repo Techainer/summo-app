@@ -437,7 +437,8 @@
     "language": "Language",
     "interface": "Interface language",
     "listing": "Fetching the model list…",
-    "none_for_language": "No model covers this language yet. Pick another language above, or use a multilingual model."
+    "none_for_language": "No model covers this language yet. Pick another language above, or use a multilingual model.",
+    "retry": "Try again"
   },
   "tour": {
     "title": "Quick tour",
