@@ -152,6 +152,15 @@ async fn launch(app: &AppHandle) -> Result<Handshake, String> {
     if let Some(path) = library_path(app) {
         command = command.env(LIBRARY_PATH_VAR, path);
     }
+    // The models the installer shipped with. The daemon copies them into the vault on the first
+    // start of a new home and never looks again — see `summo_models::seed`. Only the shell knows
+    // where its own resources are, so only the shell can say.
+    if let Ok(resources) = app.path().resource_dir() {
+        let models = resources.join("models");
+        if models.is_dir() {
+            command = command.env("SUMMO_BUNDLED_MODELS", models);
+        }
+    }
     if tauri::is_dev() {
         // In a development run the window is loaded from Vite on another loopback port, and the
         // daemon refuses a request carrying an `Origin` it does not recognise — which is the whole

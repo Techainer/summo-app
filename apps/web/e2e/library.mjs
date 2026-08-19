@@ -35,7 +35,7 @@ const fail = (why) => {
 };
 
 await page.goto(`${appUrl}?port=${port}&token=${token}`, { waitUntil: "networkidle" });
-await page.getByRole("button", { name: "Kho" }).click();
+await page.getByRole("button", { name: "Đã lưu" }).click();
 await page.locator('[data-testid="meeting-row"]').first().waitFor({ timeout: 10000 });
 
 // The dashboard is what a user sees before picking a meeting.

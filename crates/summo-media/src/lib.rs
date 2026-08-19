@@ -1,9 +1,18 @@
 //! Getting audio out of whatever the user has.
 //!
 //! Summo records its own meetings, but people also arrive with a folder of `.mp4` from Zoom, a
-//! voice memo, a podcast they want transcribed. All of that is the same problem — decode something,
-//! resample it to 16 kHz mono, hand it to the recogniser — and it is a problem ffmpeg has already
-//! solved better than any Rust crate will.
+//! voice memo, a podcast they want transcribed. All of that is the same problem: decode something,
+//! resample it to 16 kHz mono, hand it to the recogniser.
+//!
+//! **In this process first, ffmpeg second.** [`builtin`] decodes mp3, m4a, mp4, mov, mkv, wav,
+//! flac and Vorbis with Symphonia — which is to say every format a phone, a laptop or a
+//! conferencing tool produces — and needs nothing installed. That matters more than it sounds:
+//! the setup checklist used to carry a step telling somebody to go and fetch a program before the
+//! app they had just downloaded would import a recording, and an app you download should run.
+//!
+//! ffmpeg stays for what is left: Opus inside WebM, AC-3, WMA, and whatever container something
+//! invents next. When it is absent those files fail with a message naming it; everything else
+//! works.
 //!
 //! **ffmpeg is a sidecar process, not a linked library.** Three reasons, in order of how much they
 //! matter:
@@ -19,6 +28,8 @@
 //! The cost is that ffmpeg has to be found rather than assumed, which is why [`probe`] exists and
 //! why every error says what to install.
 
+pub mod builtin;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -26,6 +37,44 @@ use summo_core::{Error, Result};
 
 /// What the recogniser wants, and therefore what everything is converted to.
 pub const TARGET_RATE: u32 = 16_000;
+
+/// Decode to 16 kHz mono WAV, in this process if the format allows and through ffmpeg if not.
+///
+/// The order is the point. Nothing needs installing for the common case, and the fallback is only
+/// reached by a file the built-in decoder genuinely cannot read — at which point the error names
+/// ffmpeg, because that is now the only thing that would help.
+pub fn to_wav16(input: &Path, output: &Path) -> Result<()> {
+    match builtin::to_wav(input, output) {
+        Ok(()) => Ok(()),
+        Err(builtin_error) => {
+            tracing::debug!(%builtin_error, "built-in decode failed, trying ffmpeg");
+            match probe() {
+                Ok(tools) => tools.to_wav(input, output),
+                // Both failed, and only one of the two messages helps. The built-in decoder's is
+                // about this file; ffmpeg's is about the machine. A person who gave us a `.wma`
+                // needs to be told to install something, so that is the one that surfaces —
+                // with the first reason kept beside it, because "unsupported format" and "ffmpeg
+                // is not here" are different problems and the log should not have to guess.
+                Err(missing) => Err(Error::Other(format!(
+                    "{builtin_error}; ffmpeg would read it and is not available: {missing}"
+                ))),
+            }
+        }
+    }
+}
+
+/// What is in a file, in this process if possible.
+pub fn info_of(path: &Path) -> Result<MediaInfo> {
+    match builtin::info(path) {
+        Ok(info) => Ok(info),
+        Err(builtin_error) => match probe() {
+            Ok(tools) => tools.info(path),
+            Err(missing) => Err(Error::Other(format!(
+                "{builtin_error}; ffmpeg would read it and is not available: {missing}"
+            ))),
+        },
+    }
+}
 
 /// Extensions worth offering in a file picker.
 ///

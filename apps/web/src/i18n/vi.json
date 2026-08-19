@@ -6,7 +6,7 @@
   "nav": {
     "label": "Điều hướng",
     "record": "Ghi",
-    "library": "Kho",
+    "library": "Đã lưu",
     "tasks": "Việc",
     "chat": "Hỏi đáp",
     "analytics": "Thống kê",
@@ -28,7 +28,7 @@
     "agents": "Agent",
     "collapse": "Thu gọn {name}",
     "models": "Mô hình",
-    "setup": "Không gian",
+    "setup": "Công cụ",
     "home": "Trang chính",
     "new_page": "Trang mới",
     "new_page_in": "Trang mới trong {name}",
@@ -253,7 +253,8 @@
     "kind_meeting": "Bản ghi",
     "kind_note": "Ghi chú",
     "recent_heading": "Gần đây",
-    "empty_hint": "Bấm ghi khi buổi họp bắt đầu, hoặc kéo một file có sẵn vào. Mọi thứ nằm lại trên máy bạn."
+    "empty_hint": "Bấm ghi khi buổi họp bắt đầu, hoặc kéo một file có sẵn vào. Mọi thứ nằm lại trên máy bạn.",
+    "empty_write": "Viết ghi chú"
   },
   "analytics": {
     "title": "Thống kê",
@@ -405,7 +406,7 @@
     "no_recognition_hint": "Bản Summo bạn đang chạy được build không kèm nhận dạng giọng nói, nên tải model về cũng không dùng được. Hãy tải bản có nhận dạng — hoặc build lại với tính năng `models`.",
     "pick_model": "Chọn mô hình nhận dạng",
     "machine": "Máy này: {cores} nhân, {ram} GB RAM.",
-    "no_models": "Không lấy được danh sách mô hình. Kiểm tra mạng, hoặc chạy `summo pull` nếu bạn đã có file.",
+    "no_models": "Không lấy được danh sách mô hình. Nếu mạng vẫn vào được web bình thường thì nhiều khả năng nhà mạng chặn địa chỉ tải — thử lại sau, dùng VPN, hoặc chạy `summo pull` nếu bạn đã có sẵn file.",
     "installed": "đã cài",
     "install": "Tải và cài",
     "downloading": "Đang tải…",
@@ -414,8 +415,8 @@
     "ready": "Sẵn sàng ghi.",
     "ready_hint": "Bấm Bắt đầu, rồi nói thử một câu.",
     "later": "Có thể làm sau",
-    "step_ffmpeg": "ffmpeg",
-    "why_ffmpeg": "cần để nhập file ghi âm hoặc video có sẵn.",
+    "step_ffmpeg": "ffmpeg (không bắt buộc)",
+    "why_ffmpeg": "chỉ cần cho vài định dạng hiếm — Opus trong WebM, AC-3, WMA. Mp3, m4a, mp4, mov, mkv, wav, flac Summo tự đọc.",
     "step_llm": "Mô hình ngôn ngữ",
     "why_llm": "cần để tóm tắt, dịch và hỏi đáp. Ghi và nhận dạng không cần.",
     "step_models": "Mô hình nhận dạng",

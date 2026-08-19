@@ -92,19 +92,19 @@ def compose(scale: int) -> Image.Image:
     top = 258
     rounded(draw, [at(40, top), at(620, 372)], 12 * scale, CARD, LINE, max(1, scale))
 
-    text(60, top + 18, "Lần đầu mở, macOS sẽ hỏi", label, ACCENT)
+    text(60, top + 18, "Lần đầu mở, macOS sẽ hỏi — đừng bấm Move to Trash", label, ACCENT)
     text(
         60,
         top + 38,
-        "Bản này chưa mua chứng chỉ Apple (99$/năm), nên macOS chưa biết ai đứng sau.",
+        "Hộp thoại có hai nút: Move to Trash và Done. App không hỏng, chỉ là chưa mua chứng chỉ Apple.",
         body,
         DIM,
     )
 
     for index, (number, line) in enumerate(
         [
-            ("1", "Mở Summo, thấy thông báo thì bấm Xong."),
-            ("2", "Cài đặt hệ thống › Quyền riêng tư & Bảo mật › cuộn xuống, bấm Mở dù sao."),
+            ("1", "Bấm Done."),
+            ("2", "Cài đặt hệ thống › Quyền riêng tư & Bảo mật › cuộn xuống, bấm Open Anyway."),
         ]
     ):
         row = top + 62 + index * 24

@@ -29,6 +29,21 @@ pub const DEFAULT_GITHUB: &str = "https://raw.githubusercontent.com/Techainer/su
 /// answers slowly rather than not at all, that is a pause before the app can list a single model.
 /// A source that has never existed is not a fallback, it is latency with a comment above it.
 pub const DEFAULT_JSDELIVR: &str = "https://cdn.jsdelivr.net/gh/Techainer/summo-registry@main";
+/// The same files again, from our own domain, for the country this product is built for.
+///
+/// A user in Hanoi on a 12-core machine opened the app and was told "Could not reach the model
+/// list. Check the network." Their network was fine. `raw.githubusercontent.com` is routinely
+/// unreachable from Vietnamese consumer ISPs, and jsDelivr has been intermittently poisoned there
+/// too — so the chain above is two sources with correlated failure, which is one source wearing a
+/// hat.
+///
+/// `summo.techainer.com` is a Cloudflare Worker we already deploy, and the site's build copies the
+/// registry into it. It is not a fallback for GitHub being *down*, which is rare; it is a fallback
+/// for GitHub being *blocked*, which is Tuesday.
+///
+/// Last on purpose. It is a copy, and a copy refreshed when the site is rebuilt — the two sources
+/// above are the repository itself. Somebody who can reach GitHub should read GitHub.
+pub const DEFAULT_MIRROR: &str = "https://summo.techainer.com/registry";
 
 /// One place manifests can be read from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,6 +132,7 @@ impl Registry {
         }
         sources.push(RegistrySource::Http(DEFAULT_GITHUB.into()));
         sources.push(RegistrySource::Http(DEFAULT_JSDELIVR.into()));
+        sources.push(RegistrySource::Http(DEFAULT_MIRROR.into()));
         Self::with_sources(sources)
     }
 
@@ -180,17 +196,27 @@ impl Registry {
 
     /// Fetch the catalogue from the first source that has one.
     pub async fn index(&self) -> Result<Index> {
-        let mut last_err = None;
+        // Every source's failure, not the last one's.
+        //
+        // "Could not reach the model list. Check the network" is what a user in Hanoi was told
+        // when two of three sources were blocked by their ISP — advice that sent them to look at
+        // a router that was working. Which addresses were tried and what each answered is the
+        // difference between that and a person who can see the shape of the problem.
+        let mut failures = Vec::new();
         for source in &self.sources {
-            match self.read(&source.index_location(), source).await {
+            let location = source.index_location();
+            match self.read(&location, source).await {
                 Ok(body) => match serde_json::from_str::<Index>(&body) {
                     Ok(index) => return Ok(index),
-                    Err(e) => last_err = Some(Error::Registry(format!("malformed index: {e}"))),
+                    Err(e) => failures.push(format!("{location}: malformed index ({e})")),
                 },
-                Err(e) => last_err = Some(e),
+                Err(e) => failures.push(e.to_string()),
             }
         }
-        Err(last_err.unwrap_or_else(|| Error::Registry("no index available".into())))
+        Err(Error::Registry(format!(
+            "no registry source answered:\n  {}",
+            failures.join("\n  ")
+        )))
     }
 
     async fn read(&self, location: &str, source: &RegistrySource) -> Result<String> {
@@ -222,6 +248,56 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Three sources that fail for different reasons, which is the only kind of fallback worth
+    /// having.
+    ///
+    /// The chain was GitHub and a CDN in front of GitHub. Both are blocked from the same networks —
+    /// a Vietnamese ISP does not distinguish them — so a user in the country this is built for had
+    /// two sources and no fallback. The mirror is a different company, a different address, and a
+    /// domain we control.
+    #[test]
+    fn the_defaults_do_not_all_fail_together() {
+        // SAFETY: single-threaded test, and the variable is removed immediately after.
+        unsafe { std::env::remove_var(ENV_REGISTRY) };
+        let registry = Registry::discover().unwrap();
+        let hosts: Vec<String> = registry
+            .sources()
+            .iter()
+            .map(|source| match source {
+                RegistrySource::Http(base) => base.clone(),
+                RegistrySource::Dir(path) => path.display().to_string(),
+            })
+            .collect();
+        assert!(
+            hosts
+                .iter()
+                .any(|h| h.contains("raw.githubusercontent.com")),
+            "the repository itself must be a source: {hosts:?}"
+        );
+        assert!(
+            hosts.iter().any(|h| h.contains("summo.techainer.com")),
+            "a source that is not GitHub must be in the chain: {hosts:?}"
+        );
+        assert_eq!(
+            hosts.last().map(String::as_str),
+            Some(DEFAULT_MIRROR),
+            "the copy goes last; the repository is authoritative"
+        );
+    }
+
+    /// The message a person actually reads when nothing answers.
+    #[tokio::test]
+    async fn a_dead_chain_names_every_address_it_tried() {
+        let registry = Registry::with_sources(vec![
+            RegistrySource::Http("https://first.invalid/registry".into()),
+            RegistrySource::Http("https://second.invalid/registry".into()),
+        ])
+        .unwrap();
+        let error = registry.index().await.unwrap_err().to_string();
+        assert!(error.contains("first.invalid"), "{error}");
+        assert!(error.contains("second.invalid"), "{error}");
+    }
 
     fn sample_manifest(id: &str) -> String {
         serde_json::json!({

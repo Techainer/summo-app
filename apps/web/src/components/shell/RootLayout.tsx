@@ -10,7 +10,6 @@ import {
   ListChecks,
   Maximize2,
   Menu,
-  MessageCircleQuestion,
   House,
   Mic,
   Package,
@@ -97,8 +96,20 @@ const NAV: { key: string; labelKey: string; icon: LucideIcon; group?: "work" | "
   { key: "/agenda", labelKey: "nav.agenda", icon: CalendarDays },
   { key: "/analytics", labelKey: "nav.analytics", icon: ChartNoAxesColumn },
 
-  { key: "/notes", labelKey: "nav.notes", icon: NotebookPen, group: "setup" },
-  { key: "/chat", labelKey: "nav.chat", icon: MessageCircleQuestion, group: "setup" },
+  // `Ghi chú` and `Hỏi đáp` are not here, and both were removed for the same reason: the sidebar
+  // was listing a *place* for something that already has a better door.
+  //
+  // Notes and recordings are one shelf — that is the whole argument for calling it a shelf — and
+  // `Đã lưu` has a filter for which kind you want. A separate `Ghi chú` entry said they were two
+  // collections, which is exactly the question somebody asked after using it: "what is the vault,
+  // how is it different from Notes?" Writing one still starts from the home screen, the folder
+  // tree, or ⌘K.
+  //
+  // Asking is a button in the header on every screen, and the panel opens beside what you are
+  // looking at rather than navigating away from it. A row in the sidebar that goes to a whole
+  // screen for the same thing is a second, worse answer to a question already answered.
+  //
+  // Both routes still work. Somebody's bookmark is not a reason to keep a row.
   { key: "/people", labelKey: "nav.people", icon: AudioLines, group: "setup" },
   { key: "/agents", labelKey: "nav.agents", icon: Bot, group: "setup" },
   { key: "/models", labelKey: "nav.models", icon: Package, group: "setup" },

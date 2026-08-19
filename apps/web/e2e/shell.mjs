@@ -89,14 +89,13 @@ async function open(scheme, viewport) {
 
   // Every screen must render something rather than a blank frame.
   //
-  // `exact` on every label: "Ghi" is a prefix of "Ghi chú", and a substring match resolves to both
-  // the record screen and the notes screen.
+  // `exact` on every label. "Ghi" was a prefix of "Ghi chú" while both were in the sidebar, and a
+  // substring match resolved to two screens; the notes row is gone now — notes live on the same
+  // shelf as recordings — and `exact` stays because the next pair of labels will do it again.
   for (const [label, marker] of [
-    ["Kho", /mọi thứ|họp|hôm/i],
-    ["Ghi chú", /ghi chú|chưa có ghi chú|chọn một ghi chú/i],
+    ["Đã lưu", /mọi thứ|họp|hôm/i],
     ["Lịch", /lịch|chưa có lịch/i],
     ["Việc", /việc|agent|chưa có/i],
-    ["Hỏi đáp", /hỏi|kho họp/i],
     ["Giọng nói", /giọng|chưa có ai/i],
     ["Thống kê", /thống kê/i],
     ["Cài đặt", /cài đặt|mô hình|llm|ngôn ngữ/i],
@@ -122,8 +121,8 @@ async function open(scheme, viewport) {
   // nobody can see. So this checks paint, not presence: every ancestor of the heading has to be
   // fully opaque.
   for (const [first, second] of [
-    ["Kho", "Việc"],
-    ["Ghi chú", "Thống kê"],
+    ["Đã lưu", "Việc"],
+    ["Lịch", "Thống kê"],
   ]) {
     const nav = page.getByRole("navigation", { name: "Màn hình" });
     await nav.getByRole("button", { name: first, exact: true }).click();
@@ -156,7 +155,7 @@ async function open(scheme, viewport) {
   // The sidebar collapses on demand and comes back.
   await page
     .getByRole("navigation", { name: "Màn hình" })
-    .getByRole("button", { name: "Kho" })
+    .getByRole("button", { name: "Đã lưu" })
     .click();
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${shots}/shell-wide-dark.png` });
@@ -192,7 +191,7 @@ async function open(scheme, viewport) {
   await page.screenshot({ path: `${shots}/shell-narrow-sheet.png` });
   await page
     .getByRole("navigation", { name: "Màn hình" })
-    .getByRole("button", { name: "Kho" })
+    .getByRole("button", { name: "Đã lưu" })
     .click();
   try {
     await page

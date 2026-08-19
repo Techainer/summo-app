@@ -6,7 +6,7 @@
   "nav": {
     "label": "导航",
     "record": "录音",
-    "library": "仓库",
+    "library": "已保存",
     "tasks": "任务",
     "chat": "提问",
     "analytics": "统计",
@@ -28,7 +28,7 @@
     "agents": "智能体",
     "collapse": "收起{name}",
     "models": "模型",
-    "setup": "工作区",
+    "setup": "工具",
     "home": "主页",
     "new_page": "新建页面",
     "new_page_in": "在 {name} 新建页面",
@@ -253,7 +253,8 @@
     "kind_meeting": "录音",
     "kind_note": "笔记",
     "recent_heading": "最近",
-    "empty_hint": "会议开始时按下录制，或直接导入已有的文件。所有内容都留在你的电脑上。"
+    "empty_hint": "会议开始时按下录制，或直接导入已有的文件。所有内容都留在你的电脑上。",
+    "empty_write": "写一条笔记"
   },
   "analytics": {
     "title": "统计",
@@ -405,7 +406,7 @@
     "no_recognition_hint": "你运行的 Summo 在构建时未包含语音识别，因此下载模型也无法使用。请下载带识别功能的版本，或启用 `models` 特性重新构建。",
     "pick_model": "选一个语音模型",
     "machine": "这台机器：{cores}核，{ram} GB 内存。",
-    "no_models": "取不到模型列表。检查一下网络，或者文件已经在本地的话运行 `summo pull`。",
+    "no_models": "无法获取模型列表。如果其他网站都能打开，多半是这个网络屏蔽了读取地址——稍后再试、使用 VPN，或者在已有文件时运行 `summo pull`。",
     "installed": "已安装",
     "install": "下载并安装",
     "downloading": "正在下载…",
@@ -414,8 +415,8 @@
     "ready": "可以开始录音了。",
     "ready_hint": "按下开始，说点什么试试。",
     "later": "可以稍后",
-    "step_ffmpeg": "ffmpeg",
-    "why_ffmpeg": "导入你手上已有的音频或视频文件时需要。",
+    "step_ffmpeg": "ffmpeg（可选）",
+    "why_ffmpeg": "仅用于少数冷门格式——WebM 中的 Opus、AC-3、WMA。mp3、m4a、mp4、mov、mkv、wav、flac 由 Summo 自行读取。",
     "step_llm": "语言模型",
     "why_llm": "摘要、翻译和提问需要它。录音不需要。",
     "step_models": "语音模型",

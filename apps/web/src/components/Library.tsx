@@ -86,6 +86,10 @@ interface Props {
   onQuery: (query: string) => void;
   /** Called when the user wants to record instead of read. */
   onRecord: () => void;
+  /// Write a note from here. The sidebar's `Ghi chú` row is gone — a typed note and a recording are
+  /// the same kind of document and live on this shelf — so the empty state has to offer both ways
+  /// of putting something on it, not just the microphone.
+  onWrite: () => void;
   /** Open a meeting on its own screen, where the player and transcript live. */
   onOpen?: (id: string) => void;
 }
@@ -128,6 +132,7 @@ export function Library({
   onColour,
   onQuery,
   onRecord,
+  onWrite,
   onOpen,
 }: Props) {
   const t = useT();
@@ -475,10 +480,16 @@ export function Library({
               title={t("library.empty")}
               hint={t("library.empty_hint")}
               action={
-                <Button variant="primary" size="sm" onClick={onRecord}>
-                  <Mic aria-hidden="true" className="me-1.5 size-3.5" />
-                  {t("library.empty_cta")}
-                </Button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button variant="primary" size="sm" onClick={onRecord}>
+                    <Mic aria-hidden="true" className="me-1.5 size-3.5" />
+                    {t("library.empty_cta")}
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={onWrite}>
+                    <PencilLine aria-hidden="true" className="me-1.5 size-3.5" />
+                    {t("library.empty_write")}
+                  </Button>
+                </div>
               }
             />
           )}

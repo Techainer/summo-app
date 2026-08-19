@@ -63,7 +63,7 @@ if ((await page.getByTestId("unreachable").count()) > 0) {
 // The app is still readable: what is on screen is the only copy of anything unsaved, so the notice
 // must not replace it.
 const body = await page.locator("body").innerText();
-if (!/Kho/.test(body)) problems.push("the app replaced itself with the notice");
+if (!/Đã lưu/.test(body)) problems.push("the app replaced itself with the notice");
 await page.screenshot({ path: "/tmp/shots/offline.png" });
 
 await browser.close();

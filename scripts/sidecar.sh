@@ -51,6 +51,10 @@ export OPUS_STATIC=1
 TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 OUT="apps/desktop/src-tauri/binaries"
 
+# The models that ship inside the installer, so a fresh install can record without a download.
+# Skipped when they are already there, which is every build after the first.
+bash "$(dirname "$0")/bundle-models.sh"
+
 echo "building summo-engine (${PROFILE}, ${FEATURES})"
 cargo build "${CARGO_PROFILE[@]}" --bin summo-engine --features "${FEATURES}"
 

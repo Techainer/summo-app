@@ -6,7 +6,7 @@
   "nav": {
     "label": "Navigation",
     "record": "Record",
-    "library": "Vault",
+    "library": "Saved",
     "tasks": "Tasks",
     "chat": "Ask",
     "analytics": "Analytics",
@@ -28,7 +28,7 @@
     "agents": "Agents",
     "collapse": "Collapse {name}",
     "models": "Models",
-    "setup": "Workspace",
+    "setup": "Tools",
     "home": "Home",
     "new_page": "New page",
     "new_page_in": "New page in {name}",
@@ -253,7 +253,8 @@
     "kind_meeting": "Recordings",
     "kind_note": "Notes",
     "recent_heading": "Recent",
-    "empty_hint": "Press record when the meeting starts, or drop in a file you already have. All of it stays on your machine."
+    "empty_hint": "Press record when the meeting starts, or drop in a file you already have. All of it stays on your machine.",
+    "empty_write": "Write a note"
   },
   "analytics": {
     "title": "Analytics",
@@ -405,7 +406,7 @@
     "no_recognition_hint": "The copy of Summo you are running was built without speech recognition, so installing a model would not help. Download a build that has it, or rebuild with the `models` feature.",
     "pick_model": "Choose a speech model",
     "machine": "This machine: {cores} cores, {ram} GB RAM.",
-    "no_models": "Could not reach the model list. Check the network, or run `summo pull` if you already have the files.",
+    "no_models": "Could not reach the model list. If the rest of the internet works, the addresses it reads are most likely blocked on this network — try again later, use a VPN, or run `summo pull` if you already have the files.",
     "installed": "installed",
     "install": "Download and install",
     "downloading": "Downloading…",
@@ -414,8 +415,8 @@
     "ready": "Ready to record.",
     "ready_hint": "Press Start and say something.",
     "later": "Can wait",
-    "step_ffmpeg": "ffmpeg",
-    "why_ffmpeg": "needed to import audio or video files you already have.",
+    "step_ffmpeg": "ffmpeg (optional)",
+    "why_ffmpeg": "only for a few rare formats — Opus in WebM, AC-3, WMA. Summo reads mp3, m4a, mp4, mov, mkv, wav and flac by itself.",
     "step_llm": "Language model",
     "why_llm": "needed for summaries, translation and asking questions. Recording does not use it.",
     "step_models": "Speech model",

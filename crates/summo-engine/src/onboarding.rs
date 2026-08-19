@@ -123,6 +123,12 @@ pub fn status(paths: &Paths, hardware: &HwProfile) -> Status {
         },
     };
 
+    // Ready either way, because importing no longer depends on it.
+    //
+    // Summo decodes mp3, m4a, mp4, mov, mkv, wav, flac and Vorbis in this process. ffmpeg adds the
+    // remainder — Opus in WebM, AC-3, WMA — so its absence is a smaller catalogue of formats, not
+    // a broken feature, and a setup checklist that tells somebody to go and install a program
+    // before their app will work is the opposite of what a download should be.
     let ffmpeg = match summo_media::probe() {
         Ok(tools) => Check {
             step: Step::Ffmpeg,
@@ -130,11 +136,11 @@ pub fn status(paths: &Paths, hardware: &HwProfile) -> Status {
             blocking: false,
             detail: tools.version,
         },
-        Err(e) => Check {
+        Err(_) => Check {
             step: Step::Ffmpeg,
-            ready: false,
+            ready: true,
             blocking: false,
-            detail: e.to_string(),
+            detail: "built-in".into(),
         },
     };
 

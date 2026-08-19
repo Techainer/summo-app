@@ -61,7 +61,7 @@ page.on("console", (m) => m.type() === "error" && problems.push(`console: ${m.te
 await page.goto(`${appUrl}?port=${port}&token=${token}`, { waitUntil: "networkidle" });
 
 const started = Date.now();
-await page.getByRole("button", { name: "Kho" }).click();
+await page.getByRole("button", { name: "Đã lưu" }).click();
 await page.locator('[data-testid="meeting-row"]').first().waitFor({ timeout: 60_000 });
 await page.waitForLoadState("networkidle");
 const opened = Date.now() - started;

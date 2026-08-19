@@ -25,12 +25,10 @@ const { url: appUrl, port, token } = engine;
 const SCREENS = [
   "Trang chính",
   "Ghi",
-  "Kho",
+  "Đã lưu",
   "Việc",
   "Lịch",
   "Thống kê",
-  "Ghi chú",
-  "Hỏi đáp",
   "Giọng nói",
   "Agent",
   "Mô hình",
@@ -218,12 +216,12 @@ for (const label of SCREENS) {
   // user cannot see yet. This asserts the first row of the list is on screen without scrolling,
   // which is the thing that was false, and that the filters are still one tap away.
   // The tour first. It opens over the app on a vault this browser has not seen before, and on a
-  // phone it covers the bottom bar entirely — a click on "Kho" lands on "Tiếp" instead.
+  // phone it covers the bottom bar entirely — a click on "Đã lưu" lands on "Tiếp" instead.
   const skip = small.getByRole("button", { name: "Bỏ qua" });
   if ((await skip.count()) > 0) await skip.first().click();
   await small.waitForTimeout(300);
 
-  await small.getByRole("button", { name: "Kho" }).click();
+  await small.getByRole("button", { name: "Đã lưu" }).click();
   await small.waitForTimeout(600);
   const fold = small.getByText("Lọc", { exact: true });
   await fold.waitFor({ timeout: 10000 });

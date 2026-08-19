@@ -6,7 +6,7 @@
   "nav": {
     "label": "ナビゲーション",
     "record": "録音",
-    "library": "保管庫",
+    "library": "保存済み",
     "tasks": "タスク",
     "chat": "質問",
     "analytics": "分析",
@@ -28,7 +28,7 @@
     "agents": "エージェント",
     "collapse": "{name}をたたむ",
     "models": "モデル",
-    "setup": "ワークスペース",
+    "setup": "ツール",
     "home": "ホーム",
     "new_page": "新しいページ",
     "new_page_in": "{name} に新しいページ",
@@ -253,7 +253,8 @@
     "kind_meeting": "録音",
     "kind_note": "ノート",
     "recent_heading": "最近",
-    "empty_hint": "会議が始まったら録音、または手元のファイルを取り込んでください。すべてこの端末に残ります。"
+    "empty_hint": "会議が始まったら録音、または手元のファイルを取り込んでください。すべてこの端末に残ります。",
+    "empty_write": "メモを書く"
   },
   "analytics": {
     "title": "統計",
@@ -405,7 +406,7 @@
     "no_recognition_hint": "お使いの Summo は音声認識なしでビルドされているため、モデルを入れても使えません。認識付きのビルドを入手するか、`models` 機能を有効にして再ビルドしてください。",
     "pick_model": "音声モデルを選ぶ",
     "machine": "この端末：{cores}コア、メモリ{ram}GB。",
-    "no_models": "モデル一覧に接続できませんでした。ネットワークを確認するか、ファイルが手元にあるなら `summo pull` を実行してください。",
+    "no_models": "モデル一覧を取得できませんでした。ほかのサイトが開けるなら、読み込み先のアドレスがこのネットワークで遮断されている可能性が高いです。時間をおくか、VPN を使うか、ファイルが手元にあるなら `summo pull` を実行してください。",
     "installed": "導入済み",
     "install": "ダウンロードして導入",
     "downloading": "ダウンロード中…",
@@ -414,8 +415,8 @@
     "ready": "録音の準備ができました。",
     "ready_hint": "開始を押して話してみてください。",
     "later": "後でも大丈夫",
-    "step_ffmpeg": "ffmpeg",
-    "why_ffmpeg": "手元の音声・動画ファイルを取り込むのに必要です。",
+    "step_ffmpeg": "ffmpeg（任意）",
+    "why_ffmpeg": "WebM の Opus、AC-3、WMA など一部の形式にのみ必要です。mp3・m4a・mp4・mov・mkv・wav・flac は Summo 単体で読めます。",
     "step_llm": "言語モデル",
     "why_llm": "要約・翻訳・質問に必要です。録音には使いません。",
     "step_models": "音声モデル",

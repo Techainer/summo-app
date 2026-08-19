@@ -1,6 +1,6 @@
 [package]
 name = "summo-media"
-description = "Decoding whatever the user has into what the recogniser wants, via an ffmpeg sidecar"
+description = "Decoding whatever the user has into what the recogniser wants"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,6 +12,13 @@ summo-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
+# In-process decoding, so importing a recording does not require installing a program first.
+# Symphonia is MIT and reads the formats recordings actually arrive in; rubato is the resampler the
+# microphone path already uses; hound writes the 16 kHz mono WAV everything downstream expects.
+symphonia.workspace = true
+rubato.workspace = true
+hound.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+hound.workspace = true
