@@ -168,18 +168,21 @@ if (!/speech model/i.test(shell)) fail("nothing warned that recognition is unava
 
 // The write path. A browser sends `Origin` on every POST, even same-origin, and refusing it means
 // an app that reads and never writes — which is exactly what shipped once.
-await nav.getByRole("button", { name: "Notes" }).click();
-await page.waitForTimeout(500);
-// `exact`, because the sidebar now offers "New page" as well: a page and a note are the same
-// thing, and the tree can make one too. Without it this matches both and Playwright refuses.
 //
-// Scoped to the empty state on top of that, which is the second time this line has had to be
-// narrowed. On a vault with nothing in it there are two "New" buttons — the toolbar's and the one
-// the empty state draws — and this suite is the only one that ever sees an empty vault, so it is
-// the only one that hit it. The empty state's is also the one a real first-time user presses: it
-// is the larger target, in the middle of the screen, under a drawing that says there is nothing
-// here yet.
-await page.getByRole("status").getByRole("button", { name: "New", exact: true }).click();
+// Through `Saved` rather than a `Notes` row, because there is no longer a `Notes` row: a typed note
+// and a recording are the same kind of document and live on the same shelf. This suite is the only
+// one that walks a brand-new install, so it is the one that has to walk the route a brand-new user
+// actually has.
+await nav.getByRole("button", { name: "Saved" }).click();
+await page.waitForTimeout(500);
+// Scoped to the empty state, which is where a first-time user is looking: the largest thing on the
+// screen, in the middle, under a drawing that says there is nothing here yet.
+//
+// It says "Write a note" now. When the sidebar had a `Notes` row this suite went there and pressed
+// "New"; the row is gone — a note and a recording are the same kind of document and live on the
+// same shelf — so the empty shelf offers both ways of putting something on it, and this walks the
+// one a person who wants to type would take.
+await page.getByRole("status").getByRole("button", { name: "Write a note" }).click();
 await page.waitForTimeout(700);
 
 // Waited for rather than slept at. The editor is a lazily-fetched chunk, so on a cold cache it is

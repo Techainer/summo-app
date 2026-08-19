@@ -253,7 +253,8 @@
     "kind_meeting": "Recordings",
     "kind_note": "Notes",
     "recent_heading": "Recent",
-    "empty_hint": "Press record when the meeting starts, or drop in a file you already have. All of it stays on your machine."
+    "empty_hint": "Press record when the meeting starts, or drop in a file you already have. All of it stays on your machine.",
+    "empty_write": "Write a note"
   },
   "analytics": {
     "title": "Analytics",

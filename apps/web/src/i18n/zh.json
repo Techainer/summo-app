@@ -253,7 +253,8 @@
     "kind_meeting": "录音",
     "kind_note": "笔记",
     "recent_heading": "最近",
-    "empty_hint": "会议开始时按下录制，或直接导入已有的文件。所有内容都留在你的电脑上。"
+    "empty_hint": "会议开始时按下录制，或直接导入已有的文件。所有内容都留在你的电脑上。",
+    "empty_write": "写一条笔记"
   },
   "analytics": {
     "title": "统计",

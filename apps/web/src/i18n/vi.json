@@ -253,7 +253,8 @@
     "kind_meeting": "Bản ghi",
     "kind_note": "Ghi chú",
     "recent_heading": "Gần đây",
-    "empty_hint": "Bấm ghi khi buổi họp bắt đầu, hoặc kéo một file có sẵn vào. Mọi thứ nằm lại trên máy bạn."
+    "empty_hint": "Bấm ghi khi buổi họp bắt đầu, hoặc kéo một file có sẵn vào. Mọi thứ nằm lại trên máy bạn.",
+    "empty_write": "Viết ghi chú"
   },
   "analytics": {
     "title": "Thống kê",
