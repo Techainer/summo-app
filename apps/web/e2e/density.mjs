@@ -22,15 +22,7 @@ const engine = await daemon(process.argv, { name: "density" });
 const { url: appUrl, port, token } = engine;
 
 /** Every screen in the work group plus the setup group, by the label in the sidebar. */
-const SCREENS = [
-  "Trang chính",
-  "Ghi",
-  "Đã lưu",
-  "Việc",
-  "Lịch",
-  "Thống kê",
-  "Cài đặt",
-];
+const SCREENS = ["Trang chính", "Ghi", "Đã lưu", "Việc", "Lịch", "Thống kê", "Cài đặt"];
 
 /** How much of the pane may be empty below the last thing on it. */
 const SLACK = 1 / 3;

@@ -64,7 +64,11 @@ fn main_window(app: &tauri::AppHandle) -> Option<WebviewWindow> {
 /// Returns `Ok(())` and does nothing at all when there is no window — the same call from a browser
 /// tab is not a failure, it is a call with nothing to act on.
 #[tauri::command]
-pub fn set_shape(app: tauri::AppHandle, restore: State<'_, Restore>, shape: Shape) -> Result<(), String> {
+pub fn set_shape(
+    app: tauri::AppHandle,
+    restore: State<'_, Restore>,
+    shape: Shape,
+) -> Result<(), String> {
     let Some(window) = main_window(&app) else {
         return Ok(());
     };
@@ -80,7 +84,9 @@ pub fn set_shape(app: tauri::AppHandle, restore: State<'_, Restore>, shape: Shap
                 let _ = window.set_position(was.position);
             }
             window.set_always_on_top(false).map_err(|e| e.to_string())?;
-            window.set_ignore_cursor_events(false).map_err(|e| e.to_string())?;
+            window
+                .set_ignore_cursor_events(false)
+                .map_err(|e| e.to_string())?;
         }
         Shape::Compact | Shape::Overlay => {
             // Remembered once. Pressing compact twice must not record the strip as the thing to
@@ -88,9 +94,7 @@ pub fn set_shape(app: tauri::AppHandle, restore: State<'_, Restore>, shape: Shap
             if previous.is_none() {
                 previous.replace(Previous {
                     size: window.inner_size().map_err(|e| e.to_string())?,
-                    position: window
-                        .outer_position()
-                        .map_err(|e| e.to_string())?,
+                    position: window.outer_position().map_err(|e| e.to_string())?,
                 });
             }
             window.set_always_on_top(true).map_err(|e| e.to_string())?;
@@ -100,7 +104,9 @@ pub fn set_shape(app: tauri::AppHandle, restore: State<'_, Restore>, shape: Shap
             // Clicks still land on the strip. `ignore_cursor_events` would make the whole window
             // transparent to the mouse, including the stop button — which is the one control
             // somebody in overlay mode needs to reach.
-            window.set_ignore_cursor_events(false).map_err(|e| e.to_string())?;
+            window
+                .set_ignore_cursor_events(false)
+                .map_err(|e| e.to_string())?;
         }
     }
     Ok(())

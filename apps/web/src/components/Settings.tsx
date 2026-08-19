@@ -142,7 +142,7 @@ export function Settings({
       {/* A rule, because what follows is a different kind of thing: above are panels that change
           when you press them, below are screens you leave for. Without it the rail reads as nine
           settings, three of which mysteriously navigate. */}
-      <div className={cn("border-line", narrow ? "border-s ms-1 me-1" : "mt-2 border-t pt-2")} />
+      <div className={cn("border-line", narrow ? "ms-1 me-1 border-s" : "mt-2 border-t pt-2")} />
 
       {/* The three screens this rail indexes rather than contains. Drawn as links, so a right
           click opens one in its own window and the browser's own affordances work. */}

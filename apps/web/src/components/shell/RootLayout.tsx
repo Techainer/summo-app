@@ -592,9 +592,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
             "text-meta min-w-0 flex-1 truncate",
             // On top of a film the line has to be readable against anything, so it gets its own
             // plate rather than relying on whatever is behind it.
-            overlay
-              ? "text-fg bg-bg/75 rounded-lg px-2 py-1 backdrop-blur"
-              : "text-fg-dim",
+            overlay ? "text-fg bg-bg/75 rounded-lg px-2 py-1 backdrop-blur" : "text-fg-dim",
           )}
         >
           {latest?.text ?? t("record.listening")}
