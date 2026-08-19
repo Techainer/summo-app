@@ -1,9 +1,12 @@
+import { Link } from "@tanstack/react-router";
 import {
+  AudioLines,
   Bot,
   HardDrive,
   Info,
   Languages,
   Mic,
+  Package,
   SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
@@ -62,6 +65,25 @@ const SECTIONS: Section[] = [
   { id: "about", icon: Info, labelKey: "settings.section_about" },
 ];
 
+/**
+ * The three screens that belong with the settings and are not settings panels.
+ *
+ * The sidebar had eleven rows, and three of them — the voice book, the agent roster, the model
+ * catalogue — are things somebody sets up once and then does not look at for a month. They sat
+ * beside the places where the work happens, which is what made the navigation long enough that
+ * nobody read it.
+ *
+ * Listed here as destinations rather than folded in as panels. Each is a full screen with its own
+ * layout, its own empty state and its own toolbar; squeezing them into a 720-pixel settings column
+ * would cost all three of those to save one click. This is an index, and the screens stay
+ * themselves.
+ */
+const ELSEWHERE: { to: string; icon: LucideIcon; labelKey: string }[] = [
+  { to: "/people", icon: AudioLines, labelKey: "nav.people" },
+  { to: "/agents", icon: Bot, labelKey: "nav.agents" },
+  { to: "/models", icon: Package, labelKey: "nav.models" },
+];
+
 export function Settings({
   handshake,
   section = "general",
@@ -117,6 +139,28 @@ export function Settings({
           </button>
         );
       })}
+      {/* A rule, because what follows is a different kind of thing: above are panels that change
+          when you press them, below are screens you leave for. Without it the rail reads as nine
+          settings, three of which mysteriously navigate. */}
+      <div className={cn("border-line", narrow ? "border-s ms-1 me-1" : "mt-2 border-t pt-2")} />
+
+      {/* The three screens this rail indexes rather than contains. Drawn as links, so a right
+          click opens one in its own window and the browser's own affordances work. */}
+      {ELSEWHERE.map(({ to, icon: Icon, labelKey }) => (
+        <Link
+          key={to}
+          to={to}
+          search={{}}
+          className={cn(
+            "text-meta text-fg-dim hover:bg-bg-soft hover:text-fg flex items-center gap-2.5 rounded-[var(--radius-card)] px-3 py-2 text-start transition-colors",
+            narrow && "shrink-0 whitespace-nowrap",
+          )}
+        >
+          <Icon aria-hidden="true" className="size-4 shrink-0 stroke-[1.75]" />
+          {t(labelKey)}
+        </Link>
+      ))}
+
       {/* Where the app is, at the bottom of the rail. Every setting on these six panels is stored
           under that folder, and "where does this keep my meetings" is the question a local-first
           app is asked first — on a screen where the answer is one line, not a support article. */}

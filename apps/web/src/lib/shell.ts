@@ -47,6 +47,35 @@ export function inShell(): boolean {
 }
 
 /**
+ * What shape the window should be.
+ *
+ * `full` is the app. `compact` is the strip: short, wide, and above whatever the person is actually
+ * doing — a call, a film, a document. `overlay` is the same strip with no background of its own,
+ * for putting subtitles over something.
+ */
+export type Shape = "full" | "compact" | "overlay";
+
+/**
+ * Ask the shell to resize and float the window.
+ *
+ * Silently does nothing in a browser, which is the honest behaviour: a tab cannot float above other
+ * windows, and the compact layout is still worth having there — it is the same strip, in a tab the
+ * user can park wherever their window manager allows.
+ *
+ * Errors are swallowed on purpose. This is a nicety on top of a recording that is already running;
+ * a window manager refusing to float a window must not put a banner over a meeting.
+ */
+export async function setShape(shape: Shape): Promise<void> {
+  if (!inShell()) return;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("set_shape", { shape });
+  } catch {
+    // A shell too old to know this command, or a platform that refuses. The layout still changed.
+  }
+}
+
+/**
  * Whether this is a Mac, which decides two visible things.
  *
  * The modifier a shortcut is written with — `⌘K` on a Mac and `Ctrl+K` everywhere else, and a sheet

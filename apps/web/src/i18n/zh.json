@@ -41,7 +41,9 @@
     "maximise": "最大化",
     "restore": "还原",
     "close": "关闭",
-    "help": "帮助"
+    "help": "帮助",
+    "overlay": "悬浮字幕",
+    "overlay_hint": "背景透明、置于其他窗口之上 —— 边看边读"
   },
   "record": {
     "source": "来源",

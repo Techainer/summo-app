@@ -12,6 +12,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod engine;
+mod window;
 
 use tauri::{
     Emitter, Manager,
@@ -40,7 +41,12 @@ fn main() {
         // Rust side of the plugin only.
         .plugin(tauri_plugin_shell::init())
         .manage(engine::Engine::default())
-        .invoke_handler(tauri::generate_handler![engine::engine_handshake])
+        .manage(window::Restore::default())
+        .invoke_handler(tauri::generate_handler![
+            engine::engine_handshake,
+            window::set_shape,
+            window::can_float
+        ])
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {

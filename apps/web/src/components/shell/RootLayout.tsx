@@ -1,8 +1,6 @@
 import { useMatchRoute, useNavigate, useRouterState } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 import {
-  AudioLines,
-  Bot,
   CalendarDays,
   ChartNoAxesColumn,
   Library,
@@ -12,10 +10,10 @@ import {
   Menu,
   House,
   Mic,
-  Package,
   Search,
   Sparkles,
   Minimize2,
+  Subtitles,
   NotebookPen,
   Settings,
   Square,
@@ -44,7 +42,7 @@ import { useIsNarrow } from "../../lib/breakpoint";
 import { useEngine } from "../../lib/engine-context";
 import { deviceWarning } from "../../lib/session";
 import { ISSUES } from "../../lib/menu";
-import { inShell, isMac } from "../../lib/shell";
+import { inShell, isMac, setShape } from "../../lib/shell";
 
 /**
  * Both are fetched when they are first needed, and neither ever is on the web build.
@@ -110,9 +108,10 @@ const NAV: { key: string; labelKey: string; icon: LucideIcon; group?: "work" | "
   // screen for the same thing is a second, worse answer to a question already answered.
   //
   // Both routes still work. Somebody's bookmark is not a reason to keep a row.
-  { key: "/people", labelKey: "nav.people", icon: AudioLines, group: "setup" },
-  { key: "/agents", labelKey: "nav.agents", icon: Bot, group: "setup" },
-  { key: "/models", labelKey: "nav.models", icon: Package, group: "setup" },
+  // The voice book, the agent roster and the model catalogue are indexed from the settings rail
+  // rather than listed here. All three are things somebody sets up once and does not look at for a
+  // month, and they sat beside the places where the work happens — which is what made this list
+  // long enough that nobody read it.
   { key: "/settings", labelKey: "nav.settings", icon: Settings, group: "setup" },
   // Last, because it is where somebody goes when something else did not work — and it has to be
   // somewhere they can see, rather than only behind a menu two of the three platforms draw
@@ -261,7 +260,36 @@ export function RootLayout({ children }: { children: ReactNode }) {
       if (event.key === "?" && !typing && !event.metaKey && !event.ctrlKey) {
         event.preventDefault();
         setShortcutsOpen(true);
+        return;
       }
+
+      /*
+       * The shortcuts the sheet promises, from the keyboard rather than only from the menu.
+       *
+       * `Shortcuts.tsx` has listed ⌘N, ⌘O, ⌘B, ⌘, and ⌘1–4 for months. They were menu accelerators:
+       * real on macOS, where the system draws the menu, and nothing at all on Windows, on Linux and
+       * in a browser — where the menu is drawn by this app and an accelerator written next to an
+       * item is a picture of a shortcut. A sheet that lists a key which does nothing is worse than
+       * a sheet that lists fewer keys.
+       *
+       * Not while typing: ⌘B is bold in the editor and ⌘1 is a heading, and stealing them would
+       * break the thing the person is actually doing. ⌘K is handled separately — the palette has to
+       * open *from* the editor, which is where somebody most often wants to jump somewhere else.
+       */
+      if (typing || !(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const action = {
+        n: "new-note",
+        o: "import",
+        b: "sidebar",
+        ",": "settings",
+        "1": "home",
+        "2": "library",
+        "3": "tasks",
+        "4": "analytics",
+      }[event.key.toLowerCase()];
+      if (!action) return;
+      event.preventDefault();
+      onMenu(action);
     };
     window.addEventListener("summo:menu", onMenuEvent);
     window.addEventListener("keydown", onKey);
@@ -271,6 +299,25 @@ export function RootLayout({ children }: { children: ReactNode }) {
     };
   }, [onMenu]);
   const [compact, setCompact] = useState(false);
+  /**
+   * Subtitles over whatever else is on the screen.
+   *
+   * The strip with its background painted out, for watching something in another window. Only
+   * offered while compact, because an overlay the size of the whole app is a window with a hole in
+   * it rather than a subtitle bar.
+   */
+  const [overlay, setOverlay] = useState(false);
+
+  // The window follows the layout. In a browser this does nothing and the layout still changes —
+  // see `setShape`.
+  useEffect(() => {
+    void setShape(compact ? (overlay ? "overlay" : "compact") : "full");
+    // On the document, because the page's own background is what the window shows: the shell makes
+    // the *window* transparent and the CSS has to stop painting over it. See `theme.css`.
+    const root = document.documentElement;
+    if (compact && overlay) root.dataset.overlay = "1";
+    else delete root.dataset.overlay;
+  }, [compact, overlay]);
   const [folders, setFolders] = useState<string[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
   // Bumped after making a page, so the tree shows it without a reload.
@@ -525,19 +572,49 @@ export function RootLayout({ children }: { children: ReactNode }) {
 
   if (compact) {
     return (
-      <div data-testid="compact" className="drag-region bg-bg flex h-full items-center gap-3 px-3">
+      <div
+        data-testid="compact"
+        className={cn(
+          "drag-region flex h-full items-center gap-3 px-3",
+          // Transparent, not merely dark: the window itself has no background in overlay mode, so
+          // the film behind it shows through and the text sits on it like a subtitle.
+          overlay ? "bg-transparent" : "bg-bg",
+        )}
+      >
         <RecordButton
           recording={engine.session.recording}
           elapsed={engine.elapsed}
           onToggle={engine.toggle}
         />
         <Waveform level={engine.level} active={engine.session.recording} />
-        <p className="text-fg-dim text-meta min-w-0 flex-1 truncate">
+        <p
+          className={cn(
+            "text-meta min-w-0 flex-1 truncate",
+            // On top of a film the line has to be readable against anything, so it gets its own
+            // plate rather than relying on whatever is behind it.
+            overlay
+              ? "text-fg bg-bg/75 rounded-lg px-2 py-1 backdrop-blur"
+              : "text-fg-dim",
+          )}
+        >
           {latest?.text ?? t("record.listening")}
         </p>
         <button
           type="button"
-          onClick={() => setCompact(false)}
+          onClick={() => setOverlay((was) => !was)}
+          aria-pressed={overlay}
+          aria-label={t("nav.overlay")}
+          title={t("nav.overlay_hint")}
+          className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1"
+        >
+          <Subtitles aria-hidden="true" className="size-4 stroke-[1.75]" />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOverlay(false);
+            setCompact(false);
+          }}
           aria-label={t("nav.expand")}
           title={t("nav.expand_hint")}
           className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1"

@@ -41,7 +41,9 @@
     "maximise": "Maximise",
     "restore": "Restore down",
     "close": "Close",
-    "help": "Help"
+    "help": "Help",
+    "overlay": "Floating subtitles",
+    "overlay_hint": "Transparent, above other windows — for watching something while it listens"
   },
   "record": {
     "source": "Source",

@@ -41,7 +41,9 @@
     "maximise": "最大化",
     "restore": "元のサイズに戻す",
     "close": "閉じる",
-    "help": "ヘルプ"
+    "help": "ヘルプ",
+    "overlay": "字幕オーバーレイ",
+    "overlay_hint": "背景を透明にして最前面に — 何かを見ながら読むために"
   },
   "record": {
     "source": "入力",

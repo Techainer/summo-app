@@ -771,3 +771,19 @@ body {
 .drag-handle[data-dragging="true"] {
   cursor: grabbing;
 }
+
+/*
+ * Subtitles over something else.
+ *
+ * The window is `transparent: true`, which means the *webview* has no background of its own and
+ * whatever CSS paints is what you see. Normally that is `--color-bg` and the window looks like an
+ * ordinary opaque app. In overlay mode the page stops painting, the film behind shows through, and
+ * the only opaque things left are the strip's own controls and the plate under the line of text.
+ *
+ * On `:root` and `body` both: either one left painting is a rectangle over the thing somebody is
+ * trying to watch.
+ */
+:root[data-overlay],
+:root[data-overlay] body {
+  background: transparent;
+}

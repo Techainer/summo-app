@@ -29,9 +29,6 @@ const SCREENS = [
   "Việc",
   "Lịch",
   "Thống kê",
-  "Giọng nói",
-  "Agent",
-  "Mô hình",
   "Cài đặt",
 ];
 
