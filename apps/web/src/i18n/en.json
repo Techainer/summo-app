@@ -405,7 +405,7 @@
     "no_recognition_hint": "The copy of Summo you are running was built without speech recognition, so installing a model would not help. Download a build that has it, or rebuild with the `models` feature.",
     "pick_model": "Choose a speech model",
     "machine": "This machine: {cores} cores, {ram} GB RAM.",
-    "no_models": "Could not reach the model list. Check the network, or run `summo pull` if you already have the files.",
+    "no_models": "Could not reach the model list. If the rest of the internet works, the addresses it reads are most likely blocked on this network — try again later, use a VPN, or run `summo pull` if you already have the files.",
     "installed": "installed",
     "install": "Download and install",
     "downloading": "Downloading…",

@@ -405,7 +405,7 @@
     "no_recognition_hint": "你运行的 Summo 在构建时未包含语音识别，因此下载模型也无法使用。请下载带识别功能的版本，或启用 `models` 特性重新构建。",
     "pick_model": "选一个语音模型",
     "machine": "这台机器：{cores}核，{ram} GB 内存。",
-    "no_models": "取不到模型列表。检查一下网络，或者文件已经在本地的话运行 `summo pull`。",
+    "no_models": "无法获取模型列表。如果其他网站都能打开，多半是这个网络屏蔽了读取地址——稍后再试、使用 VPN，或者在已有文件时运行 `summo pull`。",
     "installed": "已安装",
     "install": "下载并安装",
     "downloading": "正在下载…",
