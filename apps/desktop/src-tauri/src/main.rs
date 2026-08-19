@@ -154,11 +154,21 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id("summo")
         .menu(&menu)
-        // Without this the tray entry is a blank space. The app hides here rather than quitting, so
-        // a tray with nothing in it means a running app the user cannot find and cannot stop.
-        .icon(app.default_window_icon().cloned().ok_or_else(|| {
-            tauri::Error::AssetNotFound("no window icon to use in the tray".into())
-        })?)
+        // Its own icon, not the application icon.
+        //
+        // This used to be `default_window_icon()` — the dark rounded square with three green bars,
+        // which is right for a dock and wrong for a menu bar. `icon_as_template` tells macOS to
+        // ignore the colours and draw the **alpha channel** in the bar's own colour, so it adapts
+        // to light and dark; hand it a picture whose alpha is a filled square and it faithfully
+        // draws a filled square. A user reported exactly that: a grey square where the logo goes.
+        //
+        // `icons/tray.png` is the three bars and nothing behind them, drawn by
+        // `scripts/tray-icon.py`. Embedded rather than read from the resource directory, because a
+        // tray icon that depends on files being where they were installed is a tray icon that
+        // disappears on the one machine nobody tested.
+        .icon(tauri::image::Image::from_bytes(include_bytes!(
+            "../icons/tray.png"
+        ))?)
         .icon_as_template(true)
         .tooltip("Summo")
         // A left click shows the window. Every tray app behaves this way, and requiring the menu
