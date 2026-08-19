@@ -434,7 +434,9 @@
     "reason_fast": "准确率 {accuracy}%，在本机比实时快 {times} 倍",
     "reason_slow": "在本机太慢，无法实时出字（实时系数 {rtf}）；录完后重新转写仍可用",
     "reason_unmeasured": "准确率 {accuracy}%，但从未在同类硬件上测过",
-    "reason_unknown": "本机没有任何测量数据"
+    "reason_unknown": "本机没有任何测量数据",
+    "language": "语言",
+    "interface": "界面语言"
   },
   "tour": {
     "title": "快速上手",

@@ -434,7 +434,9 @@
     "reason_fast": "{accuracy}% accurate, {times}× faster than real time on this machine",
     "reason_slow": "Too slow for live text here (real-time factor {rtf}); usable for re-transcribing a recording afterwards",
     "reason_unmeasured": "{accuracy}% accurate, but never measured on hardware like this",
-    "reason_unknown": "No measurements available for this machine"
+    "reason_unknown": "No measurements available for this machine",
+    "language": "Language",
+    "interface": "Interface language"
   },
   "tour": {
     "title": "Quick tour",

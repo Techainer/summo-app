@@ -434,7 +434,9 @@
     "reason_fast": "精度{accuracy}%、この端末で実時間の{times}倍速",
     "reason_slow": "この端末ではリアルタイム表示に間に合いません（実時間係数 {rtf}）。録音後の書き起こしには使えます",
     "reason_unmeasured": "精度{accuracy}%。ただしこの種のハードウェアでは未計測です",
-    "reason_unknown": "この端末の計測値はありません"
+    "reason_unknown": "この端末の計測値はありません",
+    "language": "言語",
+    "interface": "表示言語"
   },
   "tour": {
     "title": "かんたん案内",

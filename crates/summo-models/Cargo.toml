@@ -29,6 +29,9 @@ sysinfo.workspace = true
 raw-cpuid.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt", "macros", "test-util"] }
+# `net` for the download tests: they stand up two throwaway TCP listeners — one that refuses, one
+# that answers — because the order the downloader tries its mirrors in is the whole point of them,
+# and a `file://` URL cannot fail the way a blocked host does.
+tokio = { workspace = true, features = ["rt", "macros", "test-util", "net"] }
 tempfile.workspace = true
 pretty_assertions.workspace = true

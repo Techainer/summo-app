@@ -51,8 +51,19 @@ export OPUS_STATIC=1
 TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 OUT="apps/desktop/src-tauri/binaries"
 
-# The models that ship inside the installer, so a fresh install can record without a download.
-# Skipped when they are already there, which is every build after the first.
+# Models inside the installer: off by default, and not because they were a bad idea.
+#
+# They went in to route around a download that could not be relied on — `huggingface.co` and
+# `github.com` are both regularly unreachable from Vietnamese consumer ISPs, so a first run could
+# show a catalogue and install nothing from it. That is now fixed where it was broken: every weight
+# file we are allowed to host has a third address on `summo.techainer.com`, which is Cloudflare and
+# reaches everywhere the site does. The download works, so the installer does not have to carry
+# 76 MB on the chance that it will not.
+#
+# Still here for the case it was actually built for: an offline install, a machine that will never
+# see the network, an internal mirror. Set the variable and the models ride along again.
+#
+#     SUMMO_BUNDLE_MODELS=1 ./scripts/sidecar.sh
 #
 # `./scripts/…`, not `$(dirname "$0")/…`: this script has already `cd`-ed to the repository root by
 # the time it gets here, so a path relative to where it was *invoked* points at nothing. Tauri runs
@@ -62,7 +73,14 @@ OUT="apps/desktop/src-tauri/binaries"
 #
 # on every platform in the release job — and not on the machine it was written on, where it was run
 # from the root.
-bash ./scripts/bundle-models.sh
+if [[ "${SUMMO_BUNDLE_MODELS:-0}" == "1" ]]; then
+  bash ./scripts/bundle-models.sh
+else
+  # A stale directory from an earlier build would be bundled by `tauri.conf.json` regardless of
+  # this switch — the resource glob does not know why the files are there.
+  rm -rf "${OUT}/models"
+  echo "models: downloaded on first run (SUMMO_BUNDLE_MODELS=1 to ship them inside)"
+fi
 
 echo "building summo-engine (${PROFILE}, ${FEATURES})"
 cargo build "${CARGO_PROFILE[@]}" --bin summo-engine --features "${FEATURES}"

@@ -1,22 +1,31 @@
 #!/usr/bin/env bash
 #
-# Put the models the app needs inside the app.
+# Put the models the app needs inside the app — for an installer that will never see the network.
 #
-#   ./scripts/bundle-models.sh
+#   SUMMO_BUNDLE_MODELS=1 ./scripts/sidecar.sh --release
+#   pnpm -C apps/desktop exec tauri build --config src-tauri/tauri.offline.conf.json
 #
-# A person downloads an installer and the first thing it does is ask for the network: measure the
-# machine, list the models, wait for seventy megabytes. When the list cannot be fetched — which is
-# an ordinary evening on a Vietnamese consumer ISP, where `raw.githubusercontent.com` is blocked —
-# the setup screen says "Could not reach the model list" and there is nothing else to press.
+# **Not what the published installers do.** They did, for one release. A person downloaded Summo and
+# the first thing it asked for was the network — measure the machine, list the models, wait for
+# seventy megabytes — and on an ordinary evening on a Vietnamese consumer ISP, where both
+# `huggingface.co` and `github.com` are unreachable, the wait ended in "Could not reach the model
+# list" with nothing else to press. Carrying the models inside the app made that impossible, at the
+# cost of 76 MB on every download for everybody.
 #
-# So the recogniser and the voice detector ride along. `summo-models`'s `seed` module copies them
-# into the vault the first time the daemon starts, checking each digest on the way in, and after
-# that they are ordinary installed models: removable, counted in the disk figure, indistinguishable
-# from a model somebody chose.
+# It was the wrong place to fix it. The catalogue and the weights are now served from
+# `summo.techainer.com` as well — Cloudflare, which Vietnam reaches — so the download works and the
+# installer does not have to pre-empt it. `.dmg` goes back to about 40 MB.
 #
-# Roughly 76 MB, which takes the macOS installer from 40 MB to about 115. That is the trade, and it
-# is the right way round: bandwidth once, at a moment when somebody has already decided to install
-# something, rather than a wait and a possible dead end at the moment they first open it.
+# This stays for the case it is actually the answer to: an air-gapped machine, a lab with no route
+# out, an internal build. `summo-models`'s `seed` module copies whatever is here into the vault the
+# first time the daemon starts, checking each digest on the way in, and after that they are ordinary
+# installed models: removable, counted in the disk figure, indistinguishable from a model somebody
+# chose.
+#
+# Both commands are needed. The first fetches the weights; the second is what puts them in the
+# bundle, because `tauri.conf.json` no longer names `binaries/models/**/*` — a resource glob that
+# matches nothing is a hard error in `tauri-utils`, so naming it unconditionally would fail every
+# ordinary build the moment the directory was not there.
 #
 # Written into the layout the store already uses, so seeding is a copy and a checksum rather than a
 # second install path:

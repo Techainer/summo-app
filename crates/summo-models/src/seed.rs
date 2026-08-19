@@ -6,8 +6,19 @@
 //! screen said "Could not reach the model list. Check the network" and there was nothing else to
 //! press.
 //!
-//! An app you download should run. So the desktop installers carry the recogniser and the voice
-//! detector, and this copies them into the vault the first time the daemon starts.
+//! An app you download should run. For one release the desktop installers carried the recogniser
+//! and the voice detector, and this copied them into the vault the first time the daemon started.
+//!
+//! **The published installers no longer carry them.** That was the wrong place to fix the problem:
+//! it charged everybody 76 MB on every download to route around two hosts being blocked, and it
+//! left the actual failure — a catalogue you can read and cannot install from — in place for
+//! anybody who deleted a model or wanted a different one. The weights now have a third address on
+//! `summo.techainer.com`, which Vietnam reaches, so the download works and the installer does not
+//! have to pre-empt it.
+//!
+//! This stays for the case it is genuinely the answer to: an air-gapped machine, or a build made
+//! for one. `SUMMO_BUNDLE_MODELS=1` puts the models back in the bundle — see
+//! `scripts/bundle-models.sh` — and everything below then does what it always did.
 //!
 //! **Copied, not read in place.** The store is content-addressed and things are removed from it —
 //! the models screen has a delete button — and a store that silently repaired itself from a

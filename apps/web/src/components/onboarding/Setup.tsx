@@ -43,6 +43,12 @@ const SPOKEN_FIRST = ["vi", "en", "ja", "zh"];
  * reachable — the record bar's picker lists every language the daemon reports — but a first-run
  * screen with a hundred-item dropdown is a first-run screen nobody finishes.
  */
+/** The two pickers below, so the pair reads as one control rather than two unrelated ones. */
+const PICKER =
+  "border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-10 w-full rounded-[var(--radius-card)] border px-3 text-sm transition-colors focus:outline-none sm:w-auto sm:min-w-56";
+
+const LABEL = "text-fg-dim text-meta mb-1.5 block";
+
 const OTHER_SPOKEN = [
   "ko",
   "th",
@@ -89,7 +95,7 @@ const OTHER_SPOKEN = [
 export function Setup({ onDone }: { onDone: () => void }) {
   const { handshake } = useEngine();
   const say = useErrorText();
-  const { t, locale } = useI18n();
+  const { t, locale, setLocale, languages } = useI18n();
   const client = useMemo(() => new OnboardingClient(handshake), [handshake]);
 
   // The language being *spoken*, which is the question this screen used to answer by assuming it
@@ -97,6 +103,9 @@ export function Setup({ onDone }: { onDone: () => void }) {
   // asked out loud, because the cost of the guess being wrong is a download that cannot transcribe
   // the meeting it was installed for.
   const [spoken, setSpoken] = useState(() => loadCapture().spoken || locale);
+  // Whether the answer above is the user's or the interface's. Only the user's survives a change of
+  // reading language.
+  const [touchedSpoken, setTouchedSpoken] = useState(() => Boolean(loadCapture().spoken));
   const [status, setStatus] = useState<Status | null>(null);
   const [models, setModels] = useState<Recommended[]>([]);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -176,9 +185,10 @@ export function Setup({ onDone }: { onDone: () => void }) {
   const later = optional(status);
   const selected = models.find((m) => m.id === chosen);
 
-  // Which numbered card is which depends on the build. A binary with no recognition has no language
-  // question and no model to choose, so numbering the permission card "3" there would be counting
-  // two steps that are not on the screen.
+  // Which numbered card is which depends on the build. A binary with no recognition has nothing to
+  // transcribe with, so it asks no spoken language and offers no model — numbering the permission
+  // card "3" there would be counting a step that is not on the screen. The reading language is
+  // asked in every build, because every build has an interface.
   const asks = status.recognition;
 
   return (
@@ -220,19 +230,52 @@ export function Setup({ onDone }: { onDone: () => void }) {
           </m.p>
         )}
 
-        {/* Asked before the models, because it decides them. A picker below a list of models would
-            be a question asked after the answer — and not asked at all in a build with no
-            recognition, where it would decide nothing and its own hint would be describing a list
-            that is not there. */}
-        {asks && (
-          <Step index={1} icon={Languages} title={t("setup.spoken")} done>
-            <label className="mt-1 block">
-              <span className="sr-only">{t("setup.spoken")}</span>
+        {/* Two languages, one step, and the interface first.
+
+            This screen used to pick its language from the operating system and never mention it: a
+            Japanese laptop opened Summo in English, and the only way to change it was a settings
+            screen behind a setup flow the user had not finished. The first question an app asks
+            should be answerable by everyone it is asking, and "which language do you read" is that
+            question.
+
+            Asked before the models, because the spoken one decides them. A picker below a list of
+            models would be a question asked after the answer — and the spoken half is not asked at
+            all in a build with no recognition, where it would decide nothing. */}
+        <Step index={1} icon={Languages} title={t("setup.language")} done>
+          <label className="mt-1 block">
+            <span className={LABEL}>{t("setup.interface")}</span>
+            <select
+              value={locale}
+              aria-label={t("setup.interface")}
+              onChange={(event) => {
+                const next = event.target.value;
+                setLocale(next);
+                // The spoken language follows the interface until somebody says otherwise. Picking
+                // Japanese to read and leaving Vietnamese to transcribe is a real combination, and
+                // it is the rarer one; a user who has already answered it keeps their answer.
+                if (!touchedSpoken) setSpoken(next.split("-")[0] ?? next);
+              }}
+              className={PICKER}
+            >
+              {languages.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {asks && (
+            <label className="mt-3 block">
+              <span className={LABEL}>{t("setup.spoken")}</span>
               <select
                 value={spoken}
                 aria-label={t("setup.spoken")}
-                onChange={(event) => setSpoken(event.target.value)}
-                className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-10 w-full rounded-[var(--radius-card)] border px-3 text-sm transition-colors focus:outline-none sm:w-auto sm:min-w-56"
+                onChange={(event) => {
+                  setTouchedSpoken(true);
+                  setSpoken(event.target.value);
+                }}
+                className={PICKER}
               >
                 {/* The interface languages first — the overwhelmingly likely answers — then
                     everything the registry can serve, which is where a Japanese speaker reading
@@ -249,10 +292,10 @@ export function Setup({ onDone }: { onDone: () => void }) {
                   </option>
                 ))}
               </select>
+              <p className="text-fg-dim text-meta mt-2">{t("setup.spoken_hint")}</p>
             </label>
-            <p className="text-fg-dim text-meta mt-2">{t("setup.spoken_hint")}</p>
-          </Step>
-        )}
+          )}
+        </Step>
 
         {/* A build that cannot transcribe says so, instead of selling a catalogue.
 
@@ -390,7 +433,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
             the trust. Compact here: the system-audio note belongs in Settings, not in the way of
             somebody who has not recorded anything yet. */}
         <Step
-          index={asks ? 3 : 1}
+          index={asks ? 3 : 2}
           icon={MonitorSmartphone}
           title={t("setup.permission")}
           done={false}

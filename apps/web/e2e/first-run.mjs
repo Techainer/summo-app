@@ -153,6 +153,35 @@ console.log(
 );
 console.log(`setup: ${setupText.split("\n").slice(0, 2).join(" · ")}`);
 
+// The first question, and the only one everybody can answer.
+//
+// Setup used to take the language from the browser and never mention it, so a Vietnamese user on an
+// English laptop met an English welcome screen and the way out was a settings page behind a flow
+// they had not finished. Asked here now — and asked *first*, because every sentence after it is
+// written in the answer.
+{
+  const picker = page.getByLabel("Interface language");
+  await picker.waitFor({ timeout: 10000 });
+  await picker.selectOption("vi");
+  await page.waitForTimeout(500);
+
+  const inVietnamese = await page.locator("h1").first().innerText();
+  if (!/Chào/i.test(inVietnamese)) {
+    fail(`choosing Tiếng Việt left the welcome in ${JSON.stringify(inVietnamese)}`);
+  }
+  if ((await page.evaluate(() => document.documentElement.lang)) !== "vi") {
+    fail("the document language did not follow the choice");
+  }
+
+  // Back to English: everything below reads English wording, and a first-time user who picked the
+  // wrong language has to be able to make this same return trip.
+  await page.getByLabel("Ngôn ngữ giao diện").selectOption("en");
+  await page.waitForTimeout(500);
+  if (!/welcome/i.test(await page.locator("h1").first().innerText())) {
+    fail("could not get back to English from Vietnamese");
+  }
+}
+
 await page.screenshot({ path: "/tmp/shots/first-run-setup.png", fullPage: true });
 
 // Skipping has to get you into the app, and has to stick.
