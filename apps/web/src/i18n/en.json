@@ -427,7 +427,6 @@
     "start": "Start",
     "skip": "Later",
     "fix": "Fix this",
-    "spoken": "Which language will be spoken?",
     "spoken_hint": "This decides which model is recommended below. Changeable at any time, including just before recording.",
     "local": "Runs on your machine",
     "permission": "Allow the microphone",
@@ -436,7 +435,9 @@
     "reason_unmeasured": "{accuracy}% accurate, but never measured on hardware like this",
     "reason_unknown": "No measurements available for this machine",
     "language": "Language",
-    "interface": "Interface language"
+    "interface": "Interface language",
+    "listing": "Fetching the model list…",
+    "none_for_language": "No model covers this language yet. Pick another language above, or use a multilingual model."
   },
   "tour": {
     "title": "Quick tour",

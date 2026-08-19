@@ -427,7 +427,6 @@
     "start": "開始",
     "skip": "後で",
     "fix": "解決する",
-    "spoken": "話される言語は？",
     "spoken_hint": "下で推奨されるモデルを決めます。録音直前を含め、いつでも変更できます。",
     "local": "この端末で動作",
     "permission": "マイクを許可",
@@ -436,7 +435,9 @@
     "reason_unmeasured": "精度{accuracy}%。ただしこの種のハードウェアでは未計測です",
     "reason_unknown": "この端末の計測値はありません",
     "language": "言語",
-    "interface": "表示言語"
+    "interface": "表示言語",
+    "listing": "モデル一覧を取得しています…",
+    "none_for_language": "この言語に対応するモデルはまだありません。上で別の言語を選ぶか、多言語モデルを使ってください。"
   },
   "tour": {
     "title": "かんたん案内",

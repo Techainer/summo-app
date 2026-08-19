@@ -36,6 +36,12 @@ import { useRefresh } from "../../lib/use-load";
  */
 const SPOKEN_FIRST = ["vi", "en", "ja", "zh"];
 
+/** The two pickers below, so the pair reads as one control rather than two unrelated ones. */
+const PICKER =
+  "border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-10 w-full rounded-[var(--radius-card)] border px-3 text-sm transition-colors focus:outline-none sm:w-auto sm:min-w-56";
+
+const LABEL = "text-fg-dim text-meta mb-1.5 block";
+
 /**
  * The rest, in the order Whisper's own language list has them, which is roughly by speakers.
  *
@@ -43,12 +49,6 @@ const SPOKEN_FIRST = ["vi", "en", "ja", "zh"];
  * reachable — the record bar's picker lists every language the daemon reports — but a first-run
  * screen with a hundred-item dropdown is a first-run screen nobody finishes.
  */
-/** The two pickers below, so the pair reads as one control rather than two unrelated ones. */
-const PICKER =
-  "border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-10 w-full rounded-[var(--radius-card)] border px-3 text-sm transition-colors focus:outline-none sm:w-auto sm:min-w-56";
-
-const LABEL = "text-fg-dim text-meta mb-1.5 block";
-
 const OTHER_SPOKEN = [
   "ko",
   "th",
@@ -111,6 +111,10 @@ export function Setup({ onDone }: { onDone: () => void }) {
   const [chosen, setChosen] = useState<string | null>(null);
   const [installs, setInstalls] = useState<Install[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** Whether the catalogue is still being asked for, arrived, or could not be reached. */
+  const [listing, setListing] = useState<"loading" | "ok" | "failed">("loading");
+  /** What the daemon said when it could not reach it — the addresses it tried, in practice. */
+  const [listingError, setListingError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -134,16 +138,23 @@ export function Setup({ onDone }: { onDone: () => void }) {
       .then((result) => {
         if (cancelled) return;
         setModels(result.models);
+        setListing("ok");
         setChosen((current) => current ?? preferred(result.models)?.id ?? null);
       })
-      .catch(() => {
-        // Offline is a supported state for a local-first tool. The daemon still ranks whatever is
-        // installed, so an empty list here means genuinely nothing to offer.
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        // Told apart from "still asking", which is the state this screen used to render as a
+        // failure. An empty list a second after opening is the normal first second of a working
+        // install, and telling that person their ISP is blocking the download is both wrong and
+        // the kind of wrong that makes them close the app.
+        setModels([]);
+        setListing("failed");
+        setListingError(say(e));
       });
     return () => {
       cancelled = true;
     };
-  }, [client, spoken]);
+  }, [client, spoken, say]);
 
   const downloading = installs.some((i) => !isFinished(i));
   useEffect(() => {
@@ -253,7 +264,13 @@ export function Setup({ onDone }: { onDone: () => void }) {
                 // The spoken language follows the interface until somebody says otherwise. Picking
                 // Japanese to read and leaving Vietnamese to transcribe is a real combination, and
                 // it is the rarer one; a user who has already answered it keeps their answer.
-                if (!touchedSpoken) setSpoken(next.split("-")[0] ?? next);
+                // Back to "asking", from the event rather than from the effect below: a state
+                // written synchronously inside an effect is a cascading render, and React's own
+                // lint says so.
+                if (!touchedSpoken) {
+                  setSpoken(next.split("-")[0] ?? next);
+                  setListing("loading");
+                }
               }}
               className={PICKER}
             >
@@ -267,13 +284,18 @@ export function Setup({ onDone }: { onDone: () => void }) {
 
           {asks && (
             <label className="mt-3 block">
-              <span className={LABEL}>{t("setup.spoken")}</span>
+              {/* "Ngôn ngữ nói", not "Bạn sẽ nói ngôn ngữ nào?". Two questions stacked under a
+                  heading that is itself the word "Ngôn ngữ" read as three ways of asking the same
+                  thing, and a user said so. The step title asks; these two name what each answer
+                  is; the sentence underneath says what the second one decides. */}
+              <span className={LABEL}>{t("record.spoken")}</span>
               <select
                 value={spoken}
-                aria-label={t("setup.spoken")}
+                aria-label={t("record.spoken")}
                 onChange={(event) => {
                   setTouchedSpoken(true);
                   setSpoken(event.target.value);
+                  setListing("loading");
                 }}
                 className={PICKER}
               >
@@ -323,7 +345,24 @@ export function Setup({ onDone }: { onDone: () => void }) {
             </p>
 
             {models.length === 0 ? (
-              <p className="text-fg-faint mt-4 text-sm">{t("setup.no_models")}</p>
+              // Three different situations, and they used to share one sentence about the network
+              // being blocked: still asking, asked and nothing came back, asked and this language
+              // has nothing. The first is what everybody sees for the first moment of a perfectly
+              // healthy install.
+              <p className="text-fg-faint mt-4 text-sm">
+                {listing === "loading" && t("setup.listing")}
+                {listing === "ok" && t("setup.none_for_language")}
+                {listing === "failed" && (
+                  <>
+                    {t("setup.no_models")}
+                    {listingError && (
+                      <span className="text-fg-faint text-micro mt-1.5 block break-words">
+                        {listingError}
+                      </span>
+                    )}
+                  </>
+                )}
+              </p>
             ) : (
               <ul className="mt-3 space-y-2">
                 {models.map((model) => {

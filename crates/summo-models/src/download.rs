@@ -52,6 +52,12 @@ pub struct Downloader {
     staging: PathBuf,
     max_retries: u32,
     credentials: Credentials,
+    /// The address that served the last file, tried first for the next one.
+    ///
+    /// A model is four or five files and they all live in the same three places. Without this,
+    /// every file re-pays the connect timeout of the addresses this network cannot reach — five
+    /// times the same wait, for a fact learned on the first file.
+    working: std::sync::Mutex<Option<String>>,
 }
 
 impl Downloader {
@@ -60,7 +66,10 @@ impl Downloader {
     pub fn new(staging: impl Into<PathBuf>) -> Result<Self> {
         let client = reqwest::Client::builder()
             .user_agent(concat!("summo/", env!("CARGO_PKG_VERSION")))
-            .connect_timeout(Duration::from_secs(15))
+            // Five seconds to make a connection, not fifteen. A blocked address on a Vietnamese
+            // ISP does not refuse the connection, it swallows it, so this timeout is the entire
+            // cost of discovering that an address is unusable — paid once per address, per file.
+            .connect_timeout(Duration::from_secs(5))
             // No overall request timeout: a multi-gigabyte model on a slow line is not an error.
             .build()
             .map_err(|e| Error::Registry(format!("cannot build http client: {e}")))?;
@@ -69,6 +78,7 @@ impl Downloader {
             staging: staging.into(),
             max_retries: 3,
             credentials: Credentials::none(),
+            working: std::sync::Mutex::new(None),
         })
     }
 
@@ -112,7 +122,13 @@ impl Downloader {
         let partial = self.staging.join(format!("{}.part", entry.sha256));
 
         let mut last_err = None;
-        let urls: Vec<&String> = std::iter::once(&entry.url).chain(&entry.mirror).collect();
+        let mut urls: Vec<&String> = std::iter::once(&entry.url).chain(&entry.mirror).collect();
+        // Whatever served the previous file goes first. On a connection where the first two
+        // addresses are black holes, this is the difference between paying ten seconds once and
+        // paying it for every file in the model.
+        if let Some(known) = self.working.lock().ok().and_then(|slot| slot.clone()) {
+            urls.sort_by_key(|url| usize::from(**url != known));
+        }
         // Addresses this round gave up on for good — a 404, a checksum mismatch, anything that
         // will still be true in ten seconds. Retrying those is time spent proving the same thing.
         let mut dead = vec![false; urls.len()];
@@ -130,6 +146,9 @@ impl Downloader {
                 }
                 match self.try_one(url, entry, &partial, &mut on_progress).await {
                     Ok(()) => {
+                        if let Ok(mut slot) = self.working.lock() {
+                            *slot = Some((*url).clone());
+                        }
                         self.promote(&partial, dest).await?;
                         return Ok(());
                     }
