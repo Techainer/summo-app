@@ -41,7 +41,9 @@
     "maximise": "Phóng to",
     "restore": "Khôi phục",
     "close": "Đóng",
-    "help": "Trợ giúp"
+    "help": "Trợ giúp",
+    "overlay": "Phụ đề nổi",
+    "overlay_hint": "Nền trong suốt, nổi trên cửa sổ khác — để vừa xem vừa đọc"
   },
   "record": {
     "source": "Nguồn",

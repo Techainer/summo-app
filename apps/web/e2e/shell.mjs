@@ -96,7 +96,6 @@ async function open(scheme, viewport) {
     ["Đã lưu", /mọi thứ|họp|hôm/i],
     ["Lịch", /lịch|chưa có lịch/i],
     ["Việc", /việc|agent|chưa có/i],
-    ["Giọng nói", /giọng|chưa có ai/i],
     ["Thống kê", /thống kê/i],
     ["Cài đặt", /cài đặt|mô hình|llm|ngôn ngữ/i],
     ["Ghi", /ghi|đang nghe|bấm ghi/i],

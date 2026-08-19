@@ -1,8 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the main window is allowed to ask the shell for. Deliberately short: everything that touches audio, models or the vault goes to the daemon over an authenticated socket instead, so the webview needs almost no native privilege of its own.",
-  "windows": ["main", "compact"],
+  "description": "What the main window is allowed to ask the shell for. Deliberately short: everything that touches audio, models or the vault goes to the daemon over an authenticated socket instead, so the webview needs almost no native privilege of its own. The window permissions below are what the compact strip needs — resize itself, float above other windows, and be put back where it was.",
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "core:event:default",
@@ -14,6 +16,12 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "global-shortcut:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-inner-size",
+    "core:window:allow-outer-position"
   ]
 }
