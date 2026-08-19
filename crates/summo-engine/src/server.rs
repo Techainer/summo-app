@@ -4138,6 +4138,7 @@ fn handle_command_with_models(
         // Saved immediately rather than left to the autosave: this arrives debounced already, and
         // a person who typed a sentence and closed the laptop should not lose it to a timer.
         Command::Notes { text } => {
+            let mut session = session;
             let Some(active) = session.as_mut() else {
                 return (
                     vec![Event::error(&summo_core::Error::Other(

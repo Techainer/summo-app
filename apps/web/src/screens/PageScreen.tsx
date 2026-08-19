@@ -2,6 +2,7 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Comments } from "../components/meeting/Comments";
+import { LiveMeeting } from "../components/meeting/LiveMeeting";
 import { Markdown } from "../components/page/Markdown";
 import { NoteEditor } from "../components/page/NoteEditor";
 import { cn } from "../lib/cn";
@@ -16,7 +17,7 @@ import { Button, Card, CardBody, CardHeader, SegmentedControl } from "../compone
 import { useEngine } from "../lib/engine-context";
 import { DraftClient, templates, type Draft } from "../lib/draft";
 import { url, type MeetingDetail } from "../lib/library";
-import { NoteClient } from "../lib/notes";
+import { NOTES_HEADING, NoteClient } from "../lib/notes";
 import { TaskClient } from "../lib/tasks";
 import { formatDuration } from "../lib/duration";
 import type { Naming } from "../components/meeting/TranscriptChips";
@@ -56,7 +57,8 @@ export function PageScreen() {
   const say = useErrorText();
   const navigate = useNavigate();
   const { pageId } = useParams({ from: "/pages/$pageId" });
-  const { library, handshake, people } = useEngine();
+  const engine = useEngine();
+  const { library, handshake, people } = engine;
   // Stored with the page it belongs to, so switching pages does not need an effect to blank it
   // first. The `setDetail(null)` that used to do that ran synchronously inside the effect — one
   // extra render per navigation, and a frame in which the new page's title sat above the old
@@ -284,6 +286,16 @@ export function PageScreen() {
   const { summary, sections, transcript } = detail;
   const note = summary.kind === "note";
 
+  /**
+   * This page, right now, with the microphone open.
+   *
+   * The document is being written by the daemon's recorder while this renders, so the screen shows
+   * the two things that are moving — what the user types and what is being heard — and none of the
+   * things that only make sense afterwards: a player with nothing to play, an export of a meeting
+   * that has not finished, a summary of a conversation still happening.
+   */
+  const live = engine.session.recording && engine.session.meeting === pageId;
+
   const meta = (
     <>
       {/* Where this page is, when it is inside another one. A sub-page opened from a search result
@@ -316,6 +328,15 @@ export function PageScreen() {
       </div>
     </>
   );
+
+  if (live) {
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-4 p-5">
+        {meta}
+        <LiveMeeting initialNotes={detail?.sections.find((s) => s.heading === NOTES_HEADING)?.body ?? ""} />
+      </div>
+    );
+  }
 
   if (note) {
     return (

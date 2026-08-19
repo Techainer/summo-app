@@ -8,6 +8,7 @@ const base: SessionState = {
   error: null,
   deviceLabel: null,
   sampleRate: null,
+  meeting: null,
 };
 
 describe("device warnings", () => {

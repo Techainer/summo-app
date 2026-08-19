@@ -210,6 +210,16 @@ export class AgendaClient {
 export const SAVE_DEBOUNCE_MS = 2_000;
 
 /**
+ * The section a meeting's own notes live in.
+ *
+ * Matches `summo_vault::meeting::NOTES_HEADING`, and it is not interface text — nobody translates
+ * it, because it is a heading inside a Markdown file that the daemon writes, the summariser reads
+ * and a person opening the vault in Obsidian sees. Three parts of the system have to agree on it
+ * exactly; a typo in any one of them is a note that silently stops reaching the summary.
+ */
+export const NOTES_HEADING = "Ghi chú"; // i18n-exempt: a heading in the file, not on the screen
+
+/**
  * Split a note's body into a title suggestion and the rest.
  *
  * A person types the title as the first line and expects it to become the title. Asking for one in

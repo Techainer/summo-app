@@ -501,6 +501,25 @@ export function RootLayout({ children }: { children: ReactNode }) {
   // A page is filed in the vault, and `Kho` is the shelf. Neither kind gets its own destination
   // highlighted, because the tree below is what says where the open page lives.
   const active = matchRoute({ to: "/pages/$pageId", fuzzy: true }) ? "/library" : pathname;
+
+  /**
+   * Follow the recording to the page it is writing into.
+   *
+   * A meeting is a note with a transcript, so the moment the daemon says which note, that is where
+   * the user should be — with somewhere to type, which is what a person in a meeting is trying to
+   * do. Before this the app knew a recording was running and could not say into what, so recording
+   * had a screen of its own with a transcript and no editor.
+   *
+   * Once per recording, and never on top of a page the user chose: somebody who navigated to a
+   * different document while a meeting runs has said where they want to be.
+   */
+  const followed = useRef<string | null>(null);
+  useEffect(() => {
+    const meeting = engine.session.meeting;
+    if (!engine.session.recording || !meeting || followed.current === meeting) return;
+    followed.current = meeting;
+    void navigate({ to: "/pages/$pageId", params: { pageId: meeting } });
+  }, [engine.session.recording, engine.session.meeting, navigate]);
   const warning = deviceWarning(engine.session);
   const latest = engine.transcript.segments.at(-1);
 

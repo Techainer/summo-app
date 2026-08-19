@@ -128,7 +128,8 @@
     "summary_shape": "模板",
     "shape_auto": "自动选择",
     "play_from": "从{time}播放",
-    "no_transcript": "还没有人说话。"
+    "no_transcript": "还没有人说话。",
+    "your_notes": "你的笔记"
   },
   "export": {
     "title": "导出与翻译",
