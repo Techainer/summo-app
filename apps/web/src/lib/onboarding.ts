@@ -137,8 +137,18 @@ export class OnboardingClient {
     );
   }
 
-  async recommend(lang: string): Promise<{ models: Recommended[] }> {
-    return readJson<{ models: Recommended[] }>(
+  /**
+   * Rank what this machine could install for `lang`.
+   *
+   * `registry_error` is the field that matters when `models` is empty. The daemon ranks whatever is
+   * installed when it cannot reach the catalogue, so "the network is blocked" and "nothing covers
+   * Japanese" arrive as the same empty array — and the screen told a Vietnamese user, in an app
+   * whose default model is Vietnamese, that no model covers their language.
+   */
+  async recommend(
+    lang: string,
+  ): Promise<{ models: Recommended[]; registry_error?: string | null }> {
+    return readJson<{ models: Recommended[]; registry_error?: string | null }>(
       await fetch(url(this.handshake, "/onboarding/recommend", { lang })),
     );
   }

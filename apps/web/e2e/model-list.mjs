@@ -27,7 +27,7 @@
  */
 import { chromium } from "playwright";
 
-import { boot } from "./daemon.mjs";
+import { REGISTRY, boot } from "./daemon.mjs";
 
 const engine = await boot({ name: "model-list", onboarded: false, seed: false });
 const browser = await chromium.launch();
@@ -147,6 +147,43 @@ async function watch(page, ticks = 40, gap = 150) {
   return seen;
 }
 
+// ---- 0. the daemon says which kind of empty list this is -----------------
+//
+// Below the screen, because this is where the confusion started: `candidates` ranks whatever is
+// installed when it cannot reach the catalogue, so an unreachable registry and a language nothing
+// covers both come back `200 OK` with `models: []`. A user in Hanoi was told, in Vietnamese, that
+// no model covers Vietnamese.
+//
+// Driven through the endpoint's own `registry` parameter, which replaces the whole chain — so this
+// is a real daemon reading a real dead address, with no network and no interception.
+{
+  const ask = async (registry) => {
+    const query = new URLSearchParams({ lang: "vi", token: engine.token, registry });
+    return await fetch(`${engine.url}/onboarding/recommend?${query}`).then((r) => r.json());
+  };
+
+  // Port 9 is `discard`: nothing listens, and the connection is refused rather than hanging.
+  const dead = await ask("https://127.0.0.1:9/registry");
+  if (!dead.registry_error) {
+    problems.push("an unreachable registry was reported as a perfectly good empty catalogue");
+  } else if (!String(dead.registry_error).includes("127.0.0.1:9")) {
+    problems.push(`the failure does not name the address it tried: ${dead.registry_error}`);
+  }
+
+  const good = await ask(REGISTRY);
+  if (good.registry_error) {
+    problems.push(`a readable registry reported an error: ${good.registry_error}`);
+  }
+  if (!Array.isArray(good.models) || good.models.length === 0) {
+    problems.push("the local registry ranked nothing for Vietnamese");
+  }
+
+  console.log(
+    `daemon: dead registry → ${dead.models?.length ?? "?"} model(s) and a reason, ` +
+      `local registry → ${good.models?.length ?? "?"} model(s) and none`,
+  );
+}
+
 // ---- 1. the real registry, on a build that can use one -------------------
 if (recognises) {
   const { context, page } = await screen();
@@ -205,7 +242,27 @@ if (recognises) {
     problems.push("the failure gave no detail at all");
   }
 
-  console.log("failed: says so, with a reason");
+  // And there is a way out of it that is not "quit the app": the network comes back, the button is
+  // pressed, the list arrives.
+  await page.unroute(RECOMMEND);
+  await page.route(RECOMMEND, (route) => route.fulfill({ json: CANNED }));
+  const retried = await page
+    .getByRole("button", { name: "Thử lại" })
+    .click({ timeout: 10000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!retried) {
+    problems.push("a failed catalogue offered no way to ask again");
+  } else {
+    const back = await rows(page)
+      .first()
+      .waitFor({ timeout: 15000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!back) problems.push("asking again did not fetch the list");
+  }
+
+  console.log("failed: says so, with a reason, and can be asked again");
   await context.close();
 }
 
@@ -267,6 +324,43 @@ if (recognises) {
   if (accused) problems.push("changing the language reported the network as blocked");
 
   console.log("re-ask: language change does not flash a network error");
+  await context.close();
+}
+
+// ---- 6. an empty list with a reason is a network problem, and says so ----
+//
+// The shape the user's machine actually produced: the daemon answers, the list is empty, and the
+// reason is in the payload. Before this the screen picked the wrong one of its two sentences and
+// told them to choose a different language.
+{
+  const { context, page } = await screen();
+  await page.route(RECOMMEND, (route) =>
+    route.fulfill({
+      json: {
+        lang: "vi",
+        models: [],
+        registry_error:
+          "no registry source answered:\n  https://raw.githubusercontent.com/...: timed out",
+      },
+    }),
+  );
+  await open(page);
+  await welcome(page);
+  await page
+    .getByText(BLOCKED)
+    .first()
+    .waitFor({ timeout: 20000 })
+    .catch(() => problems.push("an empty list with a stated reason was not reported as a failure"));
+
+  const text = await body(page);
+  if (text.includes(NONE_FOR_LANGUAGE)) {
+    problems.push("a blocked registry was reported as a language nothing covers");
+  }
+  if (!text.includes("raw.githubusercontent.com")) {
+    problems.push("the reason the daemon gave was not shown to the user");
+  }
+
+  console.log("empty with a reason: named as a failure, with the address that failed");
   await context.close();
 }
 

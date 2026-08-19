@@ -27,7 +27,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * here with `SUMMO_REGISTRY_DIR`. The old line was a fixed `../../../../summo-registry` and the
  * browser job spent its life failing on "Repository path is not under GITHUB_WORKSPACE".
  */
-const REGISTRY = process.env.SUMMO_REGISTRY_DIR ?? join(HERE, "../../../../summo-registry");
+export const REGISTRY = process.env.SUMMO_REGISTRY_DIR ?? join(HERE, "../../../../summo-registry");
 
 /** The daemon, built with the interface inside it. `--features bundled` is what puts it there. */
 const BINARY = join(HERE, "../../../target/debug/summo-engine");

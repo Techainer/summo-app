@@ -598,25 +598,18 @@ async fn catalogue(
         .map(|m| (m.id.to_string(), m.size_bytes))
         .collect();
 
-    let mut reachable = true;
-    let manifests = match candidates(&state, q.registry.as_deref()).await {
-        Ok(manifests) => manifests,
+    // Asked, not inferred. This used to guess whether the registry had answered by comparing the
+    // list against the installed set — "everything here is already installed, so probably not" —
+    // which is wrong for a machine that has installed everything on offer and wrong for a machine
+    // that has installed nothing.
+    let (manifests, unreachable) = match candidates(&state, q.registry.as_deref()).await {
+        Ok(catalogue) => (catalogue.manifests, catalogue.unreachable),
         Err(e) => {
             tracing::warn!(error = %e, "registry unavailable; showing installed models only");
-            reachable = false;
-            state.engine.store().list()
+            (state.engine.store().list(), Some(e.to_string()))
         }
     };
-    // `candidates` swallows a registry failure and returns the installed set, so "did the registry
-    // answer" cannot be read from the result alone. Anything the user has not installed came from
-    // the registry, which means it did.
-    if reachable
-        && manifests
-            .iter()
-            .all(|m| installed.contains_key(&m.id.to_string()))
-    {
-        reachable = !installed.is_empty() && manifests.len() > installed.len();
-    }
+    let reachable = unreachable.is_none();
 
     let hardware = state.engine.hardware();
     let models: Vec<_> = manifests
@@ -2403,8 +2396,8 @@ async fn recommend_models(
         return rejection.into_response();
     }
 
-    let manifests = match candidates(&state, q.registry.as_deref()).await {
-        Ok(manifests) => manifests,
+    let (manifests, unreachable) = match candidates(&state, q.registry.as_deref()).await {
+        Ok(catalogue) => (catalogue.manifests, catalogue.unreachable),
         Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
     };
 
@@ -2445,6 +2438,11 @@ async fn recommend_models(
         "lang": q.lang,
         "models": models,
         "rejected": ranked.rejected,
+        // Null when the catalogue was read. A string — every address tried, and what each said —
+        // when it was not, so the screen can tell "nothing covers Japanese" apart from "this
+        // machine could not reach the list", which are the same empty array and were told to the
+        // user as the same sentence.
+        "registry_error": unreachable,
     })))
 }
 
@@ -2786,8 +2784,8 @@ async fn languages(
         return rejection.into_response();
     }
 
-    let manifests = match candidates(&state, q.registry.as_deref()).await {
-        Ok(manifests) => manifests,
+    let (manifests, unreachable) = match candidates(&state, q.registry.as_deref()).await {
+        Ok(catalogue) => (catalogue.manifests, catalogue.unreachable),
         Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
     };
     let installed: Vec<String> = state
@@ -2807,6 +2805,9 @@ async fn languages(
         // on a default that silently disagrees with the settings file.
         "current": settings.models.language,
         "languages": languages,
+        // As on `/onboarding/recommend`: a short list because the catalogue could not be read is
+        // not the same fact as a short list because that is what exists.
+        "registry_error": unreachable,
     })))
 }
 
@@ -2815,10 +2816,7 @@ async fn languages(
 /// An unreachable registry ranks the installed models rather than failing. Offline is a supported
 /// state for a local-first tool, and a setup screen that refuses to render without a network is the
 /// opposite of the promise.
-async fn candidates(
-    state: &AppState,
-    registry: Option<&str>,
-) -> summo_core::Result<Vec<summo_models::Manifest>> {
+async fn candidates(state: &AppState, registry: Option<&str>) -> summo_core::Result<Catalogue> {
     let mut manifests = state.engine.store().list();
 
     let reg = match registry {
@@ -2828,6 +2826,7 @@ async fn candidates(
         None => summo_models::Registry::discover()?,
     };
 
+    let mut unreachable = None;
     match reg.index().await {
         Ok(index) => {
             for entry in index.models {
@@ -2840,9 +2839,30 @@ async fn candidates(
                 }
             }
         }
-        Err(e) => tracing::warn!(error = %e, "registry unavailable; ranking installed models only"),
+        Err(e) => {
+            tracing::warn!(error = %e, "registry unavailable; ranking installed models only");
+            unreachable = Some(e.to_string());
+        }
     }
-    Ok(manifests)
+    Ok(Catalogue {
+        manifests,
+        unreachable,
+    })
+}
+
+/// What could be offered, and whether that is the whole truth.
+///
+/// The second field is the point. This used to return a bare `Vec`, so a machine that could not
+/// reach the registry got the same answer as a machine whose registry has nothing for Japanese: an
+/// empty list, `200 OK`, no hint that anything had gone wrong. The setup screen then said "no model
+/// covers this language" to a user whose network was blocked — a confident, wrong sentence, about
+/// Vietnamese, in an app whose default model is Vietnamese. The failure was logged, and a log line
+/// inside a daemon is not something the person looking at the screen can read.
+struct Catalogue {
+    manifests: Vec<summo_models::Manifest>,
+    /// `Some(reason)` when the registry could not be read — every address that was tried, and what
+    /// each one said.
+    unreachable: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

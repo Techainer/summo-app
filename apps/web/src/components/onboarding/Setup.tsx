@@ -115,6 +115,9 @@ export function Setup({ onDone }: { onDone: () => void }) {
   const [listing, setListing] = useState<"loading" | "ok" | "failed">("loading");
   /** What the daemon said when it could not reach it — the addresses it tried, in practice. */
   const [listingError, setListingError] = useState<string | null>(null);
+  // Bumped to ask again. Without it the only way out of a failed catalogue was to quit the app and
+  // open it again, which is a lot to ask of somebody whose wifi came back thirty seconds ago.
+  const [attempt, setAttempt] = useState(0);
 
   const refresh = useCallback(async () => {
     try {
@@ -138,7 +141,15 @@ export function Setup({ onDone }: { onDone: () => void }) {
       .then((result) => {
         if (cancelled) return;
         setModels(result.models);
-        setListing("ok");
+        // A `200` with an empty list is two different facts, and the daemon now says which. Without
+        // this the screen reads a blocked network as "nothing covers Vietnamese" — which it says to
+        // the user in Vietnamese, offering them the choice of picking a different language.
+        if (result.registry_error) {
+          setListing("failed");
+          setListingError(result.registry_error);
+        } else {
+          setListing("ok");
+        }
         setChosen((current) => current ?? preferred(result.models)?.id ?? null);
       })
       .catch((e: unknown) => {
@@ -154,7 +165,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [client, spoken, say]);
+  }, [client, spoken, say, attempt]);
 
   const downloading = installs.some((i) => !isFinished(i));
   useEffect(() => {
@@ -360,6 +371,16 @@ export function Setup({ onDone }: { onDone: () => void }) {
                         {listingError}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setListing("loading");
+                        setAttempt((n) => n + 1);
+                      }}
+                      className="text-accent mt-2 block font-medium underline"
+                    >
+                      {t("setup.retry")}
+                    </button>
                   </>
                 )}
               </p>
