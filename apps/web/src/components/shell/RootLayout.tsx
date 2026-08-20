@@ -750,9 +750,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
               Models screen" — and a user read that with permission granted and two devices listed.
               A guess that names the wrong cause is worse than the raw reason. */}
           {engine.session.error.code === "session_refused" && engine.session.error.error && (
-            <span className="mt-1 block break-words opacity-80">
-              {engine.session.error.error}
-            </span>
+            <span className="mt-1 block break-words opacity-80">{engine.session.error.error}</span>
           )}
           {engine.session.error.code === "mic_denied" && (
             <button

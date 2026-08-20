@@ -108,11 +108,7 @@ export function Translation({ settings }: { settings: LlmSettings }) {
               place of the one thing they wanted, which was to have the model. The catalogue screen
               installs it, shows what it is, how big it is and who wrote it. */}
           {llm.translator.provider === LOCAL ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void navigate({ to: "/models" })}
-            >
+            <Button variant="secondary" size="sm" onClick={() => void navigate({ to: "/models" })}>
               <HardDriveDownload aria-hidden="true" className="me-1.5 size-3.5" />
               {t("settings.mt_pull")}
             </Button>
