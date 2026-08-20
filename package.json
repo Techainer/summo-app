@@ -1,7 +1,7 @@
 {
   "name": "summo-workspace",
   "private": true,
-  "version": "0.3.5",
+  "version": "0.4.0",
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test"
