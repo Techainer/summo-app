@@ -130,14 +130,18 @@ fi
 APP_PID=$!
 
 # The handshake, which is the app saying it has a daemon and where it is. Sixty seconds because a
-# cold start on a loaded CI runner loads the vault, the settings and the model manifests first.
+# cold start on a loaded CI runner loads the vault, the settings and the model manifests first —
+# and three minutes on Windows, where Defender reads all fifty megabytes of a freshly written
+# binary before letting it run. A release build failed here once and passed on a rerun with no
+# change to anything, which is the signature of a deadline set from the wrong machine.
 HANDSHAKE="${HOME_DIR}/engine.json"
-for _ in $(seq 1 120); do
+if [[ "${WINDOWS}" == "yes" ]]; then TRIES=360; else TRIES=120; fi
+for _ in $(seq 1 "${TRIES}"); do
   [[ -s "${HANDSHAKE}" ]] && break
   kill -0 "${APP_PID}" 2>/dev/null || fail "the app exited before it wrote a handshake"
   sleep 0.5
 done
-[[ -s "${HANDSHAKE}" ]] || fail "no handshake after 60s — the app never started its daemon"
+[[ -s "${HANDSHAKE}" ]] || fail "no handshake after $((TRIES / 2))s — the app never started its daemon"
 
 PORT="$(grep -o '"port"[[:space:]]*:[[:space:]]*[0-9]*' "${HANDSHAKE}" | grep -o '[0-9]*$')"
 [[ -n "${PORT}" ]] || fail "the handshake has no port in it: $(cat "${HANDSHAKE}")"
