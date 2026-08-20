@@ -2409,7 +2409,12 @@ async fn recommend_models(
         .map(|m| m.id.to_string())
         .collect();
 
-    let ranked = summo_models::recommend::recommend(&manifests, state.engine.hardware(), &q.lang);
+    // Measured now, not at boot. The daemon starts with the app and can be hours old by the time
+    // somebody opens setup, and the number this decides on — how much memory is free — is the one
+    // fact in the profile that changes minute to minute.
+    let mut hw = state.engine.hardware().clone();
+    hw.refresh_memory();
+    let ranked = summo_models::recommend::recommend(&manifests, &hw, &q.lang);
     let models: Vec<_> = ranked
         .ranked
         .iter()

@@ -124,12 +124,22 @@ pub fn recommend(candidates: &[Manifest], hw: &HwProfile, language: &str) -> Rec
         }
 
         let needed = required_ram_mb(manifest);
-        if needed > 0 && (needed as f32 * RAM_HEADROOM) > hw.available_ram_mb as f32 {
+        // A profile that says nothing is available is a profile whose platform would not say, not a
+        // machine with no memory — this code is running, so there is memory. `HwProfile::detect`
+        // already falls back, and this is the second line of the same defence: a profile can arrive
+        // from a settings file written by an older build, or over the wire from a machine that
+        // measured itself badly, and neither should produce "every model is too large for this
+        // 24 GB laptop".
+        let room = if hw.available_ram_mb == 0 {
+            hw.total_ram_mb
+        } else {
+            hw.available_ram_mb
+        };
+        if needed > 0 && room > 0 && (needed as f32 * RAM_HEADROOM) > room as f32 {
             rejected.push(Rejected {
                 id: manifest.id.to_string(),
                 reason: format!(
-                    "needs about {needed} MB with headroom, and {} MB is available",
-                    hw.available_ram_mb
+                    "needs about {needed} MB with headroom, and {room} MB is available"
                 ),
             });
             continue;
@@ -304,6 +314,34 @@ mod tests {
         hw.available_ram_mb = available_mb;
         hw.cores = 8;
         hw
+    }
+
+    /// The user's machine, as their daemon described it.
+    ///
+    /// A profile with `available_ram_mb: 0` used to reject every candidate — including the 800 MB
+    /// Vietnamese model on a 24 GB laptop — and the setup screen then reported it as "no model
+    /// covers this language", which was the sentence the user actually read.
+    #[test]
+    fn a_profile_claiming_no_free_memory_still_ranks_models() {
+        let candidates = vec![manifest(
+            "gipformer-65m",
+            &["vi"],
+            0.021,
+            "wer_fleurs_vi",
+            0.024,
+            800,
+        )];
+        let mut profile = hw(0);
+        profile.total_ram_mb = 24_576;
+        profile.available_ram_mb = 0;
+
+        let ranked = recommend(&candidates, &profile, "vi");
+        assert_eq!(
+            ranked.best().map(|m| m.id.as_str()),
+            Some("gipformer-65m"),
+            "rejected on a 24 GB machine: {:?}",
+            ranked.rejected
+        );
     }
 
     /// The real case: the two models actually measured, ranked for a Vietnamese user.
