@@ -1,7 +1,27 @@
 import { Checkbox, Input } from "../ui";
 import { CONTROL, FIELD, HINT, LABEL, SELECT } from "./fields";
-import { useT } from "../../i18n/context";
+import { useI18n, useT } from "../../i18n/context";
+import { languageName } from "../../lib/languages";
 import { CUSTOM, type LlmSettings } from "./llm";
+
+/**
+ * The languages a summary can be written in, offered as a list rather than typed.
+ *
+ * The stored value is the English name, because it goes into a prompt — "write this in Vietnamese"
+ * is what a model understands, and a field holding `Tiếng Việt` would have quietly changed what the
+ * model was asked for. So the value is English and the label is not: a Vietnamese interface asking
+ * somebody to type the word "Vietnamese" was the interface leaking its own plumbing.
+ */
+const SUMMARY_LANGUAGES: { value: string; code: string }[] = [
+  { value: "Vietnamese", code: "vi" },
+  { value: "English", code: "en" },
+  { value: "Japanese", code: "ja" },
+  { value: "Chinese", code: "zh" },
+  { value: "Korean", code: "ko" },
+  { value: "French", code: "fr" },
+  { value: "German", code: "de" },
+  { value: "Spanish", code: "es" },
+];
 
 /**
  * Which model writes the summaries, and where it runs.
@@ -12,6 +32,7 @@ import { CUSTOM, type LlmSettings } from "./llm";
  */
 export function Intelligence({ settings }: { settings: LlmSettings }) {
   const t = useT();
+  const { locale } = useI18n();
   const {
     llm,
     providers,
@@ -114,13 +135,23 @@ export function Intelligence({ settings }: { settings: LlmSettings }) {
 
       <label className={FIELD}>
         <span className={LABEL}>{t("settings.summary_language")}</span>
-        <Input
-          className={CONTROL}
+        <select
+          className={SELECT}
           value={llm.language}
           aria-label={t("settings.summary_language")}
-          onChange={(e) => edit({ ...llm, language: e.target.value })}
-          onBlur={() => void save(llm)}
-        />
+          onChange={(e) => void save({ ...llm, language: e.target.value })}
+        >
+          {/* Whatever is stored, even if it is not on the list — a value typed before this was a
+              list, or set by hand in the settings file, must not silently become Vietnamese. */}
+          {!SUMMARY_LANGUAGES.some((one) => one.value === llm.language) && (
+            <option value={llm.language}>{llm.language}</option>
+          )}
+          {SUMMARY_LANGUAGES.map(({ value, code }) => (
+            <option key={value} value={value}>
+              {languageName(code, locale)}
+            </option>
+          ))}
+        </select>
       </label>
 
       <Checkbox

@@ -806,7 +806,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           onRecord={engine.toggle}
           recordLabel={engine.session.recording ? t("record.stop") : t("record.start")}
         >
-          <FirstRun>
+          <FirstRun pauseTour={assistantOpen}>
             {/* Keyed on the path, so a route change is a change of element and the new screen
                 fades in. No `AnimatePresence`, and therefore no exit animation.
                 

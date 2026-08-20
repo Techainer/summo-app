@@ -25,6 +25,7 @@ import { useEngine } from "../lib/engine-context";
 import { useErrorText } from "../lib/errors";
 import type { MeetingSummary } from "../lib/library";
 import { listItem, stagger } from "../lib/motion";
+import { NoteClient } from "../lib/notes";
 import { ReportClient, shiftDay, today, type ActionItem, type Report } from "../lib/report";
 
 /**
@@ -57,6 +58,24 @@ export function HomeScreen() {
   const { handshake, session, elapsed, toggle, transcript } = useEngine();
 
   const reports = useMemo(() => new ReportClient(handshake), [handshake]);
+  const notes = useMemo(() => new NoteClient(handshake), [handshake]);
+
+  /**
+   * Write, which used to mean "go to a screen where you can ask for a note".
+   *
+   * The button said Viết and landed on an empty notes screen holding another button called Mới.
+   * Two clicks and a dead end for the action the home screen advertises; this makes the note and
+   * opens it, which is what the word means. If the daemon refuses, the notes screen is still the
+   * right place to be — it says why there.
+   */
+  const write = useCallback(async () => {
+    try {
+      const { id } = await notes.create(t("notes.untitled"), "");
+      await navigate({ to: "/notes", search: { open: id } });
+    } catch {
+      await navigate({ to: "/notes", search: { open: undefined } });
+    }
+  }, [notes, navigate, t]);
 
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -240,11 +259,7 @@ export function HomeScreen() {
                   <FileUp aria-hidden="true" className="me-1 size-3.5" />
                   {t("record.tab_upload")}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => void navigate({ to: "/notes", search: { open: undefined } })}
-                >
+                <Button size="sm" variant="secondary" onClick={() => void write()}>
                   <PencilLine aria-hidden="true" className="me-1 size-3.5" />
                   {t("home.write")}
                 </Button>

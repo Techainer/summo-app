@@ -183,7 +183,7 @@
   },
   "chat": {
     "question": "質問",
-    "placeholder": "予算について田中さんは何と言っていた？",
+    "placeholder": "記録した内容について何でも質問できます。",
     "ask": "聞く",
     "heading": "記録に聞く",
     "searching": "記録を探しています…",
@@ -666,7 +666,7 @@
     "intro": "録音したことも書いたことも聞けます。エージェントに作業を頼むこともできます。",
     "mode_ask": "質問",
     "mode_do": "実行",
-    "ask_placeholder": "予算について田中さんは何と言っていた？",
+    "ask_placeholder": "録音やノートについて質問してください。",
     "do_placeholder": "ローンチの予定を下書きして…"
   },
   "permissions": {

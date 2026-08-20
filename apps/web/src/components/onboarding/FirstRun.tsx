@@ -24,7 +24,20 @@ function same(a: Status | null, b: Status): boolean {
   return a !== null && JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function FirstRun({ children }: { children: ReactNode }) {
+export function FirstRun({
+  children,
+  /**
+   * Hold the tour back while something else owns the corner it lives in.
+   *
+   * The assistant panel opens down the right-hand side and its composer sits at the bottom of it —
+   * exactly where the tour card is pinned. Somebody who opened the assistant during their first
+   * session saw a panel inviting them to ask a question with the box to type it in covered up.
+   */
+  pauseTour = false,
+}: {
+  children: ReactNode;
+  pauseTour?: boolean;
+}) {
   const { handshake } = useEngine();
   const client = useMemo(() => new OnboardingClient(handshake), [handshake]);
 
@@ -122,7 +135,7 @@ export function FirstRun({ children }: { children: ReactNode }) {
         </p>
       )}
       <div className="min-h-0 flex-1">{children}</div>
-      {tour && <Tour onClose={() => setTour(false)} />}
+      {tour && !pauseTour && <Tour onClose={() => setTour(false)} />}
     </div>
   );
 }
