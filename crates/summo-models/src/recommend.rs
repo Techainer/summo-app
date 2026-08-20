@@ -150,14 +150,10 @@ pub fn recommend(candidates: &[Manifest], hw: &HwProfile, language: &str) -> Rec
         // running are different acts, minutes or days apart, and the second one is not this
         // function's decision to make. Ranked lower, labelled, and installable.
         let needed = required_ram_mb(manifest);
-        // Zero available is what a platform that would not answer looks like; this code is running,
-        // so memory exists. `HwProfile::detect` already falls back — this is the same defence for a
-        // profile that arrived from an older build's settings file or from another machine.
-        let room = if hw.available_ram_mb == 0 {
-            hw.total_ram_mb
-        } else {
-            hw.available_ram_mb
-        };
+        // `room_mb`, not `available_ram_mb`: zero available is a platform that would not answer,
+        // and `HwProfile::detect` already falls back — this is the same rule for a profile that
+        // arrived from an older build's settings file or from another machine.
+        let room = hw.room_mb();
         let tight = needed > 0 && room > 0 && (needed as f32 * RAM_HEADROOM) > room as f32;
 
         let mut scored = score(manifest, &hw_key, language);
