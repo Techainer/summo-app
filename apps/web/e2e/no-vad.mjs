@@ -51,9 +51,16 @@ for (let i = 0; i < 300; i += 1) {
   await new Promise((r) => setTimeout(r, 500));
 }
 
+const status = await (await fetch(at("/onboarding"))).json();
+const recognises = status.recognition === true;
+console.log(
+  recognises
+    ? "this daemon can transcribe: the refusal is driven for real"
+    : "this daemon has no recogniser, so there is no pipeline to refuse — only the clock is checked",
+);
+
 // ---- the daemon must not call this ready -------------------------------
 {
-  const status = await (await fetch(at("/onboarding"))).json();
   const models = status.checks.find((check) => check.step === "models");
   if (status.recognition) {
     if (models.ready) {
@@ -93,7 +100,11 @@ for (let i = 0; i < 300; i += 1) {
   await page.waitForTimeout(6000);
 
   const text = await page.locator("body").innerText();
-  if (!/dò giọng/.test(text)) {
+  // Only a build with recognition in it reaches `resolve_vad`. Without the feature the daemon
+  // refuses earlier and for a different reason, which is its own correct behaviour — and CI builds
+  // exactly that binary, so asserting the detector message there fails a suite over a message the
+  // code could not have produced.
+  if (recognises && !/dò giọng/.test(text)) {
     problems.push("nothing on screen said a voice detector was missing");
   }
 
