@@ -2439,6 +2439,7 @@ async fn recommend_models(
                 "installed": installed.contains(&scored.id),
                 "size_bytes": manifest.map(|m| m.size_bytes),
                 "license": manifest.map(|m| m.license.clone()),
+                "attribution": manifest.and_then(|m| m.attribution.clone()),
                 // Shown, not hidden: a non-redistributable or gated model is a real choice the user
                 // is allowed to make, and they should know which one they are making.
                 "redistributable": manifest.map(|m| m.redistributable),

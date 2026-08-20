@@ -10,6 +10,7 @@ import {
   Menu,
   House,
   Mic,
+  Package,
   Search,
   Sparkles,
   Minimize2,
@@ -90,7 +91,11 @@ import { Unreachable } from "./Unreachable";
 /// both. `Kho` is that shelf, with a control for which kind you want to see.
 const NAV: { key: string; labelKey: string; icon: LucideIcon; group?: "work" | "setup" }[] = [
   { key: "/", labelKey: "nav.home", icon: House },
-  { key: "/record", labelKey: "nav.record", icon: Mic },
+  // No `Ghi` row. Pressing record opens the note it is recording into — that is the screen, and a
+  // sidebar entry that leads to a second, emptier version of it is how somebody ends up watching a
+  // page with no transcript on it while the meeting runs somewhere else. Importing a file lives on
+  // the home screen, next to the button that records one.
+  { key: "/models", labelKey: "nav.models", icon: Package },
   { key: "/library", labelKey: "nav.library", icon: Library },
   { key: "/tasks", labelKey: "nav.tasks", icon: ListChecks },
   { key: "/agenda", labelKey: "nav.agenda", icon: CalendarDays },
@@ -747,6 +752,18 @@ export function RootLayout({ children }: { children: ReactNode }) {
               className="ml-2 font-medium underline"
             >
               {t("permissions.open")}
+            </button>
+          )}
+          {/* A missing model is the other failure with a repair path, and until now the sentence
+              told the user to open a screen that is not in the sidebar. The button installs it. */}
+          {(engine.session.error.code === "session.no_vad" ||
+            engine.session.error.code === "session.no_model") && (
+            <button
+              type="button"
+              onClick={() => void navigate({ to: "/models" })}
+              className="ml-2 font-medium underline"
+            >
+              {t("setup.install")}
             </button>
           )}
         </p>

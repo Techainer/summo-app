@@ -281,8 +281,14 @@ fn resolve_vad(store: &ModelStore) -> Result<std::path::PathBuf> {
         .into_iter()
         .find(|m| m.task == summo_models::Task::Vad)
         .ok_or_else(|| {
-            Error::ModelNotFound(
-                "no voice detector installed. Run `summo pull silero-vad-v5`.".into(),
+            // Coded, for the same reason `session.no_model` is: this is what a new user hits, and
+            // until now they hit it as an English sentence telling them to run a command in a
+            // terminal — from an app with no terminal in it. Worse, nothing showed it at all: the
+            // recogniser installs, setup says ready, the timer starts and no words ever arrive,
+            // because the pipeline needs a voice detector to decide where an utterance ends.
+            Error::msg(
+                "session.no_vad",
+                "no voice detector installed. Run `summo pull silero-vad-v5`.",
             )
         })?;
 

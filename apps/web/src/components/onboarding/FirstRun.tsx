@@ -19,6 +19,11 @@ import { Setup } from "./Setup";
  * loopback request would mean a blank window every launch for the sake of a screen almost nobody
  * needs twice.
  */
+/** Whether two answers from `/onboarding` say the same thing. */
+function same(a: Status | null, b: Status): boolean {
+  return a !== null && JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function FirstRun({ children }: { children: ReactNode }) {
   const { handshake } = useEngine();
   const client = useMemo(() => new OnboardingClient(handshake), [handshake]);
@@ -28,16 +33,42 @@ export function FirstRun({ children }: { children: ReactNode }) {
   const [dismissed, setDismissed] = useState(false);
   const [tour, setTour] = useState(false);
 
+  // Asked again, not once.
+  //
+  // This ran on mount and never again, so the banner that says a model is missing stayed up after
+  // the model was installed — until the app was quit and reopened. A user installed Whisper, was
+  // told to install a recogniser, and reasonably concluded the install had not worked.
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const again = () => setAttempt((n) => n + 1);
+    window.addEventListener("focus", again);
+    // While something is still wrong, keep checking: an install finishing is the event this is
+    // waiting for, and it happens on another screen.
+    const timer = window.setInterval(again, 5000);
+    return () => {
+      window.removeEventListener("focus", again);
+      window.clearInterval(timer);
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     client
       .status()
       .then((next) => {
         if (cancelled) return;
-        setStatus(next);
+        // Only when it actually changed. The poll below runs every five seconds and the answer is
+        // almost always identical; setting a fresh object anyway re-rendered the whole application
+        // on a timer. Nothing looked wrong — but every CSS transition in the tree restarted five
+        // times a minute, which is enough to make a button never settle: Playwright refused to
+        // click one for thirty seconds, and a person on a slow machine pays for the same renders.
+        setStatus((current) => (same(current, next) ? current : next));
         // The tour follows setup rather than running beside it: four cards over a download bar is
         // two things asking for attention at once.
-        if (!next.should_prompt && !seen()) setTour(true);
+        //
+        // Only on the first answer. The status is polled now, and without this the tour would come
+        // back five seconds after being closed, for as long as nobody had marked it seen.
+        if (attempt === 0 && !next.should_prompt && !seen()) setTour(true);
       })
       .catch(() => {
         // No daemon yet. The status bar already says so; a setup screen on top of that would be a
@@ -46,7 +77,7 @@ export function FirstRun({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, attempt]);
 
   if (status?.should_prompt && !dismissed) {
     return (

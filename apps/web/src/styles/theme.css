@@ -279,9 +279,67 @@
     0 0 28px -6px color-mix(in oklab, var(--color-accent) 45%, transparent);
 }
 
-/* An explicit choice overrides the system one. Set on <html> by the theme switcher. */
+/* An explicit choice overrides the system one. Set on <html> by the theme switcher.
+ *
+ * The light block below is the same list of colours as the `prefers-color-scheme: light` block
+ * above, and it has to be: `:root` is the dark palette, so light has only ever existed inside that
+ * media query. `[data-theme="light"]` used to set `color-scheme` and nothing else — which on a
+ * machine whose system is dark meant choosing Light changed the scrollbars and left every colour
+ * exactly as it was. A user pressed it and reported that nothing happened, and they were right.
+ *
+ * Duplicated rather than shared because plain CSS has no way to name a set of declarations and
+ * apply it from two selectors. `theme.test.ts` compares the two blocks so they cannot drift. */
 :root[data-theme="light"] {
   color-scheme: light;
+
+  /* Warm off-white rather than the cold grey this replaced, which is the single change that most
+     * separates the reference palettes from a default Tailwind page. */
+  --color-bg: #f7f6f4;
+  --color-bg-soft: #f1efec;
+  --color-bg-raised: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-line: #e6e3de;
+  --color-line-strong: #d5d1ca;
+  --color-fg: #17161a;
+  --color-fg-dim: #56545e;
+  --color-fg-faint: #64626c;
+  /* Every accent here is also used as *text* — on a chip, in a link, as a sidebar item — and each
+     * is checked against its own `-soft` tint rather than against the page, because that tint is a
+     * near-white wash that raises the background it has to stand out from. The lighter versions
+     * these replaced were legible on white and failed on the chip they were designed for. */
+  --color-accent: #0f7350;
+  --color-accent-soft: #0f735014;
+  --color-accent-fg: #ffffff;
+  --color-ai: #5b34d6;
+  --color-ai-soft: #5b34d614;
+  --color-ai-fg: #ffffff;
+  --color-rec: #c62f32;
+  --color-rec-soft: #c62f3214;
+  --color-danger: #c62f32;
+  --color-danger-soft: #c62f3214;
+  --color-done: #0f7350;
+  --color-running: #2f5fc0;
+  --color-running-soft: #2f5fc014;
+  --color-blocked: #8a5610;
+  --color-blocked-soft: #8a561014;
+  /* Darker than their dark-mode counterparts: a dot has to be seen *against* the surface, and on
+     * a near-white page the pastels above disappear. Same eight names, same eight hues. */
+  --color-swatch-red: #c62f32;
+  --color-swatch-amber: #b8730d;
+  --color-swatch-green: #0f7350;
+  --color-swatch-teal: #0d7a83;
+  --color-swatch-blue: #2f5fc0;
+  --color-swatch-purple: #6b46c1;
+  --color-swatch-pink: #b83280;
+  --color-swatch-grey: #616a78;
+  --avatar-fill-l: 0.78;
+  --avatar-fill-c: 0.1;
+  --avatar-fill-a: 0.3;
+  --avatar-text-l: 0.4;
+  --avatar-text-c: 0.11;
+  --shadow-sm: 0 1px 2px rgb(28 25 23 / 0.05);
+  --shadow-card: 0 1px 2px rgb(28 25 23 / 0.06), 0 8px 24px -12px rgb(28 25 23 / 0.14);
+  --shadow-pop: 0 4px 12px rgb(28 25 23 / 0.1), 0 16px 48px -16px rgb(28 25 23 / 0.22);
 }
 :root[data-theme="dark"] {
   color-scheme: dark;

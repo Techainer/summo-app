@@ -23,6 +23,8 @@ export interface Check {
   /** Whether recording is impossible without it. Only `models` is. */
   blocking: boolean;
   detail: string;
+  /** Which pieces are absent, by name — `asr`, `vad`. Empty when the step is satisfied. */
+  missing?: string[];
 }
 
 export interface Status {
@@ -65,6 +67,8 @@ export interface Recommended {
   accuracy?: number;
   size_bytes?: number | null;
   license?: string | null;
+  /** Who published it, for the credit line under a model we do not host ourselves. */
+  attribution?: string | null;
   redistributable?: boolean | null;
   gated?: boolean | null;
   /**
