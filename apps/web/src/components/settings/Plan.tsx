@@ -84,7 +84,8 @@ export function Plan() {
           note={data.language_model.provider}
         />
 
-        <p className="text-fg-faint text-micro">{t("plan.derived")}</p>
+        {/* No footnote explaining that the table is derived. It is a table of what the app is
+            using; how it knows is not the reader's problem. */}
       </CardBody>
     </Card>
   );

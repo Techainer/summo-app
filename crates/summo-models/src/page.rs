@@ -32,7 +32,10 @@ pub fn render(manifest: &Manifest, readme: Option<&str>) -> String {
     let mut out = String::new();
 
     out.push_str(&format!("# {}\n\n", manifest.name));
-    out.push_str(&format!("`summo pull {}`\n\n", manifest.id));
+    // The id, not a command. This page is read inside the app now, where "run `summo pull x`" is
+    // an instruction to open a terminal the reader does not have — and the id is the useful half of
+    // that line anyway.
+    out.push_str(&format!("`{}`\n\n", manifest.id));
 
     if let Some(description) = manifest.description.as_deref()
         && !description.trim().is_empty()
@@ -141,6 +144,21 @@ fn performance(manifest: &Manifest) -> String {
         rows.sort_by_key(|(k, _)| k.as_str());
         for (machine, rtf) in rows {
             out.push_str(&format!("| `{machine}` | {rtf:.3} |\n"));
+        }
+        out.push('\n');
+    }
+
+    if !profile.quality.is_empty() {
+        // Accuracy, in the same shape as the speed table above: a number somebody can check
+        // against another model, with the benchmark it came from named. `wer_fleurs_vi` is word
+        // error rate on FLEURS Vietnamese — lower is better — and the reader should be told that
+        // rather than left to infer it from the key.
+        out.push_str("Accuracy, measured — word error rate, lower is better:\n\n");
+        out.push_str("| Benchmark | Score |\n|---|---|\n");
+        let mut rows: Vec<_> = profile.quality.iter().collect();
+        rows.sort_by_key(|(k, _)| k.as_str());
+        for (benchmark, score) in rows {
+            out.push_str(&format!("| `{benchmark}` | {:.1}% |\n", score * 100.0));
         }
         out.push('\n');
     }
@@ -260,10 +278,16 @@ mod tests {
     }
 
     #[test]
-    fn a_page_leads_with_the_command_that_installs_it() {
+    fn a_page_leads_with_the_model_id_rather_than_a_command() {
+        // The page is read inside the app now, where "run `summo pull whisper-tiny`" is an
+        // instruction to open a terminal that is not there. The id is the half of that line a
+        // reader can use — to recognise the model, to search for it, to type it into a config.
         let page = render(&manifest(), None);
-        assert!(page.starts_with("# Whisper tiny"), "{page}");
-        assert!(page.contains("summo pull whisper-tiny"));
+        assert!(page.contains("`whisper-tiny`"), "{page}");
+        assert!(
+            !page.contains("summo pull"),
+            "no terminal commands on a page in a GUI:\n{page}"
+        );
     }
 
     #[test]

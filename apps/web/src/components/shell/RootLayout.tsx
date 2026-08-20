@@ -745,6 +745,15 @@ export function RootLayout({ children }: { children: ReactNode }) {
       {engine.session.error && (
         <p className="border-rec/30 bg-rec-soft text-rec text-meta border-b px-4 py-2">
           {say(engine.session.error)}
+          {/* What the daemon actually said, when the app has no better sentence of its own. The
+              generic refusal used to guess — "check the microphone in Settings and the model in the
+              Models screen" — and a user read that with permission granted and two devices listed.
+              A guess that names the wrong cause is worse than the raw reason. */}
+          {engine.session.error.code === "session_refused" && engine.session.error.error && (
+            <span className="mt-1 block break-words opacity-80">
+              {engine.session.error.error}
+            </span>
+          )}
           {engine.session.error.code === "mic_denied" && (
             <button
               type="button"

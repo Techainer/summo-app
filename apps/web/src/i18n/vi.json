@@ -317,14 +317,14 @@
     "group_hosted": "Dịch vụ ngoài",
     "key_ready": "đã có khoá",
     "key_found": "{name} đã được đặt. Văn bản bản ghi sẽ được gửi tới nhà cung cấp này.",
-    "mt_hint": "Dịch có thể dùng một mô hình nhỏ riêng. Mô hình dịch 1B dịch tốt hơn mô hình đa dụng 8B, chạy trên CPU của bạn, và không tốn tiền theo từng dòng — nên vẫn dịch được kể cả khi không có API key nào.",
+    "mt_hint": "Một mô hình dịch riêng chạy trên máy, không cần API key.",
     "mt_enable": "Dùng mô hình riêng để dịch",
     "mt_endpoint": "Ở một địa chỉ khác",
     "mt_model": "Mô hình dịch",
     "mt_run": "Chạy bằng `llama-server -m milmmt-46-1b.gguf --port 8080`, hoặc qua Ollama. Khoảng 800 MB trên đĩa.",
     "mt_where": "Chạy ở",
     "mt_in_app": "Trong Summo",
-    "mt_pull": "Cài một lần bằng `summo pull small100` — 611 MB, không cần chạy thêm gì. `milmmt-46-1b` dịch chuẩn hơn, 806 MB.",
+    "mt_pull": "Cài mô hình dịch",
     "spoken_heading": "Ngôn ngữ nói",
     "spoken_hint": "Mặc định cho mọi buổi ghi. Vẫn đổi được cho từng buổi ở thanh ghi.",
     "section_general": "Chung",
@@ -529,7 +529,7 @@
     "engine_silent": "Engine nhận dạng không trả lời. Summo còn đang chạy không?",
     "unknown": "Có gì đó hỏng mà app không đọc được lý do. Thử lại, hoặc mở Cài đặt › Giới thiệu để xem log.",
     "session.no_model": "Chưa cài mô hình nhận dạng nào, nên chưa ghi được. Mở màn hình Mô hình và cài một cái.",
-    "session_refused": "Không bắt đầu ghi được. Xem lại micro trong Cài đặt › Ghi âm và mô hình trong màn hình Mô hình.",
+    "session_refused": "Không bắt đầu ghi được.",
     "session_offline": "Không nói chuyện được với engine nhận dạng. Thử mở lại Summo.",
     "session.no_vad": "Chưa cài bộ dò giọng nói, nên không có gì được ghi lại thành chữ. Cài \"silero-vad-v5\" trong màn hình Mô hình."
   },
@@ -611,7 +611,9 @@
     "on_disk": "{size} trên đĩa",
     "use": "Dùng",
     "in_use": "Đang dùng",
-    "upstream_who": "nhà phát hành"
+    "upstream_who": "nhà phát hành",
+    "details": "Chi tiết",
+    "hide_details": "Thu gọn"
   },
   "home": {
     "heading": "Không gian của bạn",
@@ -802,19 +804,18 @@
     "issue": "Báo lỗi"
   },
   "plan": {
-    "title": "Model nào làm việc gì",
-    "subtitle": "tính từ máy bạn, không phải bảng lưu sẵn",
+    "title": "Đang dùng gì",
+    "subtitle": "theo những gì đã cài trên máy này",
     "speech": "Nhận dạng",
     "translation": "Dịch",
     "summaries": "Tóm tắt & hỏi đáp",
     "on_device": "trên máy",
     "over_network": "qua mạng",
-    "in_app": "model trong app",
-    "same_as_below": "dùng chung ở dưới",
-    "none": "chưa có",
-    "no_model": "Chưa cài model nhận dạng nào — chưa ghi được.",
+    "in_app": "trong app",
+    "same_as_below": "theo phần Tóm tắt",
+    "none": "chưa chọn",
+    "no_model": "Chưa có mô hình nhận dạng nên chưa ghi được.",
     "wrong_language": "Model đang chọn không phục vụ ngôn ngữ bạn đã chọn. Chọn lại ngôn ngữ ở dưới để đổi model, hoặc cài model phù hợp.",
-    "better": "Đã cài sẵn model tốt hơn cho ngôn ngữ này: {name} ({accuracy}% chính xác).",
-    "derived": "Tính lại mỗi lần mở, nên cài hay xoá model là bảng này đổi theo."
+    "better": "Đã cài sẵn model tốt hơn cho ngôn ngữ này: {name} ({accuracy}% chính xác)."
   }
 }

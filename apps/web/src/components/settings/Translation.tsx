@@ -1,4 +1,7 @@
-import { Checkbox, Input } from "../ui";
+import { HardDriveDownload } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+
+import { Button, Checkbox, Input } from "../ui";
 import { CONTROL, FIELD, HINT, LABEL, SELECT } from "./fields";
 import { useT } from "../../i18n/context";
 import { LOCAL, type LlmSettings } from "./llm";
@@ -12,6 +15,7 @@ import { LOCAL, type LlmSettings } from "./llm";
  * translation on is a different decision from choosing who writes your summaries.
  */
 export function Translation({ settings }: { settings: LlmSettings }) {
+  const navigate = useNavigate();
   const t = useT();
   const { llm, edit, save } = settings;
   if (!llm) return null;
@@ -99,9 +103,22 @@ export function Translation({ settings }: { settings: LlmSettings }) {
             />
           </label>
 
-          <p className={HINT}>
-            {llm.translator.provider === LOCAL ? t("settings.mt_pull") : t("settings.mt_run")}
-          </p>
+          {/* A button, not an instruction. This said "Cài một lần bằng `summo pull small100` —
+              611 MB" to somebody using a desktop app: a terminal command, a model id and a size, in
+              place of the one thing they wanted, which was to have the model. The catalogue screen
+              installs it, shows what it is, how big it is and who wrote it. */}
+          {llm.translator.provider === LOCAL ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void navigate({ to: "/models" })}
+            >
+              <HardDriveDownload aria-hidden="true" className="me-1.5 size-3.5" />
+              {t("settings.mt_pull")}
+            </Button>
+          ) : (
+            <p className={HINT}>{t("settings.mt_run")}</p>
+          )}
         </>
       )}
     </div>

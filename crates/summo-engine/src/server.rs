@@ -146,6 +146,7 @@ impl Server {
             .route("/models", get(models))
             .route("/catalogue", get(catalogue))
             .route("/models/{id}", axum::routing::delete(remove_model))
+            .route("/models/{id}/page", get(model_page))
             .route("/settings/models", post(set_models))
             .route("/settings/plan", get(plan))
             .route("/agent/run", post(run_errand))
@@ -963,6 +964,56 @@ fn resolve_models(
         spec.live_model = first.id.to_string();
     }
     spec
+}
+
+/// One model's page: what it is, what it costs, who published it, and its own README.
+///
+/// `summo_models::page` has rendered this since the registry existed and only the CLI ever called
+/// it — so the catalogue screen showed a name, a size and three chips, and a user asking "what is
+/// this model, and is it any good" had nowhere to look. The measured accuracy and speed tables are
+/// in here, and they are the whole reason for having measured them.
+async fn model_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<RecommendQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let id = match summo_core::ModelId::parse(&id) {
+        Ok(id) => id,
+        Err(why) => {
+            return as_response(Err::<serde_json::Value, _>(summo_core::Error::Config(why)));
+        }
+    };
+
+    // Installed first: that manifest is the one this machine is actually using, and it needs no
+    // network. The registry is the fallback for a model somebody is still deciding about.
+    let installed = state.engine.store().list().into_iter().find(|m| m.id == id);
+    let manifest = match installed {
+        Some(manifest) => Some(manifest),
+        None => match summo_models::Registry::discover() {
+            Ok(registry) => registry.manifest(&id).await.ok(),
+            Err(_) => None,
+        },
+    };
+
+    let Some(manifest) = manifest else {
+        return as_response(Err::<serde_json::Value, _>(
+            summo_core::Error::ModelNotFound(id.to_string()),
+        ));
+    };
+
+    let readme = match summo_models::Registry::discover() {
+        Ok(registry) => registry.readme(&id).await,
+        Err(_) => None,
+    };
+
+    as_response(Ok::<_, summo_core::Error>(serde_json::json!({
+        "id": id.as_str(),
+        "markdown": summo_models::page::render(&manifest, readme.as_deref()),
+    })))
 }
 
 /// Delete an installed model, reclaiming whatever nothing else references.
