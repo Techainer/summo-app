@@ -37,6 +37,10 @@ export interface Plan {
     /** A better model *already installed*, when there is one. */
     better: Better | null;
   };
+  /** The voice detector. Without it a recording produces no words at all. */
+  detector: { installed: boolean; id: string };
+  /** The voice fingerprint, which is what lets a transcript name who spoke. */
+  speakers: { installed: boolean; id: string };
   translation: { local: boolean; provider: string | null; model: string | null };
   language_model: { provider: string; model: string | null };
 }

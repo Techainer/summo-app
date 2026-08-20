@@ -1,7 +1,8 @@
-import { AlertTriangle, Cpu, Languages, Sparkles } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { AlertTriangle, AudioLines, Cpu, Languages, Sparkles, Users } from "lucide-react";
 import { useCallback } from "react";
 
-import { useI18n } from "../../i18n/context";
+import { useI18n, useT } from "../../i18n/context";
 import { cn } from "../../lib/cn";
 import { useEngine } from "../../lib/engine-context";
 import { fetchPlan } from "../../lib/plan";
@@ -66,6 +67,26 @@ export function Plan() {
           </p>
         )}
 
+        {/* The two nothing asked about until they were missing. A recording needs the detector; a
+            transcript that names speakers needs the fingerprint. Both are one click from here when
+            they are not there — the alternative is finding out mid-meeting. */}
+        <Row
+          icon={AudioLines}
+          label={t("plan.detector")}
+          value={data.detector.installed ? t("plan.ready") : t("plan.missing")}
+          note={data.detector.installed ? t("plan.on_device") : undefined}
+          bad={!data.detector.installed}
+          action={data.detector.installed ? undefined : { id: data.detector.id }}
+        />
+
+        <Row
+          icon={Users}
+          label={t("plan.speakers")}
+          value={data.speakers.installed ? t("plan.ready") : t("plan.missing")}
+          note={data.speakers.installed ? t("plan.on_device") : undefined}
+          action={data.speakers.installed ? undefined : { id: data.speakers.id }}
+        />
+
         <Row
           icon={Languages}
           label={t("plan.translation")}
@@ -97,13 +118,19 @@ function Row({
   value,
   note,
   bad = false,
+  action,
 }: {
   icon: typeof Cpu;
   label: string;
   value: string;
-  note: string | null;
+  note?: string | null;
   bad?: boolean;
+  /** A model this row is missing, offered as a one-click install. */
+  action?: { id: string };
 }) {
+  const t = useT();
+  const navigate = useNavigate();
+
   return (
     <div className="flex items-baseline gap-3">
       <Icon aria-hidden="true" className="text-fg-faint size-3.5 shrink-0 translate-y-0.5" />
@@ -111,6 +138,15 @@ function Row({
       <span className={cn("min-w-0 flex-1 truncate font-medium", bad && "text-blocked")}>
         {value}
       </span>
+      {action && (
+        <button
+          type="button"
+          onClick={() => void navigate({ to: "/models", search: {} })}
+          className="text-accent text-micro shrink-0 font-medium underline"
+        >
+          {t("setup.install")}
+        </button>
+      )}
       {note && <span className="text-fg-faint text-micro shrink-0">{note}</span>}
     </div>
   );

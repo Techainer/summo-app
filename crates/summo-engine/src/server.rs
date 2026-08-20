@@ -2695,8 +2695,18 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
             })
     });
 
+    // The two models nothing asks about until they are missing.
+    //
+    // Without a voice detector a recording produces no words at all; without a speaker embedder it
+    // cannot say who spoke. Both were invisible on this table, so "why is nothing happening" had no
+    // answer on the screen that exists to answer it.
+    let installed = state.engine.store().list();
+    let has = |task: summo_models::Task| installed.iter().any(|m| m.task == task);
+
     Ok(serde_json::json!({
         "language": language,
+        "detector": { "installed": has(summo_models::Task::Vad), "id": "silero-vad-v5" },
+        "speakers": { "installed": has(summo_models::Task::SpeakerEmbed), "id": "campplus-sv" },
         // Speech recognition: Summo's own model, on this machine, always.
         "speech": {
             "model": chosen,
@@ -2727,6 +2737,8 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
     Ok(serde_json::json!({
         "language": settings.models.language,
         "speech": { "model": null, "installed": false, "covers_language": false, "better": null },
+        "detector": { "installed": false, "id": "silero-vad-v5" },
+        "speakers": { "installed": false, "id": "campplus-sv" },
         "translation": {
             "local": settings.llm.translator.as_ref().is_some_and(summo_core::settings::Translator::is_local),
             "provider": settings.llm.translator.as_ref().map(|t| t.provider.clone()),

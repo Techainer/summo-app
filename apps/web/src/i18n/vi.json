@@ -81,7 +81,7 @@
     "path_placeholder": "/duong/dan/toi/file.mp4",
     "browse": "Chọn file",
     "submit": "Nhập",
-    "no_dialog": "Không mở được hộp thoại chọn file — dán đường dẫn vào ô bên dưới.",
+    "no_dialog": "Không mở được hộp thoại chọn file. Dán đường dẫn vào ô nhập.",
     "file_filter": "Ghi âm & video",
     "open_meeting": "Mở bản ghi",
     "progress_label": "Tiến độ nhập {title}",
@@ -99,7 +99,7 @@
     "transcript": "Bản ghi",
     "summary": "Tóm tắt",
     "no_summary": "Chưa tóm tắt",
-    "task_not_tickable": "Dòng này chưa có mã việc nên không tích được ở đây. Mở thẻ Việc để quản lý.",
+    "task_not_tickable": "Dòng này chưa có mã việc nên chưa tích được. Mở thẻ Việc để quản lý.",
     "not_summarised_suffix": " · chưa tóm tắt",
     "play": "Phát",
     "pause": "Tạm dừng",
@@ -141,7 +141,7 @@
     "you": "Bạn",
     "revised_one": "đã sửa {count} lần",
     "revised_other": "đã sửa {count} lần",
-    "select_hint": "Bôi đen một đoạn để sửa riêng đoạn đó, hoặc nhắn ở dưới để sửa cả bài.",
+    "select_hint": "Bôi đen một đoạn để sửa riêng đoạn đó, hoặc nhắn để sửa cả bài.",
     "revising": "Sửa trong {heading}:",
     "apply": "Sửa",
     "cancel": "Huỷ",
@@ -179,7 +179,7 @@
     "due_overdue": "{date} — quá hạn",
     "due_on": "hạn {date}",
     "board_empty": "Chưa có việc nào",
-    "board_empty_hint": "Việc tự xuất hiện ở đây khi ai đó nhận trong buổi họp, hoặc khi bạn gõ một dòng “- [ ] @tên …” trong ghi chú."
+    "board_empty_hint": "Việc xuất hiện khi ai đó nhận trong buổi họp, hoặc khi bạn gõ “- [ ] @tên …” trong ghi chú."
   },
   "chat": {
     "question": "Câu hỏi",
@@ -388,16 +388,16 @@
     "start": "Bắt đầu",
     "skip": "Để sau",
     "fix": "Cài ngay",
-    "spoken_hint": "Quyết định mô hình nào được gợi ý bên dưới.",
+    "spoken_hint": "Quyết định mô hình nào được gợi ý.",
     "permission": "Cho phép dùng micro",
     "reason_fast": "Chính xác {accuracy}%, nhanh gấp {times}× thời gian thực trên máy này",
-    "reason_slow": "Quá chậm để hiện chữ trực tiếp ở đây (hệ số thời gian thực {rtf}); vẫn dùng được để chạy lại bản ghi sau buổi họp",
+    "reason_slow": "Quá chậm để hiện chữ trực tiếp (hệ số thời gian thực {rtf}); vẫn dùng được để chạy lại bản ghi sau buổi họp",
     "reason_unmeasured": "Chính xác {accuracy}%, nhưng chưa từng đo trên phần cứng như máy này",
     "reason_unknown": "Chưa có số đo nào cho máy này",
     "language": "Ngôn ngữ",
     "interface": "Ngôn ngữ giao diện",
     "listing": "Đang lấy danh sách mô hình…",
-    "none_for_language": "Chưa có mô hình nào cho ngôn ngữ này. Chọn ngôn ngữ khác ở trên, hoặc dùng một mô hình đa ngôn ngữ.",
+    "none_for_language": "Chưa có mô hình nào cho ngôn ngữ này. Chọn ngôn ngữ khác hoặc dùng một mô hình đa ngôn ngữ.",
     "retry": "Thử lại",
     "tight_memory": "Máy có thể không đủ bộ nhớ cho mô hình này."
   },
@@ -583,7 +583,7 @@
   "empty": {
     "column": "Chưa có gì",
     "agenda": "Chưa có lịch nào",
-    "agenda_hint": "Xuất file .ics từ Google Calendar hay Fastmail rồi thêm ở trên. Summo không tự ghi âm theo lịch — chỉ dùng để đặt tên cho biên bản."
+    "agenda_hint": "Thêm lịch bằng địa chỉ .ics. Summo dùng lịch để đặt tên và nhắc, không tự ghi âm."
   },
   "transcript": {
     "pause": "im lặng {seconds} giây",
@@ -641,7 +641,7 @@
     "recording_now": "Đang ghi",
     "shortcut_hint": "⌘K để tìm hoặc nhảy tới bất kỳ đâu",
     "first_title": "Chào bạn",
-    "first_hint": "Chưa có gì ở đây cả. Ghi thử một buổi — hoặc chỉ một phút nói chuyện — rồi xem Summo làm gì với nó."
+    "first_hint": "Ghi thử một buổi, rồi xem Summo làm gì với nó."
   },
   "palette": {
     "title": "Tìm mọi thứ",
@@ -808,18 +808,22 @@
     "issue": "Báo lỗi"
   },
   "plan": {
-    "title": "Đang dùng gì",
-    "subtitle": "theo những gì đã cài trên máy này",
-    "speech": "Nhận dạng",
+    "title": "Mô hình",
+    "subtitle": "trạng thái trên máy này",
+    "speech": "Nhận dạng giọng nói",
     "translation": "Dịch",
     "summaries": "Tóm tắt & hỏi đáp",
     "on_device": "trên máy",
     "over_network": "qua mạng",
     "in_app": "trong app",
-    "same_as_below": "theo phần Tóm tắt",
+    "same_as_below": "dùng mô hình tóm tắt",
     "none": "chưa chọn",
     "no_model": "Chưa có mô hình nhận dạng nên chưa ghi được.",
-    "wrong_language": "Model đang chọn không phục vụ ngôn ngữ bạn đã chọn. Chọn lại ngôn ngữ ở dưới để đổi model, hoặc cài model phù hợp.",
-    "better": "Đã cài sẵn model tốt hơn cho ngôn ngữ này: {name} ({accuracy}% chính xác)."
+    "wrong_language": "Mô hình đang chọn không phục vụ ngôn ngữ đã chọn. Đổi ngôn ngữ hoặc cài mô hình phù hợp.",
+    "better": "Đã cài sẵn model tốt hơn cho ngôn ngữ này: {name} ({accuracy}% chính xác).",
+    "detector": "Dò giọng nói",
+    "speakers": "Tách người nói",
+    "ready": "đã cài",
+    "missing": "chưa cài"
   }
 }

@@ -81,7 +81,7 @@
     "path_placeholder": "/path/to/file.mp4",
     "browse": "ファイルを選ぶ",
     "submit": "取り込む",
-    "no_dialog": "ファイル選択を開けませんでした。下にパスを貼り付けてください。",
+    "no_dialog": "ファイル選択を開けませんでした。パスを入力欄に貼り付けてください。",
     "file_filter": "音声・動画",
     "open_meeting": "録音を開く",
     "progress_label": "{title}の取り込み状況",
@@ -99,7 +99,7 @@
     "transcript": "文字起こし",
     "summary": "要約",
     "no_summary": "要約なし",
-    "task_not_tickable": "この行にはタスク ID がないため、ここではチェックできません。タスク画面をご利用ください。",
+    "task_not_tickable": "この行にはタスク ID がないためチェックできません。タスクタブで管理してください。",
     "not_summarised_suffix": " · 要約なし",
     "play": "再生",
     "pause": "一時停止",
@@ -141,7 +141,7 @@
     "you": "自分",
     "revised_one": "{count}回の修正",
     "revised_other": "{count}回の修正",
-    "select_hint": "一部だけ変えるにはその箇所を選択、全体を変えるには下に書いてください。",
+    "select_hint": "一部を選択してその部分だけ直すか、メッセージで全体を直します。",
     "revising": "{heading}を変更中：",
     "apply": "適用",
     "cancel": "取り消し",
@@ -179,7 +179,7 @@
     "due_overdue": "{date} — 期限切れ",
     "due_on": "期限 {date}",
     "board_empty": "やることはありません",
-    "board_empty_hint": "会議で誰かが引き受けたとき、またはノートに「- [ ] @名前 …」と書いたときにここへ届きます。"
+    "board_empty_hint": "会議で誰かが引き受けたとき、またはノートに「- [ ] @名前 …」と書いたときに表示されます。"
   },
   "chat": {
     "question": "質問",
@@ -388,16 +388,16 @@
     "start": "開始",
     "skip": "後で",
     "fix": "解決する",
-    "spoken_hint": "下に表示されるモデルの候補が変わります。",
+    "spoken_hint": "提案されるモデルが変わります。",
     "permission": "マイクを許可",
     "reason_fast": "精度{accuracy}%、この端末で実時間の{times}倍速",
-    "reason_slow": "この端末ではリアルタイム表示に間に合いません（実時間係数 {rtf}）。録音後の書き起こしには使えます",
+    "reason_slow": "リアルタイム表示には遅すぎます（実時間比 {rtf}）。録音後の再処理には使えます",
     "reason_unmeasured": "精度{accuracy}%。ただしこの種のハードウェアでは未計測です",
     "reason_unknown": "この端末の計測値はありません",
     "language": "言語",
     "interface": "表示言語",
     "listing": "モデル一覧を取得しています…",
-    "none_for_language": "この言語に対応するモデルはまだありません。上で別の言語を選ぶか、多言語モデルを使ってください。",
+    "none_for_language": "この言語に対応するモデルがありません。別の言語を選ぶか、多言語モデルを使ってください。",
     "retry": "もう一度",
     "tight_memory": "この端末ではメモリが足りない可能性があります。"
   },
@@ -583,7 +583,7 @@
   "empty": {
     "column": "ここには何もありません",
     "agenda": "カレンダーはまだありません",
-    "agenda_hint": "GoogleカレンダーやFastmailから .ics を書き出して、上から追加してください。Summoが勝手に録音することはなく、会議に名前を付けるためだけに使います。"
+    "agenda_hint": ".ics のアドレスでカレンダーを追加します。Summo は名前とリマインドに使うだけで、自動では録音しません。"
   },
   "transcript": {
     "pause": "{seconds}秒の沈黙",
@@ -641,7 +641,7 @@
     "recording_now": "録音中",
     "shortcut_hint": "⌘K でどこへでも検索・移動",
     "first_title": "ようこそ",
-    "first_hint": "まだ何もありません。1 分の会話でもいいので録音して、Summo が何をするか見てみてください。"
+    "first_hint": "試しに録音して、Summo が何をするか見てください。"
   },
   "palette": {
     "title": "すべてを検索",
@@ -808,18 +808,22 @@
     "issue": "問題を報告"
   },
   "plan": {
-    "title": "使用中",
-    "subtitle": "この端末にあるものから",
+    "title": "モデル",
+    "subtitle": "この端末の状態",
     "speech": "音声認識",
     "translation": "翻訳",
     "summaries": "要約と質問",
     "on_device": "端末上",
     "over_network": "ネットワーク経由",
     "in_app": "アプリ内",
-    "same_as_below": "要約と同じ",
+    "same_as_below": "要約モデルを使用",
     "none": "未選択",
     "no_model": "音声モデルがないため録音を開始できません。",
-    "wrong_language": "選択中のモデルは、選んだ言語に対応していません。下で言語を選び直すか、対応するモデルを入れてください。",
-    "better": "この言語により適したモデルが既に入っています: {name}（正確度 {accuracy}%）。"
+    "wrong_language": "選択中のモデルは選択した言語に対応していません。言語を変えるか、対応するモデルを入れてください。",
+    "better": "この言語により適したモデルが既に入っています: {name}（正確度 {accuracy}%）。",
+    "detector": "音声検出",
+    "speakers": "話者の判別",
+    "ready": "インストール済み",
+    "missing": "未インストール"
   }
 }
