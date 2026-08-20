@@ -55,7 +55,7 @@
     "pick_screen": "画面かウィンドウを選ぶ",
     "translate_live": "リアルタイム翻訳",
     "translate_hint": "確定した行を訳して、原文の下に表示します。",
-    "translate_needs_system": "翻訳は有効ですが、マイクしか取り込んでいません。再生中の音を訳すにはシステム音声を有効にしてください。",
+    "translate_needs_system": "再生中の音声を訳すには「システム」も有効にしてください。",
     "short": "録音",
     "spoken": "話す言語",
     "spoken_auto": "自動判定",
@@ -71,7 +71,8 @@
     "listening_change": "変更",
     "listening_note": "その場で切り替わります。録音済みの内容は失われません。",
     "spoken_multi": "複数言語（自動判定）",
-    "warm_ready": "すぐ録音できます — {model} を読み込み済み。"
+    "warm_ready": "録音できます。",
+    "browse_models": "モデルを見る"
   },
   "import": {
     "title": "録音ファイルを取り込む",
@@ -216,7 +217,7 @@
     "no_hits": "「{query}」は見つかりませんでした。",
     "unreadable": "{path}を読めませんでした：{reason}",
     "more_lines": "他{count}行",
-    "vault_hint": "すべては ~/.summo/vault にあります。Obsidianで開くのも、grepするのも、好きな方法でバックアップするのも自由です。",
+    "vault_hint": "すべて ~/.summo/vault にあります。",
     "record_new": "録音する",
     "recordings": "{count}件の録音",
     "trash_confirm": "ゴミ箱に移しますか？",
@@ -276,7 +277,7 @@
     "maybe": "たぶん",
     "name_this": "{label}に名前を付ける",
     "identified_by": "{space}で特定",
-    "empty": "まだ誰もいません。会議を録音して声に名前を付ければ、次から認識します。",
+    "empty": "まだいません。録音して話者に名前を付けてください。",
     "rename_who": "{name}の名前を変える",
     "forget_who": "{name}を外す",
     "samples": "声のサンプル{count}件",
@@ -285,7 +286,7 @@
     "relabelled": "過去{meetings}件の会議で{utterances}行を修正しました",
     "unmerged": "他{count}人から外しました",
     "empty_title": "まだ声がありません",
-    "subtitle": "録音に登場する人。Summo は声を学習し、次回から自動で名前を付けます。",
+    "subtitle": "録音の中で認識された話者。",
     "naming_note": "声に名前を付けると、過去に取り違えた記録もまとめて直ります。"
   },
   "settings": {
@@ -312,7 +313,7 @@
     "local_only_comma": "この端末で動きます",
     "llm_hint_tail": "。言語モデルを使うのは要約・翻訳・質問だけで、それをどこで動かすかも自分で選べます。",
     "llm_hint_head": "音声認識と話者の識別は",
-    "key_not_stored": "キーは設定ファイルに保存されません。保存すればバックアップや同期にそのまま流れてしまうからです。",
+    "key_not_stored": "キーは設定ファイルに保存しません。",
     "group_local": "この端末",
     "group_hosted": "クラウド",
     "key_ready": "キー設定済み",
@@ -368,10 +369,10 @@
     "title": "Summoへようこそ",
     "promise": "言語と音声認識モデルを選んで始めます。",
     "no_recognition": "このビルドは音声認識に対応していません",
-    "no_recognition_hint": "お使いの Summo は音声認識なしでビルドされているため、モデルを入れても使えません。認識付きのビルドを入手するか、`models` 機能を有効にして再ビルドしてください。",
+    "no_recognition_hint": "このビルドには音声認識が入っていません。認識付きのビルドを入れてください。",
     "pick_model": "音声モデルを選ぶ",
     "machine": "この端末：{cores}コア、メモリ{ram}GB。",
-    "no_models": "モデル一覧を取得できませんでした。ほかのサイトが開けるなら、読み込み先のアドレスがこのネットワークで遮断されている可能性が高いです。時間をおくか、VPN を使うか、ファイルが手元にあるなら `summo pull` を実行してください。",
+    "no_models": "モデル一覧を取得できませんでした。",
     "installed": "導入済み",
     "install": "ダウンロードして導入",
     "downloading": "ダウンロード中…",
@@ -387,7 +388,7 @@
     "start": "開始",
     "skip": "後で",
     "fix": "解決する",
-    "spoken_hint": "下で推奨されるモデルを決めます。録音直前を含め、いつでも変更できます。",
+    "spoken_hint": "下に表示されるモデルの候補が変わります。",
     "permission": "マイクを許可",
     "reason_fast": "精度{accuracy}%、この端末で実時間の{times}倍速",
     "reason_slow": "この端末ではリアルタイム表示に間に合いません（実時間係数 {rtf}）。録音後の書き起こしには使えます",
@@ -398,7 +399,7 @@
     "listing": "モデル一覧を取得しています…",
     "none_for_language": "この言語に対応するモデルはまだありません。上で別の言語を選ぶか、多言語モデルを使ってください。",
     "retry": "もう一度",
-    "tight_memory": "このマシンでは実行に必要なメモリが足りない可能性があります。インストールして試すことはできます。"
+    "tight_memory": "この端末ではメモリが足りない可能性があります。"
   },
   "tour": {
     "title": "かんたん案内",
@@ -531,7 +532,8 @@
     "session.no_model": "音声モデルが未インストールのため録音できません。モデル画面から 1 つ入れてください。",
     "session_refused": "録音を開始できませんでした。",
     "session_offline": "認識エンジンに接続できません。Summo を再起動してください。",
-    "session.no_vad": "音声検出モデルが未インストールのため、文字になりません。モデル画面から「silero-vad-v5」を入れてください。"
+    "session.no_vad": "音声検出モデルが未インストールのため、文字になりません。モデル画面から「silero-vad-v5」を入れてください。",
+    "mic_timeout": "マイクを開けませんでした。他のアプリが使用していないか確認してからもう一度お試しください。"
   },
   "agents": {
     "title": "エージェント",
@@ -613,7 +615,9 @@
     "in_use": "使用中",
     "upstream_who": "公開元",
     "details": "詳細",
-    "hide_details": "詳細を隠す"
+    "hide_details": "詳細を隠す",
+    "for_language": "{language} 向けのモデル",
+    "show_all": "すべて表示"
   },
   "home": {
     "heading": "あなたのワークスペース",

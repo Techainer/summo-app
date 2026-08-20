@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
@@ -59,6 +60,7 @@ export function SpokenLanguage({
   /** Drop the explanation line — for the record bar, where space is a row. */
   compact?: boolean;
 }) {
+  const navigate = useNavigate();
   const { handshake } = useEngine();
   const { t, locale } = useI18n();
   const [installing, setInstalling] = useState<{ id: string; pct: number } | null>(null);
@@ -168,6 +170,21 @@ export function SpokenLanguage({
           ))}
         </select>
       </label>
+      {/* The way out of a list that does not have what somebody wants: the catalogue, filtered to
+          the language they just chose. Every model that serves it, with its size, its measured
+          accuracy and its page — rather than a picker that can only offer what it already knows. */}
+      <button
+        type="button"
+        onClick={() =>
+          void navigate({
+            to: "/models",
+            search: value && value !== AUTO ? { lang: value } : {},
+          })
+        }
+        className="text-fg-faint hover:text-fg text-micro underline"
+      >
+        {t("record.browse_models")}
+      </button>
 
       {/* The model that will actually run, named. Two languages can resolve to the same model and
           one language can resolve to a model the user did not expect; saying which removes both

@@ -120,6 +120,12 @@ export function explainMicrophoneError(error: unknown): { error: string; code: s
     case "OverconstrainedError":
       return { code: "mic_gone", error: "That microphone is no longer available." };
     default:
+      // A deadline rather than a refusal: the device never answered. Its own code, because the
+      // repair is different — a refused microphone is a permission to grant, a silent one is
+      // usually another application holding it or an audio subsystem that has stopped answering.
+      if (error instanceof Error && error.message === "microphone_timeout") {
+        return { code: "mic_timeout", error: "The microphone did not open." };
+      }
       return {
         code: "mic_failed",
         error: error instanceof Error ? error.message : "The microphone could not be opened.",

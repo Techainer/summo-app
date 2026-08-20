@@ -169,6 +169,16 @@ export function Transcript({
                     )}
                   >
                     {segment.text}
+                    {/* A caret on the line still being heard. Dimmed text says "not final" to
+                        somebody who already knows the convention; a blinking cursor says "this is
+                        happening right now" to everybody, and a screen where words arrive in
+                        bursts needs something moving between them. */}
+                    {segment.source === "partial" && (
+                      <span
+                        aria-hidden="true"
+                        className="bg-accent ms-1 inline-block h-[1em] w-[2px] translate-y-[0.15em] animate-pulse rounded-full align-baseline"
+                      />
+                    )}
                   </p>
                   {/* Under the original, never instead of it: the original is what was actually
                       said, and anyone checking a subtitle against the speaker needs both. */}

@@ -55,7 +55,7 @@
     "pick_screen": "Choose a screen or window",
     "translate_live": "Live translation",
     "translate_hint": "Each finished line is translated and shown under the original.",
-    "translate_needs_system": "Translation is on but only the microphone is captured — turn on System to translate what is playing.",
+    "translate_needs_system": "Turn on the System source to translate what is playing.",
     "short": "Record",
     "spoken": "Spoken language",
     "spoken_auto": "Detect automatically",
@@ -71,7 +71,8 @@
     "listening_change": "Change",
     "listening_note": "Changes take effect immediately; nothing already recorded is lost.",
     "spoken_multi": "Several languages (detected)",
-    "warm_ready": "Ready to record — {model} is loaded."
+    "warm_ready": "Ready to record.",
+    "browse_models": "Browse models"
   },
   "import": {
     "title": "Import a recording",
@@ -216,7 +217,7 @@
     "no_hits": "Nothing found for “{query}”.",
     "unreadable": "Could not read {path}: {reason}",
     "more_lines": "+{count} more lines",
-    "vault_hint": "Everything lives in ~/.summo/vault — open it in Obsidian, grep it, back it up however you like.",
+    "vault_hint": "Everything lives in ~/.summo/vault.",
     "record_new": "Record something",
     "recordings": "{count} recordings",
     "trash_confirm": "Move to trash?",
@@ -276,7 +277,7 @@
     "maybe": "Might be",
     "name_this": "Name {label}",
     "identified_by": "Identified by {space}",
-    "empty": "Nobody yet. Record a meeting, then name a voice — Summo recognises it next time.",
+    "empty": "Nobody yet. Record a meeting, then name a voice.",
     "rename_who": "Rename {name}",
     "forget_who": "Remove {name}",
     "samples": "{count} voice samples",
@@ -285,7 +286,7 @@
     "relabelled": "Corrected {utterances} lines across {meetings} earlier meetings",
     "unmerged": "removed from {count} other people",
     "empty_title": "No voices yet",
-    "subtitle": "Who speaks in your recordings — Summo learns each voice and names it next time.",
+    "subtitle": "The voices Summo has recognised in your recordings.",
     "naming_note": "Naming a voice also fixes the past meetings Summo guessed wrong."
   },
   "settings": {
@@ -312,7 +313,7 @@
     "local_only_comma": "runs on your machine",
     "llm_hint_tail": ". Only summaries, translation and questions use a language model — and you choose where it runs.",
     "llm_hint_head": "Speech recognition and speaker attribution ",
-    "key_not_stored": "The key is not stored in the settings file — if it were, it would follow into backups and sync.",
+    "key_not_stored": "The key is not written to the settings file.",
     "group_local": "On this machine",
     "group_hosted": "Hosted",
     "key_ready": "key set",
@@ -368,10 +369,10 @@
     "title": "Welcome to Summo",
     "promise": "Pick a language and a speech model to get started.",
     "no_recognition": "This build cannot recognise speech",
-    "no_recognition_hint": "The copy of Summo you are running was built without speech recognition, so installing a model would not help. Download a build that has it, or rebuild with the `models` feature.",
+    "no_recognition_hint": "This build has no speech recognition. Download one that has it.",
     "pick_model": "Choose a speech model",
     "machine": "This machine: {cores} cores, {ram} GB RAM.",
-    "no_models": "Could not reach the model list. If the rest of the internet works, the addresses it reads are most likely blocked on this network — try again later, use a VPN, or run `summo pull` if you already have the files.",
+    "no_models": "Could not fetch the model list.",
     "installed": "installed",
     "install": "Download and install",
     "downloading": "Downloading…",
@@ -387,7 +388,7 @@
     "start": "Start",
     "skip": "Later",
     "fix": "Fix this",
-    "spoken_hint": "This decides which model is recommended below. Changeable at any time, including just before recording.",
+    "spoken_hint": "It decides which models are suggested below.",
     "permission": "Allow the microphone",
     "reason_fast": "{accuracy}% accurate, {times}× faster than real time on this machine",
     "reason_slow": "Too slow for live text here (real-time factor {rtf}); usable for re-transcribing a recording afterwards",
@@ -398,7 +399,7 @@
     "listing": "Fetching the model list…",
     "none_for_language": "No model covers this language yet. Pick another language above, or use a multilingual model.",
     "retry": "Try again",
-    "tight_memory": "This machine may not have the memory to run it — you can still install and try."
+    "tight_memory": "This machine may not have the memory for it."
   },
   "tour": {
     "title": "Quick tour",
@@ -531,7 +532,8 @@
     "session.no_model": "No speech model is installed yet, so there is nothing to record with. Open Models and install one.",
     "session_refused": "Recording could not start.",
     "session_offline": "Cannot reach the recognition engine. Try restarting Summo.",
-    "session.no_vad": "No voice detector is installed, so nothing ever becomes text. Install “silero-vad-v5” from the Models screen."
+    "session.no_vad": "No voice detector is installed, so nothing ever becomes text. Install “silero-vad-v5” from the Models screen.",
+    "mic_timeout": "The microphone did not open. Check whether another application is using it, then try again."
   },
   "agents": {
     "title": "Agents",
@@ -613,7 +615,9 @@
     "in_use": "In use",
     "upstream_who": "the publisher",
     "details": "Details",
-    "hide_details": "Hide details"
+    "hide_details": "Hide details",
+    "for_language": "Models for {language}",
+    "show_all": "Show all"
   },
   "home": {
     "heading": "Your workspace",

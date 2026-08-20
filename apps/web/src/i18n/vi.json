@@ -55,7 +55,7 @@
     "pick_screen": "Chọn màn hình hoặc thư mục",
     "translate_live": "Dịch trực tiếp",
     "translate_hint": "Mỗi câu nói xong sẽ được dịch và hiện ngay dưới câu gốc.",
-    "translate_needs_system": "Đang bật dịch nhưng chỉ nghe micro — bật thêm Hệ thống để dịch thứ đang phát.",
+    "translate_needs_system": "Bật thêm nguồn Hệ thống để dịch được thứ đang phát.",
     "short": "Ghi",
     "spoken": "Ngôn ngữ nói",
     "spoken_auto": "Tự động nhận biết",
@@ -71,7 +71,8 @@
     "listening_change": "Đổi",
     "listening_note": "Đổi ngay giữa buổi, không mất phần đã ghi.",
     "spoken_multi": "Nhiều ngôn ngữ (tự động)",
-    "warm_ready": "Sẵn sàng ghi ngay — {model} đã nạp."
+    "warm_ready": "Sẵn sàng ghi.",
+    "browse_models": "Xem mô hình"
   },
   "import": {
     "title": "Nhập bản ghi có sẵn",
@@ -216,7 +217,7 @@
     "no_hits": "Không tìm thấy “{query}”.",
     "unreadable": "Không đọc được {path}: {reason}",
     "more_lines": "+{count} dòng nữa",
-    "vault_hint": "Mọi thứ nằm trong ~/.summo/vault — mở bằng Obsidian, grep, hay sao lưu tuỳ bạn.",
+    "vault_hint": "Tất cả nằm trong ~/.summo/vault.",
     "record_new": "Ghi mới",
     "recordings": "{count} bản ghi âm",
     "trash_confirm": "Chuyển vào thùng rác?",
@@ -276,7 +277,7 @@
     "maybe": "Có thể là",
     "name_this": "Đặt tên cho {label}",
     "identified_by": "Nhận diện bằng {space}",
-    "empty": "Chưa có ai. Ghi một buổi họp, rồi đặt tên cho giọng nói — lần sau Summo tự nhận ra.",
+    "empty": "Chưa có ai. Ghi một buổi rồi đặt tên cho giọng nói.",
     "rename_who": "Đổi tên {name}",
     "forget_who": "Xoá {name}",
     "samples": "{count} mẫu giọng",
@@ -285,7 +286,7 @@
     "relabelled": "Đã sửa {utterances} câu trong {meetings} buổi họp cũ",
     "unmerged": "gỡ nhầm khỏi {count} người khác",
     "empty_title": "Chưa có giọng nào",
-    "subtitle": "Ai nói trong các buổi ghi của bạn — Summo học giọng và tự đặt tên lần sau.",
+    "subtitle": "Những giọng nói Summo đã nhận ra trong các buổi ghi.",
     "naming_note": "Đặt tên một giọng sẽ sửa lại cả các buổi cũ mà Summo đoán nhầm."
   },
   "settings": {
@@ -312,7 +313,7 @@
     "local_only_comma": "chạy trên máy bạn",
     "llm_hint_tail": ". Chỉ tóm tắt, dịch và hỏi đáp mới dùng mô hình ngôn ngữ — và bạn chọn nó chạy ở đâu.",
     "llm_hint_head": "Nhận dạng giọng nói và tách người nói ",
-    "key_not_stored": "Khoá không được lưu vào tệp cài đặt — nếu lưu, nó sẽ theo vào bản sao lưu và bản đồng bộ.",
+    "key_not_stored": "Khoá không lưu vào tệp cài đặt.",
     "group_local": "Trên máy này",
     "group_hosted": "Dịch vụ ngoài",
     "key_ready": "đã có khoá",
@@ -368,10 +369,10 @@
     "title": "Chào mừng tới Summo",
     "promise": "Chọn ngôn ngữ và mô hình nhận dạng để bắt đầu.",
     "no_recognition": "Bản dựng này không nhận dạng được giọng nói",
-    "no_recognition_hint": "Bản Summo bạn đang chạy được build không kèm nhận dạng giọng nói, nên tải model về cũng không dùng được. Hãy tải bản có nhận dạng — hoặc build lại với tính năng `models`.",
+    "no_recognition_hint": "Bản cài này không kèm nhận dạng giọng nói. Hãy tải bản có nhận dạng.",
     "pick_model": "Chọn mô hình nhận dạng",
     "machine": "Máy này: {cores} nhân, {ram} GB RAM.",
-    "no_models": "Không lấy được danh sách mô hình. Nếu mạng vẫn vào được web bình thường thì nhiều khả năng nhà mạng chặn địa chỉ tải — thử lại sau, dùng VPN, hoặc chạy `summo pull` nếu bạn đã có sẵn file.",
+    "no_models": "Không lấy được danh sách mô hình.",
     "installed": "đã cài",
     "install": "Tải và cài",
     "downloading": "Đang tải…",
@@ -387,7 +388,7 @@
     "start": "Bắt đầu",
     "skip": "Để sau",
     "fix": "Cài ngay",
-    "spoken_hint": "Quyết định model nào được đề xuất bên dưới. Đổi lúc nào cũng được, kể cả ngay trước khi ghi.",
+    "spoken_hint": "Quyết định mô hình nào được gợi ý bên dưới.",
     "permission": "Cho phép dùng micro",
     "reason_fast": "Chính xác {accuracy}%, nhanh gấp {times}× thời gian thực trên máy này",
     "reason_slow": "Quá chậm để hiện chữ trực tiếp ở đây (hệ số thời gian thực {rtf}); vẫn dùng được để chạy lại bản ghi sau buổi họp",
@@ -398,7 +399,7 @@
     "listing": "Đang lấy danh sách mô hình…",
     "none_for_language": "Chưa có mô hình nào cho ngôn ngữ này. Chọn ngôn ngữ khác ở trên, hoặc dùng một mô hình đa ngôn ngữ.",
     "retry": "Thử lại",
-    "tight_memory": "Máy có thể không đủ bộ nhớ để chạy — vẫn tải và thử được."
+    "tight_memory": "Máy có thể không đủ bộ nhớ cho mô hình này."
   },
   "tour": {
     "title": "Hướng dẫn nhanh",
@@ -531,7 +532,8 @@
     "session.no_model": "Chưa cài mô hình nhận dạng nào, nên chưa ghi được. Mở màn hình Mô hình và cài một cái.",
     "session_refused": "Không bắt đầu ghi được.",
     "session_offline": "Không nói chuyện được với engine nhận dạng. Thử mở lại Summo.",
-    "session.no_vad": "Chưa cài bộ dò giọng nói, nên không có gì được ghi lại thành chữ. Cài \"silero-vad-v5\" trong màn hình Mô hình."
+    "session.no_vad": "Chưa cài bộ dò giọng nói, nên không có gì được ghi lại thành chữ. Cài \"silero-vad-v5\" trong màn hình Mô hình.",
+    "mic_timeout": "Không mở được micro. Kiểm tra xem có ứng dụng khác đang dùng nó không, rồi thử lại."
   },
   "agents": {
     "title": "Agent",
@@ -613,7 +615,9 @@
     "in_use": "Đang dùng",
     "upstream_who": "nhà phát hành",
     "details": "Chi tiết",
-    "hide_details": "Thu gọn"
+    "hide_details": "Thu gọn",
+    "for_language": "Mô hình cho {language}",
+    "show_all": "Xem tất cả"
   },
   "home": {
     "heading": "Không gian của bạn",

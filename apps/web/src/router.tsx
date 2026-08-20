@@ -218,6 +218,13 @@ const modelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/models",
   component: lazyRouteComponent(screens.models, "ModelsScreen"),
+  // `?lang=ja` narrows the catalogue to models that serve that language. It is how the rest of the
+  // app answers "you chose Japanese and nothing installed speaks it": a filtered shelf, rather than
+  // a sentence telling somebody to go and look.
+  validateSearch: (search: Record<string, unknown>) =>
+    typeof search.lang === "string" && search.lang.trim() !== ""
+      ? { lang: search.lang.trim() }
+      : {},
 });
 
 const settingsRoute = createRoute({

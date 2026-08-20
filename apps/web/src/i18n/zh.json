@@ -55,7 +55,7 @@
     "pick_screen": "选择屏幕或窗口",
     "translate_live": "实时翻译",
     "translate_hint": "每句话说完就翻译，显示在原文下方。",
-    "translate_needs_system": "翻译已开启，但只采集了麦克风。要翻译正在播放的声音，请打开系统声音。",
+    "translate_needs_system": "打开“系统”音源才能翻译正在播放的内容。",
     "short": "录音",
     "spoken": "所讲语言",
     "spoken_auto": "自动识别",
@@ -71,7 +71,8 @@
     "listening_change": "更改",
     "listening_note": "立即生效，已录制的内容不会丢失。",
     "spoken_multi": "多种语言（自动识别）",
-    "warm_ready": "可立即录音——已加载 {model}。"
+    "warm_ready": "可以开始录音。",
+    "browse_models": "浏览模型"
   },
   "import": {
     "title": "导入录音",
@@ -216,7 +217,7 @@
     "no_hits": "没有找到“{query}”。",
     "unreadable": "读不了{path}：{reason}",
     "more_lines": "还有{count}行",
-    "vault_hint": "所有内容都在 ~/.summo/vault —— 用 Obsidian 打开、用 grep 搜、想怎么备份都行。",
+    "vault_hint": "所有内容都在 ~/.summo/vault。",
     "record_new": "开始录制",
     "recordings": "{count}段录音",
     "trash_confirm": "移到回收站？",
@@ -276,7 +277,7 @@
     "maybe": "可能是",
     "name_this": "给{label}起名",
     "identified_by": "由{space}认出",
-    "empty": "还没有人。录一场会议，再给某把声音起个名字——下次 Summo 就认得了。",
+    "empty": "还没有。录一段，然后给说话人命名。",
     "rename_who": "给{name}改名",
     "forget_who": "移除{name}",
     "samples": "{count}段声音样本",
@@ -285,7 +286,7 @@
     "relabelled": "已在过去{meetings}场会议中更正{utterances}行",
     "unmerged": "已从另外{count}个人那里移除",
     "empty_title": "还没有声音",
-    "subtitle": "你的录音里有谁 — Summo 学习每个声音，下次自动标注。",
+    "subtitle": "在录音中识别到的说话人。",
     "naming_note": "为一个声音命名，也会修正以前认错的记录。"
   },
   "settings": {
@@ -312,7 +313,7 @@
     "local_only_comma": "在你的机器上运行",
     "llm_hint_tail": "。只有摘要、翻译和提问会用到语言模型——而且在哪里运行由你决定。",
     "llm_hint_head": "语音识别和说话人归属",
-    "key_not_stored": "密钥不会存进设置文件——存了就会一路跟着备份和同步跑出去。",
+    "key_not_stored": "密钥不会写入设置文件。",
     "group_local": "本机",
     "group_hosted": "云端",
     "key_ready": "密钥已设置",
@@ -368,10 +369,10 @@
     "title": "欢迎使用 Summo",
     "promise": "选择语言和识别模型即可开始。",
     "no_recognition": "此版本不支持语音识别",
-    "no_recognition_hint": "你运行的 Summo 在构建时未包含语音识别，因此下载模型也无法使用。请下载带识别功能的版本，或启用 `models` 特性重新构建。",
+    "no_recognition_hint": "此版本不含语音识别，请下载带识别的版本。",
     "pick_model": "选一个语音模型",
     "machine": "这台机器：{cores}核，{ram} GB 内存。",
-    "no_models": "无法获取模型列表。如果其他网站都能打开，多半是这个网络屏蔽了读取地址——稍后再试、使用 VPN，或者在已有文件时运行 `summo pull`。",
+    "no_models": "无法获取模型列表。",
     "installed": "已安装",
     "install": "下载并安装",
     "downloading": "正在下载…",
@@ -387,7 +388,7 @@
     "start": "开始",
     "skip": "以后再说",
     "fix": "去解决",
-    "spoken_hint": "它决定下面推荐哪个模型。随时可改，录音前也可以。",
+    "spoken_hint": "它决定下面推荐哪些模型。",
     "permission": "允许使用麦克风",
     "reason_fast": "准确率 {accuracy}%，在本机比实时快 {times} 倍",
     "reason_slow": "在本机太慢，无法实时出字（实时系数 {rtf}）；录完后重新转写仍可用",
@@ -398,7 +399,7 @@
     "listing": "正在获取模型列表…",
     "none_for_language": "暂时没有支持该语言的模型。请在上方换一种语言，或使用多语言模型。",
     "retry": "重试",
-    "tight_memory": "这台机器的内存可能不足以运行它——仍然可以安装试试。"
+    "tight_memory": "这台机器的内存可能不够。"
   },
   "tour": {
     "title": "快速上手",
@@ -531,7 +532,8 @@
     "session.no_model": "尚未安装语音模型，无法录制。请在模型页面安装一个。",
     "session_refused": "无法开始录音。",
     "session_offline": "无法连接识别引擎。请重启 Summo。",
-    "session.no_vad": "未安装语音检测模型，因此不会产生文字。请在模型页面安装 “silero-vad-v5”。"
+    "session.no_vad": "未安装语音检测模型，因此不会产生文字。请在模型页面安装 “silero-vad-v5”。",
+    "mic_timeout": "无法打开麦克风。检查是否有其他应用正在占用，然后重试。"
   },
   "agents": {
     "title": "智能体",
@@ -613,7 +615,9 @@
     "in_use": "使用中",
     "upstream_who": "发布方",
     "details": "详情",
-    "hide_details": "收起"
+    "hide_details": "收起",
+    "for_language": "{language} 的模型",
+    "show_all": "显示全部"
   },
   "home": {
     "heading": "你的工作区",

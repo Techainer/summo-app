@@ -2,9 +2,11 @@ import { CloudOff, HardDriveDownload, Package, Trash2 } from "lucide-react";
 import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useNavigate, useSearch } from "@tanstack/react-router";
+
 import { Markdown } from "../components/page/Markdown";
 import { Button, Empty, Page, PageGlow, SectionTitle } from "../components/ui";
-import { useT } from "../i18n/context";
+import { useI18n, useT } from "../i18n/context";
 import { cn } from "../lib/cn";
 import {
   CatalogueClient,
@@ -19,6 +21,7 @@ import { useEngine } from "../lib/engine-context";
 import { useErrorText } from "../lib/errors";
 import { listItem, stagger } from "../lib/motion";
 import { OnboardingClient, POLL_MS, isFinished, percent, type Install } from "../lib/onboarding";
+import { languageName } from "../lib/languages";
 import { url } from "../lib/library";
 import { useRefresh } from "../lib/use-load";
 
@@ -44,6 +47,9 @@ import { useRefresh } from "../lib/use-load";
  */
 export function ModelsScreen() {
   const t = useT();
+  const { lang } = useSearch({ from: "/models" });
+  const navigate = useNavigate();
+  const { locale } = useI18n();
   const say = useErrorText();
   const { handshake } = useEngine();
   const catalogue = useMemo(() => new CatalogueClient(handshake), [handshake]);
@@ -136,7 +142,17 @@ export function ModelsScreen() {
     );
   }
 
-  const groups = byTask(models);
+  // Narrowed to one language when the app sent somebody here to solve a specific gap. `*` counts:
+  // a multilingual model does serve Japanese, and hiding it would be a filter that lies.
+  const wanted = lang?.toLowerCase();
+  const shown = wanted
+    ? models.filter(
+        (model) =>
+          model.langs.length === 0 ||
+          model.langs.some((code) => code === "*" || code.toLowerCase().split("-")[0] === wanted),
+      )
+    : models;
+  const groups = byTask(shown);
 
   return (
     <Page title={t("models.title")} subtitle={t("models.hint")} data-testid="models">
@@ -157,6 +173,22 @@ export function ModelsScreen() {
       {error && (
         <p className="border-rec/30 bg-rec-soft text-rec text-meta mt-4 rounded-lg border px-3 py-2">
           {error}
+        </p>
+      )}
+
+      {/* Why this shelf is short. Somebody arrives here from a language they picked, and a
+          catalogue that silently shows three of its eight models looks broken rather than
+          filtered. */}
+      {wanted && (
+        <p className="border-line bg-bg-soft text-meta mb-3 flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border px-3 py-2">
+          <span>{t("models.for_language", { language: languageName(wanted, locale) })}</span>
+          <button
+            type="button"
+            onClick={() => void navigate({ to: "/models", search: {} })}
+            className="text-accent font-medium underline"
+          >
+            {t("models.show_all")}
+          </button>
         </p>
       )}
 
