@@ -518,7 +518,12 @@ async fn hardware(
     if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
-    Json(state.engine.hardware().clone()).into_response()
+    // Memory measured now. The rest of the profile — cores, features, accelerators — cannot change
+    // while the daemon runs; free memory is the one field that is a reading rather than a fact, and
+    // this route is what the status bar asks every fifteen seconds.
+    let mut hw = state.engine.hardware().clone();
+    hw.refresh_memory();
+    Json(hw).into_response()
 }
 
 async fn status(
@@ -2425,6 +2430,9 @@ async fn recommend_models(
                 "name": scored.name,
                 "score": scored.score,
                 "reason": scored.reason,
+                // "may not fit in this machine's memory", when that is true. A caution, not a veto:
+                // the model stays in the list and stays installable.
+                "caution": scored.caution,
                 "live_capable": scored.live_capable,
                 "expected_rtf": scored.expected_rtf,
                 "accuracy": scored.accuracy,

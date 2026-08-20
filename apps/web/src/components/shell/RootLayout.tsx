@@ -69,6 +69,7 @@ import { SCHEMES, choose as chooseScheme, read as readScheme, type Scheme } from
 import { usePaletteShortcut } from "../../lib/use-palette-shortcut";
 import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
+import { useMemory } from "../../lib/memory";
 import { QuickPrefs } from "./QuickPrefs";
 import { WindowControls } from "./WindowControls";
 import { NudgeBar } from "./NudgeBar";
@@ -128,6 +129,9 @@ const NAV: { key: string; labelKey: string; icon: LucideIcon; group?: "work" | "
  */
 export function RootLayout({ children }: { children: ReactNode }) {
   const engine = useEngine();
+  // Polled here rather than inside the status bar, which is a component that draws what it is given
+  // and has no business owning a timer.
+  const memory = useMemory(engine.handshake);
   const navigate = useNavigate();
   const { languages, setLocale, locale } = useI18n();
   // Read once. The document already carries the choice — `index.html` applies it before the first
@@ -836,6 +840,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
         notice={engine.notice ? say(engine.notice) : null}
         connection={engine.session.connection}
         device={engine.session.deviceLabel}
+        memory={memory}
       />
     </div>
   );

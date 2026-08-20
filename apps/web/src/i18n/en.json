@@ -438,7 +438,8 @@
     "interface": "Interface language",
     "listing": "Fetching the model list…",
     "none_for_language": "No model covers this language yet. Pick another language above, or use a multilingual model.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "tight_memory": "This machine may not have the memory to run it — you can still install and try."
   },
   "tour": {
     "title": "Quick tour",

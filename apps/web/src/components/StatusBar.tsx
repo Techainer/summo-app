@@ -1,5 +1,6 @@
 import { cn } from "../lib/cn";
 import { useI18n } from "../i18n/context";
+import type { Memory } from "../lib/memory";
 import type { ConnectionState } from "../lib/engine";
 
 /**
@@ -15,12 +16,14 @@ export function StatusBar({
   notice,
   connection,
   device,
+  memory,
 }: {
   stat: { rtf: number; rss_mb: number; queue_ms: number } | null;
   speakers: string[];
   notice: string | null;
   connection: ConnectionState;
   device: string | null;
+  memory: Memory | null;
 }) {
   // `n`, not `t`: English needs "1 speaker" and "2 speakers"; Vietnamese needs one form for both.
   const { t, n } = useI18n();
@@ -47,6 +50,20 @@ export function StatusBar({
       {speakers.length > 0 && (
         <span className="border-line nums text-micro inline-flex items-center rounded-full border px-2 py-0.5">
           {n("status.speakers", speakers.length)}
+        </span>
+      )}
+      {/* This machine's memory, whether or not anything is recording.
+
+          Requested after three releases spent on a bug whose cause was this number: a 24 GB MacBook
+          reported zero bytes free, every model was ranked as too large to run, and the figure that
+          decided it was nowhere on screen. Hidden on a phone, where the row has no room and the
+          operating system shows it anyway. */}
+      {memory && (
+        <span
+          className="border-line tabular text-micro hidden items-center rounded-full border px-2 py-0.5 sm:inline-flex"
+          data-testid="memory"
+        >
+          RAM {memory.usedGb.toFixed(1)}/{memory.totalGb.toFixed(0)} GB
         </span>
       )}
       {stat && (

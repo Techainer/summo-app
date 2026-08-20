@@ -442,6 +442,14 @@ export function Setup({ onDone }: { onDone: () => void }) {
                           <span className="text-fg-dim text-meta mt-0.5 block">
                             {reasonOf(model, t)}
                           </span>
+                          {/* Said, not acted on. The app's guess about free memory decides how the
+                              list is ordered and what it warns about; it does not decide what a
+                              person is allowed to download. */}
+                          {model.caution && (
+                            <span className="text-blocked text-micro mt-0.5 block">
+                              {t("setup.tight_memory")}
+                            </span>
+                          )}
                           {model.license && (
                             <span className="text-fg-faint text-micro mt-0.5 block">
                               {model.license}

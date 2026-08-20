@@ -379,6 +379,66 @@ if (recognises) {
   await context.close();
 }
 
+// ---- 7. a model that may not fit is offered, warned about, installable ---
+//
+// The rule this replaced hid such a model completely, so a machine that misreported its free
+// memory — a 24 GB MacBook reporting zero — was offered nothing and told its language had no
+// models. Downloading and running are different acts, and only the second needs the memory.
+{
+  const { context, page } = await screen();
+  await page.route(RECOMMEND, (route) =>
+    route.fulfill({
+      json: {
+        lang: "vi",
+        models: [
+          {
+            ...CANNED.models[0],
+            caution: "needs about 1024 MB with headroom, and 400 MB is free right now",
+          },
+        ],
+      },
+    }),
+  );
+  await open(page);
+  await welcome(page);
+  await rows(page)
+    .first()
+    .waitFor({ timeout: 20000 })
+    .catch(() => problems.push("a model that may not fit was hidden instead of flagged"));
+
+  if (!(await body(page)).includes("có thể không đủ bộ nhớ")) {
+    problems.push("the memory caution was not shown");
+  }
+  const install = page.getByRole("button", { name: "Tải và cài" });
+  if ((await install.count()) === 0 || (await install.isDisabled())) {
+    problems.push("a model with a caution could not be installed");
+  }
+
+  console.log("tight memory: offered, flagged, still installable");
+  await context.close();
+}
+
+// ---- 8. the machine's memory is on screen --------------------------------
+//
+// Asked for after three releases spent chasing a bug whose cause was this number, which the app
+// read, acted on, and never showed.
+{
+  const { context, page } = await screen();
+  await open(page);
+  await welcome(page);
+  const ram = page.getByTestId("memory");
+  const shown = await ram
+    .waitFor({ timeout: 20000 })
+    .then(() => ram.innerText())
+    .catch(() => null);
+  if (!shown || !/RAM \d+(\.\d+)?\/\d+ GB/.test(shown)) {
+    problems.push(`the status bar does not show the machine's memory: ${JSON.stringify(shown)}`);
+  } else {
+    console.log(`status bar: ${shown.trim()}`);
+  }
+  await context.close();
+}
+
 await browser.close();
 await engine.stop();
 
