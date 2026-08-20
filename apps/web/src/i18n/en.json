@@ -48,7 +48,7 @@
     "start": "Start recording",
     "stop": "Stop recording",
     "listening": "Listening…",
-    "idle": "Press record to start. Everything runs on your machine.",
+    "idle": "Press record to start.",
     "audio_source": "Audio source",
     "microphone": "Microphone",
     "system": "System",
@@ -75,7 +75,7 @@
   },
   "import": {
     "title": "Import a recording",
-    "hint": "An audio or video file. The audio is extracted and transcribed on your machine.",
+    "hint": "A recording or a video. The audio is extracted and transcribed.",
     "path_label": "File path",
     "path_placeholder": "/path/to/file.mp4",
     "browse": "Choose file",
@@ -115,7 +115,8 @@
     "shape_auto": "Choose for me",
     "play_from": "Play from {time}",
     "no_transcript": "Nothing was said yet.",
-    "your_notes": "Your notes"
+    "your_notes": "Your notes",
+    "open_ai_settings": "AI settings"
   },
   "export": {
     "title": "Export & translate",
@@ -232,7 +233,7 @@
     "kind_meeting": "Recordings",
     "kind_note": "Notes",
     "recent_heading": "Recent",
-    "empty_hint": "Press record when the meeting starts, or drop in a file you already have. All of it stays on your machine.",
+    "empty_hint": "Press record when the meeting starts, or drop in a file you already have.",
     "empty_write": "Write a note"
   },
   "analytics": {
@@ -247,7 +248,7 @@
     "meetings": "Meetings",
     "unsummarised": "Not summarised",
     "open_tasks": "Open tasks",
-    "empty": "No meetings in this range.",
+    "empty": "The numbers appear after your first recording.",
     "empty_hint": "Record something, or widen the range.",
     "days_7": "7 days",
     "days_30": "30 days",
@@ -302,13 +303,13 @@
     "not_connected": "Could not connect",
     "key_present": "SUMMO_API_KEY is set.",
     "key_missing": "Set {name} (or SUMMO_API_KEY) before using this. Transcript text will be sent to this provider.",
-    "local_only": "Runs on your machine. Nothing leaves it.",
+    "local_only": "Runs on your machine.",
     "saved": "Saved",
     "always_local": "always run on your machine",
     "address": "Address",
     "summarise_on_stop": "Summarise when recording stops",
     "sent_here": "Transcript text is sent here. Audio never is.",
-    "local_only_comma": "Runs on your machine, nothing leaves it.",
+    "local_only_comma": "runs on your machine",
     "llm_hint_tail": ". Only summaries, translation and questions use a language model — and you choose where it runs.",
     "llm_hint_head": "Speech recognition and speaker attribution ",
     "key_not_stored": "The key is not stored in the settings file — if it were, it would follow into backups and sync.",
@@ -328,7 +329,7 @@
     "spoken_hint": "The default for every recording. Still changeable per meeting from the record bar.",
     "section_general": "General",
     "section_recording": "Recording",
-    "section_ai": "Intelligence",
+    "section_ai": "Summaries & AI",
     "section_translation": "Translation",
     "section_storage": "Storage",
     "section_about": "About",
@@ -365,7 +366,7 @@
   },
   "setup": {
     "title": "Welcome to Summo",
-    "promise": "Speech recognition and speaker attribution run entirely on your machine. Audio never leaves it.",
+    "promise": "Pick a language and a speech model to get started.",
     "no_recognition": "This build cannot recognise speech",
     "no_recognition_hint": "The copy of Summo you are running was built without speech recognition, so installing a model would not help. Download a build that has it, or rebuild with the `models` feature.",
     "pick_model": "Choose a speech model",
@@ -374,8 +375,6 @@
     "installed": "installed",
     "install": "Download and install",
     "downloading": "Downloading…",
-    "upstream": "fetched upstream",
-    "upstream_note": "Summo does not distribute this model. The files come straight from whoever published them, under their own licence.",
     "ready": "Ready to record.",
     "ready_hint": "Press Start and say something.",
     "later": "Can wait",
@@ -389,7 +388,6 @@
     "skip": "Later",
     "fix": "Fix this",
     "spoken_hint": "This decides which model is recommended below. Changeable at any time, including just before recording.",
-    "local": "Runs on your machine",
     "permission": "Allow the microphone",
     "reason_fast": "{accuracy}% accurate, {times}× faster than real time on this machine",
     "reason_slow": "Too slow for live text here (real-time factor {rtf}); usable for re-transcribing a recording afterwards",
@@ -423,7 +421,6 @@
     "role": "CEO, Techainer",
     "company_line": "AI solutions to empower humanity's potential",
     "site": "techainer.com",
-    "local_promise": "Speech recognition and speaker attribution run entirely on your machine. Audio never leaves it.",
     "version": "Version {version}",
     "source": "Open source, AGPL-3.0"
   },
@@ -480,7 +477,7 @@
   },
   "agenda": {
     "title": "Calendar",
-    "hint": "Subscribe with a calendar address to keep it current, or add an .ics file. Summo never records on a schedule — it only prompts, and titles the notes.",
+    "hint": "Subscribe to a calendar so meetings arrive already named.",
     "name_placeholder": "calendar name",
     "name_label": "Calendar name",
     "add": "Add",
@@ -533,7 +530,8 @@
     "unknown": "Something failed and said nothing about why. Try again, or open Settings › About for the log.",
     "session.no_model": "No speech model is installed yet, so there is nothing to record with. Open Models and install one.",
     "session_refused": "The recording could not start. Check the microphone in Settings › Recording and the model in Models.",
-    "session_offline": "Cannot reach the recognition engine. Try restarting Summo."
+    "session_offline": "Cannot reach the recognition engine. Try restarting Summo.",
+    "session.no_vad": "No voice detector is installed, so nothing ever becomes text. Install “silero-vad-v5” from the Models screen."
   },
   "agents": {
     "title": "Agents",
@@ -592,7 +590,7 @@
   },
   "models": {
     "title": "Models",
-    "hint": "Everything Summo can run on this machine. Speech recognition and speaker attribution never leave it; a translation model does not either. Sizes are what the download costs.",
+    "hint": "The size is what has to be downloaded.",
     "offline": "Could not reach the model catalogue — showing what is already installed.",
     "none": "No models yet",
     "installed": "Installed",
@@ -600,7 +598,7 @@
     "starting": "Starting…",
     "failed": "Download failed",
     "needs_ram": "Needs {mb} MB of memory; this machine has less.",
-    "upstream": "Downloaded from whoever published it, under their own licence. Summo does not host this one.",
+    "upstream": "By {who}",
     "task_asr": "Speech recognition",
     "task_translate": "Translation",
     "task_vad": "Voice activity",
@@ -612,12 +610,13 @@
     "remove_confirm": "Remove?",
     "on_disk": "{size} on disk",
     "use": "Use",
-    "in_use": "In use"
+    "in_use": "In use",
+    "upstream_who": "the publisher"
   },
   "home": {
     "heading": "Your workspace",
-    "subheading": "Everything you record, write and ask — kept on this machine.",
-    "capture_hint": "Press to record. Everything runs here.",
+    "subheading": "Record it, write it down, ask about it later.",
+    "capture_hint": "Press to record.",
     "write": "Write",
     "waiting": "Waiting on you",
     "all_clear": "Nothing waiting.",
@@ -658,7 +657,7 @@
   },
   "permissions": {
     "title": "Permissions & devices",
-    "why": "Summo needs the microphone to record. The audio never leaves this machine — the permission belongs to your operating system, not to us.",
+    "why": "Summo needs microphone permission to record.",
     "state_granted": "granted",
     "state_denied": "refused",
     "state_prompt": "not asked yet",
@@ -778,7 +777,7 @@
     "title": "Help",
     "lead": "The questions people actually ask, each with the button that acts on it.",
     "privacy_q": "Does my audio go anywhere?",
-    "privacy_a": "No. Speech recognition and speaker separation run on models on your machine — pull the network cable and recording still works. Two things need the network: summarising and asking questions, because they call a language model, and you choose that endpoint in Settings (it can be Ollama on this same machine). Translation runs on a model inside the app.",
+    "privacy_a": "Speech recognition and speaker attribution run from a model on your machine — unplug the network and recording still works. Summaries, translation and questions call a language model, and you choose the endpoint in Settings: pick Ollama and the text stays here; pick a hosted API and the text is sent there.",
     "record_q": "Do I need a bot in the meeting?",
     "record_a": "No. Summo captures the microphone and the system audio on your own machine, so it works with Zoom, Meet, Teams, a phone call, or people in a room — anything your computer can hear. Press record, talk, press stop.",
     "go_record": "Open the recorder",

@@ -98,7 +98,9 @@ async function open(scheme, viewport) {
     ["Việc", /việc|agent|chưa có/i],
     ["Thống kê", /thống kê/i],
     ["Cài đặt", /cài đặt|mô hình|llm|ngôn ngữ/i],
-    ["Ghi", /ghi|đang nghe|bấm ghi/i],
+    // No `Ghi` row: recording opens the note it is recording into, so the sidebar lists places to
+    // go rather than a second, emptier version of the screen a meeting happens on.
+    ["Mô hình", /mô hình|nhận dạng/i],
   ]) {
     await page
       .getByRole("navigation", { name: "Màn hình" })

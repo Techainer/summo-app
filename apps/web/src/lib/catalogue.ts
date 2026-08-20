@@ -149,9 +149,28 @@ export function byTask(models: CatalogueModel[]): { task: Task; models: Catalogu
  * not ours to redistribute and one is gated behind an account — a user finding that out at the
  * download is a user who has already committed.
  */
+/**
+ * The licence, as short as it can be said honestly.
+ *
+ * `MIT` and `Apache-2.0` are already short. The long ones are titles rather than names — "FunASR
+ * Model Open Source License Agreement v1.1" — and the words that carry the meaning are at the
+ * front.
+ */
+export function shortLicense(license: string): string {
+  const trimmed = license
+    .replace(/\s*Model Open Source License Agreement\s*/i, " ")
+    .replace(/\s*Terms of Use\s*/i, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return trimmed.length > 22 ? `${trimmed.slice(0, 21)}…` : trimmed;
+}
+
 export function tags(model: CatalogueModel): { label: string; kind: "plain" | "warn" | "good" }[] {
   const out: { label: string; kind: "plain" | "warn" | "good" }[] = [];
-  out.push({ label: model.license, kind: "plain" });
+  // The licence, short enough to read at a glance. "FunASR Model Open Source License Agreement
+  // v1.1" is a chip wider than the card it sits in, and the full text is on the model's own page —
+  // what belongs here is which licence it is, not its full legal title.
+  out.push({ label: shortLicense(model.license), kind: "plain" });
   if (model.langs.length > 0 && !model.langs.includes("*")) {
     // Four is what fits on a phone before the row wraps twice.
     const shown = model.langs.slice(0, 4).join(" · ");
@@ -162,7 +181,9 @@ export function tags(model: CatalogueModel): { label: string; kind: "plain" | "w
   }
   if (model.mode === "live") out.push({ label: "live", kind: "good" });
   if (model.gated) out.push({ label: "gated", kind: "warn" });
-  if (!model.redistributable) out.push({ label: "upstream", kind: "warn" });
+  // No `upstream` chip: the line under the card already names who the file comes from, and a
+  // warning-coloured badge over a licence somebody else wrote reads as "something is wrong here",
+  // which is not what "we are not the distributor" means.
   if (!model.fits) out.push({ label: "ram", kind: "warn" });
   return out;
 }

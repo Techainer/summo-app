@@ -12,7 +12,6 @@ import {
   POLL_MS,
   blocker,
   isFinished,
-  needsConsent,
   optional,
   percent,
   preferred,
@@ -23,6 +22,7 @@ import {
   type Rejected,
   type Status,
 } from "../../lib/onboarding";
+import { shortLicense } from "../../lib/catalogue";
 import { Button, Card, CardBody, PageGlow, Sticker } from "../ui";
 import { load as loadCapture, save as saveCapture } from "../../lib/capture";
 import { languageName, rememberLanguage } from "../../lib/languages";
@@ -36,6 +36,14 @@ import { useRefresh } from "../../lib/use-load";
  * second list underneath holds everything else the registry can serve.
  */
 const SPOKEN_FIRST = ["vi", "en", "ja", "zh"];
+
+/**
+ * The voice detector, installed alongside whichever recogniser is chosen.
+ *
+ * Not a choice: there is one, it is 2 MB, and without it a recording produces silence on screen
+ * for as long as somebody is willing to watch it.
+ */
+const VOICE_DETECTOR = "silero-vad-v5";
 
 /** The two pickers below, so the pair reads as one control rather than two unrelated ones. */
 const PICKER =
@@ -182,8 +190,16 @@ export function Setup({ onDone }: { onDone: () => void }) {
     if (!chosen) return;
     setError(null);
     try {
-      const job = await client.install(chosen);
-      setInstalls((current) => [...current.filter((i) => i.model !== job.model), job]);
+      // The recogniser and the voice detector, together, because recording needs both. Installing
+      // only the recogniser is what shipped: setup said ready, the pipeline refused for want of a
+      // detector, and the app ran a timer over a session that was never recording. The detector is
+      // 2 MB — there is no version of this screen where asking about it separately is worth it.
+      const jobs = [await client.install(chosen)];
+      if (!hasDetector) jobs.push(await client.install(VOICE_DETECTOR));
+      setInstalls((current) => [
+        ...current.filter((i) => !jobs.some((job) => job.model === i.model)),
+        ...jobs,
+      ]);
     } catch (e) {
       setError(say(e));
     }
@@ -208,8 +224,11 @@ export function Setup({ onDone }: { onDone: () => void }) {
   }
 
   const stuck = blocker(status);
+  // Which half is missing, as data. `detail` is a sentence written for a person to read, and
+  // matching on its words is a coupling that breaks the day somebody rewords it.
+  const missing = status.checks.find((check) => check.step === "models")?.missing ?? [];
+  const hasDetector = !missing.includes("vad");
   const later = optional(status);
-  const selected = models.find((m) => m.id === chosen);
 
   // Which numbered card is which depends on the build. A binary with no recognition has nothing to
   // transcribe with, so it asks no spoken language and offers no model — numbering the permission
@@ -452,8 +471,13 @@ export function Setup({ onDone }: { onDone: () => void }) {
                           )}
                           {model.license && (
                             <span className="text-fg-faint text-micro mt-0.5 block">
-                              {model.license}
-                              {needsConsent(model) ? ` · ${t("setup.upstream")}` : ""}
+                              {shortLicense(model.license)}
+                              {/* Whose model it is, in the same grey as the licence: a credit, not
+                                  a warning. It used to be a boxed paragraph in alarm colours. */}
+                              {model.attribution &&
+                                ` · ${t("models.upstream", {
+                                  who: model.attribution || t("models.upstream_who"),
+                                })}`}
                             </span>
                           )}
                           {job && (
@@ -485,12 +509,6 @@ export function Setup({ onDone }: { onDone: () => void }) {
                   );
                 })}
               </ul>
-            )}
-
-            {selected && needsConsent(selected) && (
-              <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-3 rounded-[var(--radius-card)] border p-3">
-                {t("setup.upstream_note")}
-              </p>
             )}
 
             <Button

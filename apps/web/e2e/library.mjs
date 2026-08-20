@@ -136,7 +136,11 @@ await page.getByRole("button", { name: /Thử kết nối/ }).click();
 await page.locator('[data-testid="test-result"]').waitFor({ timeout: 15000 });
 const verdict = await page.locator('[data-testid="test-result"]').innerText();
 console.log(`connection test: ${verdict.split("\n")[0]}`);
-if (!/không có gì rời khỏi máy/i.test(verdict)) {
+// "chạy trên máy bạn", not "không có gì rời khỏi máy". The claim this used to check for is one the
+// app cannot make: point the summariser at a hosted API — which this screen exists to let you do —
+// and the text does leave the machine. What the line has to say is *which* of the two this
+// provider is, and that is what is asserted now.
+if (!/chạy trên máy bạn/i.test(verdict)) {
   fail(`the settings screen did not say where transcript text goes: ${JSON.stringify(verdict)}`);
 }
 await page.screenshot({ path: "/tmp/shots/settings.png" });

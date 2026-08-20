@@ -53,6 +53,10 @@ export const NARROWBAND_HZ = 16000;
 export class Session {
   private client: EngineClient | null = null;
   private microphone: Microphone | null = null;
+  /** A refusal from the daemon, whenever it arrived. Cleared when a session starts. */
+  private refused: { code: string; error: string } | null = null;
+  /** True from the first press until the daemon is recording or has refused. */
+  private starting = false;
   private state: SessionState = {
     recording: false,
     connection: "closed",
@@ -77,7 +81,14 @@ export class Session {
   }
 
   async start(spec: SessionSpec): Promise<void> {
-    if (this.state.recording) return;
+    // Already recording, or already on the way there. The second guard is the one that was
+    // missing: `start` is async — a socket to open, a model to load, a microphone to be granted —
+    // and a second press during that window sent a second `session_start`. The daemon answered
+    // "a recording is already in progress", in English, and the refusal tore down the session that
+    // was working perfectly. Pressing a button twice must not stop a meeting.
+    if (this.state.recording || this.starting) return;
+    this.starting = true;
+    this.refused = null;
     this.update({ error: null });
 
     this.client = new EngineClient(this.handshake, {
@@ -86,13 +97,16 @@ export class Session {
         // timer running, its button red and its banner up while the daemon sat idle — and the
         // failure was only visible to somebody who read the transcript that never appeared. A
         // transient error is different: the pipeline is still running and will catch up.
-        if (event.kind === "error" && !event.transient && this.state.recording) {
-          this.microphone?.stop();
-          this.microphone = null;
-          this.update({
-            recording: false,
-            error: { code: "session_refused", error: event.message },
-          });
+        if (event.kind === "error" && !event.transient) {
+          // Remembered even when the refusal arrives before the microphone is open, which is the
+          // usual case: `session_start` goes out, the daemon fails to load a model or finds no
+          // voice detector, and the answer comes back while this code is still asking the browser
+          // for a microphone. The old guard was `this.state.recording`, so that answer was dropped
+          // on the floor — and a moment later the app set `recording: true` and ran a timer over a
+          // session the daemon had already refused. Somebody watched it count to seventeen seconds
+          // with nothing being recorded at all.
+          this.refused = { code: event.code ?? "session_refused", error: event.message };
+          if (this.state.recording) this.abandon(this.refused);
         }
         this.callbacks.onEvent(event);
       },
@@ -112,6 +126,7 @@ export class Session {
       });
       this.client.close();
       this.client = null;
+      this.starting = false;
       return;
     }
 
@@ -130,8 +145,18 @@ export class Session {
       this.client.close();
       this.client = null;
       this.microphone = null;
+      this.starting = false;
       return;
     }
+
+    // The daemon may already have said no while the microphone was opening. Checked here rather
+    // than trusted to arrive later: this is the last moment before the app starts claiming to
+    // record.
+    if (this.refused) {
+      this.abandon(this.refused);
+      return;
+    }
+    this.starting = false;
 
     this.update({
       recording: true,
@@ -144,6 +169,21 @@ export class Session {
     // convenience — a session that records perfectly while this request is in flight is a session
     // that recorded perfectly.
     void this.findMeeting();
+  }
+
+  /**
+   * Put everything down: the microphone, the socket, the claim to be recording.
+   *
+   * One path for "the daemon will not do this", whether it says so in the first fifty milliseconds
+   * or the fiftieth second.
+   */
+  private abandon(refusal: { code: string; error: string }): void {
+    this.starting = false;
+    this.microphone?.stop();
+    this.microphone = null;
+    this.client?.close();
+    this.client = null;
+    this.update({ recording: false, error: refusal });
   }
 
   /**

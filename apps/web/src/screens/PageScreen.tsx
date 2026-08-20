@@ -255,7 +255,37 @@ export function PageScreen() {
     return () => {
       cancelled = true;
     };
-  }, [library, drafts, pageId, say, t]);
+    // `recording` is a dependency: the daemon rewrites this document as the meeting ends — it
+    // writes the duration, finishes the transcript, and the index stops calling it a note. Without
+    // this, the page kept whatever it loaded *during* the recording, which is why the first thing a
+    // user saw after their first meeting was the plain editor with the transcript's own bookkeeping
+    // in it: `**[00:00:00] me** — … <!-- seq:0 end:3.40 -->`.
+  }, [library, drafts, pageId, say, t, engine.session.recording]);
+
+  /**
+   * And once more, a moment later.
+   *
+   * Stopping is not instant on the daemon's side: the socket says the session ended, then the
+   * recorder flushes the last utterance, writes the duration and lets the index re-read the file.
+   * A single fetch on the way down wins that race about half the time — and losing it means the
+   * meeting renders as an empty note, which is what it looked like the first time this was fixed.
+   */
+  const wasRecording = useRef(engine.session.recording);
+  useEffect(() => {
+    const stopped = wasRecording.current && !engine.session.recording;
+    wasRecording.current = engine.session.recording;
+    if (!stopped) return undefined;
+
+    const timers = [1200, 3000].map((after) =>
+      window.setTimeout(() => {
+        library
+          .detail(pageId)
+          .then((d) => setLoaded({ id: pageId, detail: d }))
+          .catch(() => undefined);
+      }, after),
+    );
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [engine.session.recording, library, pageId]);
 
   // Only when there is nothing else to show. Every failure on this screen used to replace it — so
   // asking the agent to reword a sentence while the model was unreachable left the reader with one
@@ -284,7 +314,17 @@ export function PageScreen() {
   }
 
   const { summary, sections, transcript } = detail;
-  const note = summary.kind === "note";
+  // A document with a transcript in it is a meeting, whatever the index decided.
+  //
+  // The index reads a window at the top of the file and looks for `## Transcript`; a recording that
+  // has only just stopped can miss it — no duration written yet, the heading pushed past the
+  // window by notes typed during the meeting — and the page then opened in the plain editor, where
+  // the transcript's own bookkeeping (`<!-- seq:0 end:3.43 -->`) is text like any other. A user saw
+  // that at the end of their first recording.
+  //
+  // `transcript`, not the sections: the parser lifts the transcript out of the document into its
+  // own field, so a meeting's sections are only the prose around it.
+  const note = summary.kind === "note" && transcript.length === 0;
 
   /**
    * This page, right now, with the microphone open.
@@ -415,6 +455,17 @@ export function PageScreen() {
             <Card>
               <CardBody className="pt-4 text-center">
                 <p className="text-fg-faint">{t("meeting.no_summary_yet")}</p>
+                {/* Where the summariser is configured. "Trí tuệ" was the name of that settings
+                    section, and a user looking for where to point the app at a language model
+                    never found it — reasonably. The link is here because this is the moment
+                    somebody needs it: they pressed summarise. */}
+                <button
+                  type="button"
+                  onClick={() => void navigate({ to: "/settings", search: { section: "ai" } })}
+                  className="text-fg-faint text-micro mt-1 underline"
+                >
+                  {t("meeting.open_ai_settings")}
+                </button>
                 <Button
                   className="mt-3"
                   variant="primary"

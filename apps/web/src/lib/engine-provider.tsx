@@ -48,7 +48,11 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         setNotice({ error: event.message, ...(event.code ? { code: event.code } : {}) });
         break;
       case "info":
-        setNotice({ error: event.text });
+        // Not shown. These are the daemon's own log lines — "session started with gipformer-65m —
+        // writing to /tmp/…/2026-08-20-hop-03-57.md" — and they were being printed along the
+        // bottom of the window, filesystem path and all, to somebody who wanted to know whether
+        // their meeting was being recorded. The red button and the clock say that.
+        break;
         break;
       default:
         setTranscript((state) => apply(state, event));
@@ -126,7 +130,6 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const start = useCallback(async () => {
     setElapsed(0);
     setTranscript(empty);
-    timer.current = window.setInterval(() => setElapsed((e) => e + 1), 1000);
     // Read at the moment of starting, not captured at mount: the tray icon and the global shortcut
     // both reach `toggle` without going through the screen, and they have to honour whatever the
     // user last chose rather than whatever was set when the window opened.
@@ -169,11 +172,30 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   );
 
   const stop = useCallback(() => {
-    if (timer.current !== null) window.clearInterval(timer.current);
-    timer.current = null;
     setLevel(0);
     controller?.stop();
   }, [controller]);
+
+  /**
+   * The clock runs while the daemon is recording, and not one second before.
+   *
+   * It used to start the moment the button was pressed. When the daemon refused the session — no
+   * voice detector installed, for instance — nothing stopped it, so the app showed a running timer,
+   * a red button and a level meter over a recording that did not exist. A user watched it reach
+   * seventeen seconds and asked, fairly, what it thought it was doing.
+   */
+  useEffect(() => {
+    if (!session.recording) {
+      if (timer.current !== null) window.clearInterval(timer.current);
+      timer.current = null;
+      return undefined;
+    }
+    timer.current = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => {
+      if (timer.current !== null) window.clearInterval(timer.current);
+      timer.current = null;
+    };
+  }, [session.recording]);
 
   const toggle = useCallback(() => {
     if (session.recording) stop();

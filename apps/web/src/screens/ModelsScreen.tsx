@@ -317,8 +317,14 @@ function Card({
           {t("models.needs_ram", { mb: model.min_ram_mb })}
         </p>
       )}
-      {!model.redistributable && !model.installed && (
-        <p className="text-fg-faint text-micro mt-2">{t("models.upstream")}</p>
+      {/* Whose model it is. Two rewrites to get here: first a licensing position written for a
+          lawyer ("Summo không phân phối mô hình này. File tải thẳng từ nơi phát hành, theo giấy
+          phép của họ."), then a sentence about where the bytes travel from, which is not something
+          anyone choosing a model needs to think about. A credit is the whole of it. */}
+      {model.attribution && !model.installed && (
+        <p className="text-fg-faint text-micro mt-2">
+          {t("models.upstream", { who: model.attribution || t("models.upstream_who") })}
+        </p>
       )}
 
       {running && (

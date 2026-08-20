@@ -48,7 +48,7 @@
     "start": "録音を開始",
     "stop": "録音を停止",
     "listening": "聞いています…",
-    "idle": "録音ボタンを押すと始まります。すべてこの端末で処理されます。",
+    "idle": "録音を押して開始。",
     "audio_source": "音声の入力元",
     "microphone": "マイク",
     "system": "システム音声",
@@ -75,7 +75,7 @@
   },
   "import": {
     "title": "録音ファイルを取り込む",
-    "hint": "音声か動画のファイル。音声を取り出し、この端末で文字起こしします。",
+    "hint": "録音または動画ファイル。音声を取り出して文字にします。",
     "path_label": "ファイルのパス",
     "path_placeholder": "/path/to/file.mp4",
     "browse": "ファイルを選ぶ",
@@ -115,7 +115,8 @@
     "shape_auto": "おまかせ",
     "play_from": "{time}から再生",
     "no_transcript": "まだ何も話されていません。",
-    "your_notes": "あなたのメモ"
+    "your_notes": "あなたのメモ",
+    "open_ai_settings": "AI 設定"
   },
   "export": {
     "title": "書き出しと翻訳",
@@ -232,7 +233,7 @@
     "kind_meeting": "録音",
     "kind_note": "ノート",
     "recent_heading": "最近",
-    "empty_hint": "会議が始まったら録音、または手元のファイルを取り込んでください。すべてこの端末に残ります。",
+    "empty_hint": "会議が始まったら録音を押すか、手元のファイルをドロップしてください。",
     "empty_write": "メモを書く"
   },
   "analytics": {
@@ -247,7 +248,7 @@
     "meetings": "会議",
     "unsummarised": "要約なし",
     "open_tasks": "未完了タスク",
-    "empty": "この期間に会議はありません。",
+    "empty": "最初の録音のあとに数字が出ます。",
     "empty_hint": "録音するか、期間を広げてください。",
     "days_7": "7日間",
     "days_30": "30日間",
@@ -302,13 +303,13 @@
     "not_connected": "接続できませんでした",
     "key_present": "SUMMO_API_KEY は設定済みです。",
     "key_missing": "使う前に {name}（または SUMMO_API_KEY）を設定してください。文字起こしのテキストはこの提供元に送られます。",
-    "local_only": "この端末で動きます。何も外に出ません。",
+    "local_only": "この端末で動きます。",
     "saved": "保存しました",
     "always_local": "は常にこの端末で動きます",
     "address": "アドレス",
     "summarise_on_stop": "録音を止めたら要約する",
     "sent_here": "文字起こしのテキストはここに送られます。音声は決して送られません。",
-    "local_only_comma": "この端末で動き、何も外に出ません。",
+    "local_only_comma": "この端末で動きます",
     "llm_hint_tail": "。言語モデルを使うのは要約・翻訳・質問だけで、それをどこで動かすかも自分で選べます。",
     "llm_hint_head": "音声認識と話者の識別は",
     "key_not_stored": "キーは設定ファイルに保存されません。保存すればバックアップや同期にそのまま流れてしまうからです。",
@@ -328,7 +329,7 @@
     "spoken_hint": "すべての録音の既定値です。録音バーで会議ごとに変更できます。",
     "section_general": "一般",
     "section_recording": "録音",
-    "section_ai": "AI",
+    "section_ai": "要約と AI",
     "section_translation": "翻訳",
     "section_storage": "ストレージ",
     "section_about": "情報",
@@ -365,7 +366,7 @@
   },
   "setup": {
     "title": "Summoへようこそ",
-    "promise": "音声認識と話者の識別は、すべてこの端末で行われます。音声が外に出ることはありません。",
+    "promise": "言語と音声認識モデルを選んで始めます。",
     "no_recognition": "このビルドは音声認識に対応していません",
     "no_recognition_hint": "お使いの Summo は音声認識なしでビルドされているため、モデルを入れても使えません。認識付きのビルドを入手するか、`models` 機能を有効にして再ビルドしてください。",
     "pick_model": "音声モデルを選ぶ",
@@ -374,8 +375,6 @@
     "installed": "導入済み",
     "install": "ダウンロードして導入",
     "downloading": "ダウンロード中…",
-    "upstream": "配布元から取得",
-    "upstream_note": "このモデルはSummoが配布しているものではありません。ファイルは公開元から直接、その配布元のライセンスのもとで取得されます。",
     "ready": "録音の準備ができました。",
     "ready_hint": "開始を押して話してみてください。",
     "later": "後でも大丈夫",
@@ -389,7 +388,6 @@
     "skip": "後で",
     "fix": "解決する",
     "spoken_hint": "下で推奨されるモデルを決めます。録音直前を含め、いつでも変更できます。",
-    "local": "この端末で動作",
     "permission": "マイクを許可",
     "reason_fast": "精度{accuracy}%、この端末で実時間の{times}倍速",
     "reason_slow": "この端末ではリアルタイム表示に間に合いません（実時間係数 {rtf}）。録音後の書き起こしには使えます",
@@ -423,7 +421,6 @@
     "role": "Techainer CEO",
     "company_line": "人の可能性を引き出すAIソリューション",
     "site": "techainer.com",
-    "local_promise": "音声認識と話者の識別は、すべてこの端末で行われます。音声が外に出ることはありません。",
     "version": "バージョン {version}",
     "source": "オープンソース、AGPL-3.0"
   },
@@ -480,7 +477,7 @@
   },
   "agenda": {
     "title": "カレンダー",
-    "hint": "カレンダーのアドレスを購読すると自動で最新になります。.ics ファイルの追加も可能です。予定に従って自動録音はしません — 声をかけ、議事録に名前を付けるだけです。",
+    "hint": "カレンダーを登録すると、会議に名前と時刻が入ります。",
     "name_placeholder": "カレンダー名",
     "name_label": "カレンダー名",
     "add": "追加",
@@ -533,7 +530,8 @@
     "unknown": "原因を伴わないエラーが発生しました。再試行するか、設定 › 概要のログをご確認ください。",
     "session.no_model": "音声モデルが未インストールのため録音できません。モデル画面から 1 つ入れてください。",
     "session_refused": "録音を開始できませんでした。設定 › 録音のマイクと、モデル画面のモデルをご確認ください。",
-    "session_offline": "認識エンジンに接続できません。Summo を再起動してください。"
+    "session_offline": "認識エンジンに接続できません。Summo を再起動してください。",
+    "session.no_vad": "音声検出モデルが未インストールのため、文字になりません。モデル画面から「silero-vad-v5」を入れてください。"
   },
   "agents": {
     "title": "エージェント",
@@ -592,7 +590,7 @@
   },
   "models": {
     "title": "モデル",
-    "hint": "この端末で動かせるモデルの一覧です。音声認識と話者の識別は端末から出ません。翻訳モデルも同じです。容量はダウンロード量です。",
+    "hint": "サイズはダウンロード量です。",
     "offline": "モデル一覧に接続できませんでした。導入済みのものだけ表示しています。",
     "none": "モデルがありません",
     "installed": "導入済み",
@@ -600,7 +598,7 @@
     "starting": "開始中…",
     "failed": "ダウンロード失敗",
     "needs_ram": "メモリが{mb} MB必要ですが、この端末はそれより少ないです。",
-    "upstream": "公開元から直接、その配布元のライセンスで取得します。Summoは保管していません。",
+    "upstream": "提供: {who}",
     "task_asr": "音声認識",
     "task_translate": "翻訳",
     "task_vad": "音声区間検出",
@@ -612,12 +610,13 @@
     "remove_confirm": "削除しますか？",
     "on_disk": "ディスク使用 {size}",
     "use": "使う",
-    "in_use": "使用中"
+    "in_use": "使用中",
+    "upstream_who": "公開元"
   },
   "home": {
     "heading": "あなたのワークスペース",
-    "subheading": "録音・記述・質問したものすべてを、この端末に。",
-    "capture_hint": "押すと録音が始まります。すべてここで動きます。",
+    "subheading": "録って、書いて、あとで聞き返す。",
+    "capture_hint": "押して録音。",
     "write": "書く",
     "waiting": "あなた待ち",
     "all_clear": "待っているものはありません。",
@@ -658,7 +657,7 @@
   },
   "permissions": {
     "title": "権限とデバイス",
-    "why": "録音にはマイクが必要です。音声はこの端末から出ません。許可を管理するのは OS であり、Summo ではありません。",
+    "why": "録音にはマイクの許可が必要です。",
     "state_granted": "許可済み",
     "state_denied": "拒否",
     "state_prompt": "未確認",
@@ -778,7 +777,7 @@
     "title": "ヘルプ",
     "lead": "よくある質問と、その場で実行できるボタン。",
     "privacy_q": "Does my audio go anywhere?",
-    "privacy_a": "No. Speech recognition and speaker separation run on models on your machine — pull the network cable and recording still works. Two things need the network: summarising and asking questions, because they call a language model, and you choose that endpoint in Settings (it can be Ollama on this same machine). Translation runs on a model inside the app.",
+    "privacy_a": "音声認識と話者の判別は端末上のモデルで動きます。ネットワークを切っても録音と文字起こしは動作します。要約・翻訳・質問応答は言語モデルを呼び出し、その接続先は設定で選べます。Ollama を選べば内容は端末に残り、外部 API を選べばその API に送られます。",
     "record_q": "Do I need a bot in the meeting?",
     "record_a": "No. Summo captures the microphone and the system audio on your own machine, so it works with Zoom, Meet, Teams, a phone call, or people in a room — anything your computer can hear. Press record, talk, press stop.",
     "go_record": "Open the recorder",

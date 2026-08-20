@@ -48,7 +48,7 @@
     "start": "开始录音",
     "stop": "停止录音",
     "listening": "正在听…",
-    "idle": "按下录音即可开始。全部在本机处理。",
+    "idle": "点击录音开始。",
     "audio_source": "音频来源",
     "microphone": "麦克风",
     "system": "系统声音",
@@ -75,7 +75,7 @@
   },
   "import": {
     "title": "导入录音",
-    "hint": "音频或视频文件。音轨会被提取出来，在本机完成转写。",
+    "hint": "录音或视频文件。音频会被提取并转写。",
     "path_label": "文件路径",
     "path_placeholder": "/path/to/file.mp4",
     "browse": "选择文件",
@@ -115,7 +115,8 @@
     "shape_auto": "自动选择",
     "play_from": "从{time}播放",
     "no_transcript": "还没有人说话。",
-    "your_notes": "你的笔记"
+    "your_notes": "你的笔记",
+    "open_ai_settings": "AI 设置"
   },
   "export": {
     "title": "导出与翻译",
@@ -232,7 +233,7 @@
     "kind_meeting": "录音",
     "kind_note": "笔记",
     "recent_heading": "最近",
-    "empty_hint": "会议开始时按下录制，或直接导入已有的文件。所有内容都留在你的电脑上。",
+    "empty_hint": "会议开始时点击录音，或拖入已有的文件。",
     "empty_write": "写一条笔记"
   },
   "analytics": {
@@ -247,7 +248,7 @@
     "meetings": "会议",
     "unsummarised": "未生成摘要",
     "open_tasks": "未完成任务",
-    "empty": "这段时间没有会议。",
+    "empty": "第一次录音之后就会出现数字。",
     "empty_hint": "录制一次，或扩大时间范围。",
     "days_7": "7天",
     "days_30": "30天",
@@ -302,13 +303,13 @@
     "not_connected": "连不上",
     "key_present": "SUMMO_API_KEY 已设置。",
     "key_missing": "使用前请设置 {name}（或 SUMMO_API_KEY）。转写文本会发送给这个服务商。",
-    "local_only": "在你的电脑上运行，数据不外传。",
+    "local_only": "在你的机器上运行。",
     "saved": "已保存",
     "always_local": "始终在你的电脑上运行",
     "address": "地址",
     "summarise_on_stop": "停止录音后自动生成摘要",
     "sent_here": "转写文本会发到这里，音频永远不会。",
-    "local_only_comma": "在你的电脑上运行，数据不外传。",
+    "local_only_comma": "在你的机器上运行",
     "llm_hint_tail": "。只有摘要、翻译和提问会用到语言模型——而且在哪里运行由你决定。",
     "llm_hint_head": "语音识别和说话人归属",
     "key_not_stored": "密钥不会存进设置文件——存了就会一路跟着备份和同步跑出去。",
@@ -328,7 +329,7 @@
     "spoken_hint": "所有录音的默认值。仍可在录音栏中按会议更改。",
     "section_general": "通用",
     "section_recording": "录音",
-    "section_ai": "智能",
+    "section_ai": "摘要与 AI",
     "section_translation": "翻译",
     "section_storage": "存储",
     "section_about": "关于",
@@ -365,7 +366,7 @@
   },
   "setup": {
     "title": "欢迎使用 Summo",
-    "promise": "语音识别和说话人归属全部在你的电脑上完成，音频从不外传。",
+    "promise": "选择语言和识别模型即可开始。",
     "no_recognition": "此版本不支持语音识别",
     "no_recognition_hint": "你运行的 Summo 在构建时未包含语音识别，因此下载模型也无法使用。请下载带识别功能的版本，或启用 `models` 特性重新构建。",
     "pick_model": "选一个语音模型",
@@ -374,8 +375,6 @@
     "installed": "已安装",
     "install": "下载并安装",
     "downloading": "正在下载…",
-    "upstream": "从原始发布方获取",
-    "upstream_note": "这个模型不由 Summo 分发。文件直接来自发布方，遵循他们自己的许可协议。",
     "ready": "可以开始录音了。",
     "ready_hint": "按下开始，说点什么试试。",
     "later": "可以稍后",
@@ -389,7 +388,6 @@
     "skip": "以后再说",
     "fix": "去解决",
     "spoken_hint": "它决定下面推荐哪个模型。随时可改，录音前也可以。",
-    "local": "在本机运行",
     "permission": "允许使用麦克风",
     "reason_fast": "准确率 {accuracy}%，在本机比实时快 {times} 倍",
     "reason_slow": "在本机太慢，无法实时出字（实时系数 {rtf}）；录完后重新转写仍可用",
@@ -423,7 +421,6 @@
     "role": "Techainer CEO",
     "company_line": "用 AI 释放人的潜能",
     "site": "techainer.com",
-    "local_promise": "语音识别和说话人归属全部在你的电脑上完成，音频从不外传。",
     "version": "版本 {version}",
     "source": "开源，AGPL-3.0"
   },
@@ -480,7 +477,7 @@
   },
   "agenda": {
     "title": "日历",
-    "hint": "用日历地址订阅即可自动更新，也可以添加 .ics 文件。Summo 不会按日程自动录音 — 只会提醒，并为记录取名。",
+    "hint": "订阅日历后，会议会自动带上名称和时间。",
     "name_placeholder": "日历名称",
     "name_label": "日历名称",
     "add": "添加",
@@ -533,7 +530,8 @@
     "unknown": "出错了，但没有给出原因。请重试，或在设置 › 关于中查看日志。",
     "session.no_model": "尚未安装语音模型，无法录制。请在模型页面安装一个。",
     "session_refused": "无法开始录制。请检查设置 › 录音中的麦克风，以及模型页面中的模型。",
-    "session_offline": "无法连接识别引擎。请重启 Summo。"
+    "session_offline": "无法连接识别引擎。请重启 Summo。",
+    "session.no_vad": "未安装语音检测模型，因此不会产生文字。请在模型页面安装 “silero-vad-v5”。"
   },
   "agents": {
     "title": "智能体",
@@ -592,7 +590,7 @@
   },
   "models": {
     "title": "模型",
-    "hint": "这台机器能跑的全部模型。语音识别和说话人归属永远不出本机，翻译模型也一样。大小是要下载的量。",
+    "hint": "大小即需要下载的体积。",
     "offline": "连不上模型目录——只显示已安装的。",
     "none": "还没有模型",
     "installed": "已安装",
@@ -600,7 +598,7 @@
     "starting": "正在开始…",
     "failed": "下载失败",
     "needs_ram": "需要 {mb} MB 内存，这台机器不够。",
-    "upstream": "直接从发布方下载，遵循他们的许可协议。Summo 不托管这个模型。",
+    "upstream": "来自 {who}",
     "task_asr": "语音识别",
     "task_translate": "翻译",
     "task_vad": "语音活动检测",
@@ -612,12 +610,13 @@
     "remove_confirm": "删除？",
     "on_disk": "占用磁盘 {size}",
     "use": "使用",
-    "in_use": "使用中"
+    "in_use": "使用中",
+    "upstream_who": "发布方"
   },
   "home": {
     "heading": "你的工作区",
-    "subheading": "你录下的、写下的、问过的，都留在这台机器上。",
-    "capture_hint": "按下开始录音，全部在本机运行。",
+    "subheading": "录下来，写下来，之后再问。",
+    "capture_hint": "点击录音。",
     "write": "写",
     "waiting": "等你处理",
     "all_clear": "没有待办。",
@@ -658,7 +657,7 @@
   },
   "permissions": {
     "title": "权限与设备",
-    "why": "录音需要麦克风。音频不会离开本机——权限由操作系统掌管，而不是我们。",
+    "why": "Summo 需要麦克风权限才能录音。",
     "state_granted": "已授权",
     "state_denied": "已拒绝",
     "state_prompt": "尚未询问",
@@ -778,7 +777,7 @@
     "title": "帮助",
     "lead": "最常见的问题，每条都配了可直接执行的按钮。",
     "privacy_q": "Does my audio go anywhere?",
-    "privacy_a": "No. Speech recognition and speaker separation run on models on your machine — pull the network cable and recording still works. Two things need the network: summarising and asking questions, because they call a language model, and you choose that endpoint in Settings (it can be Ollama on this same machine). Translation runs on a model inside the app.",
+    "privacy_a": "语音识别和说话人区分由本机上的模型完成——断网也能录音和出字。摘要、翻译和问答会调用语言模型，接入点在设置里由你选择：选 Ollama，内容留在本机；选外部 API，内容会发送到那里。",
     "record_q": "Do I need a bot in the meeting?",
     "record_a": "No. Summo captures the microphone and the system audio on your own machine, so it works with Zoom, Meet, Teams, a phone call, or people in a room — anything your computer can hear. Press record, talk, press stop.",
     "go_record": "Open the recorder",

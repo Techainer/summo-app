@@ -53,6 +53,14 @@ pub struct Check {
     pub blocking: bool,
     /// What is there, or what is missing — shown next to the step.
     pub detail: String,
+    /// Which pieces are absent, by name, for a client that has to *do* something about it.
+    ///
+    /// `detail` is a Vietnamese sentence written for a human. The setup screen needs to know
+    /// whether to install a voice detector as well as a recogniser, and reading that out of a
+    /// sentence is the kind of coupling that breaks the day somebody rewords it — and it did: the
+    /// check for it matched on the words "dò giọng".
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing: Vec<&'static str>,
 }
 
 /// Everything a new install needs to know about itself.
@@ -111,16 +119,32 @@ pub fn status(paths: &Paths, hardware: &HwProfile) -> Status {
     // app ends up promising a recording it will refuse.
     let recognition = cfg!(feature = "models");
 
+    // Both halves, because recording needs both.
+    //
+    // This counted speech models only, so a vault with a recogniser and no voice detector was
+    // "ready to record" — and then the pipeline refused at `resolve_vad`, the app kept its timer
+    // running, and no words ever arrived. The detector is what decides where an utterance ends;
+    // without it nothing is ever committed to a transcript, however good the recogniser is.
     let asr: Vec<_> = installed.iter().filter(|m| m.task == Task::Asr).collect();
+    let vad: Vec<_> = installed.iter().filter(|m| m.task == Task::Vad).collect();
     let models = Check {
         step: Step::Models,
-        ready: recognition && !asr.is_empty(),
+        ready: recognition && !asr.is_empty() && !vad.is_empty(),
         blocking: Step::Models.blocking(),
-        detail: match (recognition, asr.first()) {
-            (false, _) => "bản dựng này không có nhận dạng giọng nói".into(),
-            (true, Some(model)) => model.id.to_string(),
-            (true, None) => "chưa cài mô hình nhận dạng nào".into(),
+        detail: match (recognition, asr.first(), vad.first()) {
+            (false, _, _) => "bản dựng này không có nhận dạng giọng nói".into(),
+            (true, Some(model), Some(_)) => model.id.to_string(),
+            (true, Some(_), None) => "chưa cài bộ dò giọng nói".into(),
+            (true, None, Some(_)) => "chưa cài mô hình nhận dạng nào".into(),
+            (true, None, None) => "chưa cài mô hình nhận dạng và bộ dò giọng nói".into(),
         },
+        missing: [
+            asr.is_empty().then_some("asr"),
+            vad.is_empty().then_some("vad"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect(),
     };
 
     // Ready either way, because importing no longer depends on it.
@@ -135,12 +159,14 @@ pub fn status(paths: &Paths, hardware: &HwProfile) -> Status {
             ready: true,
             blocking: false,
             detail: tools.version,
+            missing: Vec::new(),
         },
         Err(_) => Check {
             step: Step::Ffmpeg,
             ready: true,
             blocking: false,
             detail: "built-in".into(),
+            missing: Vec::new(),
         },
     };
 
@@ -172,6 +198,7 @@ fn llm_check(paths: &Paths) -> Check {
             ready: false,
             blocking: false,
             detail: "chưa đọc được cài đặt".into(),
+            missing: Vec::new(),
         };
     };
 
@@ -182,6 +209,7 @@ fn llm_check(paths: &Paths) -> Check {
             ready: false,
             blocking: false,
             detail: "chưa chọn mô hình ngôn ngữ".into(),
+            missing: Vec::new(),
         };
     }
 
@@ -196,6 +224,7 @@ fn llm_check(paths: &Paths) -> Check {
             ready: false,
             blocking: false,
             detail: format!("{provider} cần SUMMO_API_KEY"),
+            missing: Vec::new(),
         };
     }
 
@@ -204,6 +233,7 @@ fn llm_check(paths: &Paths) -> Check {
         ready: true,
         blocking: false,
         detail: provider.to_string(),
+        missing: Vec::new(),
     }
 }
 
@@ -258,6 +288,77 @@ mod tests {
             .expect("models check");
         assert!(!models.ready);
         assert!(models.blocking);
+    }
+
+    /// A manifest on disk is what `ModelStore::list` reads, so this is what "installed" means here.
+    fn install(paths: &Paths, id: &str, task: &str) {
+        let dir = paths.manifests();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            serde_json::json!({
+                "schema": 1,
+                "id": id,
+                "name": id,
+                "task": task,
+                "mode": "live",
+                "runtime": "test/runtime",
+                "license": "MIT",
+                "files": [{
+                    "name": "model.onnx",
+                    "sha256": "c".repeat(64),
+                    "size": 1024,
+                    "url": "https://example.invalid/model.onnx"
+                }]
+            })
+            .to_string(),
+        )
+        .unwrap();
+    }
+
+    /// The one that shipped: a recogniser and no voice detector reported "ready to record".
+    ///
+    /// The pipeline then refused at `resolve_vad`, the app kept a timer running, and no words ever
+    /// arrived. A checklist that says ready has to mean it — this is the assertion that makes the
+    /// two halves agree.
+    #[test]
+    fn a_recogniser_without_a_voice_detector_is_not_ready_to_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        install(&paths, "gipformer-65m", "asr");
+
+        let status = super::status(&paths, &hw());
+        let models = status
+            .checks
+            .iter()
+            .find(|c| c.step == Step::Models)
+            .expect("models check");
+
+        if cfg!(feature = "models") {
+            assert!(
+                !models.ready,
+                "a vault with no voice detector said it was ready"
+            );
+            assert!(
+                models.detail.contains("dò giọng"),
+                "the missing half is not named: {}",
+                models.detail
+            );
+            assert!(!status.can_record);
+
+            install(&paths, "silero-vad-v5", "vad");
+            let with_both = super::status(&paths, &hw());
+            let models = with_both
+                .checks
+                .iter()
+                .find(|c| c.step == Step::Models)
+                .expect("models check");
+            assert!(
+                models.ready,
+                "both installed and still not ready: {}",
+                models.detail
+            );
+        }
     }
 
     /// The point of separating blocking from ready: no ffmpeg means no *importing*, and a user who
