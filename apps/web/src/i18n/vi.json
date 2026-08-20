@@ -820,6 +820,10 @@
     "none": "chưa chọn",
     "no_model": "Chưa có mô hình nhận dạng nên chưa ghi được.",
     "wrong_language": "Model đang chọn không phục vụ ngôn ngữ bạn đã chọn. Chọn lại ngôn ngữ ở dưới để đổi model, hoặc cài model phù hợp.",
-    "better": "Đã cài sẵn model tốt hơn cho ngôn ngữ này: {name} ({accuracy}% chính xác)."
+    "better": "Đã cài sẵn model tốt hơn cho ngôn ngữ này: {name} ({accuracy}% chính xác).",
+    "detector": "Dò giọng nói",
+    "speakers": "Tách người nói",
+    "ready": "đã cài",
+    "missing": "chưa cài"
   }
 }

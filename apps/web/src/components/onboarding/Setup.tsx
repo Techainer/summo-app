@@ -45,6 +45,16 @@ const SPOKEN_FIRST = ["vi", "en", "ja", "zh"];
  */
 const VOICE_DETECTOR = "silero-vad-v5";
 
+/**
+ * The voice fingerprint, installed with the rest.
+ *
+ * 26 MB, and it is what lets a recording say who said which line. Skipping it was a decision made
+ * for the user by a screen that never mentioned it — and the way they found out was turning on
+ * system audio months later and having the whole recording refused. Everything the app needs to do
+ * its job arrives in one download.
+ */
+const SPEAKER_MODEL = "campplus-sv";
+
 /** The two pickers below, so the pair reads as one control rather than two unrelated ones. */
 const PICKER =
   "border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-10 w-full rounded-[var(--radius-card)] border px-3 text-sm transition-colors focus:outline-none sm:w-auto sm:min-w-56";
@@ -196,9 +206,14 @@ export function Setup({ onDone }: { onDone: () => void }) {
       // 2 MB — there is no version of this screen where asking about it separately is worth it.
       const jobs = [await client.install(chosen)];
       if (!hasDetector) jobs.push(await client.install(VOICE_DETECTOR));
+      // Speaker attribution: small, and the alternative is discovering it is missing at the moment
+      // somebody needs it. A failure here does not fail the install — recording works without it.
+      const speaker = await client.install(SPEAKER_MODEL).catch(() => null);
+      if (speaker) jobs.push(speaker);
+      const started = jobs.filter((job) => job !== null);
       setInstalls((current) => [
-        ...current.filter((i) => !jobs.some((job) => job.model === i.model)),
-        ...jobs,
+        ...current.filter((i) => !started.some((job) => job.model === i.model)),
+        ...started,
       ]);
     } catch (e) {
       setError(say(e));

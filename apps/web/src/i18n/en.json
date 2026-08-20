@@ -820,6 +820,10 @@
     "none": "not chosen",
     "no_model": "No speech model yet, so recording cannot start.",
     "wrong_language": "The chosen model does not serve the language you picked. Pick the language again below to switch the model, or install one that covers it.",
-    "better": "A better model for this language is already installed: {name} ({accuracy}% accurate)."
+    "better": "A better model for this language is already installed: {name} ({accuracy}% accurate).",
+    "detector": "Voice detection",
+    "speakers": "Speaker attribution",
+    "ready": "installed",
+    "missing": "not installed"
   }
 }
