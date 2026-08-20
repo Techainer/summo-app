@@ -34,8 +34,15 @@ export function NotesScreen() {
   const { t } = useI18n();
   const client = useMemo(() => new NoteClient(handshake), [handshake]);
 
+  // Read before the state below, because the state below starts from it.
+  const wanted = useSearch({ from: "/notes" }).open;
+
   const [notes, setNotes] = useState<NoteSummary[]>([]);
-  const [openId, setOpenId] = useState<string | null>(null);
+  // The note in the URL is open from the first frame. Starting at `null` and correcting on *change*
+  // meant arriving with `?open=<id>` opened nothing at all: on the first render `wanted` and
+  // `linked` are already equal, so the correction below never ran. Every link into this screen —
+  // the palette, the sidebar, the home screen's Viết button — landed on "pick a note".
+  const [openId, setOpenId] = useState<string | null>(wanted ?? null);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
 
@@ -56,7 +63,6 @@ export function NotesScreen() {
   // the screen once with the old note and once with the new one, and the first of those two frames
   // shows the wrong document — which is precisely the frame somebody following a link is looking
   // at. React sanctions this shape for exactly this case.
-  const wanted = useSearch({ from: "/notes" }).open;
   const [linked, setLinked] = useState(wanted);
   if (wanted !== linked) {
     setLinked(wanted);

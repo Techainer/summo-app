@@ -183,7 +183,7 @@
   },
   "chat": {
     "question": "问题",
-    "placeholder": "关于预算，小明说了什么？",
+    "placeholder": "关于你的记录，随便问。",
     "ask": "提问",
     "heading": "问你的记录",
     "searching": "正在翻找记录…",
@@ -666,7 +666,7 @@
     "intro": "问任何你录过或写过的内容，也可以让智能体去做事。",
     "mode_ask": "提问",
     "mode_do": "执行",
-    "ask_placeholder": "关于预算，小明说了什么？",
+    "ask_placeholder": "询问你的录音和笔记。",
     "do_placeholder": "帮我起草上线的日程…"
   },
   "permissions": {

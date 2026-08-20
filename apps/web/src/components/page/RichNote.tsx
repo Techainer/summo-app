@@ -70,6 +70,7 @@ export function RichNote({
   resolveImage,
   onNewSubpage,
   onOpenPage,
+  autofocus = false,
   className,
 }: {
   /** The note as it is on disk, below its title. */
@@ -81,6 +82,15 @@ export function RichNote({
   onUpload?: (file: File) => Promise<string>;
   /** A vault link to something this browser can fetch. */
   resolveImage?: (link: string) => string;
+  /**
+   * Put the caret in the note as it opens.
+   *
+   * For a note that was made a moment ago and has nothing in it. Pressing Viết, watching a blank
+   * page arrive and then having to click it before typing is a step nobody would design; every
+   * other editor puts the cursor where you are about to type. Not for a note with words already in
+   * it — stealing focus from somebody who came to read is worse than the click it saves.
+   */
+  autofocus?: boolean;
   /**
    * Make a page inside this one and answer with what to link to.
    *
@@ -162,6 +172,7 @@ export function RichNote({
       [resolveImage, t],
     ),
     content: toDoc(markdown),
+    autofocus: autofocus ? "end" : false,
     editorProps: {
       attributes: {
         // `font-reading` and a measure: a note is prose, and prose at full window width is prose

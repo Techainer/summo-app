@@ -296,6 +296,10 @@ export function NoteEditor({
             onUnsupported={() => setMode("plain")}
             onUpload={upload}
             resolveImage={resolve}
+            // Only into an empty note, which means one that was just made. A note with words in it
+            // was opened to be read, and taking the caret away from somebody who is reading is the
+            // worse of the two mistakes.
+            autofocus={rest.trim() === ""}
             onNewSubpage={subpage}
             onOpenPage={onOpenPage}
           />

@@ -183,7 +183,7 @@
   },
   "chat": {
     "question": "Câu hỏi",
-    "placeholder": "Ngọc nói gì về ngân sách?",
+    "placeholder": "Hỏi gì cũng được về những buổi bạn đã ghi.",
     "ask": "Hỏi",
     "heading": "Hỏi kho họp",
     "searching": "Đang tìm trong kho họp…",
@@ -666,7 +666,7 @@
     "intro": "Hỏi bất cứ điều gì bạn đã ghi hoặc đã viết, hoặc giao việc cho agent.",
     "mode_ask": "Hỏi",
     "mode_do": "Làm",
-    "ask_placeholder": "Ngọc nói gì về ngân sách?",
+    "ask_placeholder": "Hỏi về những buổi đã ghi và ghi chú của bạn.",
     "do_placeholder": "Soạn lịch cho đợt ra mắt…"
   },
   "permissions": {

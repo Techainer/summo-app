@@ -86,7 +86,7 @@ const ELSEWHERE: { to: string; icon: LucideIcon; labelKey: string }[] = [
 
 export function Settings({
   handshake,
-  section = "general",
+  section: asked = "general",
   onSection,
 }: {
   handshake: Handshake;
@@ -97,6 +97,11 @@ export function Settings({
   const t = useT();
   const { locale } = useI18n();
   const narrow = useIsNarrow();
+  // A section this screen does not have opens the first one. The route is supposed to strip an
+  // unknown `?section=` and something gets through — `?section=voices`, a name from the rail's
+  // links, drew a pane with a heading and nothing under it. Whatever the route does, a screen that
+  // can render blank is a screen that will.
+  const section = SECTIONS.some((one) => one.id === asked) ? asked : "general";
   // One fetch of the model settings for the two sections that show them: split state is how a
   // screen sends a stale translator alongside a fresh provider and undoes half of what was just
   // done. See `settings/llm.ts`.

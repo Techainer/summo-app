@@ -196,15 +196,107 @@ if ((await details.count()) > 0) {
   problems.push("no model card offers its details");
 }
 
-// The two settings sections with something to look at: where recordings are kept, and the
-// translation model — which is now installed from that section rather than pointed at from it.
-for (const [name, section] of [
-  ["settings-translation", "translation"],
-  ["settings-storage", "storage"],
-]) {
+// Every settings section, not the two that were interesting the day this file was written. A rail
+// with eight entries has eight layouts, and the ones nobody photographs are the ones that rot.
+for (const section of ["general", "recording", "ai", "translation", "storage", "about"]) {
   await page.goto(at(`/settings?section=${section}`), { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(1300);
+  await shot(`settings-${section}`);
+}
+
+// The three screens the settings rail indexes rather than contains: they are routes with their own
+// layouts, and nothing had ever photographed them.
+for (const [name, hash] of [
+  ["people", "/people"],
+  ["agents", "/agents"],
+]) {
+  await page.goto(at(hash), { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1400);
   await shot(name);
+}
+
+// A section that does not exist opens the first one rather than a heading with nothing under it.
+await page.goto(at("/settings?section=khong-co-that"), { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+if (!(await page.getByTestId("settings-general").count())) {
+  problems.push("an unknown settings section draws an empty pane");
+}
+
+// ---- 3b. the things that open over a screen rather than replacing it -----
+//
+// A panel, a palette and an editor: none of them are routes, so none of them appeared in a review
+// that walked the sidebar. All three are on the path somebody takes in their first ten minutes.
+await page.goto(at("/"), { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+
+{
+  const ask = page.getByRole("button", { name: "Trợ lý" });
+  if ((await ask.count()) === 0) problems.push("no way to open the assistant");
+  else {
+    await ask.first().click();
+    await page.waitForTimeout(1200);
+    await shot("assistant");
+    // The box you type the question into. The tour card is pinned to the same corner, and during a
+    // first session it sat on top of it — a panel inviting a question with no way to ask one.
+    const box = page.getByPlaceholder(/Hỏi về những buổi đã ghi/);
+    if ((await box.count()) === 0) problems.push("the assistant has no visible question box");
+    else {
+      const covered = await box.first().evaluate((node) => {
+        const { left, top, width, height } = node.getBoundingClientRect();
+        const at = document.elementFromPoint(left + width / 2, top + height / 2);
+        return at === null || !node.contains(at);
+      });
+      if (covered) problems.push("something is drawn on top of the assistant question box");
+    }
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(500);
+  }
+}
+
+{
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.waitForTimeout(800);
+  await shot("palette");
+  await page.keyboard.type("họp");
+  await page.waitForTimeout(900);
+  await shot("palette-typed");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+}
+
+{
+  const write = page.getByRole("button", { name: "Viết" }).first();
+  if ((await write.count()) === 0) problems.push("the home screen offers no way to write a note");
+  else {
+    await write.click();
+    await page.waitForTimeout(2200);
+    // A note, opened. The button said Viết and used to land on an empty notes screen holding
+    // another button called Mới.
+    if (/Chọn một ghi chú, hoặc tạo mới/.test(await page.locator("main").innerText())) {
+      problems.push("pressing Viết opened a screen asking you to press New");
+    }
+    await page.keyboard.type("Ghi chú thử: ngân sách quý sau, và ai chốt.");
+    await page.waitForTimeout(900);
+    await shot("note-typed");
+    // What was typed has to be on screen. An editor that swallows keystrokes is the one failure
+    // here that a screenshot alone would not name.
+    if (!(await page.locator("body").innerText()).includes("ngân sách quý sau")) {
+      problems.push("typing into a new note put nothing on screen");
+    }
+  }
+}
+
+// The import panel, which is the other half of "how does anything get into this app".
+{
+  await page.goto(at("/"), { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1000);
+  const importer = page.getByRole("button", { name: "Nhập file" }).first();
+  if ((await importer.count()) === 0) problems.push("no way to import a recording");
+  else {
+    await importer.click();
+    await page.waitForTimeout(1200);
+    await shot("import");
+  }
 }
 
 // ---- 4. the same app in light ------------------------------------------
@@ -236,6 +328,49 @@ for (const [name, hash] of [
   await page.goto(at(hash), { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1400);
   await shot(name);
+}
+
+// ---- 6. a tablet, and a language that is not the source one --------------
+//
+// 1024px is the width at which the sidebar, a two-column screen and a side panel all want room at
+// once, and English is where a layout tuned on Vietnamese finds out how long its own words are.
+await page.setViewportSize({ width: 1024, height: 800 });
+for (const [name, hash] of [
+  ["tablet-home", "/"],
+  ["tablet-models", "/models"],
+]) {
+  await page.goto(at(hash), { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1400);
+  await shot(name);
+}
+
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.goto(at("/settings?section=general"), { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(1200);
+// Scoped: the header has a language menu with the same label, and it is a button rather than a
+// select, so an unscoped lookup resolved to it and the run died on the wrong element.
+const language = page.getByTestId("settings-general").getByLabel("Ngôn ngữ").first();
+if ((await language.count()) === 0) problems.push("the general settings do not offer a language");
+else {
+  await language.selectOption("en");
+  await page.waitForTimeout(1000);
+  for (const [name, hash] of [
+    ["en-home", "/"],
+    ["en-models", "/models"],
+    ["en-analytics", "/analytics"],
+  ]) {
+    await page.goto(at(hash), { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1400);
+    await shot(name);
+  }
+  // Nothing left in the source language on a screen somebody switched to English. A missing
+  // translation renders as its Vietnamese original, which is how a half-translated app looks.
+  const english = await page.locator("main").innerText();
+  for (const vietnamese of ["Mô hình", "Đã cài", "Cài đặt", "Dung lượng"]) {
+    if (english.includes(vietnamese)) {
+      problems.push(`the English catalogue still says "${vietnamese}"`);
+    }
+  }
 }
 
 await browser.close();

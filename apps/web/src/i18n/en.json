@@ -183,7 +183,7 @@
   },
   "chat": {
     "question": "Question",
-    "placeholder": "What did Ngọc say about the budget?",
+    "placeholder": "Ask anything about what you have recorded.",
     "ask": "Ask",
     "heading": "Ask the vault",
     "searching": "Searching the vault…",
@@ -666,7 +666,7 @@
     "intro": "Ask about anything you have recorded or written, or tell an agent to do something.",
     "mode_ask": "Ask",
     "mode_do": "Do",
-    "ask_placeholder": "What did Ngọc say about the budget?",
+    "ask_placeholder": "Ask about your recordings and notes.",
     "do_placeholder": "Draft the calendar events for the launch…"
   },
   "permissions": {
