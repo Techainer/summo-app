@@ -274,6 +274,28 @@ impl Registry {
         Ok(manifest)
     }
 
+    /// The upstream project's own README, when the registry carries one beside the manifest.
+    ///
+    /// `None` when nothing has one — which is most models, and not a failure: the page is built
+    /// from the manifest and the README is an extra chapter when it exists.
+    pub async fn readme(&self, id: &ModelId) -> Option<String> {
+        self.race(|index| async move {
+            let source = &self.sources[index];
+            let location = match source {
+                RegistrySource::Http(base) => format!("{base}/models/{id}.md"),
+                RegistrySource::Dir(dir) => dir
+                    .join("models")
+                    .join(format!("{id}.md"))
+                    .display()
+                    .to_string(),
+            };
+            self.read(&location, source).await
+        })
+        .await
+        .ok()
+        .filter(|text| !text.trim().is_empty())
+    }
+
     /// Fetch the catalogue from whichever source answers first.
     pub async fn index(&self) -> Result<Index> {
         self.race(|index| async move {

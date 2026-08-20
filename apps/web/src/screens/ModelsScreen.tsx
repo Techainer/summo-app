@@ -2,6 +2,7 @@ import { CloudOff, HardDriveDownload, Package, Trash2 } from "lucide-react";
 import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { Markdown } from "../components/page/Markdown";
 import { Button, Empty, Page, PageGlow, SectionTitle } from "../components/ui";
 import { useT } from "../i18n/context";
 import { cn } from "../lib/cn";
@@ -18,6 +19,7 @@ import { useEngine } from "../lib/engine-context";
 import { useErrorText } from "../lib/errors";
 import { listItem, stagger } from "../lib/motion";
 import { OnboardingClient, POLL_MS, isFinished, percent, type Install } from "../lib/onboarding";
+import { url } from "../lib/library";
 import { useRefresh } from "../lib/use-load";
 
 /**
@@ -212,6 +214,20 @@ function Card({
   // Two clicks, not a dialog. Re-downloading a gigabyte is a real cost, and a modal for it would
   // be one more thing to dismiss on the screen where somebody is tidying up several models.
   const [confirming, setConfirming] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [page, setPage] = useState<string | null>(null);
+  const { handshake } = useEngine();
+
+  // Fetched when it is opened, not with the list: eight model pages, each carrying an upstream
+  // README, is a lot of text to download for a screen most people scroll past.
+  useEffect(() => {
+    if (!open || page !== null) return;
+    fetch(url(handshake, `/models/${encodeURIComponent(model.id)}/page`))
+      .then((r) => r.json())
+      .then((body: { markdown?: string }) => setPage(body.markdown ?? ""))
+      .catch(() => setPage(""));
+  }, [open, page, handshake, model.id]);
+
   const running = job !== undefined && !isFinished(job);
   const done = percent(job ?? ({} as Install));
 
@@ -231,7 +247,21 @@ function Card({
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-body leading-snug font-medium">{model.name}</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-body leading-snug font-medium">{model.name}</h3>
+            {/* State on the title line, where the eye already is: whether this machine has it, and
+                whether it is the one being used. Those were two buttons and a word in three
+                different places on the card. */}
+            {inUse ? (
+              <span className="border-accent/40 text-accent text-micro rounded-full border px-2 py-0.5">
+                {t("models.in_use")}
+              </span>
+            ) : model.installed ? (
+              <span className="border-done/40 text-done text-micro rounded-full border px-2 py-0.5">
+                {t("models.installed")}
+              </span>
+            ) : null}
+          </div>
           <p className="text-fg-faint tabular text-micro mt-0.5">
             {model.id}
             {model.size_bytes > 0 && ` · ${size(model.size_bytes)}`}
@@ -242,18 +272,15 @@ function Card({
             {/* Installed and *chosen* are different states, and conflating them is what made the
                 catalogue decorative: a user could install a Japanese model and record in
                 Vietnamese with no indication of why. */}
-            {inUse ? (
-              <span className="text-accent text-micro font-medium">{t("models.in_use")}</span>
-            ) : (
-              roleFor(model.task) !== null && (
-                <Button size="sm" variant="secondary" onClick={onUse}>
-                  {t("models.use")}
-                </Button>
-              )
-            )}
-            {!inUse && (
-              <span className="text-done text-micro font-medium">{t("models.installed")}</span>
-            )}
+            {inUse
+              ? null
+              : roleFor(model.task) !== null && (
+                  <Button size="sm" variant="secondary" onClick={onUse}>
+                    {t("models.use")}
+                  </Button>
+                )}
+            {/* No second "Đã cài" here: the state chip lives on the title line now, where the eye
+                lands first. Two of them meant the same word twice on one card. */}
             <Button
               size="sm"
               variant={confirming ? "danger" : "ghost"}
@@ -310,6 +337,35 @@ function Card({
           </span>
         ))}
       </div>
+
+      {/* The rest of what a model card owes a reader: measured accuracy, measured speed, memory,
+          checksums, and the publisher's own README. All of it has existed in `summo_models::page`
+          since the registry did — rendered for the CLI and never shown here, so somebody choosing
+          between two models had a name, a size and three chips to do it with. */}
+      <button
+        type="button"
+        onClick={() => setOpen((was) => !was)}
+        aria-expanded={open}
+        className="text-fg-faint hover:text-fg text-micro mt-2 underline"
+      >
+        {open ? t("models.hide_details") : t("models.details")}
+      </button>
+      {open && (
+        <div className="border-line mt-2 border-t pt-2">
+          {page === null ? (
+            <p className="text-fg-faint text-micro">{t("common.loading")}</p>
+          ) : (
+            // From the first section down. The page opens with the model's name, its id and its
+            // description — all three of which are already on the card this is expanding under,
+            // and reading them twice is how a detail view starts to feel like a different screen
+            // that happens to be inside this one.
+            <Markdown
+              markdown={page.slice(Math.max(0, page.indexOf("\n## ")))}
+              className="text-meta"
+            />
+          )}
+        </div>
+      )}
 
       {/* The two facts that cost an afternoon if they turn up at the download instead of here. */}
       {!model.fits && (

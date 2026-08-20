@@ -317,14 +317,14 @@
     "group_hosted": "云端",
     "key_ready": "密钥已设置",
     "key_found": "{name} 已设置。转写文本会发送给这个服务商。",
-    "mt_hint": "翻译可以单独用一个小模型。1B 的翻译模型比通用的 8B 翻得更好，跑在你的 CPU 上，按行也不花钱——所以就算完全没有 API key，翻译照样能用。",
+    "mt_hint": "在本机运行的专用翻译模型，不需要 API key。",
     "mt_enable": "翻译单独用一个模型",
     "mt_endpoint": "在别的地址",
     "mt_model": "翻译模型",
     "mt_run": "用 `llama-server -m milmmt-46-1b.gguf --port 8080` 启动，或者走 Ollama。占磁盘约 800 MB。",
     "mt_where": "运行位置",
     "mt_in_app": "在 Summo 里",
-    "mt_pull": "用 `summo pull small100` 装一次就行，611 MB，不用再跑别的东西。`milmmt-46-1b` 更准，806 MB。",
+    "mt_pull": "安装翻译模型",
     "spoken_heading": "所讲语言",
     "spoken_hint": "所有录音的默认值。仍可在录音栏中按会议更改。",
     "section_general": "通用",
@@ -529,7 +529,7 @@
     "engine_silent": "识别引擎没有响应。Summo 还在运行吗？",
     "unknown": "出错了，但没有给出原因。请重试，或在设置 › 关于中查看日志。",
     "session.no_model": "尚未安装语音模型，无法录制。请在模型页面安装一个。",
-    "session_refused": "无法开始录制。请检查设置 › 录音中的麦克风，以及模型页面中的模型。",
+    "session_refused": "无法开始录音。",
     "session_offline": "无法连接识别引擎。请重启 Summo。",
     "session.no_vad": "未安装语音检测模型，因此不会产生文字。请在模型页面安装 “silero-vad-v5”。"
   },
@@ -611,7 +611,9 @@
     "on_disk": "占用磁盘 {size}",
     "use": "使用",
     "in_use": "使用中",
-    "upstream_who": "发布方"
+    "upstream_who": "发布方",
+    "details": "详情",
+    "hide_details": "收起"
   },
   "home": {
     "heading": "你的工作区",
@@ -802,19 +804,18 @@
     "issue": "报告问题"
   },
   "plan": {
-    "title": "哪个模型负责什么",
-    "subtitle": "依据这台机器实时推算，而非预存表格",
+    "title": "正在使用",
+    "subtitle": "根据本机已安装的内容",
     "speech": "语音识别",
     "translation": "翻译",
     "summaries": "摘要与问答",
     "on_device": "本机",
-    "over_network": "经由网络",
-    "in_app": "应用内模型",
-    "same_as_below": "与下方相同",
-    "none": "暂无",
-    "no_model": "尚未安装语音模型，无法录制。",
+    "over_network": "通过网络",
+    "in_app": "应用内",
+    "same_as_below": "同摘要",
+    "none": "未选择",
+    "no_model": "还没有语音模型，无法开始录音。",
     "wrong_language": "当前模型不支持你选择的语言。请在下方重新选择语言以切换模型，或安装支持该语言的模型。",
-    "better": "本机已装有更适合该语言的模型：{name}（准确率 {accuracy}%）。",
-    "derived": "每次打开都会重新推算，安装或删除模型都会即时反映。"
+    "better": "本机已装有更适合该语言的模型：{name}（准确率 {accuracy}%）。"
   }
 }

@@ -317,14 +317,14 @@
     "group_hosted": "Hosted",
     "key_ready": "key set",
     "key_found": "{name} is set. Transcript text will be sent to this provider.",
-    "mt_hint": "Translation can use a small model of its own. A 1B translation model is better at translating than a general 8B one, runs on your CPU, and costs nothing per line — so translation keeps working even with no API key at all.",
+    "mt_hint": "A dedicated translator that runs on this machine, with no API key.",
     "mt_enable": "Use a separate model for translation",
     "mt_endpoint": "At an endpoint",
     "mt_model": "Translation model",
     "mt_run": "Serve it with `llama-server -m milmmt-46-1b.gguf --port 8080`, or from Ollama. About 800 MB on disk.",
     "mt_where": "Runs",
     "mt_in_app": "In Summo",
-    "mt_pull": "Install it once with `summo pull small100` — 611 MB, and nothing else to run. `milmmt-46-1b` is more accurate at 806 MB.",
+    "mt_pull": "Install a translation model",
     "spoken_heading": "Spoken language",
     "spoken_hint": "The default for every recording. Still changeable per meeting from the record bar.",
     "section_general": "General",
@@ -529,7 +529,7 @@
     "engine_silent": "The recognition engine is not answering. Is Summo still running?",
     "unknown": "Something failed and said nothing about why. Try again, or open Settings › About for the log.",
     "session.no_model": "No speech model is installed yet, so there is nothing to record with. Open Models and install one.",
-    "session_refused": "The recording could not start. Check the microphone in Settings › Recording and the model in Models.",
+    "session_refused": "Recording could not start.",
     "session_offline": "Cannot reach the recognition engine. Try restarting Summo.",
     "session.no_vad": "No voice detector is installed, so nothing ever becomes text. Install “silero-vad-v5” from the Models screen."
   },
@@ -611,7 +611,9 @@
     "on_disk": "{size} on disk",
     "use": "Use",
     "in_use": "In use",
-    "upstream_who": "the publisher"
+    "upstream_who": "the publisher",
+    "details": "Details",
+    "hide_details": "Hide details"
   },
   "home": {
     "heading": "Your workspace",
@@ -802,19 +804,18 @@
     "issue": "Report a problem"
   },
   "plan": {
-    "title": "Which model does what",
-    "subtitle": "worked out from this machine, not a stored table",
+    "title": "What is in use",
+    "subtitle": "based on what is installed here",
     "speech": "Recognition",
     "translation": "Translation",
-    "summaries": "Summaries & answers",
+    "summaries": "Summaries & questions",
     "on_device": "on this machine",
     "over_network": "over the network",
-    "in_app": "a model inside the app",
-    "same_as_below": "same as below",
-    "none": "none yet",
-    "no_model": "No speech model is installed, so there is nothing to record with.",
+    "in_app": "in the app",
+    "same_as_below": "same as summaries",
+    "none": "not chosen",
+    "no_model": "No speech model yet, so recording cannot start.",
     "wrong_language": "The chosen model does not serve the language you picked. Pick the language again below to switch the model, or install one that covers it.",
-    "better": "A better model for this language is already installed: {name} ({accuracy}% accurate).",
-    "derived": "Worked out each time this opens, so installing or removing a model changes it."
+    "better": "A better model for this language is already installed: {name} ({accuracy}% accurate)."
   }
 }
