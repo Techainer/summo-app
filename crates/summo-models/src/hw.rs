@@ -121,6 +121,24 @@ impl HwProfile {
         }
     }
 
+    /// How much memory a model may plan to use.
+    ///
+    /// [`Self::available_ram_mb`] with one rule applied: zero means the platform declined to
+    /// answer, not that the machine has no memory — a process that is executing has memory. A
+    /// 24 GB MacBook reported zero (see [`usable_ram_mb`]), every model was judged too large, and
+    /// the setup screen told the user their language had no models.
+    ///
+    /// Everything that decides something from free memory goes through here, so the rule cannot be
+    /// applied in one place and forgotten in the next.
+    #[must_use]
+    pub fn room_mb(&self) -> u32 {
+        if self.available_ram_mb > 0 {
+            self.available_ram_mb
+        } else {
+            self.total_ram_mb
+        }
+    }
+
     /// Refresh only the volatile part. Cheap enough to call before each model load.
     pub fn refresh_memory(&mut self) {
         let mut sys = sysinfo::System::new();

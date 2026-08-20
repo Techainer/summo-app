@@ -451,13 +451,13 @@ async fn pull(paths: &Paths, id: &str, registry: Option<&str>) -> Result<()> {
     }
 
     let hw = HwProfile::detect();
-    if !manifest.fits_in_ram(hw.available_ram_mb) {
+    if !manifest.fits_in_ram(hw.room_mb()) {
         tracing::warn!(
             needs_mb = manifest
                 .profile
                 .min_ram_mb
                 .max(manifest.profile.rss_mb.peak),
-            available_mb = hw.available_ram_mb,
+            available_mb = hw.room_mb(),
             "this model may not fit in available memory"
         );
     }

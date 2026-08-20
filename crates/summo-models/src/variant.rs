@@ -165,7 +165,7 @@ pub fn choose(manifest: &Manifest, hw: &HwProfile) -> Choice {
         if !fits(manifest, variant, hw) {
             rejected.push(Rejected {
                 variant: name,
-                why: format!("needs more than {} MB free", hw.available_ram_mb),
+                why: format!("needs more than {} MB free", hw.room_mb()),
             });
             continue;
         }
@@ -233,7 +233,10 @@ fn fits(manifest: &Manifest, variant: &Variant, hw: &HwProfile) -> bool {
         None => base,
     };
     // Headroom: a model that exactly fills free memory leaves nothing for the rest of the app.
-    scaled * 1.3 <= hw.available_ram_mb as f32
+    // `room_mb` rather than the raw reading: a machine whose platform reports zero free bytes must
+    // not have every build of every model rejected, which is how the smallest export gets chosen on
+    // a laptop with 24 GB to spare.
+    scaled * 1.3 <= hw.room_mb() as f32
 }
 
 /// Higher is better.
@@ -273,7 +276,7 @@ fn describe(variant: &Variant, hw: &HwProfile) -> String {
     if let Some(precision) = variant.precision {
         parts.push(format!("{precision:?}").to_lowercase());
     }
-    parts.push(format!("{} MB free", hw.available_ram_mb));
+    parts.push(format!("{} MB free", hw.room_mb()));
     parts.join(", ")
 }
 
