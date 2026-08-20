@@ -1,4 +1,4 @@
-import { CloudOff, HardDriveDownload, Package, Trash2 } from "lucide-react";
+import { CloudOff, HardDriveDownload, Package, Search, Trash2 } from "lucide-react";
 import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -12,10 +12,12 @@ import {
   CatalogueClient,
   byTask,
   installedBytes,
+  matches,
   roleFor,
   size,
   tags,
   type CatalogueModel,
+  type Task,
 } from "../lib/catalogue";
 import { useEngine } from "../lib/engine-context";
 import { useErrorText } from "../lib/errors";
@@ -24,6 +26,15 @@ import { OnboardingClient, POLL_MS, isFinished, percent, type Install } from "..
 import { languageName } from "../lib/languages";
 import { url } from "../lib/library";
 import { useRefresh } from "../lib/use-load";
+
+/**
+ * How long the app waits for a model's page before giving up on it.
+ *
+ * The daemon fetches the upstream README to build that page, so this is really a deadline on the
+ * registry — eight seconds is long enough for a slow mirror and short enough that a blocked one is
+ * an answer rather than a spinner somebody watches.
+ */
+const PAGE_TIMEOUT_MS = 8000;
 
 /**
  * Every model, what it is for, and a button.
@@ -61,6 +72,9 @@ export function ModelsScreen() {
   /** Which model fills each role, so the card can say "in use" rather than offering a button. */
   const [chosen, setChosen] = useState<Record<string, string | null>>({});
   const [error, setError] = useState<string | null>(null);
+  /** What was typed into the search box, and which task is being looked at. */
+  const [query, setQuery] = useState("");
+  const [task, setTask] = useState<Task | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -145,13 +159,19 @@ export function ModelsScreen() {
   // Narrowed to one language when the app sent somebody here to solve a specific gap. `*` counts:
   // a multilingual model does serve Japanese, and hiding it would be a filter that lies.
   const wanted = lang?.toLowerCase();
-  const shown = wanted
+  const forLanguage = wanted
     ? models.filter(
         (model) =>
           model.langs.length === 0 ||
           model.langs.some((code) => code === "*" || code.toLowerCase().split("-")[0] === wanted),
       )
     : models;
+  // The task chips describe the shelf as it is, not as the interface imagines it: a registry that
+  // starts publishing denoisers gets a chip for them without a release here.
+  const offered = byTask(forLanguage).map((group) => group.task);
+  const shown = forLanguage.filter(
+    (model) => (task === null || model.task === task) && matches(model, query),
+  );
   const groups = byTask(shown);
 
   return (
@@ -192,8 +212,58 @@ export function ModelsScreen() {
         </p>
       )}
 
+      {/* Search and a task filter, because the catalogue is now long enough to scroll past what you
+          came for. Both narrow the same list the language banner narrows — one row of controls, not
+          a filter panel: there are three axes worth filtering on and two of them fit on a line. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="border-line bg-bg-soft focus-within:border-line-strong flex min-w-[12rem] flex-1 items-center gap-2 rounded-full border px-3 py-1.5 transition-colors">
+          <Search aria-hidden="true" className="text-fg-faint size-3.5 shrink-0" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("models.search")}
+            aria-label={t("models.search")}
+            data-testid="model-search"
+            className="text-meta placeholder:text-fg-faint w-full bg-transparent outline-none"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Chip active={task === null} onClick={() => setTask(null)}>
+            {t("models.all_tasks")}
+          </Chip>
+          {offered.map((each) => (
+            <Chip key={each} active={task === each} onClick={() => setTask(each)}>
+              {t(`models.task_${each.replace("-", "_")}`)}
+            </Chip>
+          ))}
+        </div>
+      </div>
+
       {groups.length === 0 ? (
-        <Empty icon={Package} title={t("models.none")} hint={t("models.offline")} />
+        // Two different empty screens. A catalogue with nothing in it is a connection problem; a
+        // catalogue with nothing *matching* is a typo, and telling somebody the registry is offline
+        // when they have simply mistyped a name sends them to fix the wrong thing.
+        query || task !== null ? (
+          <Empty
+            icon={Search}
+            title={t("models.no_match")}
+            hint={t("models.no_match_hint")}
+            action={
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setQuery("");
+                  setTask(null);
+                }}
+              >
+                {t("models.clear_filters")}
+              </Button>
+            }
+          />
+        ) : (
+          <Empty icon={Package} title={t("models.none")} hint={t("models.offline")} />
+        )
       ) : (
         groups.map((group) => (
           <section key={group.task}>
@@ -227,6 +297,33 @@ export function ModelsScreen() {
   );
 }
 
+/** One filter, pressed or not. A toggle, so it carries `aria-pressed` rather than looking like one. */
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "text-micro rounded-full border px-2.5 py-1 transition-colors",
+        active
+          ? "border-accent/50 bg-accent-soft text-accent"
+          : "border-line text-fg-dim hover:border-line-strong hover:text-fg",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 function Card({
   model,
   job,
@@ -247,18 +344,36 @@ function Card({
   // be one more thing to dismiss on the screen where somebody is tidying up several models.
   const [confirming, setConfirming] = useState(false);
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState<string | null>(null);
+  // Keyed by the language it was fetched in, so switching the interface to English re-fetches the
+  // page in English rather than leaving Vietnamese prose under English headings.
+  const [page, setPage] = useState<{ lang: string; markdown: string } | null>(null);
   const { handshake } = useEngine();
+  const { locale } = useI18n();
 
-  // Fetched when it is opened, not with the list: eight model pages, each carrying an upstream
+  // Fetched when it is opened, not with the list: ten model pages, each carrying an upstream
   // README, is a lot of text to download for a screen most people scroll past.
+  //
+  // On a deadline, because the daemon fetches that README from the registry and a registry it
+  // cannot reach costs it a full connect timeout. Opening the details on a blocked network showed
+  // "Đang tải…" and kept showing it — the one state a spinner must never end in.
   useEffect(() => {
-    if (!open || page !== null) return;
-    fetch(url(handshake, `/models/${encodeURIComponent(model.id)}/page`))
+    if (!open || page?.lang === locale) return undefined;
+    const stop = new AbortController();
+    const deadline = window.setTimeout(() => stop.abort(), PAGE_TIMEOUT_MS);
+    fetch(url(handshake, `/models/${encodeURIComponent(model.id)}/page`, { lang: locale }), {
+      signal: stop.signal,
+    })
       .then((r) => r.json())
-      .then((body: { markdown?: string }) => setPage(body.markdown ?? ""))
-      .catch(() => setPage(""));
-  }, [open, page, handshake, model.id]);
+      .then((body: { markdown?: string }) =>
+        setPage({ lang: locale, markdown: body.markdown ?? "" }),
+      )
+      .catch(() => setPage({ lang: locale, markdown: "" }))
+      .finally(() => window.clearTimeout(deadline));
+    return () => {
+      window.clearTimeout(deadline);
+      stop.abort();
+    };
+  }, [open, page, handshake, model.id, locale]);
 
   const running = job !== undefined && !isFinished(job);
   const done = percent(job ?? ({} as Install));
@@ -386,13 +501,18 @@ function Card({
         <div className="border-line mt-2 border-t pt-2">
           {page === null ? (
             <p className="text-fg-faint text-micro">{t("common.loading")}</p>
+          ) : page.markdown.trim() === "" ? (
+            // The registry could not be reached, or had nothing to add. Either way the card above
+            // holds every fact this machine knows about the model, and saying so beats a blank
+            // panel that looks like a rendering failure.
+            <p className="text-fg-faint text-micro">{t("models.no_details")}</p>
           ) : (
             // From the first section down. The page opens with the model's name, its id and its
             // description — all three of which are already on the card this is expanding under,
             // and reading them twice is how a detail view starts to feel like a different screen
             // that happens to be inside this one.
             <Markdown
-              markdown={page.slice(Math.max(0, page.indexOf("\n## ")))}
+              markdown={page.markdown.slice(Math.max(0, page.markdown.indexOf("\n## ")))}
               className="text-meta"
             />
           )}

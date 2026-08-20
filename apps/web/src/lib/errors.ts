@@ -36,6 +36,20 @@ export interface Failure {
  */
 export const UNKNOWN = "unknown";
 
+/**
+ * Whether two failures are the same event arriving twice.
+ *
+ * A refused recording reaches the screen down two paths — the call that was refused returns one,
+ * and the daemon announces the same refusal on its event stream — so pressing record with no model
+ * installed printed the identical sentence in a banner at the top of the window and along the
+ * status bar at the bottom. Same code, or failing that same text, is the same thing said twice.
+ */
+export function same(a: Failure | null, b: Failure | null): boolean {
+  if (!a || !b) return false;
+  if (a.code && b.code) return a.code === b.code;
+  return a.error === b.error;
+}
+
 /** Pull a failure out of a response body, whatever shape it turned out to be. */
 export function failureFrom(body: unknown, status?: number): Failure {
   if (typeof body === "object" && body !== null) {

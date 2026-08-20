@@ -73,6 +73,42 @@ export function today(): string {
 }
 
 /**
+ * Every day in the report's window, with what was recorded on it.
+ *
+ * The report carries meetings and a list of quiet days, and the screen drew the second of those as
+ * a comma-separated list of dates — "Không họp: 2026-08-14, 2026-08-15, …" — under a screen that
+ * was otherwise empty. The same facts as a row of bars answer the question somebody opened this
+ * screen with, which is when the work happened, and a quiet day is then a gap rather than a
+ * sentence.
+ *
+ * Built from the window rather than from the meetings, so days with nothing on them are rows with a
+ * zero in them and the shape of a week stays honest. Capped: a range wider than `limit` days is not
+ * a strip a person reads, and no range the interface offers reaches it.
+ */
+export function byDay(
+  report: Report,
+  limit = 31,
+): { day: string; seconds: number; count: number }[] {
+  const totals = new Map<string, { seconds: number; count: number }>();
+  for (const meeting of report.meetings) {
+    const at = totals.get(meeting.day) ?? { seconds: 0, count: 0 };
+    at.seconds += meeting.duration;
+    at.count += 1;
+    totals.set(meeting.day, at);
+  }
+
+  const out: { day: string; seconds: number; count: number }[] = [];
+  for (let day = report.from; out.length < limit; day = shiftDay(day, 1)) {
+    out.push({ day, ...(totals.get(day) ?? { seconds: 0, count: 0 }) });
+    if (day === report.to) break;
+    // A malformed window would otherwise walk forever: `shiftDay` returns its input unchanged when
+    // it cannot parse it, so the date would never reach `to`.
+    if (shiftDay(day, 1) === day) break;
+  }
+  return out;
+}
+
+/**
  * Share of the total, as a percentage, for a bar's width.
  *
  * Returns 0 rather than `NaN` when the total is zero, so an empty report renders flat bars instead

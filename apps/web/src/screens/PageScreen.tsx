@@ -453,25 +453,13 @@ export function PageScreen() {
 
           {sections.length === 0 ? (
             <Card>
-              <CardBody className="pt-4 text-center">
+              {/* A column, because these are three separate things stacked and they were laid out
+                  as flowing text: an inline link followed by an inline-flex button put the settings
+                  link and the summarise button on the same line, overlapping, on every meeting with
+                  no summary yet. */}
+              <CardBody className="flex flex-col items-center gap-3 pt-4 text-center">
                 <p className="text-fg-faint">{t("meeting.no_summary_yet")}</p>
-                {/* Where the summariser is configured. "Trí tuệ" was the name of that settings
-                    section, and a user looking for where to point the app at a language model
-                    never found it — reasonably. The link is here because this is the moment
-                    somebody needs it: they pressed summarise. */}
-                <button
-                  type="button"
-                  onClick={() => void navigate({ to: "/settings", search: { section: "ai" } })}
-                  className="text-fg-faint text-micro mt-1 underline"
-                >
-                  {t("meeting.open_ai_settings")}
-                </button>
-                <Button
-                  className="mt-3"
-                  variant="primary"
-                  busy={summarising}
-                  onClick={() => void summarise()}
-                >
+                <Button variant="primary" busy={summarising} onClick={() => void summarise()}>
                   {t("meeting.summarise_now")}
                 </Button>
                 {/* Which shape. Four templates ship and `generate` has always taken one; nothing
@@ -479,7 +467,7 @@ export function PageScreen() {
                     weekly meeting unless the file's tags happened to match. Absent means "let the
                     tags and the title choose", which is the old behaviour and stays the default. */}
                 {shapes.data && shapes.data.length > 1 && (
-                  <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
                     <span className="text-fg-faint text-micro">{t("meeting.summary_shape")}</span>
                     {[{ id: "", name: t("meeting.shape_auto") }, ...shapes.data].map((shape) => (
                       <button
@@ -499,6 +487,17 @@ export function PageScreen() {
                     ))}
                   </div>
                 )}
+                {/* Where the summariser is configured, under the action rather than above it: this
+                    is what somebody reaches for when the button did not give them what they
+                    expected, and "Trí tuệ" was a settings section nobody looking for a language
+                    model ever found. */}
+                <button
+                  type="button"
+                  onClick={() => void navigate({ to: "/settings", search: { section: "ai" } })}
+                  className="text-fg-faint text-micro underline"
+                >
+                  {t("meeting.open_ai_settings")}
+                </button>
               </CardBody>
             </Card>
           ) : (

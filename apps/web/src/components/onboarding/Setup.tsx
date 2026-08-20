@@ -1,4 +1,4 @@
-import { Check, Cpu, Languages, MonitorSmartphone, ShieldCheck } from "lucide-react";
+import { Check, Cpu, Languages, MonitorSmartphone } from "lucide-react";
 import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -272,11 +272,11 @@ export function Setup({ onDone }: { onDone: () => void }) {
             <h1 className="text-display font-semibold tracking-tight text-balance">
               {t("setup.title")}
             </h1>
+            {/* No badge under this. It held the claim that audio never leaves the machine, which
+                stopped being true the moment summaries could go to an endpoint somebody configures
+                — and when that copy was deleted the key went with it while the badge stayed, so the
+                first screen of the app rendered the literal text `setup.local` for two releases. */}
             <p className="text-fg-dim mt-2 text-pretty">{t("setup.promise")}</p>
-            <p className="border-accent/25 bg-accent-soft text-accent text-micro mt-3 inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border px-2.5 py-1 font-medium">
-              <ShieldCheck aria-hidden="true" className="size-3.5" />
-              {t("setup.local")}
-            </p>
           </div>
         </m.header>
 

@@ -14,12 +14,13 @@ import {
   SegmentedControl,
   Ticker,
 } from "../components/ui";
+import { cn } from "../lib/cn";
 import { GENTLE } from "../lib/motion";
 import { useLoad } from "../lib/use-load";
 import { useI18n } from "../i18n/context";
 import { formatDuration } from "../lib/duration";
 import { useEngine } from "../lib/engine-context";
-import { ReportClient, share, shiftDay, today } from "../lib/report";
+import { ReportClient, byDay, share, shiftDay, today } from "../lib/report";
 
 type Range = "day" | "week" | "month";
 
@@ -49,6 +50,7 @@ export function AnalyticsScreen() {
     () => client.between(shiftDay(today(), -DAYS[range]), today()),
     [client, range],
   );
+  const days = useMemo(() => (report ? byDay(report) : []), [report]);
 
   return (
     <Page
@@ -196,16 +198,85 @@ export function AnalyticsScreen() {
             </Card>
           )}
 
+          {/* When the work happened, which is the question this screen was opened with and the one
+              it answered least well: four totals at the top, then several hundred pixels of nothing,
+              then a comma-separated list of the dates with no meetings on them. The same facts as a
+              strip make a quiet day a gap in a shape rather than a sentence to read. */}
+          <Days days={days} locale={locale} label={t("analytics.by_day")} />
+
           {report.quiet_days.length > 0 && (
             <p className="text-fg-faint text-meta">
-              {t("analytics.quiet_days", {
-                days: report.quiet_days.join(", "),
-              })}
+              {t("analytics.quiet_count", { count: report.quiet_days.length })}
             </p>
           )}
         </>
       )}
     </Page>
+  );
+}
+
+/**
+ * One column per day in the window, as tall as the time recorded on it.
+ *
+ * Scaled against the busiest day rather than against the total, because the comparison a person is
+ * making is between days. A day with nothing on it keeps its column — a hairline at the baseline —
+ * so the gaps are part of the shape instead of missing from it.
+ */
+function Days({
+  days,
+  locale,
+  label,
+}: {
+  days: { day: string; seconds: number; count: number }[];
+  locale: string;
+  label: string;
+}) {
+  if (days.length < 2) return null;
+  const peak = Math.max(...days.map((d) => d.seconds));
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: "narrow", timeZone: "UTC" });
+  const full = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" });
+
+  return (
+    <Card>
+      <CardHeader title={label} />
+      <CardBody>
+        <div className="flex h-24 items-end gap-1">
+          {days.map((day) => {
+            const at = new Date(`${day.day}T00:00:00Z`);
+            return (
+              // Capped, and centred in its share of the row. Seven columns stretched across a
+              // wide pane read as blocks rather than bars; the cap keeps the shape the same at
+              // every width the window takes.
+              <div
+                key={day.day}
+                className="flex h-full flex-1 flex-col items-center justify-end gap-1"
+              >
+                <m.div
+                  initial={{ scaleY: 0 }}
+                  animate={{ scaleY: 1 }}
+                  transition={GENTLE}
+                  title={`${full.format(at)} — ${formatDuration(day.seconds, locale, "short")}`}
+                  style={{
+                    // A floor of two pixels: a day with one short meeting on it and a day with
+                    // none must not look the same.
+                    height: peak > 0 ? `${Math.max(2, (day.seconds / peak) * 100)}%` : "2px",
+                  }}
+                  className={cn(
+                    "w-full max-w-8 origin-bottom rounded-sm",
+                    day.seconds > 0 ? "bg-accent" : "bg-line",
+                  )}
+                />
+                {/* Only when they fit. Thirty narrow columns with a letter under each is a row of
+                    noise, and the bars carry the shape on their own. */}
+                {days.length <= 14 && (
+                  <span className="text-fg-faint text-micro text-center">{weekday.format(at)}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardBody>
+    </Card>
   );
 }
 

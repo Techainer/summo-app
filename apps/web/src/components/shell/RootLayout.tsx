@@ -54,7 +54,7 @@ import { inShell, isMac, setShape } from "../../lib/shell";
  */
 const MenuBar = lazy(() => import("./MenuBar").then((m) => ({ default: m.MenuBar })));
 const Shortcuts = lazy(() => import("./Shortcuts").then((m) => ({ default: m.Shortcuts })));
-import { useErrorText } from "../../lib/errors";
+import { same, useErrorText } from "../../lib/errors";
 import * as sidebar from "../../lib/sidebar";
 import { RecordButton } from "../RecordButton";
 import { ListeningIn } from "../record/ListeningIn";
@@ -861,7 +861,12 @@ export function RootLayout({ children }: { children: ReactNode }) {
       <StatusBar
         stat={engine.stat}
         speakers={speakersOf(engine.transcript.segments)}
-        notice={engine.notice ? say(engine.notice) : null}
+        // Not the refusal that is already in the banner above. Both arrive for one press — the
+        // call returns it, and the daemon announces it on the event stream — and the screen said
+        // the same sentence at the top of the window and along the bottom of it.
+        notice={
+          engine.notice && !same(engine.notice, engine.session.error) ? say(engine.notice) : null
+        }
         connection={engine.session.connection}
         device={engine.session.deviceLabel}
         memory={memory}

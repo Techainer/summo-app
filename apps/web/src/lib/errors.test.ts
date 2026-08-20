@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { translator } from "../i18n";
-import { describeError, explain, failureFrom, messageOf } from "./errors";
+import { describeError, explain, failureFrom, messageOf, same } from "./errors";
 
 const t = translator("en", {
   "errors.import.no_audio": "That file has no audio in it.",
@@ -109,5 +109,31 @@ describe("a failure that was never thrown", () => {
   // the last-resort sentence is still a sentence in the reader's language.
   it("still says something readable for something with no message at all", () => {
     expect(describeError({}, t)).toBe("Có gì đó hỏng mà app không đọc được lý do.");
+  });
+});
+
+describe("same", () => {
+  // The banner and the status bar are fed by two paths that both carry one refusal: the call that
+  // was refused, and the daemon announcing it. Pressing record with no model printed the identical
+  // sentence at the top of the window and along the bottom of it.
+  it("matches on the code when both carry one", () => {
+    expect(
+      same({ error: "a", code: "session.no_model" }, { error: "b", code: "session.no_model" }),
+    ).toBe(true);
+    expect(
+      same({ error: "a", code: "session.no_model" }, { error: "a", code: "session.no_vad" }),
+    ).toBe(false);
+  });
+
+  it("falls back to the text when a code is missing", () => {
+    expect(same({ error: "refused" }, { error: "refused" })).toBe(true);
+    expect(same({ error: "refused" }, { error: "something else" })).toBe(false);
+  });
+
+  // Nothing is not the same as nothing: with no banner on screen there is no duplicate to suppress,
+  // and treating two absences as equal would hide the status bar's only message.
+  it("is false when either side is absent", () => {
+    expect(same(null, null)).toBe(false);
+    expect(same({ error: "refused" }, null)).toBe(false);
   });
 });

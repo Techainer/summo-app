@@ -96,6 +96,64 @@ try {
 
   await page.screenshot({ path: "/tmp/shots/models.png", fullPage: true });
 
+  // ---- narrowing a catalogue that is now long enough to need it -----------
+  //
+  // Ten models over seven tasks: "which of these translates" used to be a scroll past everything
+  // else. Search and the task chips narrow the same list, and the state where they match nothing
+  // has to read as a typo rather than as a broken registry — that distinction is the whole reason
+  // the empty state is not shared with the offline one.
+  {
+    const cards = page.locator("article");
+    const search = page.getByTestId("model-search");
+
+    const everything = await cards.count();
+    await search.fill("small100");
+    await page.waitForTimeout(300);
+    const found = await cards.allInnerTexts();
+    // Not "exactly one". The search reads descriptions too, and a translator whose description
+    // compares itself to SMALL100 is a legitimate hit — hiding it would make the box worse. What
+    // has to hold is that every card shown says the word, and that the shelf actually narrowed.
+    if (found.length === 0) fail("searching for a model by its id found nothing");
+    if (found.length >= everything) fail(`searching narrowed nothing: ${found.length} card(s)`);
+    for (const card of found) {
+      if (!card.toLowerCase().includes("small100")) {
+        fail(`a card with no mention of the term was shown: ${card.split("\n")[0]}`);
+      }
+    }
+
+    await search.fill("khong-co-mo-hinh-nao-ten-nhu-vay");
+    await page.waitForTimeout(300);
+    const dead = await page.locator('[data-testid="models"]').innerText();
+    if (!dead.includes("Không có mô hình nào khớp")) {
+      fail("a search that matches nothing does not say so");
+    }
+    if (dead.includes("Không kết nối được kho mô hình")) {
+      fail("a search that matches nothing is reported as an unreachable registry");
+    }
+
+    const screen = page.getByTestId("models");
+    await screen.getByRole("button", { name: "Bỏ bộ lọc", exact: true }).click();
+    await page.waitForTimeout(300);
+    if ((await cards.count()) < 2) fail("clearing the filters did not bring the catalogue back");
+
+    // The task chips. `Dịch` is also a section heading, so this asks for the button specifically.
+    await screen.getByRole("button", { name: "Dịch", exact: true }).click();
+    await page.waitForTimeout(300);
+    const translators = await page.locator('[data-testid="models"]').innerText();
+    if (!translators.includes("small100")) fail("filtering to translation hid the translators");
+    if (translators.includes("silero-vad-v5")) {
+      fail("filtering to translation still shows the voice detector");
+    }
+
+    // Scoped to the catalogue: the folder tree in the sidebar has a "Tất cả" of its own, and an
+    // unscoped selector matched both.
+    await screen.getByRole("button", { name: "Tất cả", exact: true }).click();
+    await page.waitForTimeout(300);
+    if (!(await page.locator('[data-testid="models"]').innerText()).includes("silero-vad-v5")) {
+      fail("going back to every task did not restore the list");
+    }
+  }
+
   // Install, then remove. These are 73 MB to 2.5 GB each and installing the wrong one is the most
   // likely mistake this screen invites, so the way back has to be on it.
   if (!missing.has("silero-vad-v5")) {

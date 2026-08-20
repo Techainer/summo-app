@@ -256,7 +256,8 @@
     "today": "今天",
     "people_count": "{count}人",
     "tasks_count": "{count}项",
-    "quiet_days": "没有会议：{days}"
+    "by_day": "按天",
+    "quiet_count": "有 {count} 天没有记录。"
   },
   "people": {
     "title": "人",
@@ -336,7 +337,8 @@
     "section_about": "关于",
     "general_hint": "界面语言，以及浅色或深色。",
     "recording_hint": "麦克风权限，以及开始录音时使用的语言。",
-    "vault_at": "所有内容都在"
+    "vault_at": "所有内容都在",
+    "mt_ready": "已安装 {model}，可以翻译。"
   },
   "status": {
     "unreachable": "无法连接到本机上的 Summo。",
@@ -529,10 +531,10 @@
     "mic_failed": "无法打开麦克风。",
     "engine_silent": "识别引擎没有响应。Summo 还在运行吗？",
     "unknown": "出错了，但没有给出原因。请重试，或在设置 › 关于中查看日志。",
-    "session.no_model": "尚未安装语音模型，无法录制。请在模型页面安装一个。",
+    "session.no_model": "尚未安装语音识别模型，无法录音。",
     "session_refused": "无法开始录音。",
     "session_offline": "无法连接识别引擎。请重启 Summo。",
-    "session.no_vad": "未安装语音检测模型，因此不会产生文字。请在模型页面安装 “silero-vad-v5”。",
+    "session.no_vad": "尚未安装语音活动检测模型，无法转成文字。",
     "mic_timeout": "无法打开麦克风。检查是否有其他应用正在占用，然后重试。"
   },
   "agents": {
@@ -617,7 +619,13 @@
     "details": "详情",
     "hide_details": "收起",
     "for_language": "{language} 的模型",
-    "show_all": "显示全部"
+    "show_all": "显示全部",
+    "search": "搜索模型",
+    "all_tasks": "全部",
+    "no_match": "没有匹配的模型",
+    "no_match_hint": "换个关键词，或清除筛选查看完整目录。",
+    "clear_filters": "清除筛选",
+    "no_details": "无法从发布方获取更多说明。本机已知的信息见上方。"
   },
   "home": {
     "heading": "你的工作区",
