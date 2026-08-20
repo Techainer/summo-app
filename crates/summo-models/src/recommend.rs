@@ -49,6 +49,10 @@ pub struct Scored {
     pub accuracy: f32,
     /// Human-readable justification, shown next to the recommendation.
     pub reason: String,
+    /// Something to know before installing it, when there is something — "this machine may not have
+    /// the memory to run it". Not a reason to hide the model: see [`recommend`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caution: Option<String>,
 }
 
 /// Why a candidate was excluded.
@@ -98,6 +102,12 @@ impl Scored {
     }
 }
 
+/// How much a model that may not fit in memory is pushed down the list.
+///
+/// Enough that anything comfortable outranks it, small enough that it stays above nothing at all —
+/// which is what the user gets when it is dropped.
+const TIGHT_MEMORY_PENALTY: f32 = 0.5;
+
 /// Rank candidates for a machine and a language.
 ///
 /// `language` is an ISO code; `"*"` in a manifest means the model covers everything.
@@ -123,18 +133,6 @@ pub fn recommend(candidates: &[Manifest], hw: &HwProfile, language: &str) -> Rec
             continue;
         }
 
-        let needed = required_ram_mb(manifest);
-        if needed > 0 && (needed as f32 * RAM_HEADROOM) > hw.available_ram_mb as f32 {
-            rejected.push(Rejected {
-                id: manifest.id.to_string(),
-                reason: format!(
-                    "needs about {needed} MB with headroom, and {} MB is available",
-                    hw.available_ram_mb
-                ),
-            });
-            continue;
-        }
-
         if !hw.supports(&manifest.profile.accel) {
             rejected.push(Rejected {
                 id: manifest.id.to_string(),
@@ -143,7 +141,33 @@ pub fn recommend(candidates: &[Manifest], hw: &HwProfile, language: &str) -> Rec
             continue;
         }
 
-        ranked.push(score(manifest, &hw_key, language));
+        // Memory is a caution, not a veto.
+        //
+        // It used to remove the model from the list, which put a guess about *this minute's* free
+        // memory in charge of whether a download is offered at all — and the guess is not even
+        // reliable: a 24 GB MacBook reported zero available, so the only Vietnamese model in the
+        // catalogue disappeared and the screen said no model covers Vietnamese. Downloading and
+        // running are different acts, minutes or days apart, and the second one is not this
+        // function's decision to make. Ranked lower, labelled, and installable.
+        let needed = required_ram_mb(manifest);
+        // Zero available is what a platform that would not answer looks like; this code is running,
+        // so memory exists. `HwProfile::detect` already falls back — this is the same defence for a
+        // profile that arrived from an older build's settings file or from another machine.
+        let room = if hw.available_ram_mb == 0 {
+            hw.total_ram_mb
+        } else {
+            hw.available_ram_mb
+        };
+        let tight = needed > 0 && room > 0 && (needed as f32 * RAM_HEADROOM) > room as f32;
+
+        let mut scored = score(manifest, &hw_key, language);
+        if tight {
+            scored.score *= TIGHT_MEMORY_PENALTY;
+            scored.caution = Some(format!(
+                "needs about {needed} MB with headroom, and {room} MB is free right now"
+            ));
+        }
+        ranked.push(scored);
     }
 
     ranked.sort_by(|a, b| {
@@ -241,6 +265,7 @@ fn score(manifest: &Manifest, hw_key: &str, language: &str) -> Scored {
         live_capable,
         reason,
         accuracy: accuracy.unwrap_or(0.0),
+        caution: None,
     }
 }
 
@@ -306,6 +331,39 @@ mod tests {
         hw
     }
 
+    /// The user's machine, as their daemon described it.
+    ///
+    /// A profile with `available_ram_mb: 0` used to reject every candidate — including the 800 MB
+    /// Vietnamese model on a 24 GB laptop — and the setup screen then reported it as "no model
+    /// covers this language", which was the sentence the user actually read.
+    #[test]
+    fn a_profile_claiming_no_free_memory_still_ranks_models() {
+        let candidates = vec![manifest(
+            "gipformer-65m",
+            &["vi"],
+            0.021,
+            "wer_fleurs_vi",
+            0.024,
+            800,
+        )];
+        let mut profile = hw(0);
+        profile.total_ram_mb = 24_576;
+        profile.available_ram_mb = 0;
+
+        let ranked = recommend(&candidates, &profile, "vi");
+        assert_eq!(
+            ranked.best().map(|m| m.id.as_str()),
+            Some("gipformer-65m"),
+            "rejected on a 24 GB machine: {:?}",
+            ranked.rejected
+        );
+        assert!(
+            ranked.ranked[0].caution.is_none(),
+            "24 GB is not tight: {:?}",
+            ranked.ranked[0].caution
+        );
+    }
+
     /// The real case: the two models actually measured, ranked for a Vietnamese user.
     #[test]
     fn a_vietnamese_user_is_not_offered_a_model_that_is_bad_at_vietnamese() {
@@ -351,19 +409,22 @@ mod tests {
         assert_eq!(recommend(&candidates, &hw(8000), "en-US").ranked.len(), 1);
     }
 
+    /// A model that may not fit is offered anyway, with the numbers.
+    ///
+    /// It used to be dropped from the list, and the day that mattered was the day a machine
+    /// reported zero free memory: the only Vietnamese model vanished and the screen said the
+    /// language had none. Downloading and running are different acts, minutes or days apart, and
+    /// whether to try is the user's call — the app's job is to say what it knows.
     #[test]
-    fn a_model_that_does_not_fit_is_excluded_with_the_numbers() {
-        // Loading it would push the machine into swap mid-meeting.
+    fn a_model_that_may_not_fit_is_offered_with_the_numbers() {
         let candidates = vec![manifest("huge", &["vi"], 0.05, "wer_fleurs_vi", 0.01, 4000)];
         let out = recommend(&candidates, &hw(2000), "vi");
 
-        assert!(out.ranked.is_empty());
-        assert!(
-            out.rejected[0].reason.contains("4000 MB"),
-            "got: {}",
-            out.rejected[0].reason
-        );
-        assert!(out.rejected[0].reason.contains("2000 MB"));
+        assert_eq!(out.ranked.len(), 1, "a model was hidden over free memory");
+        assert!(out.rejected.is_empty());
+        let caution = out.ranked[0].caution.as_deref().unwrap_or_default();
+        assert!(caution.contains("4000 MB"), "got: {caution}");
+        assert!(caution.contains("2000 MB"), "got: {caution}");
     }
 
     #[test]
@@ -377,8 +438,25 @@ mod tests {
             0.01,
             1500,
         )];
-        assert!(recommend(&candidates, &hw(1600), "vi").ranked.is_empty());
-        assert_eq!(recommend(&candidates, &hw(4000), "vi").ranked.len(), 1);
+        let tight = recommend(&candidates, &hw(1600), "vi");
+        assert_eq!(tight.ranked.len(), 1, "still installable");
+        assert!(tight.ranked[0].caution.is_some(), "and still warned about");
+
+        let roomy = recommend(&candidates, &hw(4000), "vi");
+        assert_eq!(roomy.ranked.len(), 1);
+        assert!(roomy.ranked[0].caution.is_none(), "nothing to warn about");
+
+        // And the warning costs it the top spot when something comfortable is also on offer.
+        let both = vec![
+            manifest("tight", &["vi"], 0.05, "wer_fleurs_vi", 0.01, 1500),
+            manifest("small", &["vi"], 0.06, "wer_fleurs_vi", 0.02, 300),
+        ];
+        assert_eq!(
+            recommend(&both, &hw(1600), "vi")
+                .best()
+                .map(|m| m.id.as_str()),
+            Some("small")
+        );
     }
 
     #[test]

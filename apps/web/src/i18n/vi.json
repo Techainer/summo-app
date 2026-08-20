@@ -438,7 +438,8 @@
     "interface": "Ngôn ngữ giao diện",
     "listing": "Đang lấy danh sách mô hình…",
     "none_for_language": "Chưa có mô hình nào cho ngôn ngữ này. Chọn ngôn ngữ khác ở trên, hoặc dùng một mô hình đa ngôn ngữ.",
-    "retry": "Thử lại"
+    "retry": "Thử lại",
+    "tight_memory": "Máy có thể không đủ bộ nhớ để chạy — vẫn tải và thử được."
   },
   "tour": {
     "title": "Hướng dẫn nhanh",

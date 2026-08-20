@@ -67,6 +67,14 @@ export interface Recommended {
   license?: string | null;
   redistributable?: boolean | null;
   gated?: boolean | null;
+  /**
+   * Something to know before installing, when there is something.
+   *
+   * Today that is only "this machine may not have the memory to run it" — which used to remove the
+   * model from the list entirely, so a machine that misreported its free memory was offered nothing
+   * at all. Downloading and running are different acts, and only the second one needs the memory.
+   */
+  caution?: string | null;
 }
 
 /**

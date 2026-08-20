@@ -110,7 +110,11 @@ impl HwProfile {
             cores,
             logical_cpus,
             total_ram_mb: bytes_to_mb(sys.total_memory()),
-            available_ram_mb: bytes_to_mb(sys.available_memory()),
+            available_ram_mb: usable_ram_mb(
+                bytes_to_mb(sys.total_memory()),
+                bytes_to_mb(sys.available_memory()),
+                bytes_to_mb(sys.used_memory()),
+            ),
             cpu_brand,
             features: CpuFeatures::detect(),
             accel: detect_accel(),
@@ -122,7 +126,11 @@ impl HwProfile {
         let mut sys = sysinfo::System::new();
         sys.refresh_memory();
         self.total_ram_mb = bytes_to_mb(sys.total_memory());
-        self.available_ram_mb = bytes_to_mb(sys.available_memory());
+        self.available_ram_mb = usable_ram_mb(
+            self.total_ram_mb,
+            bytes_to_mb(sys.available_memory()),
+            bytes_to_mb(sys.used_memory()),
+        );
     }
 
     /// Benchmark key for this machine, e.g. `cpu_x86_avx512vnni_8t`.
@@ -158,6 +166,32 @@ impl HwProfile {
     pub fn supports(&self, model_accel: &[Accel]) -> bool {
         model_accel.is_empty() || model_accel.iter().any(|a| self.accel.contains(a))
     }
+}
+
+/// How much memory a model may plan to use, when the operating system's own answer is unusable.
+///
+/// A user on a 24 GB MacBook was told every model was too large: "needs about 1024 MB with headroom,
+/// and 0 MB is available". The total was reported correctly on the same screen. sysinfo computes
+/// macOS availability as `free + inactive + purgeable - compressor_pages`, and a Mac leaning on
+/// memory compression — which is every Mac under load — can have a compressor bigger than that sum.
+/// The subtraction saturates, the answer is zero, and every model in the catalogue is rejected for
+/// not fitting in nothing.
+///
+/// Zero available memory is not a state a running process can observe: this code is executing, so
+/// there is memory. So zero means "the platform did not tell us", and the fallbacks are, in order,
+/// what is left after what is in use, and then the total. An over-estimate here costs a model that
+/// swaps; the under-estimate cost an app that refused to install anything at all.
+fn usable_ram_mb(total_mb: u32, available_mb: u32, used_mb: u32) -> u32 {
+    // Nonsense in the other direction: more available than exists. Seen from container runtimes
+    // that report the host's free pages against a cgroup's total.
+    if available_mb > 0 && available_mb <= total_mb {
+        return available_mb;
+    }
+    if available_mb > total_mb && total_mb > 0 {
+        return total_mb;
+    }
+    let left = total_mb.saturating_sub(used_mb);
+    if left > 0 { left } else { total_mb }
 }
 
 fn bytes_to_mb(bytes: u64) -> u32 {
@@ -222,12 +256,46 @@ fn has_cuda() -> bool {
 mod tests {
     use super::*;
 
+    /// The MacBook that could not install anything.
+    ///
+    /// 24 GB of RAM, correctly reported as the total, and `0` available — sysinfo subtracts the
+    /// compressor from free+inactive+purgeable, and on a Mac under memory pressure the compressor
+    /// wins. Every model in the catalogue was then rejected for not fitting in nothing, and the
+    /// screen told the user their language had no models.
+    #[test]
+    fn a_platform_that_reports_no_free_memory_is_not_believed() {
+        assert_eq!(usable_ram_mb(24_576, 0, 9_000), 15_576, "24 GB, 9 in use");
+        assert_eq!(
+            usable_ram_mb(24_576, 0, 0),
+            24_576,
+            "nothing measured at all: the total is the best guess left"
+        );
+        assert_eq!(
+            usable_ram_mb(24_576, 0, 30_000),
+            24_576,
+            "more in use than exists is also nonsense, and must not underflow to zero"
+        );
+    }
+
+    #[test]
+    fn a_believable_figure_is_used_as_it_is() {
+        assert_eq!(usable_ram_mb(24_576, 12_000, 9_000), 12_000);
+        // A container reporting the host's free pages against the cgroup's total.
+        assert_eq!(usable_ram_mb(4_096, 60_000, 1_000), 4_096);
+    }
+
     #[test]
     fn detect_reports_something_plausible() {
         let hw = HwProfile::detect();
         assert!(hw.cores >= 1);
         assert!(hw.logical_cpus >= hw.cores.min(hw.logical_cpus));
         assert!(hw.total_ram_mb > 0);
+        // The whole point of `usable_ram_mb`: a machine running this test has memory, whatever the
+        // platform's own bookkeeping says.
+        assert!(
+            hw.available_ram_mb > 0,
+            "a running process was told it has no memory available"
+        );
         assert!(
             hw.accel.contains(&Accel::Cpu),
             "cpu must always be a fallback"
