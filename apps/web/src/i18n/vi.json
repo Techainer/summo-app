@@ -72,7 +72,11 @@
     "listening_note": "Đổi ngay giữa buổi, không mất phần đã ghi.",
     "spoken_multi": "Nhiều ngôn ngữ (tự động)",
     "warm_ready": "Sẵn sàng ghi.",
-    "browse_models": "Xem mô hình"
+    "browse_models": "Xem mô hình",
+    "recording_now": "Đang ghi",
+    "elapsed": "Thời gian đã ghi",
+    "listening_hint": "Câu nói xong sẽ hiện ở đây. Cứ nói bình thường.",
+    "open_meeting": "Mở buổi đang ghi"
   },
   "import": {
     "title": "Nhập bản ghi có sẵn",
@@ -625,7 +629,17 @@
     "no_match": "Không có mô hình nào khớp",
     "no_match_hint": "Thử từ khoá khác, hoặc bỏ bộ lọc để xem toàn bộ danh mục.",
     "clear_filters": "Bỏ bộ lọc",
-    "no_details": "Không lấy thêm được mô tả từ nơi phát hành. Những gì máy này biết đã ở trên."
+    "no_details": "Không lấy thêm được mô tả từ nơi phát hành. Những gì máy này biết đã ở trên.",
+    "picked_not_installed": "Đã chọn · chưa tải",
+    "running_title": "Đang chạy trên máy này",
+    "role_asr": "Nhận dạng giọng nói",
+    "role_vad": "Dò giọng nói",
+    "role_speaker": "Nhận diện người nói",
+    "role_translate": "Dịch",
+    "role_missing": "Chưa có",
+    "role_none": "Chưa chọn",
+    "role_endpoint": "Qua {provider}",
+    "running_hint": "Đây là những gì sẽ chạy khi bạn bấm ghi."
   },
   "home": {
     "heading": "Không gian của bạn",

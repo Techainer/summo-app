@@ -72,7 +72,11 @@
     "listening_note": "Changes take effect immediately; nothing already recorded is lost.",
     "spoken_multi": "Several languages (detected)",
     "warm_ready": "Ready to record.",
-    "browse_models": "Browse models"
+    "browse_models": "Browse models",
+    "recording_now": "Recording",
+    "elapsed": "Time recorded",
+    "listening_hint": "Sentences appear here as they finish. Speak normally.",
+    "open_meeting": "Open the running meeting"
   },
   "import": {
     "title": "Import a recording",
@@ -625,7 +629,17 @@
     "no_match": "No models match",
     "no_match_hint": "Try another term, or clear the filters to see the whole catalogue.",
     "clear_filters": "Clear filters",
-    "no_details": "No further description could be fetched from the publisher. What this machine knows is above."
+    "no_details": "No further description could be fetched from the publisher. What this machine knows is above.",
+    "picked_not_installed": "Chosen · not downloaded",
+    "running_title": "Running on this machine",
+    "role_asr": "Speech recognition",
+    "role_vad": "Voice detection",
+    "role_speaker": "Speaker attribution",
+    "role_translate": "Translation",
+    "role_missing": "Missing",
+    "role_none": "Not chosen",
+    "role_endpoint": "Via {provider}",
+    "running_hint": "This is what runs when you press record."
   },
   "home": {
     "heading": "Your workspace",

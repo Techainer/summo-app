@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 
 import { useI18n } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
@@ -35,6 +36,8 @@ import { X } from "lucide-react";
 export function ListeningIn() {
   const { session, retune } = useEngine();
   const { t, locale } = useI18n();
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   // Bumped after a change, to re-read what the daemon now says rather than what this component
@@ -101,6 +104,24 @@ export function ListeningIn() {
 
       {!open ? (
         <>
+          {/* Back to the meeting. A recording survives navigation, so somebody who wandered off to
+              the library while it ran had the red clock in the header — which stops the recording —
+              and no way at all to return to the page the words are landing on. */}
+          {session.meeting && !pathname.startsWith(`/pages/${session.meeting}`) && (
+            <button
+              type="button"
+              data-testid="back-to-meeting"
+              onClick={() =>
+                void navigate({
+                  to: "/pages/$pageId",
+                  params: { pageId: session.meeting as string },
+                })
+              }
+              className="text-accent font-medium underline"
+            >
+              {t("record.open_meeting")}
+            </button>
+          )}
           <button type="button" onClick={() => setOpen(true)} className="font-medium underline">
             {t("record.listening_change")}
           </button>

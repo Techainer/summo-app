@@ -139,7 +139,9 @@ try {
     // The task chips. `Dịch` is also a section heading, so this asks for the button specifically.
     await screen.getByRole("button", { name: "Dịch", exact: true }).click();
     await page.waitForTimeout(300);
-    const translators = await page.locator('[data-testid="models"]').innerText();
+    // The cards, not the whole pane: the panel at the top names every model a recording would use,
+    // including the voice detector, and it is supposed to stay put while the shelf below narrows.
+    const translators = (await cards.allInnerTexts()).join("\n");
     if (!translators.includes("small100")) fail("filtering to translation hid the translators");
     if (translators.includes("silero-vad-v5")) {
       fail("filtering to translation still shows the voice detector");
@@ -149,7 +151,7 @@ try {
     // unscoped selector matched both.
     await screen.getByRole("button", { name: "Tất cả", exact: true }).click();
     await page.waitForTimeout(300);
-    if (!(await page.locator('[data-testid="models"]').innerText()).includes("silero-vad-v5")) {
+    if (!(await cards.allInnerTexts()).join("\n").includes("silero-vad-v5")) {
       fail("going back to every task did not restore the list");
     }
   }

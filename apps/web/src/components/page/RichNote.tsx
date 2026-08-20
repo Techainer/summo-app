@@ -460,8 +460,17 @@ export function RichNote({
       // here rather than by turning `openOnClick` back on, because that would also follow every
       // `https://` in the note into whatever the shell decides to do with it.
       onClick={(event) => {
+        // Clicking the empty space under the last line puts the caret at the end, the way every
+        // page-shaped editor does. Without it a note with one line in it is a page where four
+        // hundred pixels of blank paper do nothing when you click them — which reads, correctly,
+        // as an editor that is not accepting typing.
+        const target = event.target as HTMLElement;
+        if (editor && (target === event.currentTarget || target.dataset.blank === "yes")) {
+          editor.chain().focus("end").run();
+          return;
+        }
         if (!onOpenPage) return;
-        const link = (event.target as HTMLElement).closest?.("a[data-page]");
+        const link = target.closest?.("a[data-page]");
         const href = link?.getAttribute("href") ?? "";
         const page = /^\/pages\/([^/?#]+)/.exec(href)?.[1];
         if (!page) return;
@@ -511,6 +520,10 @@ export function RichNote({
       )}
 
       <EditorContent editor={editor} />
+
+      {/* The rest of the page. A click here lands on the wrapper above and puts the caret at the
+          end; without something to catch it, the blank half of a short note is dead space. */}
+      <div data-blank="yes" aria-hidden="true" className="min-h-24 flex-1 cursor-text" />
 
       {busy && (
         <p role="status" className="text-fg-faint text-micro mt-2">

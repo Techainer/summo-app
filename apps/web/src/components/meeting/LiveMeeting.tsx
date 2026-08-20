@@ -1,9 +1,9 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { m } from "motion/react";
 
-import { Square } from "lucide-react";
-
+import { LiveBar } from "./LiveBar";
 import { Transcript } from "../Transcript";
-import { Button, SectionTitle } from "../ui";
+import { SectionTitle } from "../ui";
 import { useT } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { SAVE_DEBOUNCE_MS } from "../../lib/notes";
@@ -29,7 +29,7 @@ import { SAVE_DEBOUNCE_MS } from "../../lib/notes";
 const RichNote = lazy(() => import("../page/RichNote").then((m) => ({ default: m.RichNote })));
 
 export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
-  const { transcript, notes, stop } = useEngine();
+  const { transcript, notes } = useEngine();
   const t = useT();
 
   const [text, setText] = useState(initialNotes);
@@ -63,47 +63,84 @@ export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
   );
 
   return (
-    <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
-      <section className="flex min-h-0 flex-col gap-2.5">
-        <SectionTitle>{t("meeting.your_notes")}</SectionTitle>
-        <div className="border-line bg-bg-raised rounded-card min-h-0 flex-1 overflow-y-auto border shadow-[var(--shadow-card)]">
-          {plain ? (
-            // The same fallback a note has: an editor that cannot hold something without changing
-            // it hands the text back as text rather than quietly rewriting it.
-            <textarea
-              aria-label={t("meeting.your_notes")}
-              value={text}
-              onChange={(e) => edit(e.target.value)}
-              className="h-full w-full resize-none bg-transparent p-4 font-mono text-[13px] outline-none"
-            />
-          ) : (
-            <Suspense fallback={null}>
-              <RichNote
-                markdown={text}
-                onChange={edit}
-                onUnsupported={() => setPlain(true)}
-                className="p-4"
-              />
-            </Suspense>
-          )}
-        </div>
-      </section>
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      {/* Across both columns, above everything. Whether this is recording is the question the
+          screen exists to answer, and it was being answered by a pill in the window header. */}
+      <LiveBar />
 
-      <section className="flex min-h-0 flex-col gap-2.5">
-        <div className="flex items-center justify-between gap-3">
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
+        <section className="flex min-h-0 flex-col gap-2.5">
+          <SectionTitle>{t("meeting.your_notes")}</SectionTitle>
+          <div className="border-line bg-bg-raised rounded-card min-h-0 flex-1 overflow-y-auto border shadow-[var(--shadow-card)]">
+            {plain ? (
+              // The same fallback a note has: an editor that cannot hold something without changing
+              // it hands the text back as text rather than quietly rewriting it.
+              <textarea
+                aria-label={t("meeting.your_notes")}
+                value={text}
+                onChange={(e) => edit(e.target.value)}
+                className="h-full w-full resize-none bg-transparent p-4 font-mono text-[13px] outline-none"
+              />
+            ) : (
+              <Suspense fallback={null}>
+                <RichNote
+                  markdown={text}
+                  onChange={edit}
+                  onUnsupported={() => setPlain(true)}
+                  className="p-4"
+                />
+              </Suspense>
+            )}
+          </div>
+        </section>
+
+        <section className="flex min-h-0 flex-col gap-2.5">
           <SectionTitle>{t("meeting.transcript")}</SectionTitle>
-          {/* Stopping, spelled out. The only way to end a meeting was the red pill in the header
-              that shows the elapsed time — a control somebody has to guess at, on the one screen
-              where they know exactly what they want to do next. */}
-          <Button size="sm" variant="danger" onClick={stop}>
-            <Square aria-hidden="true" className="me-1.5 size-3" />
-            {t("record.stop")}
-          </Button>
-        </div>
-        <div className="min-h-0 flex-1">
-          <Transcript segments={transcript.segments} />
-        </div>
-      </section>
+          <div className="min-h-0 flex-1">
+            {transcript.segments.length === 0 ? (
+              <Listening />
+            ) : (
+              <Transcript segments={transcript.segments} live />
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The transcript before the first sentence lands.
+ *
+ * Two to six seconds of a blank panel, which is exactly the window in which somebody decides the
+ * app is broken — and on a quiet room it lasts as long as the quiet does. The words say what is
+ * being waited for; the moving bars say the waiting is the app's and not the screen's.
+ */
+function Listening() {
+  const t = useT();
+  return (
+    <div className="border-line bg-bg-raised rounded-card flex h-full flex-col items-center justify-center gap-3 border px-6 text-center">
+      <span aria-hidden="true" className="flex items-end gap-1">
+        {[0, 1, 2, 3, 4].map((bar) => (
+          <m.i
+            key={bar}
+            className="bg-accent/70 block w-1 rounded-full"
+            initial={{ height: 8 }}
+            animate={{ height: [8, 22, 8] }}
+            transition={{
+              duration: 1.1,
+              repeat: Infinity,
+              ease: "easeInOut",
+              // Staggered, so it reads as a level meter rather than five bars blinking together.
+              delay: bar * 0.12,
+            }}
+          />
+        ))}
+      </span>
+      <p className="text-fg-dim text-meta">{t("record.listening")}</p>
+      <p className="text-fg-faint text-micro max-w-xs leading-relaxed">
+        {t("record.listening_hint")}
+      </p>
     </div>
   );
 }

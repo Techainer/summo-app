@@ -22,8 +22,17 @@ import type { Event } from "../lib/protocol";
  */
 export function Transcript({
   segments,
+  live = false,
 }: {
   segments: Segment[];
+  /**
+   * Whether words are still arriving.
+   *
+   * Draws the rail's open end: a pulsing tip under the last line, which is the difference between
+   * "this is the whole meeting" and "this is the meeting so far". A finished transcript ends; a
+   * running one is waiting for the next sentence, and the timeline should look like it.
+   */
+  live?: boolean;
   onEvent?: (event: Event) => void;
 }) {
   // Not compiled by the React Compiler, deliberately.
@@ -121,9 +130,16 @@ export function Transcript({
                   </p>
                 )}
 
+                {/* A timeline rather than a list of paragraphs.
+
+                    Time on the left, a rule down the middle, and a dot where a speaker takes over:
+                    the shape says "this happened over a period" before a word of it is read, and it
+                    gives the eye a column to travel down instead of a wall of text. The rule is
+                    drawn per row rather than once behind them all because the rows are virtualised
+                    — there is no element that spans the list to hang a line on. */}
                 {showSpeaker && (
-                  <div className="flex items-center gap-2.5">
-                    <span className="tabular text-fg-faint text-meta">
+                  <div className="mb-1 flex items-center gap-2.5">
+                    <span className="tabular text-fg-faint text-micro w-11 shrink-0 text-end">
                       {formatTime(segment.t0)}
                     </span>
                     <Avatar name={speaker} size="sm" />
@@ -146,9 +162,24 @@ export function Transcript({
                     meeting appears to have been. The rule is indented and tied to the line above
                     it, and it says so in words for anyone who cannot see the rule. */}
                 <div
-                  className={cn(overlapping && "border-accent/40 -mt-0.5 border-l-2 ps-2.5")}
+                  className={cn(
+                    // The rail: every row hangs off the same line, indented past the time column.
+                    "border-line relative ms-[52px] border-s ps-4",
+                    overlapping && "border-accent/40 border-s-2",
+                  )}
                   data-overlapping={overlapping || undefined}
                 >
+                  {/* The dot sits on the rail at the moment somebody starts talking. `ring` in the
+                      page colour punches it out of the line rather than drawing it over the top. */}
+                  {showSpeaker && (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "ring-bg-raised absolute -start-[4.5px] top-[0.55em] size-2 rounded-full ring-4",
+                        segment.lane === "mic" ? "bg-accent" : "bg-fg-faint",
+                      )}
+                    />
+                  )}
                   {overlapping && (
                     <p className="text-fg-faint text-micro mb-0.5">
                       {t("transcript.at_the_same_time")}
@@ -198,6 +229,17 @@ export function Transcript({
             );
           })}
         </div>
+        {/* The open end of the rail. Under the last line, on the same column as the dots, so the
+            timeline visibly continues rather than stopping at whatever was said last. */}
+        {live && (
+          <div className="ms-[52px] flex items-center gap-2.5 ps-0" data-testid="transcript-live">
+            <span aria-hidden="true" className="relative flex size-2 shrink-0">
+              <span className="bg-rec absolute inline-flex size-2 rounded-full" />
+              <span className="bg-rec/60 absolute inline-flex size-2 rounded-full motion-safe:animate-ping" />
+            </span>
+            <span className="text-fg-faint text-micro">{t("record.listening")}</span>
+          </div>
+        )}
       </div>
 
       {/* Only while the user is reading something older. It is both the way back and the only
