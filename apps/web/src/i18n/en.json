@@ -81,7 +81,7 @@
     "path_placeholder": "/path/to/file.mp4",
     "browse": "Choose file",
     "submit": "Import",
-    "no_dialog": "Could not open a file dialog — paste a path below instead.",
+    "no_dialog": "The file dialog could not open. Paste a path into the field instead.",
     "file_filter": "Audio & video",
     "open_meeting": "Open recording",
     "progress_label": "Import progress for {title}",
@@ -99,7 +99,7 @@
     "transcript": "Transcript",
     "summary": "Summary",
     "no_summary": "Not summarised",
-    "task_not_tickable": "This line has no task id, so it cannot be ticked here. Use the Tasks board.",
+    "task_not_tickable": "This line has no task id yet, so it cannot be ticked. Open the Tasks tab to manage it.",
     "not_summarised_suffix": " · not summarised",
     "play": "Play",
     "pause": "Pause",
@@ -141,7 +141,7 @@
     "you": "You",
     "revised_one": "{count} revision",
     "revised_other": "{count} revisions",
-    "select_hint": "Select a passage to change just that part, or write below to change the whole thing.",
+    "select_hint": "Select a passage to edit just that, or send a message to revise the whole thing.",
     "revising": "Changing in {heading}:",
     "apply": "Apply",
     "cancel": "Cancel",
@@ -179,7 +179,7 @@
     "due_overdue": "{date} — overdue",
     "due_on": "due {date}",
     "board_empty": "Nothing to do",
-    "board_empty_hint": "Tasks arrive here when somebody takes one on in a meeting, or when you type a “- [ ] @name …” line in a note."
+    "board_empty_hint": "Tasks appear when somebody takes one in a meeting, or when you type “- [ ] @name …” in a note."
   },
   "chat": {
     "question": "Question",
@@ -388,16 +388,16 @@
     "start": "Start",
     "skip": "Later",
     "fix": "Fix this",
-    "spoken_hint": "It decides which models are suggested below.",
+    "spoken_hint": "It decides which models are suggested.",
     "permission": "Allow the microphone",
     "reason_fast": "{accuracy}% accurate, {times}× faster than real time on this machine",
-    "reason_slow": "Too slow for live text here (real-time factor {rtf}); usable for re-transcribing a recording afterwards",
+    "reason_slow": "Too slow for live text (real-time factor {rtf}); still fine for re-running a recording afterwards",
     "reason_unmeasured": "{accuracy}% accurate, but never measured on hardware like this",
     "reason_unknown": "No measurements available for this machine",
     "language": "Language",
     "interface": "Interface language",
     "listing": "Fetching the model list…",
-    "none_for_language": "No model covers this language yet. Pick another language above, or use a multilingual model.",
+    "none_for_language": "No model covers this language. Choose another language, or use a multilingual model.",
     "retry": "Try again",
     "tight_memory": "This machine may not have the memory for it."
   },
@@ -583,7 +583,7 @@
   "empty": {
     "column": "Nothing here",
     "agenda": "No calendars yet",
-    "agenda_hint": "Export an .ics from Google Calendar or Fastmail and add it above. Summo never records on its own — it only uses this to name a meeting."
+    "agenda_hint": "Add a calendar by its .ics address. Summo uses it for names and reminders, and never records on its own."
   },
   "transcript": {
     "pause": "{seconds}s of silence",
@@ -641,7 +641,7 @@
     "recording_now": "Recording",
     "shortcut_hint": "⌘K to search or jump anywhere",
     "first_title": "Hello",
-    "first_hint": "Nothing here yet. Record something — even a minute of talking — and see what Summo does with it."
+    "first_hint": "Record something, and see what Summo does with it."
   },
   "palette": {
     "title": "Search everything",
@@ -808,18 +808,18 @@
     "issue": "Report a problem"
   },
   "plan": {
-    "title": "What is in use",
-    "subtitle": "based on what is installed here",
-    "speech": "Recognition",
+    "title": "Models",
+    "subtitle": "status on this machine",
+    "speech": "Speech recognition",
     "translation": "Translation",
     "summaries": "Summaries & questions",
     "on_device": "on this machine",
     "over_network": "over the network",
     "in_app": "in the app",
-    "same_as_below": "same as summaries",
-    "none": "not chosen",
+    "same_as_below": "uses the summary model",
+    "none": "not selected",
     "no_model": "No speech model yet, so recording cannot start.",
-    "wrong_language": "The chosen model does not serve the language you picked. Pick the language again below to switch the model, or install one that covers it.",
+    "wrong_language": "The chosen model does not serve the chosen language. Change the language, or install a model that does.",
     "better": "A better model for this language is already installed: {name} ({accuracy}% accurate).",
     "detector": "Voice detection",
     "speakers": "Speaker attribution",
