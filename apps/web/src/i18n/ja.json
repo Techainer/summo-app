@@ -115,7 +115,8 @@
     "shape_auto": "おまかせ",
     "play_from": "{time}から再生",
     "no_transcript": "まだ何も話されていません。",
-    "your_notes": "あなたのメモ"
+    "your_notes": "あなたのメモ",
+    "open_ai_settings": "AI 設定"
   },
   "export": {
     "title": "書き出しと翻訳",
@@ -247,7 +248,7 @@
     "meetings": "会議",
     "unsummarised": "要約なし",
     "open_tasks": "未完了タスク",
-    "empty": "この期間に会議はありません。",
+    "empty": "最初の録音のあとに数字が出ます。",
     "empty_hint": "録音するか、期間を広げてください。",
     "days_7": "7日間",
     "days_30": "30日間",
@@ -328,7 +329,7 @@
     "spoken_hint": "すべての録音の既定値です。録音バーで会議ごとに変更できます。",
     "section_general": "一般",
     "section_recording": "録音",
-    "section_ai": "AI",
+    "section_ai": "要約と AI",
     "section_translation": "翻訳",
     "section_storage": "ストレージ",
     "section_about": "情報",
@@ -476,7 +477,7 @@
   },
   "agenda": {
     "title": "カレンダー",
-    "hint": "カレンダーのアドレスを購読すると自動で最新になります。.ics ファイルの追加も可能です。予定に従って自動録音はしません — 声をかけ、議事録に名前を付けるだけです。",
+    "hint": "カレンダーを登録すると、会議に名前と時刻が入ります。",
     "name_placeholder": "カレンダー名",
     "name_label": "カレンダー名",
     "add": "追加",

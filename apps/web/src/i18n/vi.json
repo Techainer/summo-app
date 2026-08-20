@@ -115,7 +115,8 @@
     "shape_auto": "Tự chọn",
     "play_from": "Nghe từ {time}",
     "no_transcript": "Chưa có ai nói gì.",
-    "your_notes": "Ghi chú của bạn"
+    "your_notes": "Ghi chú của bạn",
+    "open_ai_settings": "Cài đặt AI"
   },
   "export": {
     "title": "Xuất & dịch",
@@ -247,7 +248,7 @@
     "meetings": "Buổi họp",
     "unsummarised": "Chưa tóm tắt",
     "open_tasks": "Việc còn treo",
-    "empty": "Không có buổi họp nào trong khoảng này.",
+    "empty": "Thống kê hiện ra sau buổi ghi đầu tiên.",
     "empty_hint": "Ghi một buổi, hoặc chọn khoảng thời gian rộng hơn.",
     "days_7": "7 ngày",
     "days_30": "30 ngày",
@@ -328,7 +329,7 @@
     "spoken_hint": "Mặc định cho mọi buổi ghi. Vẫn đổi được cho từng buổi ở thanh ghi.",
     "section_general": "Chung",
     "section_recording": "Ghi âm",
-    "section_ai": "Trí tuệ",
+    "section_ai": "Tóm tắt & AI",
     "section_translation": "Dịch",
     "section_storage": "Dung lượng",
     "section_about": "Giới thiệu",
@@ -476,7 +477,7 @@
   },
   "agenda": {
     "title": "Lịch",
-    "hint": "Đăng ký bằng địa chỉ lịch để tự cập nhật, hoặc thêm file .ics. Summo không tự ghi âm theo lịch — chỉ nhắc và đặt tên cho biên bản.",
+    "hint": "Đăng ký lịch để buổi họp có sẵn tên và giờ.",
     "name_placeholder": "tên lịch",
     "name_label": "Tên lịch",
     "add": "Thêm",

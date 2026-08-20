@@ -115,7 +115,8 @@
     "shape_auto": "自动选择",
     "play_from": "从{time}播放",
     "no_transcript": "还没有人说话。",
-    "your_notes": "你的笔记"
+    "your_notes": "你的笔记",
+    "open_ai_settings": "AI 设置"
   },
   "export": {
     "title": "导出与翻译",
@@ -247,7 +248,7 @@
     "meetings": "会议",
     "unsummarised": "未生成摘要",
     "open_tasks": "未完成任务",
-    "empty": "这段时间没有会议。",
+    "empty": "第一次录音之后就会出现数字。",
     "empty_hint": "录制一次，或扩大时间范围。",
     "days_7": "7天",
     "days_30": "30天",
@@ -328,7 +329,7 @@
     "spoken_hint": "所有录音的默认值。仍可在录音栏中按会议更改。",
     "section_general": "通用",
     "section_recording": "录音",
-    "section_ai": "智能",
+    "section_ai": "摘要与 AI",
     "section_translation": "翻译",
     "section_storage": "存储",
     "section_about": "关于",
@@ -476,7 +477,7 @@
   },
   "agenda": {
     "title": "日历",
-    "hint": "用日历地址订阅即可自动更新，也可以添加 .ics 文件。Summo 不会按日程自动录音 — 只会提醒，并为记录取名。",
+    "hint": "订阅日历后，会议会自动带上名称和时间。",
     "name_placeholder": "日历名称",
     "name_label": "日历名称",
     "add": "添加",

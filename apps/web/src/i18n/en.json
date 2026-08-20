@@ -115,7 +115,8 @@
     "shape_auto": "Choose for me",
     "play_from": "Play from {time}",
     "no_transcript": "Nothing was said yet.",
-    "your_notes": "Your notes"
+    "your_notes": "Your notes",
+    "open_ai_settings": "AI settings"
   },
   "export": {
     "title": "Export & translate",
@@ -247,7 +248,7 @@
     "meetings": "Meetings",
     "unsummarised": "Not summarised",
     "open_tasks": "Open tasks",
-    "empty": "No meetings in this range.",
+    "empty": "The numbers appear after your first recording.",
     "empty_hint": "Record something, or widen the range.",
     "days_7": "7 days",
     "days_30": "30 days",
@@ -328,7 +329,7 @@
     "spoken_hint": "The default for every recording. Still changeable per meeting from the record bar.",
     "section_general": "General",
     "section_recording": "Recording",
-    "section_ai": "Intelligence",
+    "section_ai": "Summaries & AI",
     "section_translation": "Translation",
     "section_storage": "Storage",
     "section_about": "About",
@@ -476,7 +477,7 @@
   },
   "agenda": {
     "title": "Calendar",
-    "hint": "Subscribe with a calendar address to keep it current, or add an .ics file. Summo never records on a schedule — it only prompts, and titles the notes.",
+    "hint": "Subscribe to a calendar so meetings arrive already named.",
     "name_placeholder": "calendar name",
     "name_label": "Calendar name",
     "add": "Add",

@@ -455,6 +455,17 @@ export function PageScreen() {
             <Card>
               <CardBody className="pt-4 text-center">
                 <p className="text-fg-faint">{t("meeting.no_summary_yet")}</p>
+                {/* Where the summariser is configured. "Trí tuệ" was the name of that settings
+                    section, and a user looking for where to point the app at a language model
+                    never found it — reasonably. The link is here because this is the moment
+                    somebody needs it: they pressed summarise. */}
+                <button
+                  type="button"
+                  onClick={() => void navigate({ to: "/settings", search: { section: "ai" } })}
+                  className="text-fg-faint text-micro mt-1 underline"
+                >
+                  {t("meeting.open_ai_settings")}
+                </button>
                 <Button
                   className="mt-3"
                   variant="primary"

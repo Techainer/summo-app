@@ -1,7 +1,9 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 
+import { Square } from "lucide-react";
+
 import { Transcript } from "../Transcript";
-import { SectionTitle } from "../ui";
+import { Button, SectionTitle } from "../ui";
 import { useT } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { SAVE_DEBOUNCE_MS } from "../../lib/notes";
@@ -27,7 +29,7 @@ import { SAVE_DEBOUNCE_MS } from "../../lib/notes";
 const RichNote = lazy(() => import("../page/RichNote").then((m) => ({ default: m.RichNote })));
 
 export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
-  const { transcript, notes } = useEngine();
+  const { transcript, notes, stop } = useEngine();
   const t = useT();
 
   const [text, setText] = useState(initialNotes);
@@ -88,7 +90,16 @@ export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
       </section>
 
       <section className="flex min-h-0 flex-col gap-2.5">
-        <SectionTitle>{t("meeting.transcript")}</SectionTitle>
+        <div className="flex items-center justify-between gap-3">
+          <SectionTitle>{t("meeting.transcript")}</SectionTitle>
+          {/* Stopping, spelled out. The only way to end a meeting was the red pill in the header
+              that shows the elapsed time — a control somebody has to guess at, on the one screen
+              where they know exactly what they want to do next. */}
+          <Button size="sm" variant="danger" onClick={stop}>
+            <Square aria-hidden="true" className="me-1.5 size-3" />
+            {t("record.stop")}
+          </Button>
+        </div>
         <div className="min-h-0 flex-1">
           <Transcript segments={transcript.segments} />
         </div>
