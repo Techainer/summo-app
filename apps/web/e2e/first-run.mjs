@@ -118,7 +118,11 @@ const heading = await page.locator("h1").first().innerText();
 if (!/welcome/i.test(heading)) fail(`expected a welcome screen, got ${JSON.stringify(heading)}`);
 
 const setupText = await page.locator("main").innerText();
-if (!/never leaves/i.test(setupText)) fail("setup did not say the audio never leaves the machine");
+// The claim this used to check for is gone from the app. "Audio never leaves this machine" is not
+// true once the summariser points at a hosted API — which this app lets you do — and a promise the
+// product cannot keep has no business being the first sentence a new user reads. What setup owes
+// them is the question it needs answered.
+if (!/interface language/i.test(setupText)) fail("setup did not ask which language to read in");
 
 // Setup has to say where recognition stands, and there are two honest answers — but only one of
 // them is right for the binary under test, and this used to accept either.
