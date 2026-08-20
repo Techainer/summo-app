@@ -141,13 +141,22 @@ impl SessionRunner {
 
         // Only the remote lane is clustered. The microphone lane is the local user by construction,
         // so embedding it could only ever discover one speaker at real cost.
-        let diarizer = if spec.diarize {
-            Some(Diarizer {
-                embedder: SpeakerEmbedder::load(resolve_speaker_model(store)?, 1)?,
+        // Asked for, and skipped when the model for it is not installed.
+        //
+        // `?` here refused the entire session: turning on system audio sets `diarize`, diarization
+        // needs a speaker-embedding model nobody has installed, and the whole recording failed —
+        // with a message about a model the user never asked for. Telling apart two voices is a
+        // nice-to-have on top of a recording; a recording is not a nice-to-have on top of it.
+        let diarizer = match spec.diarize.then(|| resolve_speaker_model(store)) {
+            Some(Ok(model)) => Some(Diarizer {
+                embedder: SpeakerEmbedder::load(model, 1)?,
                 clusterer: OnlineClusterer::new(ClusterConfig::default()),
-            })
-        } else {
-            None
+            }),
+            Some(Err(e)) => {
+                tracing::warn!(error = %e, "recording without speaker attribution");
+                None
+            }
+            None => None,
         };
 
         Ok(Self { lanes, diarizer })

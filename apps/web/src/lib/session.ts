@@ -50,6 +50,14 @@ export interface SessionState {
 
 export const NARROWBAND_HZ = 16000;
 
+/**
+ * How long the microphone gets to open before the attempt is abandoned.
+ *
+ * Long enough for a cold audio subsystem and a permission prompt somebody has to read; short
+ * enough that "nothing is happening" becomes a sentence on screen rather than a state of mind.
+ */
+const MICROPHONE_TIMEOUT_MS = 8000;
+
 export class Session {
   private client: EngineClient | null = null;
   private microphone: Microphone | null = null;
@@ -138,7 +146,17 @@ export class Session {
     });
 
     try {
-      await this.microphone.start();
+      // With a deadline. `getUserMedia` and `audioWorklet.addModule` can both hang rather than
+      // fail — a device the operating system is still deciding about, a worklet that never
+      // arrives — and the daemon has already been told to start. Without this the app sat there
+      // showing nothing at all while a recording ran on the other side of the socket: no clock, no
+      // button, no error, and a meeting file quietly filling up.
+      await Promise.race([
+        this.microphone.start(),
+        new Promise((_, reject) =>
+          window.setTimeout(() => reject(new Error("microphone_timeout")), MICROPHONE_TIMEOUT_MS),
+        ),
+      ]);
     } catch (error) {
       this.update({ error: explainMicrophoneError(error) });
       this.client.send({ cmd: "session_stop" });
