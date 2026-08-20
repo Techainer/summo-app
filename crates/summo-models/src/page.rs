@@ -22,13 +22,119 @@
 
 use crate::{Manifest, Task};
 
-/// Render one model's page as Markdown.
+/// The words around the numbers, in one language.
+///
+/// The numbers, the checksums and the upstream README are the same in every language; the sentences
+/// that introduce them are not. This page is read inside the app — a Vietnamese app, mostly — and it
+/// was English throughout, so somebody comparing two models was reading "Where this comes from"
+/// under a Vietnamese heading that said Chi tiết.
+///
+/// Fixed strings rather than a translation framework: there are fifteen of them, they change when
+/// this file changes, and a `.json` catalogue two crates away is how they would drift apart.
+pub struct Words {
+    pub facts: [&'static str; 6],
+    pub any_language: &'static str,
+    pub provenance: &'static str,
+    pub published_by: &'static str,
+    pub no_author: &'static str,
+    pub gated: &'static str,
+    pub mirrored: &'static str,
+    pub not_mirrored: &'static str,
+    pub cost: &'static str,
+    pub memory: &'static str,
+    pub no_rtf: &'static str,
+    pub rtf: &'static str,
+    pub rtf_head: [&'static str; 2],
+    pub accuracy: &'static str,
+    pub accuracy_head: [&'static str; 2],
+    pub accel: &'static str,
+    pub files: &'static str,
+    pub files_head: [&'static str; 3],
+    pub readme: &'static str,
+    pub readme_note: &'static str,
+}
+
+/// English, which is what the CLI and the generated documentation use.
+pub const EN: Words = Words {
+    facts: ["Task", "Mode", "Languages", "Size", "Licence", "Runtime"],
+    any_language: "any",
+    provenance: "Where this comes from",
+    published_by: "Published by",
+    no_author: "The manifest names no upstream author, which is a gap in the registry rather than a claim that Summo made this.",
+    gated: "**Gated.** The publisher serves these files only after you have accepted their terms on their own site. Summo will ask for an access token and send it to that host and nowhere else.",
+    mirrored: "Redistributable under its licence, so Summo mirrors it. The checksums below are what you should get from either source.",
+    not_mirrored: "**Not redistributed by Summo.** The download goes to the original host under that project's own terms. Summo is the software that can load the file; it is not the distributor of it.",
+    cost: "What it costs",
+    memory: "Memory: about {idle} MB resident, {peak} MB at peak. Needs at least {min} MB free.",
+    no_rtf: "Nobody has measured how fast this runs yet, and the registry says so rather than guessing.",
+    rtf: "Real-time factor, measured — below 1.0 keeps up with live audio:",
+    rtf_head: ["Machine", "RTF"],
+    accuracy: "Accuracy, measured — word error rate, lower is better:",
+    accuracy_head: ["Benchmark", "Score"],
+    accel: "Accelerators",
+    files: "Files",
+    files_head: ["Name", "Size", "sha256"],
+    readme: "From the publisher",
+    readme_note: "Reproduced verbatim from the project that published these weights. Summo did not write it and has not edited it.",
+};
+
+/// Vietnamese, which is what most people reading this in the app are reading everything else in.
+pub const VI: Words = Words {
+    facts: [
+        "Việc",
+        "Chế độ",
+        "Ngôn ngữ",
+        "Dung lượng",
+        "Giấy phép",
+        "Runtime",
+    ],
+    any_language: "mọi ngôn ngữ",
+    provenance: "Mô hình này từ đâu",
+    published_by: "Phát hành bởi",
+    no_author: "Manifest không ghi tác giả gốc. Đó là thiếu sót của kho mô hình, không phải Summo tự làm ra mô hình này.",
+    gated: "**Cần chấp thuận điều khoản.** Nơi phát hành chỉ cho tải sau khi bạn đồng ý điều khoản trên trang của họ. Summo sẽ hỏi token và chỉ gửi token đó tới đúng nơi phát hành.",
+    mirrored: "Giấy phép cho phép phân phối lại, nên Summo có bản sao. Checksum bên dưới đúng cho cả hai nguồn.",
+    not_mirrored: "**Summo không phân phối lại mô hình này.** File tải thẳng từ nơi phát hành, theo điều khoản của họ.",
+    cost: "Chi phí trên máy",
+    memory: "Bộ nhớ: khoảng {idle} MB khi chạy, {peak} MB lúc cao nhất. Cần tối thiểu {min} MB trống.",
+    no_rtf: "Chưa ai đo tốc độ của mô hình này, và kho mô hình nói thẳng như vậy thay vì đoán.",
+    rtf: "Tốc độ đã đo — dưới 1.0 là theo kịp âm thanh trực tiếp:",
+    rtf_head: ["Máy", "RTF"],
+    accuracy: "Độ chính xác đã đo — tỉ lệ lỗi từ, càng thấp càng tốt:",
+    accuracy_head: ["Bộ đo", "Kết quả"],
+    accel: "Tăng tốc phần cứng",
+    files: "File",
+    files_head: ["Tên", "Dung lượng", "sha256"],
+    readme: "Mô tả của nơi phát hành",
+    readme_note: "Giữ nguyên văn từ dự án phát hành trọng số này. Summo không viết và không sửa.",
+};
+
+/// The words for a language tag, falling back to English for anything else.
+///
+/// Japanese and Chinese fall back rather than getting a machine translation of a licensing position
+/// nobody checked. Wrong-language English is a smaller failure than confident wrong Japanese.
+#[must_use]
+pub fn words_for(lang: &str) -> &'static Words {
+    if lang.trim().to_ascii_lowercase().starts_with("vi") {
+        &VI
+    } else {
+        &EN
+    }
+}
+
+/// Render one model's page as Markdown, in English.
 ///
 /// `readme` is the upstream project's own README, included verbatim when the registry has a copy
 /// beside the manifest. Verbatim and clearly attributed rather than summarised: a paraphrase of
 /// somebody else's documentation is how a licence notice quietly loses the sentence that mattered.
 #[must_use]
 pub fn render(manifest: &Manifest, readme: Option<&str>) -> String {
+    render_in(manifest, readme, &EN)
+}
+
+/// Render one model's page as Markdown, in the given language.
+#[must_use]
+pub fn render_in(manifest: &Manifest, readme: Option<&str>, words: &Words) -> String {
     let mut out = String::new();
 
     out.push_str(&format!("# {}\n\n", manifest.name));
@@ -43,19 +149,17 @@ pub fn render(manifest: &Manifest, readme: Option<&str>) -> String {
         out.push_str(&format!("{}\n\n", description.trim()));
     }
 
-    out.push_str(&facts(manifest));
-    out.push_str(&provenance(manifest));
-    out.push_str(&performance(manifest));
-    out.push_str(&files(manifest));
+    out.push_str(&facts(manifest, words));
+    out.push_str(&provenance(manifest, words));
+    out.push_str(&performance(manifest, words));
+    out.push_str(&files(manifest, words));
 
     if let Some(readme) = readme {
         let readme = readme.trim();
         if !readme.is_empty() {
-            out.push_str("## Upstream README\n\n");
-            out.push_str(
-                "Reproduced verbatim from the project that published these weights. Summo did not \
-                 write it and has not edited it.\n\n",
-            );
+            out.push_str(&format!("## {}\n\n", words.readme));
+            out.push_str(words.readme_note);
+            out.push_str("\n\n");
             out.push_str("<!-- upstream:begin -->\n\n");
             out.push_str(readme);
             out.push_str("\n\n<!-- upstream:end -->\n");
@@ -65,18 +169,27 @@ pub fn render(manifest: &Manifest, readme: Option<&str>) -> String {
     out
 }
 
-fn facts(manifest: &Manifest) -> String {
+fn facts(manifest: &Manifest, words: &Words) -> String {
     let langs = if manifest.langs.iter().any(|l| l == "*") {
-        "any".to_string()
+        words.any_language.to_string()
     } else if manifest.langs.is_empty() {
         "—".to_string()
     } else {
         manifest.langs.join(", ")
     };
 
+    let [
+        task_label,
+        mode_label,
+        langs_label,
+        size_label,
+        licence_label,
+        runtime_label,
+    ] = words.facts;
     format!(
-        "| | |\n|---|---|\n| Task | {task} |\n| Mode | {mode} |\n| Languages | {langs} |\n\
-         | Size | {size} |\n| Licence | {licence} |\n| Runtime | `{runtime}` |\n\n",
+        "| | |\n|---|---|\n| {task_label} | {task} |\n| {mode_label} | {mode} |\n\
+         | {langs_label} | {langs} |\n| {size_label} | {size} |\n| {licence_label} | {licence} |\n\
+         | {runtime_label} | `{runtime}` |\n\n",
         task = task_name(manifest.task),
         mode = format!("{:?}", manifest.mode).to_lowercase(),
         langs = langs,
@@ -87,59 +200,58 @@ fn facts(manifest: &Manifest) -> String {
 }
 
 /// Who made it, who is handing it to you, and what you have to agree to first.
-fn provenance(manifest: &Manifest) -> String {
-    let mut out = String::from("## Where this comes from\n\n");
+fn provenance(manifest: &Manifest, words: &Words) -> String {
+    let mut out = format!("## {}\n\n", words.provenance);
 
     match &manifest.attribution {
-        Some(who) => out.push_str(&format!("Published by {who}.\n\n")),
-        None => out.push_str(
-            "The manifest names no upstream author, which is a gap in the registry rather than a \
-             claim that Summo made this.\n\n",
-        ),
+        Some(who) => out.push_str(&format!("{} {who}.\n\n", words.published_by)),
+        None => {
+            out.push_str(words.no_author);
+            out.push_str("\n\n");
+        }
     }
 
     if manifest.gated {
-        out.push_str(
-            "**Gated.** The publisher serves these files only after you have accepted their terms \
-             on their own site. Summo will ask for an access token and send it to that host and \
-             nowhere else.\n\n",
-        );
+        out.push_str(words.gated);
+        out.push_str("\n\n");
     }
 
-    if manifest.redistributable {
-        out.push_str(
-            "Redistributable under its licence, so Summo mirrors it. The checksums below are what \
-             you should get from either source.\n\n",
-        );
+    out.push_str(if manifest.redistributable {
+        words.mirrored
     } else {
-        out.push_str(
-            "**Not redistributed by Summo.** The download goes to the original host under that \
-             project's own terms. Summo is the software that can load the file; it is not the \
-             distributor of it.\n\n",
-        );
-    }
+        words.not_mirrored
+    });
+    out.push_str("\n\n");
 
     out
 }
 
 /// What it costs on real hardware, or an honest admission that nobody has measured it.
-fn performance(manifest: &Manifest) -> String {
+fn performance(manifest: &Manifest, words: &Words) -> String {
     let profile = &manifest.profile;
-    let mut out = String::from("## What it costs\n\n");
+    let mut out = format!("## {}\n\n", words.cost);
 
-    out.push_str(&format!(
-        "Memory: about {} MB resident, {} MB at peak. Needs at least {} MB free.\n\n",
-        profile.rss_mb.idle, profile.rss_mb.peak, profile.min_ram_mb
-    ));
+    out.push_str(
+        &words
+            .memory
+            .replace("{idle}", &profile.rss_mb.idle.to_string())
+            .replace("{peak}", &profile.rss_mb.peak.to_string())
+            .replace("{min}", &profile.min_ram_mb.to_string()),
+    );
+    out.push_str("\n\n");
 
     if profile.rtf.is_empty() {
-        out.push_str(
-            "No real-time factor has been measured yet. Rather than guess, the registry says so — \
-             run `summo-bench` and send the numbers.\n\n",
-        );
+        // No instruction to run a benchmark binary. This page is read inside the app, where "run
+        // `summo-bench` and send the numbers" is a task for somebody who already has a checkout.
+        out.push_str(words.no_rtf);
+        out.push_str("\n\n");
     } else {
-        out.push_str("Real-time factor, measured — below 1.0 keeps up with live audio:\n\n");
-        out.push_str("| Machine | RTF |\n|---|---|\n");
+        out.push_str(words.rtf);
+        out.push_str("\n\n");
+        out.push_str(&format!(
+            "| {} | {} |\n|---|---|\n",
+            words.rtf_head[0], words.rtf_head[1]
+        ));
         let mut rows: Vec<_> = profile.rtf.iter().collect();
         rows.sort_by_key(|(k, _)| k.as_str());
         for (machine, rtf) in rows {
@@ -153,8 +265,12 @@ fn performance(manifest: &Manifest) -> String {
         // against another model, with the benchmark it came from named. `wer_fleurs_vi` is word
         // error rate on FLEURS Vietnamese — lower is better — and the reader should be told that
         // rather than left to infer it from the key.
-        out.push_str("Accuracy, measured — word error rate, lower is better:\n\n");
-        out.push_str("| Benchmark | Score |\n|---|---|\n");
+        out.push_str(words.accuracy);
+        out.push_str("\n\n");
+        out.push_str(&format!(
+            "| {} | {} |\n|---|---|\n",
+            words.accuracy_head[0], words.accuracy_head[1]
+        ));
         let mut rows: Vec<_> = profile.quality.iter().collect();
         rows.sort_by_key(|(k, _)| k.as_str());
         for (benchmark, score) in rows {
@@ -165,7 +281,8 @@ fn performance(manifest: &Manifest) -> String {
 
     if !profile.accel.is_empty() {
         out.push_str(&format!(
-            "Accelerators: {}.\n\n",
+            "{}: {}.\n\n",
+            words.accel,
             profile
                 .accel
                 .iter()
@@ -179,12 +296,15 @@ fn performance(manifest: &Manifest) -> String {
 }
 
 /// The checksums, so a download can be verified by hand.
-fn files(manifest: &Manifest) -> String {
+fn files(manifest: &Manifest, words: &Words) -> String {
     if manifest.files.is_empty() {
         return String::new();
     }
 
-    let mut out = String::from("## Files\n\n| Name | Size | sha256 |\n|---|---|---|\n");
+    let mut out = format!(
+        "## {}\n\n| {} | {} | {} |\n|---|---|---|\n",
+        words.files, words.files_head[0], words.files_head[1], words.files_head[2]
+    );
     for file in &manifest.files {
         out.push_str(&format!(
             "| `{}` | {} | `{}` |\n",
@@ -339,10 +459,37 @@ mod tests {
     fn an_unmeasured_model_admits_it_rather_than_claiming_to_be_fast() {
         let page = render(&manifest(), None);
         assert!(
-            page.contains("No real-time factor has been measured"),
+            page.contains("Nobody has measured how fast this runs"),
             "{page}"
         );
         assert!(!page.to_lowercase().contains("blazing"));
+        // And no instruction to run a benchmark binary. This page is read inside the app, where
+        // "run `summo-bench` and send the numbers" is a task for somebody with a checkout.
+        assert!(!page.contains("summo-bench"), "{page}");
+    }
+
+    #[test]
+    fn the_words_follow_the_reader_and_the_numbers_do_not() {
+        let vi = render_in(&manifest(), None, words_for("vi-VN"));
+        let en = render_in(&manifest(), None, words_for("en"));
+
+        assert!(vi.contains("## Mô hình này từ đâu"), "{vi}");
+        assert!(vi.contains("Phát hành bởi OpenAI."), "{vi}");
+        assert!(!vi.contains("Where this comes from"), "{vi}");
+        assert!(en.contains("## Where this comes from"), "{en}");
+
+        // The facts themselves are language-independent, and both pages have to carry them.
+        for page in [&vi, &en] {
+            assert!(page.contains("whisper-tiny"), "{page}");
+            assert!(page.contains("abc123"), "{page}");
+            assert!(page.contains("MIT"), "{page}");
+        }
+    }
+
+    #[test]
+    fn a_language_with_no_words_of_its_own_reads_english_rather_than_a_guess() {
+        let ja = render_in(&manifest(), None, words_for("ja"));
+        assert!(ja.contains("## Where this comes from"), "{ja}");
     }
 
     #[test]

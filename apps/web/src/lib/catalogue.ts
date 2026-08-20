@@ -188,6 +188,25 @@ export function tags(model: CatalogueModel): { label: string; kind: "plain" | "w
   return out;
 }
 
+/**
+ * Whether a typed query describes this model.
+ *
+ * Over the id and the name because those are what somebody types, over the description because that
+ * is where "streaming" or "tiếng Nhật" lives, and over the language codes because typing `ja` is the
+ * fastest way to ask the only question this catalogue is really asked. Empty query matches
+ * everything: a filter that hides the list until you type is a search box that has eaten the screen.
+ */
+export function matches(model: CatalogueModel, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return true;
+  const haystack = [model.id, model.name, model.description ?? "", model.license, ...model.langs]
+    .join(" ")
+    .toLowerCase();
+  // Every word, in any order. "whisper vi" should find the multilingual model whose name carries
+  // one term and whose language list carries the other.
+  return needle.split(/\s+/).every((word) => haystack.includes(word));
+}
+
 /** How much disk the installed models take, which is the number a user came to check. */
 export function installedBytes(models: CatalogueModel[]): number {
   return models.filter((m) => m.installed).reduce((total, m) => total + m.size_bytes, 0);

@@ -256,7 +256,8 @@
     "today": "今日",
     "people_count": "{count}人",
     "tasks_count": "{count}件",
-    "quiet_days": "会議なし：{days}"
+    "by_day": "日別",
+    "quiet_count": "記録のない日が {count} 日あります。"
   },
   "people": {
     "title": "人",
@@ -336,7 +337,8 @@
     "section_about": "情報",
     "general_hint": "アプリの表示言語と、ライト/ダークの切り替え。",
     "recording_hint": "マイクの許可と、録音を始めるときの言語。",
-    "vault_at": "すべての保存先"
+    "vault_at": "すべての保存先",
+    "mt_ready": "{model} をインストール済み。翻訳できます。"
   },
   "status": {
     "unreachable": "このマシンの Summo に接続できません。",
@@ -529,10 +531,10 @@
     "mic_failed": "マイクを開けませんでした。",
     "engine_silent": "認識エンジンが応答しません。Summo は起動していますか？",
     "unknown": "原因を伴わないエラーが発生しました。再試行するか、設定 › 概要のログをご確認ください。",
-    "session.no_model": "音声モデルが未インストールのため録音できません。モデル画面から 1 つ入れてください。",
+    "session.no_model": "音声認識モデルが未インストールのため録音できません。",
     "session_refused": "録音を開始できませんでした。",
     "session_offline": "認識エンジンに接続できません。Summo を再起動してください。",
-    "session.no_vad": "音声検出モデルが未インストールのため、文字になりません。モデル画面から「silero-vad-v5」を入れてください。",
+    "session.no_vad": "音声区間検出モデルが未インストールのため、文字になりません。",
     "mic_timeout": "マイクを開けませんでした。他のアプリが使用していないか確認してからもう一度お試しください。"
   },
   "agents": {
@@ -617,7 +619,13 @@
     "details": "詳細",
     "hide_details": "詳細を隠す",
     "for_language": "{language} 向けのモデル",
-    "show_all": "すべて表示"
+    "show_all": "すべて表示",
+    "search": "モデルを検索",
+    "all_tasks": "すべて",
+    "no_match": "該当するモデルがありません",
+    "no_match_hint": "別のキーワードを試すか、絞り込みを解除してカタログ全体を表示してください。",
+    "clear_filters": "絞り込みを解除",
+    "no_details": "配布元から追加の説明を取得できませんでした。分かっていることは上に表示しています。"
   },
   "home": {
     "heading": "あなたのワークスペース",

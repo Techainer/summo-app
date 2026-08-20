@@ -84,6 +84,11 @@ export function FirstRun({ children }: { children: ReactNode }) {
       <Setup
         onDone={() => {
           setDismissed(true);
+          // And ask the daemon again straight away. The answer on hand was fetched before the
+          // install this screen just ran, so leaving setup dropped the user onto the home screen
+          // under a banner saying a recogniser was missing — the very thing they had watched
+          // download — until the five-second poll came round and took it away.
+          setAttempt((n) => n + 1);
           if (!seen()) setTour(true);
         }}
       />

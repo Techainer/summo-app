@@ -1012,7 +1012,13 @@ async fn model_page(
 
     as_response(Ok::<_, summo_core::Error>(serde_json::json!({
         "id": id.as_str(),
-        "markdown": summo_models::page::render(&manifest, readme.as_deref()),
+        // In the reader's language. The numbers, the checksums and the publisher's own README are
+        // the same either way; the sentences around them were English inside a Vietnamese app.
+        "markdown": summo_models::page::render_in(
+            &manifest,
+            readme.as_deref(),
+            summo_models::page::words_for(&q.lang),
+        ),
     })))
 }
 

@@ -43,8 +43,10 @@ export function About() {
     <section className="border-line mt-10 border-t pt-6 text-sm">
       <h2 className="text-base font-medium">{t("about.title")}</h2>
 
-      <p className="text-fg-dim mt-2">{t("about.local_promise")}</p>
-
+      {/* The sentence that was here promised audio never leaves the machine. It was deleted when
+          summaries grew an endpoint setting and the claim stopped being true; the call to it was
+          not, so this section rendered the literal text `about.local_promise`. What Summo does and
+          does not send is in Trợ giúp, written accurately and in one place. */}
       <div className="mt-4 flex items-center gap-3">
         <a
           href="https://techainer.com/"

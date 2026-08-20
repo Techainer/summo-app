@@ -65,6 +65,91 @@ if ((await page.getByTestId("settings-tab-about").getAttribute("aria-current")) 
   problems.push("a reload did not come back to the section that was open");
 }
 
+// ---- translation: turning it on has to leave you with a model -------------
+//
+// The setting saved happily, the model was never downloaded, and the first translated line arrived
+// as an error in the middle of a meeting. The section now asks the catalogue whether that exact id
+// is on the machine and offers to fetch it here — no trip to another screen, and no terminal.
+//
+// The 611 MB download is not run: `/installs` and `/catalogue` are answered by this suite, because
+// what is being checked is that the screen asks for the right model and shows what came back.
+{
+  await page.goto(`${appUrl}?port=${port}&token=${token}#/settings?section=translation`, {
+    waitUntil: "networkidle",
+  });
+  await page.getByTestId("settings-translation").waitFor({ timeout: 10_000 });
+
+  // The input is `sr-only` and the drawn box sits over it, so the label is what a person clicks
+  // and what this clicks too.
+  const enable = page.getByRole("checkbox", { name: "Dùng mô hình riêng để dịch" });
+  if (!(await enable.isChecked())) {
+    await page.getByText("Dùng mô hình riêng để dịch").click();
+  }
+  await page.waitForTimeout(600);
+
+  const install = page.getByRole("button", { name: /Cài mô hình dịch/ });
+  if ((await install.count()) === 0) {
+    problems.push("turning translation on offers no way to get the model");
+  } else {
+    // The size is on the button, because 611 MB is the fact that decides whether now is the moment.
+    const label = await install.innerText();
+    if (!/\d+\s*(MB|GB)/.test(label)) {
+      problems.push(`the install button does not say how big the download is: ${label}`);
+    }
+
+    // Pressing it starts a job for the model the field names, and the progress is on screen.
+    // `?token=…` is on every request the app makes, so a pattern anchored at the end matches
+    // nothing — the same trap that once made four states in `model-list.mjs` test nothing at all.
+    let asked = null;
+    await page.route(/\/installs(\?|$)/, async (route) => {
+      if (route.request().method() === "POST") {
+        asked = JSON.parse(route.request().postData() ?? "{}").id;
+        await route.fulfill({
+          json: { model: asked, name: asked, state: "downloading", done: 30, total: 100 },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: [{ model: asked, name: asked, state: "downloading", done: 30, total: 100 }],
+      });
+    });
+    await install.click();
+    await page.waitForTimeout(800);
+    if (asked !== "small100") problems.push(`the wrong model was asked for: ${asked}`);
+    if (!(await page.getByTestId("settings-translation").innerText()).includes("30%")) {
+      problems.push("a running download shows no progress in the translation section");
+    }
+    await page.unroute(/\/installs(\?|$)/);
+  }
+
+  // And when the model is already there, the section says so instead of offering the download
+  // again — the state that used to be indistinguishable from "not installed".
+  await page.route(/\/catalogue/, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({
+      json: {
+        ...body,
+        models: (body.models ?? []).map((m) =>
+          m.id === "small100" ? { ...m, installed: true } : m,
+        ),
+      },
+    });
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByTestId("settings-translation").waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(900);
+  const ready = await page.getByTestId("settings-translation").innerText();
+  if (!ready.includes("Đã cài small100")) {
+    problems.push(`an installed translation model is not reported as installed: ${ready}`);
+  }
+  if ((await page.getByRole("button", { name: /Cài mô hình dịch/ }).count()) > 0) {
+    problems.push("a model that is already installed is still offered for download");
+  }
+  await page.unroute(/\/catalogue/);
+  console.log("translation: install offered here, and an installed model is named as installed");
+}
+
 // ---- storage: the section that had no interface at all --------------------
 await page.goto(`${appUrl}?port=${port}&token=${token}#/settings?section=storage`, {
   waitUntil: "networkidle",

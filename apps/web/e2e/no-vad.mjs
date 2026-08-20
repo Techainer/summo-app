@@ -108,6 +108,14 @@ console.log(
     problems.push("nothing on screen said a voice detector was missing");
   }
 
+  // Once. The refusal reaches the screen twice — the call that was refused returns it, and the
+  // daemon announces the same thing on its event stream — so it was printed in the banner at the
+  // top of the window *and* along the status bar at the bottom, word for word.
+  if (recognises) {
+    const said = text.split("Chưa cài bộ dò giọng nói").length - 1;
+    if (said > 1) problems.push(`the same refusal is on screen ${said} times`);
+  }
+
   // The clock. A running timer over a session the daemon refused is the part that made this look
   // like a working recording for seventeen seconds.
   const clock = text.match(/\b00:(\d{2})\b/);

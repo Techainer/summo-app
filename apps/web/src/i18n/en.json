@@ -256,7 +256,8 @@
     "today": "Today",
     "people_count": "{count} people",
     "tasks_count": "{count} tasks",
-    "quiet_days": "No meetings: {days}"
+    "by_day": "By day",
+    "quiet_count": "{count} day(s) with nothing recorded."
   },
   "people": {
     "title": "People",
@@ -336,7 +337,8 @@
     "section_about": "About",
     "general_hint": "What language the app speaks, and whether it is light or dark.",
     "recording_hint": "Microphone permission, and the language a recording starts in.",
-    "vault_at": "Everything lives in"
+    "vault_at": "Everything lives in",
+    "mt_ready": "{model} is installed and ready to translate."
   },
   "status": {
     "unreachable": "Cannot reach Summo on this machine.",
@@ -529,10 +531,10 @@
     "mic_failed": "The microphone could not be opened.",
     "engine_silent": "The recognition engine is not answering. Is Summo still running?",
     "unknown": "Something failed and said nothing about why. Try again, or open Settings › About for the log.",
-    "session.no_model": "No speech model is installed yet, so there is nothing to record with. Open Models and install one.",
+    "session.no_model": "No speech model is installed, so nothing can be recorded.",
     "session_refused": "Recording could not start.",
     "session_offline": "Cannot reach the recognition engine. Try restarting Summo.",
-    "session.no_vad": "No voice detector is installed, so nothing ever becomes text. Install “silero-vad-v5” from the Models screen.",
+    "session.no_vad": "No voice detector is installed, so nothing is turned into text.",
     "mic_timeout": "The microphone did not open. Check whether another application is using it, then try again."
   },
   "agents": {
@@ -617,7 +619,13 @@
     "details": "Details",
     "hide_details": "Hide details",
     "for_language": "Models for {language}",
-    "show_all": "Show all"
+    "show_all": "Show all",
+    "search": "Search models",
+    "all_tasks": "All",
+    "no_match": "No models match",
+    "no_match_hint": "Try another term, or clear the filters to see the whole catalogue.",
+    "clear_filters": "Clear filters",
+    "no_details": "No further description could be fetched from the publisher. What this machine knows is above."
   },
   "home": {
     "heading": "Your workspace",
