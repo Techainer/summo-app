@@ -120,6 +120,23 @@ const press = (page) =>
     problems.push("the clock never started while recording");
   }
 
+  // Typing, while it records. A meeting is a note with a transcript beside it, and the note half is
+  // the whole reason the recording screen was replaced by this one — a page that shows words
+  // arriving and cannot take a keystroke is the old screen with a new layout.
+  if (recognises) {
+    const editor = page.getByRole("textbox", { name: /Ghi chú|ghi chú/ }).first();
+    if ((await editor.count()) === 0) {
+      problems.push("the meeting has nowhere to type");
+    } else {
+      await editor.click();
+      await page.keyboard.type("Ngân sách chốt thứ năm.");
+      await page.waitForTimeout(600);
+      if (!(await page.locator("body").innerText()).includes("Ngân sách chốt thứ năm")) {
+        problems.push("typing into the meeting note put nothing on screen");
+      }
+    }
+  }
+
   console.log(`granted: ${lines} line(s) on screen`);
 
   // Stopped, not abandoned. Chromium's fake device is exclusive: leaving this recording running

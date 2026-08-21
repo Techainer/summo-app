@@ -83,7 +83,10 @@ export function Tour({ onClose }: { onClose: () => void }) {
         // Above the bottom bar on a phone, beside it on a desktop. At 390px the card sat over the
         // navigation — the four things this tour is pointing at were behind the card explaining
         // them, and the first step tells you to press a button it was covering.
-        className="border-line bg-bg-raised fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] left-4 z-40 rounded-[var(--radius-panel)] border p-4 shadow-[var(--shadow-pop)] sm:bottom-4 sm:left-auto sm:w-[min(22rem,calc(100vw-2rem))]"
+        // Bottom-left on a desktop, above the bottom bar on a phone. The right-hand corner is
+        // taken: the assistant panel opens down that side and the home screen's ask bar ends
+        // there, so a card pinned to it covered the two controls the tour is telling you about.
+        className="border-line bg-bg-raised fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] left-4 z-40 rounded-[var(--radius-panel)] border p-4 shadow-[var(--shadow-pop)] sm:right-auto sm:bottom-4 sm:left-4 sm:w-[min(22rem,calc(100vw-2rem))] lg:left-[18rem]"
       >
         <div className="flex items-start gap-3">
           {/* Keyed on the step, so moving on is a new drawing rather than the same one with

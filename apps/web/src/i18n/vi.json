@@ -405,7 +405,10 @@
     "listing": "Đang lấy danh sách mô hình…",
     "none_for_language": "Chưa có mô hình nào cho ngôn ngữ này. Chọn ngôn ngữ khác hoặc dùng một mô hình đa ngôn ngữ.",
     "retry": "Thử lại",
-    "tight_memory": "Máy có thể không đủ bộ nhớ cho mô hình này."
+    "tight_memory": "Máy có thể không đủ bộ nhớ cho mô hình này.",
+    "spoken_any": "Tự động nhận biết (mọi ngôn ngữ)",
+    "also_vad": "Kèm bộ dò giọng nói — bắt buộc để ra chữ",
+    "also_speaker": "Kèm nhận diện người nói — để biết ai nói câu nào"
   },
   "tour": {
     "title": "Hướng dẫn nhanh",
@@ -621,7 +624,6 @@
     "in_use": "Đang dùng",
     "upstream_who": "nhà phát hành",
     "details": "Chi tiết",
-    "hide_details": "Thu gọn",
     "for_language": "Mô hình cho {language}",
     "show_all": "Xem tất cả",
     "search": "Tìm mô hình",

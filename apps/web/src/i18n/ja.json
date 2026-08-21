@@ -405,7 +405,10 @@
     "listing": "モデル一覧を取得しています…",
     "none_for_language": "この言語に対応するモデルがありません。別の言語を選ぶか、多言語モデルを使ってください。",
     "retry": "もう一度",
-    "tight_memory": "この端末ではメモリが足りない可能性があります。"
+    "tight_memory": "この端末ではメモリが足りない可能性があります。",
+    "spoken_any": "自動判定（すべての言語）",
+    "also_vad": "音声区間検出を同梱 — 文字起こしに必須",
+    "also_speaker": "話者識別を同梱 — 誰の発言か分かります"
   },
   "tour": {
     "title": "かんたん案内",
@@ -621,7 +624,6 @@
     "in_use": "使用中",
     "upstream_who": "公開元",
     "details": "詳細",
-    "hide_details": "詳細を隠す",
     "for_language": "{language} 向けのモデル",
     "show_all": "すべて表示",
     "search": "モデルを検索",

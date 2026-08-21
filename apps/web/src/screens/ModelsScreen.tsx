@@ -433,6 +433,20 @@ function Running({
   );
 }
 
+/**
+ * A card-sized version of a model's own description.
+ *
+ * The first sentence, capped. Registry descriptions run to a paragraph — SMALL100's is nine lines
+ * about embedding tables and quantisation — and a grid of those is a wall nobody reads. Cut on a
+ * sentence boundary rather than a character count, so what is shown is a whole thought.
+ */
+function summarise(description: string): string {
+  const text = description.trim().replace(/\s+/g, " ");
+  const stop = /(?<=[.!?])\s/.exec(text);
+  const first = stop ? text.slice(0, stop.index + 1) : text;
+  return first.length > 180 ? `${first.slice(0, 179).trimEnd()}…` : first;
+}
+
 /** One filter, pressed or not. A toggle, so it carries `aria-pressed` rather than looking like one. */
 function Chip({
   active,
@@ -616,9 +630,14 @@ function Card({
           card ran to twelve lines beside a neighbour that ran to three, and a two-column grid of
           those is unreadable before a word of it is read. Three lines is enough to decide whether
           to keep reading. */}
+      {/* The first sentence, and only the first.
+          A manifest description is written for the model's page — measured numbers, licence
+          reasoning, why one model beats another — and clamping it to three lines still put a
+          paragraph of prose on a card whose job is to be scanned. The whole text is one click away
+          in the details panel, where it belongs. */}
       {model.description && (
-        <p className="text-fg-dim text-meta mt-2 line-clamp-3 leading-relaxed">
-          {model.description}
+        <p className="text-fg-dim text-meta mt-2 line-clamp-2 leading-relaxed">
+          {summarise(model.description)}
         </p>
       )}
 

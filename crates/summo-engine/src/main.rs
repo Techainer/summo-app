@@ -38,6 +38,12 @@ async fn main() -> Result<()> {
         .with_target(false)
         .init();
 
+    // Before anything loads a model: on Intel macOS the runtime is a file beside this binary
+    // rather than one linked at build time, and `ort` has to be told so before its first use.
+    if let Some(runtime) = summo_core::onnx::locate_runtime() {
+        tracing::debug!(path = %runtime.display(), "using the ONNX Runtime shipped with the app");
+    }
+
     let cli = Cli::parse();
     let paths = match &cli.home {
         Some(dir) => Paths::at(dir),

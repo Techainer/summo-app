@@ -113,6 +113,15 @@ echo "==> interface"
 pnpm install --frozen-lockfile >/dev/null
 pnpm --filter @summo/web build >/dev/null
 
+# Intel macOS loads its ONNX Runtime at run time rather than linking one, because Microsoft has
+# published no build for this target since 1.23.2. Fetched before the compile so a failure here is a
+# failure to *build*, rather than a tarball that turns out to be missing a runtime on somebody
+# else's machine.
+if [[ "${TARGET}" == "x86_64-apple-darwin" && "${FEATURES}" == *models* ]]; then
+  echo "==> ONNX Runtime for Intel macOS"
+  ./scripts/onnxruntime-intel-mac.sh "target/release"
+fi
+
 echo "==> binary (${FEATURES})"
 cargo build --release -p summo-cli --features "${FEATURES}"
 
@@ -127,6 +136,11 @@ if [[ "${FEATURES}" == *models* ]]; then
   for lib in $(collect_libs); do
     [[ -f "${lib}" ]] && cp "${lib}" "${OUT}/"
   done
+  # And the runtime this platform opens by hand. `summo_core::onnx::locate_runtime` looks for it
+  # beside the executable, which is where this puts it.
+  if [[ "${TARGET}" == "x86_64-apple-darwin" && -f "target/release/libonnxruntime.dylib" ]]; then
+    cp "target/release/libonnxruntime.dylib" "${OUT}/"
+  fi
 fi
 
 cp README.md LICENSE NOTICE "${OUT}/" 2>/dev/null || true

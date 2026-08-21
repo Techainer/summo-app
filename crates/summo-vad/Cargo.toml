@@ -18,14 +18,26 @@ summo-core.workspace = true
 serde.workspace = true
 tracing.workspace = true
 
-ort = { workspace = true, optional = true, features = [
-    "ndarray",
-    # Fetch a prebuilt ONNX Runtime at build time. `tls-rustls` is required alongside it, and
-    # keeps the build free of a system OpenSSL dependency.
-    "download-binaries",
-    "tls-rustls",
-] }
 ndarray = { workspace = true, optional = true }
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+
+# ONNX Runtime, fetched at build time — except on Intel macOS, where there is nothing to fetch.
+#
+# `ort-sys` ships a table of prebuilt runtimes and `x86_64-apple-darwin` is not in it, because
+# Microsoft stopped publishing that build after ONNX Runtime 1.23.2. Rather than drop the platform,
+# that target links the runtime at *runtime*: `load-dynamic` dlopens a `libonnxruntime.dylib` which
+# the release ships beside the binary, and `summo_core::onnx` points it at the right file. 1.23.2
+# answers `ORT_API_VERSION` 17, which is what this crate asks for, so the older runtime is a
+# complete answer rather than a degraded one.
+[target.'cfg(not(all(target_os = "macos", target_arch = "x86_64")))'.dependencies]
+ort = { workspace = true, optional = true, features = [
+    "ndarray",
+    "download-binaries",
+    # Keeps the build free of a system OpenSSL dependency.
+    "tls-rustls",
+] }
+
+[target.'cfg(all(target_os = "macos", target_arch = "x86_64"))'.dependencies]
+ort = { workspace = true, optional = true, features = ["ndarray", "load-dynamic"] }

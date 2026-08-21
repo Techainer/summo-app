@@ -405,7 +405,10 @@
     "listing": "Fetching the model list…",
     "none_for_language": "No model covers this language. Choose another language, or use a multilingual model.",
     "retry": "Try again",
-    "tight_memory": "This machine may not have the memory for it."
+    "tight_memory": "This machine may not have the memory for it.",
+    "spoken_any": "Detect it (any language)",
+    "also_vad": "Includes the voice detector — required to produce text",
+    "also_speaker": "Includes speaker attribution — so lines carry who said them"
   },
   "tour": {
     "title": "Quick tour",
@@ -621,7 +624,6 @@
     "in_use": "In use",
     "upstream_who": "the publisher",
     "details": "Details",
-    "hide_details": "Hide details",
     "for_language": "Models for {language}",
     "show_all": "Show all",
     "search": "Search models",

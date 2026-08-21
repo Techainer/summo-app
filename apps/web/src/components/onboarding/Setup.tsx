@@ -43,6 +43,15 @@ const SPOKEN_FIRST = ["vi", "en", "ja", "zh"];
  * Not a choice: there is one, it is 2 MB, and without it a recording produces silence on screen
  * for as long as somebody is willing to watch it.
  */
+/**
+ * "Any language", as the registry spells it.
+ *
+ * A manifest declaring `*` covers everything; asking the daemon to rank for `*` therefore returns
+ * exactly the multilingual models and rejects the specialised ones, which is what somebody choosing
+ * "detect it" is asking for.
+ */
+const ANY = "*";
+
 const VOICE_DETECTOR = "silero-vad-v5";
 
 /**
@@ -243,6 +252,9 @@ export function Setup({ onDone }: { onDone: () => void }) {
   // matching on its words is a coupling that breaks the day somebody rewords it.
   const missing = status.checks.find((check) => check.step === "models")?.missing ?? [];
   const hasDetector = !missing.includes("vad");
+  // The fingerprint is not part of `missing` — a recording runs without it, it just cannot say who
+  // spoke — so it is read from the installs this screen has started plus what the check reports.
+  const hasSpeaker = !missing.includes("speaker");
   const later = optional(status);
 
   // Which numbered card is which depends on the build. A binary with no recognition has nothing to
@@ -348,6 +360,12 @@ export function Setup({ onDone }: { onDone: () => void }) {
                 }}
                 className={PICKER}
               >
+                {/* Every language, which means a multilingual model and no decoding hint.
+                    Offered rather than defaulted: for Vietnamese the specialised model is 92%
+                    accurate and the multilingual one is 32%, so making "detect it" the default
+                    would trade most of the accuracy for a question nobody asked to skip. */}
+                <option value={ANY}>{t("setup.spoken_any")}</option>
+                <option disabled>──────────</option>
                 {/* The interface languages first — the overwhelmingly likely answers — then
                     everything the registry can serve, which is where a Japanese speaker reading
                     Vietnamese finds their language. */}
@@ -525,6 +543,26 @@ export function Setup({ onDone }: { onDone: () => void }) {
                 })}
               </ul>
             )}
+
+            {/* What else comes with it, named. Recording needs a voice detector and speaker
+                attribution needs a fingerprint; both were installed silently by this button, so a
+                user who went looking for them in the catalogue found two models they had never
+                agreed to and no explanation. 28 MB between them. */}
+            <ul className="text-fg-dim text-meta mt-3 space-y-1">
+              {[
+                { id: VOICE_DETECTOR, key: "setup.also_vad", have: hasDetector },
+                { id: SPEAKER_MODEL, key: "setup.also_speaker", have: hasSpeaker },
+              ].map((extra) => (
+                <li key={extra.id} className="flex items-center gap-2">
+                  <Check
+                    aria-hidden="true"
+                    className={cn("size-3.5 shrink-0", extra.have ? "text-done" : "text-fg-faint")}
+                  />
+                  <span>{t(extra.key)}</span>
+                  <span className="text-fg-faint text-micro">{extra.id}</span>
+                </li>
+              ))}
+            </ul>
 
             <Button
               className="mt-4"
