@@ -75,6 +75,17 @@ struct AppState {
     /// both — and `port: 0` means the OS chooses. So the one handler that needs to *tell* the page
     /// which port it is on reads it from here rather than from a value that would have been zero.
     port: std::sync::Arc<std::sync::atomic::AtomicU16>,
+    /// The registry, built once and shared.
+    ///
+    /// Every handler that needed one used to call `Registry::discover()`, which builds a fresh HTTP
+    /// client and a fresh empty cache — so the manifest cache inside it never survived a request,
+    /// and the catalogue re-raced three addresses on every open of the models screen. On a network
+    /// where two of those three are dropped rather than refused, that is seconds per visit.
+    ///
+    /// A `OnceCell` rather than a field built at boot: the daemon must start on a machine with no
+    /// network, and building this reads the environment rather than the wire, but the cost belongs
+    /// with the first request that needs it rather than with startup.
+    registry: std::sync::Arc<tokio::sync::OnceCell<std::sync::Arc<summo_models::Registry>>>,
     /// Notified when something asks the daemon to stop.
     ///
     /// A background daemon has no terminal to press Ctrl-C in, so `summo stop` has to reach it the
@@ -84,6 +95,27 @@ struct AppState {
 }
 
 impl AppState {
+    /// The shared registry, or a fresh one for a caller that named its own source.
+    ///
+    /// The `registry` query parameter is how the suites point the daemon at a directory on disk;
+    /// that one is per-request by definition and is not cached.
+    async fn registry(
+        &self,
+        override_spec: Option<&str>,
+    ) -> summo_core::Result<std::sync::Arc<summo_models::Registry>> {
+        if let Some(spec) = override_spec {
+            return Ok(std::sync::Arc::new(summo_models::Registry::with_sources(
+                vec![summo_models::RegistrySource::parse(spec)?],
+            )?));
+        }
+        self.registry
+            .get_or_try_init(|| async {
+                summo_models::Registry::discover().map(std::sync::Arc::new)
+            })
+            .await
+            .cloned()
+    }
+
     /// The port this daemon actually bound. Zero until the listener exists.
     fn own_port(&self) -> u16 {
         self.port.load(std::sync::atomic::Ordering::Relaxed)
@@ -128,6 +160,7 @@ impl Server {
             token: token.clone(),
             allow_loopback_origins: cfg.allow_loopback_origins,
             port: std::sync::Arc::new(std::sync::atomic::AtomicU16::new(0)),
+            registry: std::sync::Arc::new(tokio::sync::OnceCell::new()),
             stopping: std::sync::Arc::new(tokio::sync::Notify::new()),
         };
         let port_slot = state.port.clone();
@@ -991,11 +1024,14 @@ async fn model_page(
     // Installed first: that manifest is the one this machine is actually using, and it needs no
     // network. The registry is the fallback for a model somebody is still deciding about.
     let installed = state.engine.store().list().into_iter().find(|m| m.id == id);
+    // One registry for the whole daemon, so the manifest and README fetched here are cached for the
+    // next card somebody opens rather than re-raced from scratch.
+    let registry = state.registry(q.registry.as_deref()).await.ok();
     let manifest = match installed {
         Some(manifest) => Some(manifest),
-        None => match summo_models::Registry::discover() {
-            Ok(registry) => registry.manifest(&id).await.ok(),
-            Err(_) => None,
+        None => match &registry {
+            Some(registry) => registry.manifest(&id).await.ok(),
+            None => None,
         },
     };
 
@@ -1005,9 +1041,9 @@ async fn model_page(
         ));
     };
 
-    let readme = match summo_models::Registry::discover() {
-        Ok(registry) => registry.readme(&id).await,
-        Err(_) => None,
+    let readme = match &registry {
+        Some(registry) => registry.readme(&id).await,
+        None => None,
     };
 
     as_response(Ok::<_, summo_core::Error>(serde_json::json!({
@@ -2902,12 +2938,10 @@ async fn languages(
 async fn candidates(state: &AppState, registry: Option<&str>) -> summo_core::Result<Catalogue> {
     let mut manifests = state.engine.store().list();
 
-    let reg = match registry {
-        Some(spec) => {
-            summo_models::Registry::with_sources(vec![summo_models::RegistrySource::parse(spec)?])?
-        }
-        None => summo_models::Registry::discover()?,
-    };
+    // The daemon's one registry, so the index and every manifest read here stay cached for the next
+    // caller. This is the hot path — the catalogue screen, the setup screen and the language picker
+    // all land in it — and it was building a new client, and a new empty cache, every time.
+    let reg = state.registry(registry).await?;
 
     let mut unreachable = None;
     match reg.index().await {

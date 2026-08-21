@@ -90,8 +90,17 @@
   --color-blocked: #e0a458;
   --color-blocked-soft: #e0a4581a;
 
+  /* Be Vietnam Pro first, and Inter behind it.
+   *
+   * The interface is Vietnamese before it is anything else, and Inter's tone marks sit high and
+   * tight — `ế`, `ữ`, `ị` in a 13px label are where that shows. Be Vietnam Pro was drawn for this
+   * script: the marks are spaced for it and the shapes below them are unchanged. Both faces are
+   * shipped, so this is a swap of order rather than a new download.
+   *
+   * The reading face is the same family, which is the point: a note and the label above it stop
+   * being two typefaces pretending to be one. */
   --font-sans:
-    "Inter", "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    "Be Vietnam Pro", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   /* Reading mode for long transcripts: designed for Vietnamese, tone marks do not collide. */
   --font-reading: "Be Vietnam Pro", "Inter", Georgia, serif;
   /* Tabular figures, so a timestamp column does not jitter as the seconds change. */
@@ -469,6 +478,44 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* The live level meter itself.
+ *
+ * The keyframes below existed, the component existed, and nothing joined them: `.waveform` had no
+ * rule anywhere in this stylesheet, so the meter rendered twenty-eight zero-height `<i>` elements
+ * and drew nothing at all. The one control whose entire job is to prove the microphone can hear you
+ * was invisible in every build that has shipped.
+ *
+ * The height comes from the container. Each bar is scaled by the component, which writes
+ * `transform: scaleY(...)` straight onto the element rather than re-rendering sixty times a second,
+ * so the transition here is what makes that look like a meter instead of a strobe. */
+.waveform {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  min-height: 1.5rem;
+}
+.waveform i {
+  flex: 1 1 0;
+  min-width: 2px;
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--color-fg-faint);
+  transform-origin: center;
+  transform: scaleY(0.06);
+  transition: transform 90ms linear;
+}
+/* Recording is red everywhere else in the interface, and this is the loudest place it is true. */
+.waveform.active i {
+  background: var(--color-rec);
+}
+@media (prefers-reduced-motion: reduce) {
+  .waveform i {
+    transition: none;
   }
 }
 

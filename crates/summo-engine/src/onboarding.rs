@@ -127,6 +127,12 @@ pub fn status(paths: &Paths, hardware: &HwProfile) -> Status {
     // without it nothing is ever committed to a transcript, however good the recogniser is.
     let asr: Vec<_> = installed.iter().filter(|m| m.task == Task::Asr).collect();
     let vad: Vec<_> = installed.iter().filter(|m| m.task == Task::Vad).collect();
+    // Not a blocker, and still worth reporting: without a voice fingerprint a recording runs and
+    // cannot say who spoke, and the setup screen has no way to show that unless it is told.
+    let speaker: Vec<_> = installed
+        .iter()
+        .filter(|m| m.task == Task::SpeakerEmbed)
+        .collect();
     let models = Check {
         step: Step::Models,
         ready: recognition && !asr.is_empty() && !vad.is_empty(),
@@ -141,6 +147,7 @@ pub fn status(paths: &Paths, hardware: &HwProfile) -> Status {
         missing: [
             asr.is_empty().then_some("asr"),
             vad.is_empty().then_some("vad"),
+            speaker.is_empty().then_some("speaker"),
         ]
         .into_iter()
         .flatten()
@@ -316,7 +323,7 @@ mod tests {
         .unwrap();
     }
 
-    /// The one that shipped: a recogniser and no voice detector reported "ready to record".
+    /// A recogniser with no voice detector must not report "ready to record".
     ///
     /// The pipeline then refused at `resolve_vad`, the app kept a timer running, and no words ever
     /// arrived. A checklist that says ready has to mean it — this is the assertion that makes the

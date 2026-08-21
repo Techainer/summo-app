@@ -72,7 +72,11 @@
     "listening_note": "立即生效，已录制的内容不会丢失。",
     "spoken_multi": "多种语言（自动识别）",
     "warm_ready": "可以开始录音。",
-    "browse_models": "浏览模型"
+    "browse_models": "浏览模型",
+    "recording_now": "正在录音",
+    "elapsed": "已录时长",
+    "listening_hint": "说完的句子会出现在这里。正常说话就好。",
+    "open_meeting": "打开正在录制的会议"
   },
   "import": {
     "title": "导入录音",
@@ -401,7 +405,10 @@
     "listing": "正在获取模型列表…",
     "none_for_language": "没有支持该语言的模型。请换一种语言，或使用多语言模型。",
     "retry": "重试",
-    "tight_memory": "这台机器的内存可能不够。"
+    "tight_memory": "这台机器的内存可能不够。",
+    "spoken_any": "自动识别（任意语言）",
+    "also_vad": "包含语音活动检测 — 出文字必需",
+    "also_speaker": "包含说话人识别 — 知道每句是谁说的"
   },
   "tour": {
     "title": "快速上手",
@@ -476,7 +483,10 @@
     "table_column_after": "添加列",
     "table_column_delete": "删除列",
     "table_header_row": "标题行",
-    "table_delete": "删除表格"
+    "table_delete": "删除表格",
+    "mark_highlight": "高亮",
+    "code_language": "语言",
+    "code_plain": "不指定"
   },
   "agenda": {
     "title": "日历",
@@ -617,7 +627,6 @@
     "in_use": "使用中",
     "upstream_who": "发布方",
     "details": "详情",
-    "hide_details": "收起",
     "for_language": "{language} 的模型",
     "show_all": "显示全部",
     "search": "搜索模型",
@@ -625,7 +634,17 @@
     "no_match": "没有匹配的模型",
     "no_match_hint": "换个关键词，或清除筛选查看完整目录。",
     "clear_filters": "清除筛选",
-    "no_details": "无法从发布方获取更多说明。本机已知的信息见上方。"
+    "no_details": "无法从发布方获取更多说明。本机已知的信息见上方。",
+    "picked_not_installed": "已选择 · 未下载",
+    "running_title": "本机正在使用",
+    "role_asr": "语音识别",
+    "role_vad": "语音活动检测",
+    "role_speaker": "说话人识别",
+    "role_translate": "翻译",
+    "role_missing": "未安装",
+    "role_none": "未选择",
+    "role_endpoint": "通过 {provider}",
+    "running_hint": "按下录音时运行的就是这些。"
   },
   "home": {
     "heading": "你的工作区",

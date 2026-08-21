@@ -66,10 +66,9 @@ nên không có web server nào cần khởi động, cũng không có thư mụ
 tar -xzf dist/summo-*.tar.gz && cd summo-* && ./summo serve
 ```
 
-Mỗi bản phát hành có bốn bản build: Linux x64 và arm64, macOS trên chip Apple, và Windows x64. Không
-có macOS Intel, vì ONNX Runtime không còn phát hành bản build cho nền tảng đó — bản 1.28 và 1.29 của
-Microsoft chỉ có `osx-arm64`. Build từ source trên máy Mac Intel cũng dừng ở đúng chỗ này, chỉ là
-báo lỗi rõ ràng hơn.
+Mỗi bản phát hành có năm bản build: Linux x64 và arm64, macOS trên chip Apple và trên Intel, và
+Windows x64. Bản Intel mang theo ONNX Runtime riêng — Microsoft ngừng phát hành cho nền tảng này sau
+1.23.2, nên Summo đóng gói bản đó cạnh binary và nạp lúc khởi động.
 
 ### Bản app, thay vì dòng lệnh
 

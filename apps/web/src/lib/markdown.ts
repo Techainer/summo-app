@@ -21,7 +21,7 @@ import type { JSONContent } from "@tiptap/react";
  * Headings 1–3, paragraphs, bullet and ordered lists with nesting, task lists (`- [ ] `, which is
  * the same line the task board parses, so ticking a box in a note is ticking it everywhere), fenced
  * code with a language, block quotes, thematic breaks, GFM tables with column alignment. Inline:
- * bold, italic, inline code, strike, links, images.
+ * bold, italic, inline code, strike, highlight, links, images.
  */
 
 /** Two spaces per level, which is what the serializer emits and what the parser counts in. */
@@ -393,6 +393,10 @@ const INLINE: { mark: string; pattern: RegExp }[] = [
   { mark: "bold", pattern: /\*\*([^*]+)\*\*/ },
   { mark: "italic", pattern: /(?<!\*)\*([^*\n]+)\*(?!\*)/ },
   { mark: "strike", pattern: /~~([^~]+)~~/ },
+  // `==text==` is the highlight syntax Obsidian, Bear and Typora all read, and the one GFM ignores
+  // harmlessly — a note carrying it opens as literal `==` characters in an editor that does not
+  // know it, rather than losing the text. That is the rule every block in this file follows.
+  { mark: "highlight", pattern: /==([^=]+)==/ },
 ];
 
 /**
@@ -567,7 +571,7 @@ function inCell(cell: Block): string {
 }
 
 /** The order marks are written in, so nesting is stable across a round trip. */
-const ORDER = ["link", "code", "bold", "italic", "strike"];
+const ORDER = ["link", "code", "bold", "italic", "strike", "highlight"];
 
 function text(nodes: Block[] | undefined): string {
   return (nodes ?? [])
@@ -587,6 +591,7 @@ function text(nodes: Block[] | undefined): string {
         else if (mark.type === "italic") out = `*${out}*`;
         else if (mark.type === "code") out = `\`${out}\``;
         else if (mark.type === "strike") out = `~~${out}~~`;
+        else if (mark.type === "highlight") out = `==${out}==`;
         else if (mark.type === "link") {
           const href = mark.attrs?.href;
           out = `[${out}](${typeof href === "string" ? href : ""})`;

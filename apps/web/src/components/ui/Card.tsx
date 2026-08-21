@@ -34,9 +34,13 @@ export function CardHeader({
 }) {
   return (
     <div className={cn("flex items-center gap-3 px-5 pt-4 pb-3", className)}>
-      <h2 className="text-body font-semibold tracking-tight">
+      {/* The heading is a flex row, because a title is often an icon beside a word — and a
+          `<span class="flex">` inside a plain `<h2>` is a block, which pushed the count onto a line
+          of its own. Every card with an icon in its title was reading "Đang chờ bạn" and then, on
+          the next line, "· 1". */}
+      <h2 className="text-body flex min-w-0 items-center gap-2 font-semibold tracking-tight">
         {title}
-        {count !== undefined && <span className="text-fg-faint ml-2 font-normal">· {count}</span>}
+        {count !== undefined && <span className="text-fg-faint font-normal">· {count}</span>}
       </h2>
       {actions && <div className="ml-auto flex items-center gap-1.5">{actions}</div>}
     </div>

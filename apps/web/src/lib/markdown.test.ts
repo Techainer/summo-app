@@ -229,3 +229,17 @@ describe("images", () => {
     expect(paragraph?.content?.[0]?.type).toBe("image");
   });
 });
+
+describe("highlight", () => {
+  it("survives a round trip", () => {
+    const doc = toDoc("Chốt **thứ năm**, ==ngân sách 200tr==.");
+    expect(toMarkdown(doc).trim()).toBe("Chốt **thứ năm**, ==ngân sách 200tr==.");
+  });
+
+  it("is a mark, not a paragraph of equals signs", () => {
+    const doc = toDoc("==xong==");
+    const paragraph = doc.content?.[0];
+    const marks = paragraph?.content?.[0]?.marks?.map((m) => m.type);
+    expect(marks).toEqual(["highlight"]);
+  });
+});

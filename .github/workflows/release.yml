@@ -30,23 +30,16 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
+          # Intel macOS, on an Intel runner. ONNX Runtime has published nothing for this target
+          # since 1.23.2, so `ort-sys` has no prebuilt to fetch — the crates ask for `load-dynamic`
+          # here and the runtime travels with the build. `scripts/onnxruntime-intel-mac.sh` fetches
+          # 1.23.2, which answers the API version this workspace asks for.
+          - os: macos-13
+            target: x86_64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
           # `aarch64-pc-windows-msvc` is absent on purpose — see the note in `ci.yml`. Opus has no
           # ARM64 Windows build in `audiopus_sys`, so the target cannot be produced at all yet.
-          #
-          # `x86_64-apple-darwin` is absent for a different reason, and not one we chose: ONNX
-          # Runtime no longer ships a build for it. Microsoft's 1.28 and 1.29 releases carry
-          # `onnxruntime-osx-arm64` and nothing else, and `ort-sys` 2.0.0-rc.13's prebuilt table
-          # lists nine targets of which Intel macOS is not one. So the release job for it failed
-          # with `no prebuilt binaries available for target x86_64-apple-darwin`.
-          #
-          # Pinning back to `ort` 2.0.0-rc.10, which did have Intel macOS binaries, does not work
-          # either — that version has no `tls-rustls` feature, which `summo-vad` uses. The routes
-          # left are building ONNX Runtime from source for one legacy platform, or dropping the
-          # `models` feature there and shipping a build that cannot detect speech. Neither is worth
-          # doing before somebody asks: Apple stopped selling Intel Macs in 2023, and an Intel Mac
-          # user can still build from source, where cargo will tell them the same thing.
 
     runs-on: ${{ matrix.os }}
     steps:

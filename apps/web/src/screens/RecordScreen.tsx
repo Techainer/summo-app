@@ -108,7 +108,7 @@ function Idle() {
           style={{ opacity: session.recording ? 1 : 0.55 + Math.min(0.45, level * 0.9) }}
         >
           {/* Seeded rather than a flat line scaled by `level`: equal bars across a thousand pixels
-              read as a ruler, which is what the first version of this looked like. The level moves
+              read as a ruler rather than a meter. The level moves
               the whole panel's opacity instead, so the microphone still visibly does something. */}
           <Wave seed="record" bars={56} live={session.recording} />
         </div>

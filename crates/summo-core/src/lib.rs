@@ -7,6 +7,7 @@ pub mod audio;
 pub mod error;
 pub mod event;
 pub mod ids;
+pub mod onnx;
 pub mod paths;
 pub mod segment;
 pub mod settings;

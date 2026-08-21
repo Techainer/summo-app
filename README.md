@@ -65,10 +65,9 @@ no web server to start and no directory of static files to keep in step.
 tar -xzf dist/summo-*.tar.gz && cd summo-* && ./summo serve
 ```
 
-Releases carry four builds: Linux x64 and arm64, macOS on Apple silicon, and Windows x64. Intel
-macOS is missing because ONNX Runtime no longer publishes a build for it — Microsoft's 1.28 and 1.29
-releases ship `osx-arm64` only. Building from source on an Intel Mac hits the same wall, with a
-clearer message.
+Releases carry five builds: Linux x64 and arm64, macOS on Apple silicon and on Intel, and Windows
+x64. The Intel build ships its own ONNX Runtime — Microsoft stopped publishing one for that platform
+after 1.23.2, so Summo carries that version beside the binary and opens it at startup.
 
 ### The app, rather than the command
 

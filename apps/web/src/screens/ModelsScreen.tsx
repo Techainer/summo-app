@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
 import { Markdown } from "../components/page/Markdown";
-import { Button, Empty, Page, PageGlow, SectionTitle } from "../components/ui";
+import { Button, Empty, Page, PageGlow, SectionTitle, Sheet } from "../components/ui";
 import { useI18n, useT } from "../i18n/context";
 import { cn } from "../lib/cn";
 import {
@@ -20,6 +20,7 @@ import {
   type Task,
 } from "../lib/catalogue";
 import { useEngine } from "../lib/engine-context";
+import { fetchPlan, type Plan } from "../lib/plan";
 import { useErrorText } from "../lib/errors";
 import { listItem, stagger } from "../lib/motion";
 import { OnboardingClient, POLL_MS, isFinished, percent, type Install } from "../lib/onboarding";
@@ -35,6 +36,16 @@ import { useRefresh } from "../lib/use-load";
  * an answer rather than a spinner somebody watches.
  */
 const PAGE_TIMEOUT_MS = 8000;
+
+/**
+ * Pages already fetched, kept for as long as the app is open.
+ *
+ * A model page is a manifest and an upstream README: it does not change while somebody is browsing,
+ * and re-fetching it cost a round trip to the registry every time a card was opened — which on a
+ * slow connection is the difference between "opens" and "thinks about it". Keyed by id *and*
+ * language, because the daemon renders the prose in the language it is asked for.
+ */
+const PAGES = new Map<string, string>();
 
 /**
  * Every model, what it is for, and a button.
@@ -75,10 +86,17 @@ export function ModelsScreen() {
   /** What was typed into the search box, and which task is being looked at. */
   const [query, setQuery] = useState("");
   const [task, setTask] = useState<Task | null>(null);
+  /** What a recording would actually use right now, asked of the daemon rather than inferred. */
+  const [plan, setPlan] = useState<Plan | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [next, running] = await Promise.all([catalogue.load(), installer.installs()]);
+      const [next, running, current] = await Promise.all([
+        catalogue.load(),
+        installer.installs(),
+        fetchPlan(handshake).catch(() => null),
+      ]);
+      setPlan(current);
       setModels(next.models);
       setReachable(next.reachable);
       setInstalls(running);
@@ -93,7 +111,7 @@ export function ModelsScreen() {
       setReachable(false);
       setError(say(e));
     }
-  }, [catalogue, installer, say]);
+  }, [catalogue, installer, handshake, say]);
 
   useRefresh(load);
 
@@ -212,6 +230,12 @@ export function ModelsScreen() {
         </p>
       )}
 
+      {/* What is running, before what could be. "Which of these is actually being used" was the
+          question this screen could not answer: a card said "Đang dùng" because the settings named
+          it, whether or not the bytes were ever downloaded, and the two models a recording cannot
+          start without appeared nowhere until they were missing. */}
+      {plan && <Running plan={plan} onInstall={(id) => void pull(id)} installs={installs} />}
+
       {/* Search and a task filter, because the catalogue is now long enough to scroll past what you
           came for. Both narrow the same list the language banner narrows — one row of controls, not
           a filter panel: there are three axes worth filtering on and two of them fit on a line. */}
@@ -286,7 +310,11 @@ export function ModelsScreen() {
                   onPull={() => void pull(model.id)}
                   onRemove={() => void remove(model.id)}
                   onUse={() => void choose(model)}
-                  inUse={chosen[roleFor(model.task) ?? ""] === model.id}
+                  // Chosen *and* here. Naming a model in the settings does not make it usable, and
+                  // a card reading "Đang dùng" over an Install button was the screen telling two
+                  // opposite things at once.
+                  inUse={chosen[roleFor(model.task) ?? ""] === model.id && model.installed}
+                  picked={chosen[roleFor(model.task) ?? ""] === model.id}
                 />
               ))}
             </m.div>
@@ -295,6 +323,128 @@ export function ModelsScreen() {
       )}
     </Page>
   );
+}
+
+/**
+ * What a recording would use, right now, on this machine.
+ *
+ * Four roles, and every one of them was invisible until it failed. Speech recognition was named on
+ * a card that said "in use" whether or not the model had ever been downloaded; the voice detector
+ * and the speaker embedder appeared nowhere at all, so "I pressed record and nothing happened" and
+ * "it will not say who spoke" had no answer on the screen that exists to answer them.
+ *
+ * Read from `/settings/plan`, which is the daemon resolving the same question a session resolves
+ * when it starts — not the interface guessing from the settings file.
+ */
+function Running({
+  plan,
+  installs,
+  onInstall,
+}: {
+  plan: Plan;
+  installs: Install[];
+  onInstall: (id: string) => void;
+}) {
+  const t = useT();
+
+  const rows: { key: string; label: string; value: string | null; ready: boolean; id?: string }[] =
+    [
+      {
+        key: "asr",
+        label: t("models.role_asr"),
+        value: plan.speech.name ?? plan.speech.model,
+        ready: plan.speech.installed,
+        ...(plan.speech.model ? { id: plan.speech.model } : {}),
+      },
+      {
+        key: "vad",
+        label: t("models.role_vad"),
+        value: plan.detector.id,
+        ready: plan.detector.installed,
+        id: plan.detector.id,
+      },
+      {
+        key: "speaker",
+        label: t("models.role_speaker"),
+        value: plan.speakers.id,
+        ready: plan.speakers.installed,
+        id: plan.speakers.id,
+      },
+      {
+        key: "translate",
+        label: t("models.role_translate"),
+        // Translation is the one role that can be somebody else's server, and then there is nothing
+        // to install and nothing to be missing.
+        value: plan.translation.local
+          ? plan.translation.model
+          : plan.translation.provider
+            ? t("models.role_endpoint", { provider: plan.translation.provider })
+            : null,
+        ready: !plan.translation.local || plan.translation.model === null,
+        ...(plan.translation.local && plan.translation.model ? { id: plan.translation.model } : {}),
+      },
+    ];
+
+  return (
+    <section
+      data-testid="running"
+      className="border-line bg-bg-raised mb-4 rounded-[var(--radius-card)] border p-4 shadow-[var(--shadow-sm)]"
+    >
+      <div className="mb-2.5 flex items-baseline justify-between gap-3">
+        <h2 className="text-meta font-semibold">{t("models.running_title")}</h2>
+        <p className="text-fg-faint text-micro">{t("models.running_hint")}</p>
+      </div>
+      <ul className="grid gap-2 sm:grid-cols-2">
+        {rows.map((row) => {
+          const job = installs.find((each) => each.model === row.id);
+          const running = job !== undefined && !isFinished(job);
+          return (
+            <li
+              key={row.key}
+              data-testid={`running-${row.key}`}
+              className="border-line flex items-center gap-2.5 rounded-[var(--radius-card)] border px-3 py-2"
+            >
+              <span
+                aria-hidden="true"
+                className={cn("size-2 shrink-0 rounded-full", row.ready ? "bg-done" : "bg-blocked")}
+              />
+              <span className="text-micro text-fg-faint w-28 shrink-0">{row.label}</span>
+              <span className="text-meta min-w-0 flex-1 truncate">
+                {row.value ?? t("models.role_none")}
+              </span>
+              {!row.ready && row.id && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  busy={running}
+                  onClick={() => onInstall(row.id as string)}
+                >
+                  {t("models.install")}
+                </Button>
+              )}
+              {!row.ready && !row.id && (
+                <span className="text-blocked text-micro">{t("models.role_missing")}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * A card-sized version of a model's own description.
+ *
+ * The first sentence, capped. Registry descriptions run to a paragraph — SMALL100's is nine lines
+ * about embedding tables and quantisation — and a grid of those is a wall nobody reads. Cut on a
+ * sentence boundary rather than a character count, so what is shown is a whole thought.
+ */
+function summarise(description: string): string {
+  const text = description.trim().replace(/\s+/g, " ");
+  const stop = /(?<=[.!?])\s/.exec(text);
+  const first = stop ? text.slice(0, stop.index + 1) : text;
+  return first.length > 180 ? `${first.slice(0, 179).trimEnd()}…` : first;
 }
 
 /** One filter, pressed or not. A toggle, so it carries `aria-pressed` rather than looking like one. */
@@ -331,6 +481,7 @@ function Card({
   onRemove,
   onUse,
   inUse,
+  picked,
 }: {
   model: CatalogueModel;
   job: Install | undefined;
@@ -338,6 +489,8 @@ function Card({
   onRemove: () => void;
   onUse: () => void;
   inUse: boolean;
+  /** Named in the settings, whether or not the files are on this machine. */
+  picked: boolean;
 }) {
   const t = useT();
   // Two clicks, not a dialog. Re-downloading a gigabyte is a real cost, and a modal for it would
@@ -346,9 +499,15 @@ function Card({
   const [open, setOpen] = useState(false);
   // Keyed by the language it was fetched in, so switching the interface to English re-fetches the
   // page in English rather than leaving Vietnamese prose under English headings.
-  const [page, setPage] = useState<{ lang: string; markdown: string } | null>(null);
   const { handshake } = useEngine();
   const { locale } = useI18n();
+  // Starts from the cache when there is one, so a card opened a second time draws its page in the
+  // same frame rather than fetching it again — and `useState` rather than an effect, because a
+  // `setState` during an effect is a second render before the browser has painted the first.
+  const [page, setPage] = useState<{ lang: string; markdown: string } | null>(() => {
+    const cached = PAGES.get(`${model.id}:${locale}`);
+    return cached === undefined ? null : { lang: locale, markdown: cached };
+  });
 
   // Fetched when it is opened, not with the list: ten model pages, each carrying an upstream
   // README, is a lot of text to download for a screen most people scroll past.
@@ -364,9 +523,10 @@ function Card({
       signal: stop.signal,
     })
       .then((r) => r.json())
-      .then((body: { markdown?: string }) =>
-        setPage({ lang: locale, markdown: body.markdown ?? "" }),
-      )
+      .then((body: { markdown?: string }) => {
+        PAGES.set(`${model.id}:${locale}`, body.markdown ?? "");
+        setPage({ lang: locale, markdown: body.markdown ?? "" });
+      })
       .catch(() => setPage({ lang: locale, markdown: "" }))
       .finally(() => window.clearTimeout(deadline));
     return () => {
@@ -402,6 +562,13 @@ function Card({
             {inUse ? (
               <span className="border-accent/40 text-accent text-micro rounded-full border px-2 py-0.5">
                 {t("models.in_use")}
+              </span>
+            ) : picked ? (
+              // Pointed at by the settings and not downloaded. This is the state that made the
+              // screen contradict itself, and it is worth naming rather than hiding: it is why
+              // translation is switched on and nothing gets translated.
+              <span className="border-blocked/40 text-blocked text-micro rounded-full border px-2 py-0.5">
+                {t("models.picked_not_installed")}
               </span>
             ) : model.installed ? (
               <span className="border-done/40 text-done text-micro rounded-full border px-2 py-0.5">
@@ -463,9 +630,14 @@ function Card({
           card ran to twelve lines beside a neighbour that ran to three, and a two-column grid of
           those is unreadable before a word of it is read. Three lines is enough to decide whether
           to keep reading. */}
+      {/* The first sentence, and only the first.
+          A manifest description is written for the model's page — measured numbers, licence
+          reasoning, why one model beats another — and clamping it to three lines still put a
+          paragraph of prose on a card whose job is to be scanned. The whole text is one click away
+          in the details panel, where it belongs. */}
       {model.description && (
-        <p className="text-fg-dim text-meta mt-2 line-clamp-3 leading-relaxed">
-          {model.description}
+        <p className="text-fg-dim text-meta mt-2 line-clamp-2 leading-relaxed">
+          {summarise(model.description)}
         </p>
       )}
 
@@ -489,35 +661,66 @@ function Card({
           checksums, and the publisher's own README. All of it has existed in `summo_models::page`
           since the registry did — rendered for the CLI and never shown here, so somebody choosing
           between two models had a name, a size and three chips to do it with. */}
+      {/* A panel, not an accordion. Expanding a card in a two-column grid pushed its neighbour
+          down the page and left the reader scrolling a card that had grown to four screens — and
+          the thing being read is a document, which wants a column of its own. */}
       <button
         type="button"
-        onClick={() => setOpen((was) => !was)}
-        aria-expanded={open}
+        onClick={() => setOpen(true)}
         className="text-fg-faint hover:text-fg text-micro mt-2 underline"
       >
-        {open ? t("models.hide_details") : t("models.details")}
+        {t("models.details")}
       </button>
-      {open && (
-        <div className="border-line mt-2 border-t pt-2">
-          {page === null ? (
-            <p className="text-fg-faint text-micro">{t("common.loading")}</p>
-          ) : page.markdown.trim() === "" ? (
-            // The registry could not be reached, or had nothing to add. Either way the card above
-            // holds every fact this machine knows about the model, and saying so beats a blank
-            // panel that looks like a rendering failure.
-            <p className="text-fg-faint text-micro">{t("models.no_details")}</p>
-          ) : (
-            // From the first section down. The page opens with the model's name, its id and its
-            // description — all three of which are already on the card this is expanding under,
-            // and reading them twice is how a detail view starts to feel like a different screen
-            // that happens to be inside this one.
-            <Markdown
-              markdown={page.markdown.slice(Math.max(0, page.markdown.indexOf("\n## ")))}
-              className="text-meta"
-            />
-          )}
+      <Sheet
+        open={open}
+        onOpenChange={setOpen}
+        side="right"
+        title={model.name}
+        className="w-full max-w-xl"
+      >
+        <div className="h-full overflow-y-auto px-5 pb-8">
+          <p className="text-fg-faint tabular text-micro">
+            {model.id}
+            {model.size_bytes > 0 && ` · ${size(model.size_bytes)}`}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {model.installed ? (
+              <Button size="sm" variant="ghost" onClick={onRemove}>
+                <Trash2 aria-hidden="true" className="me-1 size-3.5" />
+                {t("models.remove")}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="primary"
+                busy={running}
+                disabled={!model.fits}
+                onClick={onPull}
+              >
+                <HardDriveDownload aria-hidden="true" className="me-1 size-3.5" />
+                {t("models.install")}
+              </Button>
+            )}
+            {model.installed && !inUse && roleFor(model.task) !== null && (
+              <Button size="sm" variant="secondary" onClick={onUse}>
+                {t("models.use")}
+              </Button>
+            )}
+          </div>
+          <div className="border-line mt-4 border-t pt-4">
+            {page === null ? (
+              <p className="text-fg-faint text-micro">{t("common.loading")}</p>
+            ) : page.markdown.trim() === "" ? (
+              <p className="text-fg-faint text-micro">{t("models.no_details")}</p>
+            ) : (
+              <Markdown
+                markdown={page.markdown.slice(Math.max(0, page.markdown.indexOf("\n## ")))}
+                className="text-meta"
+              />
+            )}
+          </div>
         </div>
-      )}
+      </Sheet>
 
       {/* The two facts that cost an afternoon if they turn up at the download instead of here. */}
       {!model.fits && (

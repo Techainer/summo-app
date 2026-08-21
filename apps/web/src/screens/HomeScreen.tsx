@@ -105,7 +105,12 @@ export function HomeScreen() {
     [navigate],
   );
 
-  const waiting = queue(report);
+  // The meeting being recorded right now, by the name the report knows it under.
+  const liveTitle =
+    session.recording && session.meeting
+      ? (report?.meetings.find((meeting) => meeting.id === session.meeting)?.title ?? null)
+      : null;
+  const waiting = queue(report, liveTitle);
 
   // The last three lines, newest at the bottom. Three because the card has room for three without
   // pushing the controls off it, and because a person glancing at it wants "is it hearing me",
@@ -424,7 +429,7 @@ interface Waiting {
  * another person and the other is a chore. Capped by the caller rather than here, so the count in
  * the header is the true one even when the list is shortened.
  */
-function queue(report: Report | null): Waiting[] {
+function queue(report: Report | null, running: string | null): Waiting[] {
   if (!report) return [];
   const now = today();
 
@@ -439,13 +444,18 @@ function queue(report: Report | null): Waiting[] {
       owner: action.owner ?? undefined,
     }));
 
-  const unsummarised: Waiting[] = report.without_summary.map((title) => ({
-    kind: "unsummarised" as const,
-    key: title,
-    text: title,
-    labelKey: "home.no_summary",
-    to: "/library" as const,
-  }));
+  // Not the meeting that is happening right now. A recording in progress has no summary because it
+  // has not finished — listing it under "waiting for you" asks somebody to go and deal with the
+  // thing they are in the middle of doing.
+  const unsummarised: Waiting[] = report.without_summary
+    .filter((title) => title !== running)
+    .map((title) => ({
+      kind: "unsummarised" as const,
+      key: title,
+      text: title,
+      labelKey: "home.no_summary",
+      to: "/library" as const,
+    }));
 
   return [...overdue, ...unsummarised];
 }

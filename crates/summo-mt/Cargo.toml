@@ -19,11 +19,6 @@ summo-core.workspace = true
 tracing.workspace = true
 llama-cpp-2 = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
-ort = { workspace = true, optional = true, features = [
-    # Fetch a prebuilt ONNX Runtime at build time, matching `summo-vad`.
-    "download-binaries",
-    "tls-rustls",
-] }
 # `fancy-regex` rather than the default `onig`: onig is a C library, and the point of the ONNX
 # path is that it needs no C++ toolchain to build.
 tokenizers = { version = "0.23.1", default-features = false, features = [
@@ -42,3 +37,11 @@ summo-llm.workspace = true
 [[example]]
 name = "compare"
 required-features = ["local", "onnx"]
+
+# See the note in `summo-vad`: Intel macOS has no prebuilt ONNX Runtime to download, so it loads one
+# at runtime from beside the binary instead of being dropped.
+[target.'cfg(not(all(target_os = "macos", target_arch = "x86_64")))'.dependencies]
+ort = { workspace = true, optional = true, features = ["download-binaries", "tls-rustls"] }
+
+[target.'cfg(all(target_os = "macos", target_arch = "x86_64"))'.dependencies]
+ort = { workspace = true, optional = true, features = ["load-dynamic"] }

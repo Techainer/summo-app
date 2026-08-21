@@ -177,7 +177,9 @@ await page.waitForTimeout(400);
 
 const details = page.getByRole("button", { name: "Chi tiết" }).first();
 if ((await details.count()) > 0) {
-  const card = page.locator("article", { has: page.getByRole("button", { name: "Thu gọn" }) });
+  // The details open in a panel now, not inside the card: a card that grew to four screens pushed
+  // its neighbour down the grid, and what is being read is a document.
+  const card = page.getByRole("dialog");
   await details.click();
   // Until it settles, not for a fixed second. The daemon fetches the publisher's README to build
   // this page, so on a machine that cannot reach the registry it used to say "Đang tải…" and go on

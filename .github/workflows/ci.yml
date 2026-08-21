@@ -90,8 +90,10 @@ jobs:
   # holding up review of a one-line change behind a question that will be asked again on merge
   # anyway.
   #
-  # `x86_64-apple-darwin` is not in this list: ONNX Runtime publishes no build for Intel macOS any
-  # more, so it cannot link. The reasoning is in `release.yml`, next to the matrix it was cut from.
+  # `x86_64-apple-darwin` is here again. ONNX Runtime publishes no build for it any more, so those
+  # crates ask `ort` to open a runtime at startup instead of linking one — see the note above the
+  # target sections in `summo-vad/Cargo.toml`. Linking it on an Intel runner is what proves that
+  # arrangement holds, and it is the only check that can.
   plan:
     name: which platforms
     runs-on: ubuntu-latest
@@ -104,6 +106,7 @@ jobs:
           full='[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"},
                  {"os":"ubuntu-24.04-arm","target":"aarch64-unknown-linux-gnu"},
                  {"os":"macos-latest","target":"aarch64-apple-darwin"},
+                 {"os":"macos-13","target":"x86_64-apple-darwin"},
                  {"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]'
           one='[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"}]'
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -155,6 +158,17 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - run: cargo build --workspace --release --target ${{ matrix.target }}
+
+      # The two crates that use ONNX Runtime, with the features that pull it in.
+      #
+      # The workspace build above uses default features, and both of these are off by default — so
+      # on Intel macOS, the one target whose runtime arrangement is different from every other, the
+      # build proved nothing about it. These two lines are the check that `load-dynamic` links.
+      - name: The ONNX crates
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: |
+          cargo build --release --target ${{ matrix.target }} -p summo-vad --features silero
+          cargo build --release --target ${{ matrix.target }} -p summo-mt --features onnx
 
   # Mobile is milestone 11, but the core crates must stay portable from day one. Cross-compiling
   # here catches a desktop-only dependency the week it is added, not a year later.

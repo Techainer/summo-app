@@ -791,7 +791,12 @@ function Dashboard({
               <Recent limit={6} columns={2} onOpen={(entry) => onOpen(entry.id)} />
             </section>
 
-            <p className="text-fg-faint text-meta mt-7">{t("library.vault_hint")}</p>
+            {/* A footnote, drawn as one. Loose grey text hanging under a grid reads as a line
+                somebody forgot to delete; a rule above it says "this is an aside about the screen
+                you have just read". */}
+            <p className="border-line text-fg-faint text-micro mt-8 border-t pt-3">
+              {t("library.vault_hint")}
+            </p>
           </>
         )}
       </div>

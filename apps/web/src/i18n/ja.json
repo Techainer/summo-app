@@ -72,7 +72,11 @@
     "listening_note": "その場で切り替わります。録音済みの内容は失われません。",
     "spoken_multi": "複数言語（自動判定）",
     "warm_ready": "録音できます。",
-    "browse_models": "モデルを見る"
+    "browse_models": "モデルを見る",
+    "recording_now": "録音中",
+    "elapsed": "録音時間",
+    "listening_hint": "話し終えた文がここに出ます。普段どおりで大丈夫です。",
+    "open_meeting": "録音中の会議を開く"
   },
   "import": {
     "title": "録音ファイルを取り込む",
@@ -401,7 +405,10 @@
     "listing": "モデル一覧を取得しています…",
     "none_for_language": "この言語に対応するモデルがありません。別の言語を選ぶか、多言語モデルを使ってください。",
     "retry": "もう一度",
-    "tight_memory": "この端末ではメモリが足りない可能性があります。"
+    "tight_memory": "この端末ではメモリが足りない可能性があります。",
+    "spoken_any": "自動判定（すべての言語）",
+    "also_vad": "音声区間検出を同梱 — 文字起こしに必須",
+    "also_speaker": "話者識別を同梱 — 誰の発言か分かります"
   },
   "tour": {
     "title": "かんたん案内",
@@ -476,7 +483,10 @@
     "table_column_after": "列を追加",
     "table_column_delete": "列を削除",
     "table_header_row": "見出し行",
-    "table_delete": "表を削除"
+    "table_delete": "表を削除",
+    "mark_highlight": "ハイライト",
+    "code_language": "言語",
+    "code_plain": "指定なし"
   },
   "agenda": {
     "title": "カレンダー",
@@ -617,7 +627,6 @@
     "in_use": "使用中",
     "upstream_who": "公開元",
     "details": "詳細",
-    "hide_details": "詳細を隠す",
     "for_language": "{language} 向けのモデル",
     "show_all": "すべて表示",
     "search": "モデルを検索",
@@ -625,7 +634,17 @@
     "no_match": "該当するモデルがありません",
     "no_match_hint": "別のキーワードを試すか、絞り込みを解除してカタログ全体を表示してください。",
     "clear_filters": "絞り込みを解除",
-    "no_details": "配布元から追加の説明を取得できませんでした。分かっていることは上に表示しています。"
+    "no_details": "配布元から追加の説明を取得できませんでした。分かっていることは上に表示しています。",
+    "picked_not_installed": "選択済み・未ダウンロード",
+    "running_title": "この端末で動くもの",
+    "role_asr": "音声認識",
+    "role_vad": "音声区間検出",
+    "role_speaker": "話者識別",
+    "role_translate": "翻訳",
+    "role_missing": "未インストール",
+    "role_none": "未選択",
+    "role_endpoint": "{provider} 経由",
+    "running_hint": "録音ボタンを押すとこれが動きます。"
   },
   "home": {
     "heading": "あなたのワークスペース",
