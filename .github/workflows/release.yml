@@ -30,12 +30,11 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
-          # Intel macOS, on an Intel runner. ONNX Runtime has published nothing for this target
-          # since 1.23.2, so `ort-sys` has no prebuilt to fetch — the crates ask for `load-dynamic`
-          # here and the runtime travels with the build. `scripts/onnxruntime-intel-mac.sh` fetches
-          # 1.23.2, which answers the API version this workspace asks for.
-          - os: macos-13
-            target: x86_64-apple-darwin
+          # No Intel macOS. GitHub retired the `macos-13` image, and a job asking for a label with
+          # no runners behind it queues instead of failing — so this entry produced nothing for two
+          # releases running while appearing to still be building. See the note on `plan` in
+          # `ci.yml` for what it would take to bring it back, and `bundle.sh`, which still builds
+          # the target for anyone who has the hardware.
           - os: windows-latest
             target: x86_64-pc-windows-msvc
           # `aarch64-pc-windows-msvc` is absent on purpose — see the note in `ci.yml`. Opus has no

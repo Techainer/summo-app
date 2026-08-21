@@ -90,10 +90,19 @@ jobs:
   # holding up review of a one-line change behind a question that will be asked again on merge
   # anyway.
   #
-  # `x86_64-apple-darwin` is here again. ONNX Runtime publishes no build for it any more, so those
-  # crates ask `ort` to open a runtime at startup instead of linking one — see the note above the
-  # target sections in `summo-vad/Cargo.toml`. Linking it on an Intel runner is what proves that
-  # arrangement holds, and it is the only check that can.
+  # `x86_64-apple-darwin` is *not* here, and the reason is the runner rather than the code.
+  #
+  # GitHub retired the macOS 13 image — `actions/runner-images` no longer lists it — and a job asking
+  # for a label with no runners behind it does not fail. It queues, silently, until something times
+  # it out. The v0.4.6 release sat like that for four hours and was published past it; v0.4.7 did the
+  # same. Both shipped with no Intel artifact at all while the release notes said otherwise, because
+  # a job that never starts also never fails.
+  #
+  # The Intel runners that do exist — `macos-15-intel`, `macos-26-intel` — are larger runners, billed
+  # per minute on a public repository, and would still have to clear the ONNX Runtime problem: the
+  # crates open a runtime at startup rather than linking one, and `scripts/onnxruntime-intel-mac.sh`
+  # is what fetches it. That path still works for somebody building on their own Intel Mac; it is
+  # only the hosted build that is gone. See `bundle.sh`, which still handles the target.
   plan:
     name: which platforms
     runs-on: ubuntu-latest
@@ -106,7 +115,6 @@ jobs:
           full='[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"},
                  {"os":"ubuntu-24.04-arm","target":"aarch64-unknown-linux-gnu"},
                  {"os":"macos-latest","target":"aarch64-apple-darwin"},
-                 {"os":"macos-13","target":"x86_64-apple-darwin"},
                  {"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]'
           one='[{"os":"ubuntu-latest","target":"x86_64-unknown-linux-gnu"}]'
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -119,10 +127,10 @@ jobs:
     name: build ${{ matrix.target }}
     needs: plan
     runs-on: ${{ matrix.os }}
-    # Ninety, because of one runner. `macos-13` is the Intel image: slower cores, no cache on a
-    # release build, Opus compiled from source, and the two ONNX crates built on top of the
-    # workspace. It lands around the hour mark, which is exactly where a sixty-minute limit turns a
-    # green build into a red one for no reason anybody can act on.
+    # Ninety was for the Intel runner, which is gone — see the note on `plan`. Kept rather than
+    # tightened: a release build of this workspace with a cold cache is not fast on any of the
+    # remaining platforms either, and a limit that trims a green build to red teaches people to
+    # re-run rather than to look.
     timeout-minutes: 90
     strategy:
       fail-fast: false
