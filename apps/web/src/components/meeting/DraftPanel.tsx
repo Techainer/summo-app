@@ -1,8 +1,11 @@
+import { Sparkles } from "lucide-react";
+import { m } from "motion/react";
 import { useCallback, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
 import { cn } from "../../lib/cn";
 import { isRefinable, selectionWithin, type Draft } from "../../lib/draft";
+import { GENTLE } from "../../lib/motion";
 import { sourceOf } from "../../lib/source";
 import { Markdown } from "../page/Markdown";
 import { Button, Card, CardBody, CardHeader } from "../ui";
@@ -20,7 +23,9 @@ interface Props {
  * The agent's summary, before anyone has agreed to it.
  *
  * The sections are already in the note — this draws the same text tinted, so it is obvious at a
- * glance which paragraphs a model wrote. Confirming takes the tint off. Nothing moves.
+ * glance which paragraphs a model wrote. Confirming takes the tint off. The panel itself fades up
+ * once on arrival and nothing moves after that: a draft lands while the page is being read, and the
+ * movement is what says something new is here rather than something having been redrawn.
  *
  * Two ways to change it, and they are offered differently on purpose. Selecting a passage brings up
  * a prompt box *at the selection*, because the user has already said where; that request rewrites
@@ -68,119 +73,147 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
   };
 
   return (
-    <Card className="border-accent/40">
-      <CardHeader
-        title={t("draft.heading")}
-        count={draft.revisions > 0 ? n("draft.revised", draft.revisions) : t("draft.pending")}
-        actions={
-          <>
-            <Button size="sm" variant="ghost" onClick={onDiscard} disabled={busy}>
-              {t("draft.discard")}
-            </Button>
-            <Button size="sm" variant="primary" onClick={onConfirm} busy={busy}>
-              {t("draft.confirm")}
-            </Button>
-          </>
-        }
-      />
+    /* Violet, not green — and the theme says so in its own words. `--color-ai` exists because
+       "green already means *live or chosen* and red means *recording*; neither may also mean
+       *written by a model*", and this panel is the largest block of machine-written prose in the
+       app. It was the one place still claiming the accent, which put an unapproved draft in the
+       same colour as a selected tab. Now it matches the assistant panel, the ask panel and the
+       home screen's agent card, so a reader learns one hue once.
 
-      <CardBody className="space-y-4">
-        <p className="text-fg-faint text-micro">{t("draft.select_hint")}</p>
+       It also arrives rather than appears. A summary lands seconds after the meeting stops, on a
+       page the user is already reading; a block of text that materialises with no movement reads
+       as a redraw, and the whole design brief here is that a person can tell what a model claimed
+       from what a person said. `reducedMotion="user"` at the root drops the travel and keeps the
+       fade for anyone who asked for that. */
+    <m.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={GENTLE}>
+      <Card className="border-ai/25 relative overflow-hidden">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[image:var(--gradient-ai)]"
+        />
+        <div className="relative">
+          <CardHeader
+            title={
+              <>
+                <Sparkles aria-hidden="true" className="text-ai size-4 shrink-0" />
+                {t("draft.heading")}
+              </>
+            }
+            count={draft.revisions > 0 ? n("draft.revised", draft.revisions) : t("draft.pending")}
+            actions={
+              <>
+                <Button size="sm" variant="ghost" onClick={onDiscard} disabled={busy}>
+                  {t("draft.discard")}
+                </Button>
+                <Button size="sm" variant="primary" onClick={onConfirm} busy={busy}>
+                  {t("draft.confirm")}
+                </Button>
+              </>
+            }
+          />
 
-        {draft.sections.map((section) => (
-          <section key={section.heading}>
-            <h3 className="text-fg-dim text-meta font-semibold">{section.heading}</h3>
-            {/* Not a control, despite the handlers. What is being listened for is a *selection*
+          <CardBody className="space-y-4">
+            <p className="text-fg-faint text-micro">{t("draft.select_hint")}</p>
+
+            {draft.sections.map((section) => (
+              <section key={section.heading}>
+                <h3 className="text-fg-dim text-meta font-semibold">{section.heading}</h3>
+                {/* Not a control, despite the handlers. What is being listened for is a *selection*
                 — the user dragging or shift-arrowing across a phrase to comment on it — and both
                 pointers and keyboards are covered, which is what the rule protects. Making this a
                 button would be a lie about what it does, and would take the text out of the
                 reading order it belongs in. */}
-            {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-            <div
-              // The tint is the whole signal: this text is in the note but nobody has agreed to it.
-              className="bg-accent-soft selection:bg-accent selection:text-accent-fg mt-1 rounded-md px-2 py-1.5"
-              onMouseUp={(e) => onSelect(section.heading, section.body, e.currentTarget)}
-              onKeyUp={(e) => onSelect(section.heading, section.body, e.currentTarget)}
-            >
-              {/* Rendered, like every other section — a draft is the thing a person reads most
+                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                <div
+                  // The tint is the whole signal: this text is in the note but nobody has agreed to it.
+                  // Violet for the same reason the card is — this is the model's prose. The *selection*
+                  // inside it stays the accent, because that one is the user choosing, which is exactly
+                  // what green means everywhere else.
+                  className="bg-ai-soft selection:bg-accent selection:text-accent-fg mt-1 rounded-md px-2 py-1.5"
+                  onMouseUp={(e) => onSelect(section.heading, section.body, e.currentTarget)}
+                  onKeyUp={(e) => onSelect(section.heading, section.body, e.currentTarget)}
+                >
+                  {/* Rendered, like every other section — a draft is the thing a person reads most
                   carefully, and it was the one showing them `- [ ] @Ngọc …`. No checkbox works
                   here: nobody has agreed to this text yet, so there is nothing to tick. */}
-              <Markdown markdown={section.body} />
-            </div>
-          </section>
-        ))}
+                  <Markdown markdown={section.body} />
+                </div>
+              </section>
+            ))}
 
-        {picked && (
-          <div className="border-accent/40 bg-bg-soft rounded-[var(--radius-card)] border p-2.5">
-            <p className="text-fg-dim text-micro">
-              {t("draft.revising", { heading: picked.heading })}{" "}
-              <span className="italic">“{shorten(picked.text)}”</span>
-            </p>
+            {picked && (
+              <div className="border-ai/40 bg-bg-soft rounded-[var(--radius-card)] border p-2.5">
+                <p className="text-fg-dim text-micro">
+                  {t("draft.revising", { heading: picked.heading })}{" "}
+                  <span className="italic">“{shorten(picked.text)}”</span>
+                </p>
+                <form
+                  className="mt-2 flex gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submitRefine();
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={instruction}
+                    onChange={(e) => setInstruction(e.target.value)}
+                    placeholder={t("draft.revise_placeholder")}
+                    aria-label={t("draft.revise_label")}
+                    disabled={busy}
+                    className="border-line bg-bg flex-1 rounded-lg border px-2.5 py-1.5 text-sm"
+                  />
+                  <Button size="sm" variant="primary" type="submit" busy={busy}>
+                    {t("draft.apply")}
+                  </Button>
+                  <Button size="sm" variant="ghost" type="button" onClick={() => setPicked(null)}>
+                    {t("draft.cancel")}
+                  </Button>
+                </form>
+              </div>
+            )}
+
+            {draft.turns.length > 0 && (
+              <ol className="border-line space-y-1.5 border-t pt-3">
+                {draft.turns.map((turn, i) => (
+                  <li
+                    key={`${turn.role}-${i}`}
+                    className={cn("text-meta", turn.role === "you" ? "text-fg" : "text-fg-faint")}
+                  >
+                    <span className="font-medium">
+                      {turn.role === "you" ? t("draft.you") : t("draft.agent")}:{" "}
+                    </span>
+                    {turn.text}
+                  </li>
+                ))}
+              </ol>
+            )}
+
             <form
-              className="mt-2 flex gap-2"
+              className="border-line flex gap-2 border-t pt-3"
               onSubmit={(e) => {
                 e.preventDefault();
-                submitRefine();
+                if (!message.trim()) return;
+                onChat(message.trim());
+                setMessage("");
               }}
             >
               <input
-                autoFocus
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                placeholder={t("draft.revise_placeholder")}
-                aria-label={t("draft.revise_label")}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder={t("draft.chat_placeholder")}
+                aria-label={t("draft.chat_send")}
                 disabled={busy}
                 className="border-line bg-bg flex-1 rounded-lg border px-2.5 py-1.5 text-sm"
               />
-              <Button size="sm" variant="primary" type="submit" busy={busy}>
-                {t("draft.apply")}
-              </Button>
-              <Button size="sm" variant="ghost" type="button" onClick={() => setPicked(null)}>
-                {t("draft.cancel")}
+              <Button size="sm" type="submit" busy={busy}>
+                {t("draft.send")}
               </Button>
             </form>
-          </div>
-        )}
-
-        {draft.turns.length > 0 && (
-          <ol className="border-line space-y-1.5 border-t pt-3">
-            {draft.turns.map((turn, i) => (
-              <li
-                key={`${turn.role}-${i}`}
-                className={cn("text-meta", turn.role === "you" ? "text-fg" : "text-fg-faint")}
-              >
-                <span className="font-medium">
-                  {turn.role === "you" ? t("draft.you") : t("draft.agent")}:{" "}
-                </span>
-                {turn.text}
-              </li>
-            ))}
-          </ol>
-        )}
-
-        <form
-          className="border-line flex gap-2 border-t pt-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!message.trim()) return;
-            onChat(message.trim());
-            setMessage("");
-          }}
-        >
-          <input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder={t("draft.chat_placeholder")}
-            aria-label={t("draft.chat_send")}
-            disabled={busy}
-            className="border-line bg-bg flex-1 rounded-lg border px-2.5 py-1.5 text-sm"
-          />
-          <Button size="sm" type="submit" busy={busy}>
-            {t("draft.send")}
-          </Button>
-        </form>
-      </CardBody>
-    </Card>
+          </CardBody>
+        </div>
+      </Card>
+    </m.div>
   );
 }
 

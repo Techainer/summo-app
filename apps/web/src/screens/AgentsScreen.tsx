@@ -1,3 +1,5 @@
+import { Bot } from "lucide-react";
+
 import { DreamPanel } from "../components/agents/Dream";
 import { AnimatePresence, m } from "motion/react";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -5,6 +7,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Avatar,
   Button,
+  Empty,
   Card,
   CardBody,
   CardHeader,
@@ -179,6 +182,26 @@ export function AgentsScreen() {
           {t("agents.unreadable", { path: broken.path, reason: broken.reason })}
         </p>
       ))}
+
+      {/* A roster that came back with nobody in it.
+       *
+       * Reachable, and it drew nothing at all: an agent is a folder of Markdown in the vault, so
+       * deleting the last one — or opening a vault that never had any — left this screen as a
+       * heading above six hundred pixels of background. That is the same defect `e2e/density.mjs`
+       * was written for, on one of the three screens that suite does not visit.
+       *
+       * `roster` being null is a different state and stays blank: that is the moment before the
+       * first load returns, and an empty state that flashes before the content is worse than the
+       * wait it replaced.
+       *
+       * No action button, and that is not an oversight. `Empty` asks for a next action wherever
+       * there is one, and here there genuinely is not: an agent is a folder somebody puts in the
+       * vault, and this screen has never been able to make one. A button opening a form the daemon
+       * cannot save would be worse than the blank screen it replaces. So the hint is the action —
+       * it names the exact path, which the reader can act on with the tools they already have. */}
+      {roster && roster.agents.length === 0 && (
+        <Empty icon={Bot} title={t("agents.none")} hint={t("agents.none_hint")} />
+      )}
 
       <m.div
         initial="hidden"

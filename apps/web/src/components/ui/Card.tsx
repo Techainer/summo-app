@@ -33,14 +33,26 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-center gap-3 px-5 pt-4 pb-3", className)}>
+    /* Wraps rather than squeezes.
+     *
+     * `min-w-0` on the heading below lets it shrink to nothing so the actions always fit, which is
+     * right until the actions are two buttons and the title is a Vietnamese sentence: then the
+     * heading is squeezed to about half the card and breaks mid-phrase, and the count breaks with
+     * it — "Bản tóm tắt / agent viết" beside "· chưa / duyệt" on the draft panel, in the very
+     * screenshot the landing page was built from. Allowing the row to wrap puts the buttons on a
+     * line of their own instead, which costs one row on a card that had the space anyway. */
+    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 px-5 pt-4 pb-3", className)}>
       {/* The heading is a flex row, because a title is often an icon beside a word — and a
           `<span class="flex">` inside a plain `<h2>` is a block, which pushed the count onto a line
           of its own. Every card with an icon in its title was reading "Đang chờ bạn" and then, on
           the next line, "· 1". */}
       <h2 className="text-body flex min-w-0 items-center gap-2 font-semibold tracking-tight">
         {title}
-        {count !== undefined && <span className="text-fg-faint font-normal">· {count}</span>}
+        {/* One phrase, so it breaks as one thing or not at all. "· chưa duyệt" splitting across
+            two lines reads as two separate marks rather than as a status. */}
+        {count !== undefined && (
+          <span className="text-fg-faint font-normal whitespace-nowrap">· {count}</span>
+        )}
       </h2>
       {actions && <div className="ml-auto flex items-center gap-1.5">{actions}</div>}
     </div>

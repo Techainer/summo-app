@@ -108,6 +108,7 @@
     "play": "Phát",
     "pause": "Tạm dừng",
     "cannot_open_audio": "Không mở được file ghi âm.",
+    "speed": "Tốc độ phát",
     "right_panel": "Nội dung bên phải",
     "speaker_you": "Bạn",
     "no_audio": "Buổi họp này không còn bản ghi âm. Transcript vẫn đầy đủ.",
@@ -548,6 +549,8 @@
     "mic_timeout": "Không mở được micro. Kiểm tra xem có ứng dụng khác đang dùng nó không, rồi thử lại."
   },
   "agents": {
+    "none": "Chưa có agent nào",
+    "none_hint": "Mỗi agent là một thư mục Markdown trong ~/.summo/vault/agents. Bỏ một thư mục vào đó là nó hiện ở đây — Summo đọc thẳng từ file chứ không giữ bản riêng.",
     "title": "Agent",
     "subtitle": "Mỗi agent là một thư mục Markdown trong kho của bạn.",
     "pick": "Chọn một agent để xem nó được giao việc gì.",

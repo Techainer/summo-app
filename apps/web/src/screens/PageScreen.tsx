@@ -26,9 +26,15 @@ import { useLoad } from "../lib/use-load";
 type Pane = "comments" | "transcript";
 
 // Keys, resolved at render — a module-level array is built before any provider exists.
+//
+// Transcript first, and first is also the default. What somebody opens a recorded meeting to do is
+// read what was said; comments are what they come back for later, once there is a conversation to
+// have about it. Defaulting to comments meant the widest panel on the screen opened on "nobody has
+// said anything yet" every time — visible in the screenshot the landing page was built from, where
+// two fifths of the window is an empty thread.
 const PANES = [
-  { value: "comments" as const, labelKey: "comments.title" },
   { value: "transcript" as const, labelKey: "meeting.transcript" },
+  { value: "comments" as const, labelKey: "comments.title" },
 ];
 
 /**
@@ -66,7 +72,7 @@ export function PageScreen() {
   const [loaded, setLoaded] = useState<{ id: string; detail: MeetingDetail } | null>(null);
   const detail = loaded?.id === pageId ? loaded.detail : null;
   const [error, setError] = useState<string | null>(null);
-  const [pane, setPane] = useState<Pane>("comments");
+  const [pane, setPane] = useState<Pane>("transcript");
   const [at, setAt] = useState(0);
   const [summarising, setSummarising] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -327,6 +333,24 @@ export function PageScreen() {
   const note = summary.kind === "note" && transcript.length === 0;
 
   /**
+   * What the user typed, kept apart from what the model wrote.
+   *
+   * Both are `##` sections in the same file, so the page drew them as one run of identical cards in
+   * whatever order the file happened to hold — a person's own notes could land under the summary
+   * of them, under the export panel, anywhere. They are not peers: one is the reason to trust the
+   * other. Splitting them here is what lets the notes lead the column and the summary say, in its
+   * own colour, that a model wrote it.
+   */
+  const typed = sections.find((s) => s.heading === NOTES_HEADING);
+  /**
+   * The summary, as it stands on disk.
+   *
+   * Draft sections are excluded because {@link DraftPanel} owns those until they are approved, and
+   * drawing them in both places shows the same paragraph twice.
+   */
+  const summarised = sections.filter((s) => !s.draft && s.heading !== NOTES_HEADING);
+
+  /**
    * This page, right now, with the microphone open.
    *
    * The document is being written by the daemon's recorder while this renders, so the screen shows
@@ -416,8 +440,28 @@ export function PageScreen() {
       )}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_380px]">
+        {/* The order is the order somebody works in, which is not the order this column was built
+            in. It ran player, summary machinery, ask, export, and then — last, under the button
+            that mails it — whatever the person had actually written.
+
+            Now: what you wrote, what it was summarised into, the recording it came from, and then
+            the two things you do with it. Reading beats listening back on almost every visit, so
+            the transport moved below the words; export moved under the summary because you cannot
+            sensibly send a thing you have not read. */}
         <div className="space-y-4">
-          <Player lanes={lanes} marks={marks} onTime={setAt} ref={player} />
+          {typed && typed.body.trim() && (
+            <Card>
+              <CardHeader title={t("meeting.your_notes")} />
+              <CardBody>
+                <Markdown
+                  markdown={typed.body}
+                  resolveImage={resolveImage}
+                  onToggleTask={tick}
+                  pending={ticking}
+                />
+              </CardBody>
+            </Card>
+          )}
 
           {draft && (
             <DraftPanel
@@ -442,16 +486,7 @@ export function PageScreen() {
             />
           )}
 
-          {/* Under the summary, because everything here is asked *about* what the meeting
-              concluded. Writing the follow-up email is not a feature of its own — it is one of
-              the things people ask for, and what comes back is a note like any other. */}
-          <AskPanel meeting={pageId} />
-
-          {/* Taking it out again. Under the summary because that is the order people want it in:
-              read what happened, then send it to somebody. */}
-          <Export meeting={pageId} title={summary.title} day={summary.day ?? ""} recorded={!note} />
-
-          {sections.length === 0 ? (
+          {!draft && summarised.length === 0 ? (
             <Card>
               {/* A column, because these are three separate things stacked and they were laid out
                   as flowing text: an inline link followed by an inline-flex button put the settings
@@ -501,26 +536,35 @@ export function PageScreen() {
               </CardBody>
             </Card>
           ) : (
-            sections
-              // Unapproved sections belong to the draft panel; drawing them here as well would
-              // show the same paragraph twice.
-              .filter((section) => !section.draft)
-              .map((section) => (
-                <Card key={section.heading}>
-                  <CardHeader title={section.heading} />
-                  <CardBody>
-                    {/* The body as it is on disk, comments and all: the renderer strips them, and
-                        the ids inside them are what makes a checkbox here tickable. */}
-                    <Markdown
-                      markdown={section.body}
-                      resolveImage={resolveImage}
-                      onToggleTask={tick}
-                      pending={ticking}
-                    />
-                  </CardBody>
-                </Card>
-              ))
+            summarised.map((section) => (
+              <Card key={section.heading}>
+                <CardHeader title={section.heading} />
+                <CardBody>
+                  {/* The body as it is on disk, comments and all: the renderer strips them, and
+                      the ids inside them are what makes a checkbox here tickable. */}
+                  <Markdown
+                    markdown={section.body}
+                    resolveImage={resolveImage}
+                    onToggleTask={tick}
+                    pending={ticking}
+                  />
+                </CardBody>
+              </Card>
+            ))
           )}
+
+          {/* Below the words. Listening back is the rarer visit — the transcript is searchable and
+              the summary is already written — and a transport at the top of the column put the one
+              control nobody uses where the eye lands first. */}
+          <Player lanes={lanes} marks={marks} onTime={setAt} ref={player} />
+
+          {/* Asked *about* what the meeting concluded, so it sits under the conclusion. Writing the
+              follow-up email is not a feature of its own — it is one of the things people ask for,
+              and what comes back is a note like any other. */}
+          <AskPanel meeting={pageId} />
+
+          {/* Taking it out again, last: read what happened, then send it to somebody. */}
+          <Export meeting={pageId} title={summary.title} day={summary.day ?? ""} recorded={!note} />
         </div>
 
         <aside className="space-y-3">

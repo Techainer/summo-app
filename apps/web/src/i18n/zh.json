@@ -108,6 +108,7 @@
     "play": "播放",
     "pause": "暂停",
     "cannot_open_audio": "打不开这段录音。",
+    "speed": "播放速度",
     "right_panel": "右侧面板",
     "speaker_you": "我",
     "no_audio": "这场会议的音频已清理，转写内容仍然完整。",
@@ -548,6 +549,8 @@
     "mic_timeout": "无法打开麦克风。检查是否有其他应用正在占用，然后重试。"
   },
   "agents": {
+    "none": "还没有智能体",
+    "none_hint": "每个智能体是 ~/.summo/vault/agents 里的一个 Markdown 文件夹。放进去就会出现在这里 — Summo 直接读取文件，不另存副本。",
     "title": "智能体",
     "subtitle": "每一个都是仓库里的一个 Markdown 文件夹。",
     "pick": "选一个智能体，看它被交代了什么。",
