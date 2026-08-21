@@ -67,5 +67,14 @@
         }
       }
     }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "summo"
+        ]
+      }
+    }
   }
 }
