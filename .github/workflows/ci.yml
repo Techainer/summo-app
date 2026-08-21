@@ -119,7 +119,11 @@ jobs:
     name: build ${{ matrix.target }}
     needs: plan
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    # Ninety, because of one runner. `macos-13` is the Intel image: slower cores, no cache on a
+    # release build, Opus compiled from source, and the two ONNX crates built on top of the
+    # workspace. It lands around the hour mark, which is exactly where a sixty-minute limit turns a
+    # green build into a red one for no reason anybody can act on.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
