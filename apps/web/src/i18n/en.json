@@ -483,7 +483,10 @@
     "table_column_after": "Add column",
     "table_column_delete": "Delete column",
     "table_header_row": "Header row",
-    "table_delete": "Delete table"
+    "table_delete": "Delete table",
+    "mark_highlight": "Highlight",
+    "code_language": "Language",
+    "code_plain": "None"
   },
   "agenda": {
     "title": "Calendar",

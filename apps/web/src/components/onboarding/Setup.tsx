@@ -209,10 +209,9 @@ export function Setup({ onDone }: { onDone: () => void }) {
     if (!chosen) return;
     setError(null);
     try {
-      // The recogniser and the voice detector, together, because recording needs both. Installing
-      // only the recogniser is what shipped: setup said ready, the pipeline refused for want of a
-      // detector, and the app ran a timer over a session that was never recording. The detector is
-      // 2 MB — there is no version of this screen where asking about it separately is worth it.
+      // The recogniser and the voice detector together, because recording needs both: without a
+      // detector nothing decides where an utterance ends and no text is ever committed. The
+      // detector is 2 MB, so it is not worth a separate question.
       const jobs = [await client.install(chosen)];
       if (!hasDetector) jobs.push(await client.install(VOICE_DETECTOR));
       // Speaker attribution: small, and the alternative is discovering it is missing at the moment

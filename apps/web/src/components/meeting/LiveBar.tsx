@@ -60,9 +60,8 @@ export function LiveBar() {
 
       {/* The meter takes the space that is left. It is the widest thing here on purpose: it is the
           only part that moves with the room rather than with the clock. */}
-      {/* A height, because the meter draws bars with a percentage transform and a flex child with
-          no height of its own collapses to nothing — which is what the first version of this bar
-          shipped: an empty gap where the proof that the microphone hears you was supposed to be. */}
+      {/* A height, because the bars are sized by percentage: a flex child with no height of its own
+          collapses, and the meter draws nothing. */}
       <div className="h-8 min-w-0 flex-1">
         <Waveform level={level} active />
       </div>

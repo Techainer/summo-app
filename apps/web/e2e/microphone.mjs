@@ -124,16 +124,25 @@ const press = (page) =>
   // the whole reason the recording screen was replaced by this one — a page that shows words
   // arriving and cannot take a keystroke is the old screen with a new layout.
   if (recognises) {
-    const editor = page.getByRole("textbox", { name: /Ghi chú|ghi chú/ }).first();
-    if ((await editor.count()) === 0) {
+    // Waited for, not assumed: the editor is a lazy chunk, and on a loaded machine it mounts a
+    // second or two after the page it lives on. Typing into the space where it is about to be goes
+    // nowhere and looks exactly like an editor that refuses input.
+    const editor = page.locator(".ProseMirror[contenteditable='true']").first();
+    const ready = await editor
+      .waitFor({ state: "visible", timeout: 20000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!ready) {
       problems.push("the meeting has nowhere to type");
     } else {
-      await editor.click();
-      await page.keyboard.type("Ngân sách chốt thứ năm.");
-      await page.waitForTimeout(600);
-      if (!(await page.locator("body").innerText()).includes("Ngân sách chốt thứ năm")) {
-        problems.push("typing into the meeting note put nothing on screen");
+      let landed = false;
+      for (let attempt = 0; attempt < 3 && !landed; attempt += 1) {
+        await editor.click();
+        await page.keyboard.type("Ngân sách chốt thứ năm.");
+        await page.waitForTimeout(800);
+        landed = (await page.locator("body").innerText()).includes("Ngân sách chốt thứ năm");
       }
+      if (!landed) problems.push("typing into the meeting note put nothing on screen");
     }
   }
 

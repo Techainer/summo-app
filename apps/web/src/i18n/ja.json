@@ -483,7 +483,10 @@
     "table_column_after": "列を追加",
     "table_column_delete": "列を削除",
     "table_header_row": "見出し行",
-    "table_delete": "表を削除"
+    "table_delete": "表を削除",
+    "mark_highlight": "ハイライト",
+    "code_language": "言語",
+    "code_plain": "指定なし"
   },
   "agenda": {
     "title": "カレンダー",

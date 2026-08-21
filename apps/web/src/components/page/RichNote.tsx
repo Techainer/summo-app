@@ -4,6 +4,7 @@ import { DragHandle } from "@tiptap/extension-drag-handle-react";
 import { TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import Highlight from "@tiptap/extension-highlight";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import {
@@ -26,6 +27,7 @@ import {
   Table as TableIcon,
   Trash2,
   Type,
+  Highlighter,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -62,6 +64,29 @@ import { PageLink, TABLE, VaultImage } from "./blocks";
  * parses. Ticking a box in a note ticks it on the task board, in the report and in the agent's
  * view, because there is one representation and it is the text.
  */
+/**
+ * The languages a code block can be tagged with.
+ *
+ * A list rather than a free-text field: the tag goes into the fence, every reader of the file has
+ * its own set of names, and a typo means no highlighting anywhere with nothing on screen to say
+ * why. These are the ones a meeting note actually carries.
+ */
+const CODE_LANGUAGES = [
+  "bash",
+  "json",
+  "yaml",
+  "sql",
+  "python",
+  "javascript",
+  "typescript",
+  "rust",
+  "go",
+  "java",
+  "html",
+  "css",
+  "markdown",
+] as const;
+
 export function RichNote({
   markdown,
   onChange,
@@ -167,6 +192,10 @@ export function RichNote({
           allowBase64: false,
           resolve: resolveImage ?? ((link: string) => link),
         }),
+        // `==text==`, which Obsidian, Bear and Typora all read. Multicolour is deliberately off:
+        // a colour is a fact this file cannot carry, and a highlight that turns grey on the next
+        // open is worse than one colour that always survives.
+        Highlight.configure({ multicolor: false }),
         Placeholder.configure({ placeholder: t("notes.slash_hint") }),
       ],
       [resolveImage, t],
@@ -179,11 +208,9 @@ export function RichNote({
         // nobody re-reads.
         class: "font-reading text-body leading-relaxed outline-none",
         "aria-label": t("notes.body"),
-        // A `contenteditable` div is not a text field to anything that reads the page. It carried
-        // only the label, so assistive technology announced a group with a name and no indication
-        // that anything could be typed into it — and the release check that drives a clean install
-        // could not find the editor by role either, which is how this was noticed. The textarea
-        // this replaced was a `<textarea>`, and got both for free.
+        // A `contenteditable` div is not a text field to anything reading the page: without these
+        // two attributes assistive technology announces a named group and nothing typeable, and
+        // `getByRole("textbox")` finds no editor.
         role: "textbox",
         "aria-multiline": "true",
       },
@@ -428,6 +455,12 @@ export function RichNote({
         { key: "italic", icon: Italic, is: "italic", apply: (c: Chain) => c.toggleItalic() },
         { key: "strike", icon: Strikethrough, is: "strike", apply: (c: Chain) => c.toggleStrike() },
         { key: "code", icon: Code, is: "code", apply: (c: Chain) => c.toggleCode() },
+        {
+          key: "highlight",
+          icon: Highlighter,
+          is: "highlight",
+          apply: (c: Chain) => c.toggleHighlight(),
+        },
       ] as const,
     [],
   );
@@ -529,6 +562,36 @@ export function RichNote({
         <p role="status" className="text-fg-faint text-micro mt-2">
           {t("notes.uploading")}
         </p>
+      )}
+
+      {/* Which language a code block is in.
+          The converter has always written ```` ```rust ```` and read it back, and nothing in the
+          interface could set it — so every block somebody typed came back as plain text with no
+          highlighting and no way to ask for any. A select, in the flow, only while the caret is in
+          a code block. */}
+      {editor?.isActive("codeBlock") && (
+        <label className="border-line bg-bg-raised sticky bottom-2 z-10 mt-2 flex w-fit items-center gap-2 rounded-[var(--radius-pill)] border px-3 py-1.5 shadow-[var(--shadow-sm)]">
+          <span className="text-fg-faint text-micro">{t("notes.code_language")}</span>
+          <select
+            aria-label={t("notes.code_language")}
+            value={(editor.getAttributes("codeBlock").language as string | null) ?? ""}
+            onChange={(event) =>
+              editor
+                .chain()
+                .focus()
+                .updateAttributes("codeBlock", { language: event.target.value || null })
+                .run()
+            }
+            className="text-micro bg-transparent outline-none"
+          >
+            <option value="">{t("notes.code_plain")}</option>
+            {CODE_LANGUAGES.map((language) => (
+              <option key={language} value={language}>
+                {language}
+              </option>
+            ))}
+          </select>
+        </label>
       )}
 
       {/* Formatting where the text is, rather than in a toolbar at the top of a pane the user is

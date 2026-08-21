@@ -323,7 +323,7 @@ mod tests {
         .unwrap();
     }
 
-    /// The one that shipped: a recogniser and no voice detector reported "ready to record".
+    /// A recogniser with no voice detector must not report "ready to record".
     ///
     /// The pipeline then refused at `resolve_vad`, the app kept a timer running, and no words ever
     /// arrived. A checklist that says ready has to mean it — this is the assertion that makes the
