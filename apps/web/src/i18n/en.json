@@ -108,6 +108,7 @@
     "play": "Play",
     "pause": "Pause",
     "cannot_open_audio": "Could not open the recording.",
+    "speed": "Playback speed",
     "right_panel": "Right panel",
     "speaker_you": "You",
     "no_audio": "This meeting's audio has been pruned. The transcript is complete.",
@@ -548,6 +549,8 @@
     "mic_timeout": "The microphone did not open. Check whether another application is using it, then try again."
   },
   "agents": {
+    "none": "No agents yet",
+    "none_hint": "An agent is a folder of Markdown in ~/.summo/vault/agents. Add one there and it appears here — Summo reads the files back rather than keeping its own copy.",
     "title": "Agents",
     "subtitle": "Each one is a folder of Markdown in your vault.",
     "pick": "Choose an agent to see what it was told.",

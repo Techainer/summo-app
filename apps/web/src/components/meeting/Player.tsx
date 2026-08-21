@@ -3,7 +3,6 @@ import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref
 
 import { useT } from "../../i18n/context";
 import { clock } from "../../lib/clock";
-import { cn } from "../../lib/cn";
 import { SegmentedControl } from "../ui";
 
 export interface PlayerHandle {
@@ -41,7 +40,25 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [speed, setSpeed] = useState(1);
-  const [error, setError] = useState<string | null>(null);
+  /**
+   * The lane that would not play, and why.
+   *
+   * Stored *with* its lane rather than as a bare flag, so switching lanes clears it without an
+   * effect having to remember to: a different lane is a different file, and one of them failing
+   * says nothing about the next.
+   *
+   * It was `setError(String(e))`, which put a raw DOMException in front of the reader, drawn in
+   * `text-rec` — the recording red — under a transport stuck at `0:00 / 0:00`. That is an alarm,
+   * and this is not an alarm. The transcript is complete either way; what has gone wrong is that
+   * one file cannot be opened, which is worth saying once, quietly, in the reader's own language.
+   *
+   * The first attempt at this replaced the whole transport with the "audio was pruned" notice.
+   * That was wrong twice over, and `e2e/meeting.mjs` caught it: it takes away the lane picker and
+   * the retry, and it asserts a *reason* — pruning — that nobody established. A file that will not
+   * open was not necessarily pruned; it may have been moved, or be mid-write, or be corrupt.
+   * Saying which would be inventing one.
+   */
+  const [failed, setFailed] = useState<{ lane: string } | null>(null);
 
   const current = lanes.find((l) => l.key === lane) ?? lanes[0];
 
@@ -62,6 +79,8 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
     element.playbackRate = speed;
   }, [speed, lane]);
 
+  const unplayable = failed?.lane === lane;
+
   const onTimeUpdate = useCallback(() => {
     const element = audio.current;
     if (!element) return;
@@ -72,10 +91,12 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
   const toggle = useCallback(() => {
     const element = audio.current;
     if (!element) return;
-    if (element.paused) void element.play().catch((e: unknown) => setError(String(e)));
+    if (element.paused) void element.play().catch(() => setFailed({ lane }));
     else element.pause();
-  }, []);
+  }, [lane]);
 
+  // No lane at all: audio retention is off and the daemon kept none. This one *is* the pruned case
+  // — there is no file to fail — so it is the one place the pruned sentence is true.
   if (!current) {
     return (
       <p className="border-line bg-bg-soft text-fg-faint text-meta rounded-[var(--radius-card)] border px-4 py-3">
@@ -94,7 +115,7 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
         onTimeUpdate={onTimeUpdate}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onError={() => setError(t("meeting.cannot_open_audio"))}
+        onError={() => setFailed({ lane })}
       >
         <track kind="captions" />
       </audio>
@@ -143,27 +164,27 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
             onChange={setLane}
           />
         )}
-        <div className="ml-auto flex items-center gap-1">
-          {SPEEDS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setSpeed(option)}
-              aria-pressed={speed === option}
-              className={cn(
-                "tabular text-micro rounded-full px-2 py-1 transition-colors",
-                speed === option
-                  ? "bg-accent-soft text-accent font-medium"
-                  : "text-fg-faint hover:text-fg",
-              )}
-            >
-              {option}×
-            </button>
-          ))}
-        </div>
+        {/* The same control as the lane picker beside it, rather than a row of loose pills that
+            happened to look like one. Five bare buttons with their own hover colours read as five
+            unrelated links; a segmented control reads as one choice with five positions, which is
+            what it is. Values are strings because that is what a segmented control switches on —
+            `speed` stays a number, since it is what `playbackRate` wants. */}
+        <SegmentedControl
+          className="ml-auto"
+          label={t("meeting.speed")}
+          size="sm"
+          options={SPEEDS.map((option) => ({ value: String(option), label: `${option}×` }))}
+          value={String(speed)}
+          onChange={(next) => setSpeed(Number(next))}
+        />
       </div>
 
-      {error && <p className="text-rec text-micro mt-2">{error}</p>}
+      {/* Said once, quietly, and without taking the controls away. `fg-dim` rather than `rec`:
+          this is information, not an alarm — the transcript above it is complete, and the lane
+          picker beside it is how somebody tries the other take. */}
+      {unplayable && (
+        <p className="text-fg-dim text-micro mt-2">{t("meeting.cannot_open_audio")}</p>
+      )}
     </div>
   );
 }

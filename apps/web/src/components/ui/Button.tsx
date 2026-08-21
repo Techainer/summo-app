@@ -45,6 +45,12 @@ export function Button({
     <Comp
       className={cn(
         "inline-flex items-center justify-center rounded-full font-medium",
+        // A label never wraps. `h-9` is a fixed height, so a two-line label does not make the
+        // button taller — it overflows it, which is what "Xác nhận" was doing on the draft panel
+        // in every screenshot the marketing site was built from. Vietnamese is the case that
+        // catches this: its words are short but many, so a label that fits in English arrives
+        // here as three tokens the flex container is happy to break.
+        "whitespace-nowrap",
         "transition-[background,border-color,filter,opacity,transform] duration-150",
         "disabled:pointer-events-none disabled:opacity-[var(--disabled-opacity)]",
         // Pressed, not just hovered. A button that does not move under the finger is the single
