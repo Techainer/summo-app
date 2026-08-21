@@ -109,6 +109,34 @@ export function I18nProvider({ children, extra, locale: forced }: Props) {
     document.documentElement.lang = active;
   }, [active]);
 
+  /**
+   * The language the download page was written in, offered once by a `summo://lang/<code>` link.
+   *
+   * This is the answer to a narrow question: somebody who reads Vietnamese, on a Mac set to
+   * English, downloading from the Vietnamese page. The operating system says English and is the
+   * only signal the app otherwise has, so it opens in English — and the one piece of evidence to
+   * the contrary is the page they were standing on, which is what the link carries over.
+   *
+   * **It never overrides a choice.** A saved value in storage means the user picked a language, in
+   * settings or in setup, and a link from a web page does not get to undo that — otherwise
+   * revisiting the download page and clicking the wrong button silently changes the app somebody
+   * has been using for a month. So it applies only when nothing has been saved, which is exactly
+   * the first-run case it exists for. `setLocale` then writes it, so the offer is not repeatable.
+   *
+   * A language the app does not ship is ignored rather than fallen back on: falling back would set
+   * English on a first run whose OS locale had already chosen better.
+   */
+  useEffect(() => {
+    const onOffer = (event: Event) => {
+      const code = (event as CustomEvent<string>).detail;
+      if (read()) return;
+      if (!languages.some((language) => language.code === code)) return;
+      value.setLocale(code);
+    };
+    window.addEventListener("summo:set-locale", onOffer);
+    return () => window.removeEventListener("summo:set-locale", onOffer);
+  }, [languages, value]);
+
   // Nothing renders against a catalog that has not arrived. An app painted from an empty one would
   // show its own key names — `nav.record`, `meeting.stop` — and replace them a frame later, which
   // reads as a glitch rather than as loading.

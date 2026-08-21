@@ -158,6 +158,13 @@ export async function bridgeShellEvents(): Promise<(() => void) | null> {
     listen<string>("summo://menu", (event) => {
       window.dispatchEvent(new CustomEvent("summo:menu", { detail: event.payload }));
     }),
+    // A `summo://lang/<code>` link, which is how the download page hands over the language it was
+    // written in. The shell has already checked the code is a language tag and nothing else; what
+    // it means is decided here, because which language the interface is in lives in this side's
+    // storage and the shell has nothing to write.
+    listen<string>("summo://set-locale", (event) => {
+      window.dispatchEvent(new CustomEvent("summo:set-locale", { detail: event.payload }));
+    }),
   ]);
   return () => stops.forEach((stop) => stop());
 }

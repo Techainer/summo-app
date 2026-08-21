@@ -30,8 +30,60 @@ fn record_shortcut() -> Shortcut {
     Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyR)
 }
 
+/// The language a `summo://` URL is asking for, or `None` if it is not asking for one.
+///
+/// Only `summo://lang/<code>` means anything today, and the code is checked rather than trusted:
+/// this string arrives from a web page, and the one thing it is allowed to do is name a language.
+/// Anything else — a path traversal, a script, a hundred kilobytes — falls out here as `None`.
+///
+/// The shape is deliberately narrow. A URL scheme is an input surface the operating system hands to
+/// this process from *anywhere*, including a link on a page nobody here wrote, so it grants exactly
+/// one capability: choosing which words the interface is written in. Nothing that touches the vault,
+/// the microphone or the filesystem is reachable this way.
+fn language_from(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("summo://")?;
+    let code = rest.strip_prefix("lang/")?.trim_end_matches('/');
+    // BCP-47 as far as this needs to care: letters, digits and hyphens, and short.
+    let ok = !code.is_empty()
+        && code.len() <= 12
+        && code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+    ok.then(|| code.to_ascii_lowercase())
+}
+
+/// Hand a language the webview asked for to the webview.
+///
+/// Emitted rather than written: which language the interface is in lives in the web app's own
+/// storage — see `i18n/context.tsx`, where it is per-machine on purpose and has to be readable
+/// before the daemon handshake — so the shell has nothing to write and no business writing it.
+fn offer_language(app: &tauri::AppHandle, url: &str) {
+    if let Some(code) = language_from(url) {
+        let _ = app.emit("summo://set-locale", code);
+    }
+}
+
 fn main() {
     let app = tauri::Builder::default()
+        // The deep link, and the guarantee that it reaches the window that is already open.
+        //
+        // These two are one feature. `deep-link` registers `summo://` with the OS; `single-instance`
+        // is what stops a second copy of the app starting to service it. Without the pair, clicking
+        // the link on the download page while Summo is running spawns a second shell — a second
+        // window, a second tray icon, and two processes racing for the same vault. On macOS the OS
+        // routes the URL to the running app itself and this is unnecessary; on Windows and Linux it
+        // is the whole mechanism, which is why the plugin carries the `deep-link` feature.
+        //
+        // Registered first, and before anything else asks for a lock: the plugin's own
+        // documentation is explicit that single-instance has to be the first plugin added or the
+        // second process can get far enough to do damage before it is told to stop.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // The second invocation's arguments are where the URL arrives on Windows and Linux.
+            for arg in &argv {
+                offer_language(app, arg);
+            }
+            // Whatever it wanted, somebody just tried to open Summo. Show them the one that exists.
+            window::show(app);
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         // The file dialog for `Nhập file`. The webview only ever gets a *path* back, never the
         // bytes: the daemon reads the file itself, so a two-hour video never crosses the IPC
         // boundary.
@@ -72,6 +124,28 @@ fn main() {
                     "summo: the global record shortcut is not available ({e}). \
                      Everything else works; use the record button in the window."
                 );
+            }
+            // The link, in both of the states it can arrive in.
+            //
+            // `on_open_url` is the running app being handed one — the macOS path, and the Windows
+            // and Linux path once single-instance has forwarded it. `get_current` is the cold start:
+            // the app was not running, the OS launched it *because* of the link, and by the time
+            // this hook runs the event has already been and gone. Handling only the first is the
+            // bug where the link works on the second click and never on the first.
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    for url in event.urls() {
+                        offer_language(&handle, url.as_str());
+                    }
+                    window::show(&handle);
+                });
+                if let Ok(Some(urls)) = app.deep_link().get_current() {
+                    for url in urls {
+                        offer_language(app.handle(), url.as_str());
+                    }
+                }
             }
             build_tray(app.handle())?;
             // A menu bar that fails to build is not a reason to refuse to start: the same rule the
@@ -419,4 +493,55 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<()> {
         let _ = app.emit("summo://menu", id);
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::language_from;
+
+    #[test]
+    fn reads_the_language_out_of_a_link() {
+        assert_eq!(language_from("summo://lang/vi").as_deref(), Some("vi"));
+        assert_eq!(language_from("summo://lang/en").as_deref(), Some("en"));
+        // A region subtag is a language tag too, and the web side matches on the primary one.
+        assert_eq!(
+            language_from("summo://lang/zh-Hant").as_deref(),
+            Some("zh-hant")
+        );
+        // Trailing slashes come from link builders that join paths; they mean nothing here.
+        assert_eq!(language_from("summo://lang/ja/").as_deref(), Some("ja"));
+    }
+
+    /// This string arrives from a web page, so the interesting cases are the hostile ones.
+    ///
+    /// None of these can reach the interface: the web side additionally refuses any code it does
+    /// not ship a catalogue for. This is the first of the two gates, and it is the one that keeps a
+    /// path, a script or a novel from ever being emitted as an event payload at all.
+    #[test]
+    fn refuses_anything_that_is_not_a_language_tag() {
+        for hostile in [
+            "summo://lang/../../etc/passwd",
+            "summo://lang/<script>alert(1)</script>",
+            "summo://lang/vi vi",
+            "summo://lang/vi/../en",
+            "summo://lang/",
+            "summo://lang",
+            // A different capability entirely. Only `lang/` is answered, so a link inventing a verb
+            // gets nothing rather than something adjacent.
+            "summo://open/~/.summo/vault",
+            "summo://toggle-record",
+            // Not our scheme.
+            "https://summo.techainer.com/lang/vi",
+            "file:///etc/passwd",
+            "",
+        ] {
+            assert_eq!(language_from(hostile), None, "accepted {hostile:?}");
+        }
+    }
+
+    #[test]
+    fn refuses_a_code_long_enough_to_be_something_else() {
+        let long = format!("summo://lang/{}", "a".repeat(64));
+        assert_eq!(language_from(&long), None);
+    }
 }

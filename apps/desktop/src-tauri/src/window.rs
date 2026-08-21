@@ -59,6 +59,22 @@ fn main_window(app: &tauri::AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window("main")
 }
 
+/// Bring the window back, whatever state it was left in.
+///
+/// Closing hides rather than quits — see the window-event handler in `main` — so "already running"
+/// routinely means "running with no window on screen". Somebody who has just launched the app a
+/// second time, or clicked a `summo://` link, is asking to see it; unhiding without focusing would
+/// leave it behind whatever they were reading.
+///
+/// Every step is best-effort. A window that cannot be unminimised is not a reason to fail a launch.
+pub fn show(app: &tauri::AppHandle) {
+    if let Some(window) = main_window(app) {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 /// Resize, float and restore the window.
 ///
 /// Returns `Ok(())` and does nothing at all when there is no window — the same call from a browser

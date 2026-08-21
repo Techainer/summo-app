@@ -134,6 +134,100 @@ try {
       }
     }
   }
+
+  /**
+   * A first run, in a machine's own language.
+   *
+   * Everything above writes `summo.locale` before loading the page, which is the right way to test
+   * that a language *renders* — and it means every case above is one where the user has already
+   * chosen. Nothing covered what happens when they have not, which is the state every single
+   * install passes through exactly once and the one nobody developing this ever sees again.
+   *
+   * So: a fresh context per system locale, no storage, and the only signal is `navigator.languages`
+   * — which in the packaged desktop shell is what the operating system is set to. `ko` is in the
+   * list because Summo ships no Korean: a language with no catalogue has to land on English rather
+   * than on key names or a blank screen.
+   */
+  const FIRST_RUN = [
+    { system: "vi-VN", expect: "vi" },
+    { system: "ja-JP", expect: "ja" },
+    { system: "zh-CN", expect: "zh" },
+    { system: "en-GB", expect: "en" },
+    { system: "ko-KR", expect: "en" },
+  ];
+
+  for (const { system, expect } of FIRST_RUN) {
+    const context = await browser.newContext({
+      locale: system,
+      viewport: { width: 1280, height: 860 },
+    });
+    const page = await context.newPage();
+    await page.goto(daemon.url, { waitUntil: "domcontentloaded" });
+    await page.locator("header").waitFor({ timeout: 20000 });
+    // `<html lang>` is set from the active locale, and is the one place the answer is a bare tag
+    // rather than a sentence somebody has to recognise in a language they may not read.
+    const got = await page.evaluate(() => document.documentElement.lang);
+    const saved = await page.evaluate(() => window.localStorage.getItem("summo.locale"));
+    if (got !== expect) {
+      fail(`first run on a ${system} machine opened in ${got}, not ${expect}`);
+    }
+    // Detection must not *write* a choice. If it did, a later change of system language — or the
+    // download page's handoff link — would be silently outranked by a preference nobody set.
+    if (saved !== null) {
+      fail(`first run on a ${system} machine saved ${saved} without being asked`);
+    }
+    console.log(`first run ${system} → ${got}`);
+    await context.close();
+  }
+
+  /**
+   * The language the download page hands over, via `summo://lang/<code>`.
+   *
+   * The shell turns that URL into a Tauri event and `bridgeShellEvents` turns it into the DOM event
+   * dispatched below — outside a shell the bridge is a no-op, so the browser stands in for it here.
+   * That seam is the right place to cut: the shell's half is unit-tested in `main.rs`, where the
+   * hostile URLs live, and everything downstream of the event is what this exercises.
+   *
+   * Three rules, and the second two matter more than the first:
+   *
+   * - it applies on a first run, which is the case it exists for;
+   * - it never overrides a language the user chose, or revisiting the download page would silently
+   *   re-language an app somebody has used for a month;
+   * - a code Summo does not ship is ignored rather than fallen back on, because falling back would
+   *   put English on a machine whose own locale had already chosen better.
+   */
+  const offer = async (page, code) => {
+    await page.evaluate((c) => {
+      window.dispatchEvent(new CustomEvent("summo:set-locale", { detail: c }));
+    }, code);
+    await page.waitForTimeout(600);
+    return page.evaluate(() => document.documentElement.lang);
+  };
+
+  const HANDOFF = [
+    { system: "en-GB", saved: null, code: "vi", expect: "vi", why: "a first run takes the offer" },
+    { system: "en-GB", saved: "ja", code: "vi", expect: "ja", why: "a chosen language wins" },
+    { system: "vi-VN", saved: null, code: "ko", expect: "vi", why: "an unshipped code is ignored" },
+  ];
+
+  for (const { system, saved, code, expect, why } of HANDOFF) {
+    const context = await browser.newContext({
+      locale: system,
+      viewport: { width: 1280, height: 860 },
+    });
+    const page = await context.newPage();
+    if (saved) {
+      await page.addInitScript((v) => window.localStorage.setItem("summo.locale", v), saved);
+    }
+    await page.goto(daemon.url, { waitUntil: "domcontentloaded" });
+    await page.locator("header").waitFor({ timeout: 20000 });
+    const got = await offer(page, code);
+    if (got !== expect) {
+      fail(`summo://lang/${code} on a ${system} machine (saved=${saved}): ${why} — got ${got}`);
+    }
+    console.log(`handoff ${system} saved=${saved} + lang/${code} → ${got}`);
+    await context.close();
+  }
 } finally {
   await browser.close();
   daemon.stop();
