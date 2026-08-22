@@ -353,7 +353,22 @@
     "general_hint": "界面语言，以及浅色或深色。",
     "recording_hint": "麦克风权限，以及开始录音时使用的语言。",
     "vault_at": "所有内容都在",
-    "mt_ready": "已安装 {model}，可以翻译。"
+    "mt_ready": "已安装 {model}，可以翻译。",
+    "capture_heading": "如何采集与断句",
+    "capture_hint": "这些数值决定一句话何时算结束。没问题就别动。",
+    "capture_system": "同时录制电脑正在播放的声音",
+    "capture_system_hint": "这样 Zoom、Meet 或视频里说话的人也会被记录。",
+    "suggest_on_meeting": "检测到通话时提示录音",
+    "suggest_on_meeting_hint": "只提示，绝不自动录音。",
+    "silence": "多长的静音算一句结束 — {ms} ms",
+    "silence_label": "结尾静音",
+    "silence_hint": "越短出字越快，也越容易截断。默认 500 ms。",
+    "threshold": "多大声算说话 — {value}",
+    "threshold_label": "语音阈值",
+    "threshold_hint": "过高会漏掉小声说话，过低连打字声都会变成文字。默认 0.50。",
+    "threads": "推理线程数",
+    "threads_hint": "0 表示按硬件自动决定。",
+    "reset_capture": "恢复默认"
   },
   "status": {
     "unreachable": "无法连接到本机上的 Summo。",
@@ -659,7 +674,9 @@
     "role_missing": "未安装",
     "role_none": "未选择",
     "role_endpoint": "通过 {provider}",
-    "running_hint": "按下录音时运行的就是这些。"
+    "running_hint": "按下录音时运行的就是这些。",
+    "use_refine": "用于二次转写",
+    "in_use_refine": "二次转写"
   },
   "home": {
     "heading": "你的工作区",

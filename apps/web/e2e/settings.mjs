@@ -150,6 +150,37 @@ if ((await page.getByTestId("settings-tab-about").getAttribute("aria-current")) 
   console.log("translation: install offered here, and an installed model is named as installed");
 }
 
+// ---- the numbers a recording is made with --------------------------------
+//
+// How much silence ends a sentence, and how loud counts as speech. Both have been in the settings
+// file since the daemon was written, enforced on every session, and reachable only by editing that
+// file — so the delay before text appears was a decision made once, by us, for everybody.
+{
+  await page.goto(`${appUrl}?port=${port}&token=${token}#/settings?section=recording`, {
+    waitUntil: "networkidle",
+  });
+  await page.getByTestId("settings-capture").waitFor({ timeout: 10_000 });
+
+  const silence = page.getByTestId("min-silence");
+  await silence.fill("900");
+  await silence.dispatchEvent("pointerup");
+  await page.waitForTimeout(700);
+
+  const saved = await fetch(`${appUrl}/settings?token=${token}`).then((r) => r.json());
+  const ms = saved?.settings?.recording?.min_silence_ms;
+  console.log(`trailing silence is now ${ms} ms`);
+  if (ms !== 900) problems.push(`the slider did not reach the daemon: ${JSON.stringify(ms)}`);
+
+  // And back, from the button that exists so somebody who moved it can undo that without
+  // remembering what it was.
+  await page.getByRole("button", { name: "Về mặc định" }).click();
+  await page.waitForTimeout(700);
+  const back = await fetch(`${appUrl}/settings?token=${token}`).then((r) => r.json());
+  if (back?.settings?.recording?.min_silence_ms !== 500) {
+    problems.push(`reset left it at ${JSON.stringify(back?.settings?.recording?.min_silence_ms)}`);
+  }
+}
+
 // ---- storage: the section that had no interface at all --------------------
 await page.goto(`${appUrl}?port=${port}&token=${token}#/settings?section=storage`, {
   waitUntil: "networkidle",
