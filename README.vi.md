@@ -3,7 +3,8 @@
 # Summo
 
 [![CI](https://github.com/Techainer/summo-app/actions/workflows/ci.yml/badge.svg)](https://github.com/Techainer/summo-app/actions/workflows/ci.yml)
-[![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
+[![Bản mới nhất](https://img.shields.io/github/v/release/Techainer/summo-app?label=t%E1%BA%A3i%20v%E1%BB%81&color=2f9e6f)](https://github.com/Techainer/summo-app/releases/latest)
+[![Giấy phép: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 
 Summo là ứng dụng ghi và ghi chép cuộc họp chạy ngay trên máy của bạn: ghi âm hoặc nhập một bản ghi
 có sẵn, tạo transcript có gắn tên người nói, rồi lưu kết quả thành file Markdown mà bạn có thể mở,
@@ -11,6 +12,19 @@ grep, đồng bộ hay xoá tuỳ ý. Nhận dạng giọng nói và tách ngư�
 có phần tóm tắt và dịch mới gọi ra một model ngôn ngữ, và chỉ khi bạn tự cấu hình nó.
 
 Trang sản phẩm: [summo.techainer.com](https://summo.techainer.com).
+
+![Một buổi họp đang được ghi: thanh đỏ có đồng hồ và cột đo âm lượng, ghi chú bên trái, transcript chạy bên phải](docs/media/recording.webp)
+
+<sub>Một buổi họp đang chạy. Thanh trên cùng là phần ghi âm — thời gian đã ghi, và một cột đo động
+theo tiếng nói trong phòng, vì "đang ghi" và "có nghe thấy bạn" là hai chuyện hỏng riêng. Ghi chú
+bên trái, bản ghi bên phải: cùng một tài liệu, ghi vào cùng một file Markdown.</sub>
+
+| | |
+| --- | --- |
+| ![Trang chính: nút ghi kèm sóng âm, việc đang chờ, và các buổi gần đây](docs/media/home.webp) | ![Buổi họp đã xong: trình phát, xuất file, transcript bên cạnh bản tóm tắt](docs/media/meeting.webp) |
+| **Trang chính.** Ghi, nhập file hoặc viết — bên cạnh là những việc đang chờ bạn. | **Sau buổi họp.** Bản ghi âm, transcript, và bản tóm tắt do agent soạn để bạn duyệt. |
+| ![Danh mục mô hình: cái gì đang chạy trên máy này, rồi tới mọi model trong kho](docs/media/models.webp) | ![Trang chi tiết model: nguồn gốc, chi phí, và các số đo](docs/media/model-detail.webp) |
+| **Mô hình.** Cái sẽ chạy khi bạn bấm ghi — nhận dạng, dò giọng, nhận diện người nói, dịch — nằm trên đầu, rồi mới tới cả kho. | **Mỗi model có trang riêng**: giấy phép, ai phát hành, bộ nhớ, tốc độ và độ chính xác đã đo, kèm checksum. |
 
 ## Ba nguyên tắc
 

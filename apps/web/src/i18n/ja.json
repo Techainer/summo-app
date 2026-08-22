@@ -296,6 +296,16 @@
     "naming_note": "声に名前を付けると、過去に取り違えた記録もまとめて直ります。"
   },
   "settings": {
+    "recognition_heading": "どのモデルが聞くか",
+    "recognition_hint": "既定では言語が決めます。その言語に最適な導入済みモデルを使います。モデルを自分で選ぶと、そのモデルが対応する全言語を使えます。",
+    "recognition_none": "音声モデルがまだありません。モデル画面から導入してください。",
+    "by_language": "言語で選ぶ",
+    "by_model": "モデルで選ぶ",
+    "the_model": "モデル",
+    "the_language": "言語",
+    "pick_a_model": "モデルを選ぶ",
+    "detect_it": "文ごとに自動判定",
+    "model_overruled": "{language} には {model} が推奨です。選んだモデルをそのまま使います。",
     "language": "言語",
     "language_hint": "~/.summo/locales/ にJSONファイルを置くと言語を追加できます",
     "summary_language": "要約の言語",
@@ -409,7 +419,9 @@
     "tight_memory": "この端末ではメモリが足りない可能性があります。",
     "spoken_any": "自動判定（すべての言語）",
     "also_vad": "音声区間検出を同梱 — 文字起こしに必須",
-    "also_speaker": "話者識別を同梱 — 誰の発言か分かります"
+    "also_speaker": "話者識別を同梱 — 誰の発言か分かります",
+    "step_vad": "音声区間検出",
+    "why_vad": "文字起こしに必要です。2 MB。"
   },
   "tour": {
     "title": "かんたん案内",

@@ -296,6 +296,16 @@
     "naming_note": "为一个声音命名，也会修正以前认错的记录。"
   },
   "settings": {
+    "recognition_heading": "由哪个模型来听",
+    "recognition_hint": "默认由语言决定：Summo 使用已安装模型中最适合该语言的一个。自己选模型，就能用上该模型支持的全部语言。",
+    "recognition_none": "还没有安装语音模型。请到模型页面安装。",
+    "by_language": "按语言",
+    "by_model": "按模型",
+    "the_model": "模型",
+    "the_language": "语言",
+    "pick_a_model": "选择一个模型",
+    "detect_it": "逐句自动识别",
+    "model_overruled": "{language} 推荐使用 {model}。这里仍会使用你选择的模型。",
     "language": "语言",
     "language_hint": "把一个 JSON 文件放进 ~/.summo/locales/ 就能加一门语言",
     "summary_language": "摘要语言",
@@ -409,7 +419,9 @@
     "tight_memory": "这台机器的内存可能不够。",
     "spoken_any": "自动识别（任意语言）",
     "also_vad": "包含语音活动检测 — 出文字必需",
-    "also_speaker": "包含说话人识别 — 知道每句是谁说的"
+    "also_speaker": "包含说话人识别 — 知道每句是谁说的",
+    "step_vad": "语音活动检测",
+    "why_vad": "出文字必需。2 MB。"
   },
   "tour": {
     "title": "快速上手",

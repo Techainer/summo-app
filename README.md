@@ -3,6 +3,7 @@
 # Summo
 
 [![CI](https://github.com/Techainer/summo-app/actions/workflows/ci.yml/badge.svg)](https://github.com/Techainer/summo-app/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/Techainer/summo-app?label=download&color=2f9e6f)](https://github.com/Techainer/summo-app/releases/latest)
 [![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-blue.svg)](LICENSE)
 
 Summo is a meeting recorder and notebook that runs on your own machine: it records or imports a
@@ -11,6 +12,12 @@ grep, sync or delete yourself. Speech recognition and speaker attribution never 
 only summarisation and translation call out to a language model, and only if you have configured one.
 
 Product site: [summo.techainer.com](https://summo.techainer.com).
+
+![A meeting being recorded: a red bar with the elapsed time and a live level meter, notes on the left, the transcript arriving on the right](docs/media/recording.webp)
+
+<sub>A meeting in progress. The band across the top is the recording itself — elapsed time, and a
+meter that moves with the room, because "it is recording" and "it can hear you" fail separately.
+Notes on the left, transcript on the right: one document, written to one Markdown file.</sub>
 
 ## The three rules
 
@@ -42,6 +49,13 @@ own engine at all. Recognition is compiled in for phones and has never decoded a
 ONNX Runtime publishes no x86-64 Android build and an emulator cannot run the arm64 one. Treat the
 phone as untested. iOS needs a Mac and has never been built. The hosted sync relay is not built either —
 sync works today through any shared folder instead.
+
+| | |
+| --- | --- |
+| ![The home screen: a record button with a live waveform, what is waiting on you, and recent meetings](docs/media/home.webp) | ![A finished meeting: audio player, export, and the transcript beside the summary](docs/media/meeting.webp) |
+| **Home.** Record, import or write, with the queue of things waiting on a person beside it. | **After the meeting.** The recording, the transcript, an agent-drafted summary you approve or reject. |
+| ![The model catalogue: what is running on this machine, then every model the registry offers](docs/media/models.webp) | ![A model's page: where the weights come from, what they cost, and the measured numbers](docs/media/model-detail.webp) |
+| **Models.** What a recording would use right now — recognition, voice detection, speaker attribution, translation — above everything the registry offers. | **Every model has a page**: licence, who published it, memory, measured speed and accuracy, and the checksums. |
 
 The numbers below are measured on this codebase, not estimated. Each is reproducible with the
 command shown; see [`docs/benchmarks.md`](docs/benchmarks.md) and

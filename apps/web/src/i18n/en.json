@@ -296,6 +296,16 @@
     "naming_note": "Naming a voice also fixes the past meetings Summo guessed wrong."
   },
   "settings": {
+    "recognition_heading": "Which model listens",
+    "recognition_hint": "By default the language decides: Summo uses the best installed model for it. Choose the model yourself to reach every language that model supports.",
+    "recognition_none": "No speech model is installed yet. Install one from the Models screen.",
+    "by_language": "By language",
+    "by_model": "By model",
+    "the_model": "Model",
+    "the_language": "Language",
+    "pick_a_model": "Choose a model",
+    "detect_it": "Detect it per sentence",
+    "model_overruled": "{model} is the recommended model for {language}. Yours will be used instead.",
     "language": "Language",
     "language_hint": "Add a language by dropping a JSON file into ~/.summo/locales/",
     "summary_language": "Summary language",
@@ -409,7 +419,9 @@
     "tight_memory": "This machine may not have the memory for it.",
     "spoken_any": "Detect it (any language)",
     "also_vad": "Includes the voice detector — required to produce text",
-    "also_speaker": "Includes speaker attribution — so lines carry who said them"
+    "also_speaker": "Includes speaker attribution — so lines carry who said them",
+    "step_vad": "Voice detector",
+    "why_vad": "needed to turn speech into text. 2 MB."
   },
   "tour": {
     "title": "Quick tour",

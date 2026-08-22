@@ -296,6 +296,16 @@
     "naming_note": "Đặt tên một giọng sẽ sửa lại cả các buổi cũ mà Summo đoán nhầm."
   },
   "settings": {
+    "recognition_heading": "Model nào nghe",
+    "recognition_hint": "Mặc định ngôn ngữ quyết định: Summo dùng model tốt nhất đang cài cho ngôn ngữ đó. Tự chọn model nếu bạn muốn dùng mọi ngôn ngữ mà model đó hỗ trợ.",
+    "recognition_none": "Chưa cài model nhận dạng nào. Cài một cái ở màn Mô hình.",
+    "by_language": "Theo ngôn ngữ",
+    "by_model": "Theo model",
+    "the_model": "Model",
+    "the_language": "Ngôn ngữ",
+    "pick_a_model": "Chọn một model",
+    "detect_it": "Tự nhận từng câu",
+    "model_overruled": "{model} mới là model được khuyến nghị cho {language}. Summo vẫn sẽ dùng model bạn chọn.",
     "language": "Ngôn ngữ",
     "language_hint": "Thêm ngôn ngữ bằng cách bỏ file JSON vào ~/.summo/locales/",
     "summary_language": "Ngôn ngữ tóm tắt",
@@ -409,7 +419,9 @@
     "tight_memory": "Máy có thể không đủ bộ nhớ cho mô hình này.",
     "spoken_any": "Tự động nhận biết (mọi ngôn ngữ)",
     "also_vad": "Kèm bộ dò giọng nói — bắt buộc để ra chữ",
-    "also_speaker": "Kèm nhận diện người nói — để biết ai nói câu nào"
+    "also_speaker": "Kèm nhận diện người nói — để biết ai nói câu nào",
+    "step_vad": "Bộ dò giọng nói",
+    "why_vad": "cần để câu nói thành chữ. 2 MB."
   },
   "tour": {
     "title": "Hướng dẫn nhanh",
