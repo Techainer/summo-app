@@ -409,7 +409,9 @@
     "tight_memory": "这台机器的内存可能不够。",
     "spoken_any": "自动识别（任意语言）",
     "also_vad": "包含语音活动检测 — 出文字必需",
-    "also_speaker": "包含说话人识别 — 知道每句是谁说的"
+    "also_speaker": "包含说话人识别 — 知道每句是谁说的",
+    "step_vad": "语音活动检测",
+    "why_vad": "出文字必需。2 MB。"
   },
   "tour": {
     "title": "快速上手",

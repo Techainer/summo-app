@@ -279,6 +279,10 @@ function Marked({
     if (mark.type === "bold") out = <strong className="font-semibold">{out}</strong>;
     else if (mark.type === "italic") out = <em>{out}</em>;
     else if (mark.type === "strike") out = <s className="text-fg-faint">{out}</s>;
+    // The same `==text==` the editor writes. Without this a highlighted line reads as ordinary
+    // text everywhere it is *displayed* rather than edited — the meeting page, a citation, search.
+    else if (mark.type === "highlight")
+      out = <mark className="bg-accent-soft text-fg rounded px-0.5">{out}</mark>;
     else if (mark.type === "code")
       // `break-all`, because the longest inline code in this app is a sha256 — one 64-character
       // token with nowhere to break, which pushes a table wider than the panel holding it.

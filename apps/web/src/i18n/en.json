@@ -409,7 +409,9 @@
     "tight_memory": "This machine may not have the memory for it.",
     "spoken_any": "Detect it (any language)",
     "also_vad": "Includes the voice detector — required to produce text",
-    "also_speaker": "Includes speaker attribution — so lines carry who said them"
+    "also_speaker": "Includes speaker attribution — so lines carry who said them",
+    "step_vad": "Voice detector",
+    "why_vad": "needed to turn speech into text. 2 MB."
   },
   "tour": {
     "title": "Quick tour",

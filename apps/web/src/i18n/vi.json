@@ -409,7 +409,9 @@
     "tight_memory": "Máy có thể không đủ bộ nhớ cho mô hình này.",
     "spoken_any": "Tự động nhận biết (mọi ngôn ngữ)",
     "also_vad": "Kèm bộ dò giọng nói — bắt buộc để ra chữ",
-    "also_speaker": "Kèm nhận diện người nói — để biết ai nói câu nào"
+    "also_speaker": "Kèm nhận diện người nói — để biết ai nói câu nào",
+    "step_vad": "Bộ dò giọng nói",
+    "why_vad": "cần để câu nói thành chữ. 2 MB."
   },
   "tour": {
     "title": "Hướng dẫn nhanh",

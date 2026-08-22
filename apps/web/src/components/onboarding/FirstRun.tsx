@@ -111,6 +111,14 @@ export function FirstRun({
   // A broken install is a banner, not a takeover: the notes still open, the search still works, and
   // the one thing that does not work says so instead of hiding everything that does.
   const stuck = status ? blocker(status) : null;
+  // Which half is missing, so the banner names it. `missing` is data the daemon already computes —
+  // a vault with a recogniser and no voice detector was being told to install a recogniser, which
+  // is both wrong and unfixable by doing what it says.
+  const lacks = stuck?.missing ?? [];
+  const part =
+    stuck?.step === "models" && !lacks.includes("asr") && lacks.includes("vad")
+      ? "vad"
+      : (stuck?.step ?? "models");
 
   // A column rather than a fragment. The banner and the screen are siblings inside the scrolling
   // pane, and the screens size themselves to the full height of it — so a fragment made every screen
@@ -120,8 +128,7 @@ export function FirstRun({
     <div className="flex h-full min-h-0 flex-col">
       {stuck && (
         <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta shrink-0 border-b px-4 py-2">
-          <b className="font-medium">{t(`setup.step_${stuck.step}`)}</b> —{" "}
-          {t(`setup.why_${stuck.step}`)}{" "}
+          <b className="font-medium">{t(`setup.step_${part}`)}</b> — {t(`setup.why_${part}`)}{" "}
           <button
             type="button"
             onClick={() => {
