@@ -5,7 +5,6 @@ import { useI18n } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { TARGETS, hearsOthers, load, save, translating, type Capture } from "../../lib/capture";
 import type { Lane } from "../../lib/protocol";
-import { ListeningIn } from "./ListeningIn";
 import { WarmUp } from "./WarmUp";
 import { SpokenLanguage } from "./SpokenLanguage";
 
@@ -47,10 +46,9 @@ export function CaptureControls() {
     // puts it there. It used to centre itself in a `max-w-xl`, which is why the record screen had
     // its controls floating in the middle of a pane and its button somewhere else entirely.
     <div className="w-full">
-      {/* While recording, what it is hearing — and a way to correct it without stopping. Above the
-          controls, because those are disabled mid-session and this one is the only thing on the
-          card that can still be acted on. */}
-      <ListeningIn />
+      {/* No `ListeningIn` here. The shell draws it on every screen while a recording runs, so on
+          this one it appeared twice — two banners saying the same sentence, each with its own
+          "Đổi" button, and a click landing on whichever the browser found first. */}
       <WarmUp />
 
       <fieldset disabled={busy} className="mt-2 disabled:opacity-60">
