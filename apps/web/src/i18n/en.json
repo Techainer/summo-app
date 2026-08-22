@@ -353,7 +353,22 @@
     "general_hint": "What language the app speaks, and whether it is light or dark.",
     "recording_hint": "Microphone permission, and the language a recording starts in.",
     "vault_at": "Everything lives in",
-    "mt_ready": "{model} is installed and ready to translate."
+    "mt_ready": "{model} is installed and ready to translate.",
+    "capture_heading": "How audio is captured and cut",
+    "capture_hint": "These decide when a sentence counts as finished. Leave them alone unless something is wrong.",
+    "capture_system": "Record what the computer is playing",
+    "capture_system_hint": "So people speaking in Zoom, Meet or a video are recorded too.",
+    "suggest_on_meeting": "Offer to record when a call starts",
+    "suggest_on_meeting_hint": "It offers. It never records on its own.",
+    "silence": "Silence that ends a sentence — {ms} ms",
+    "silence_label": "Trailing silence",
+    "silence_hint": "Shorter means text sooner and sentences cut mid-word. Ships at 500 ms.",
+    "threshold": "How loud counts as speech — {value}",
+    "threshold_label": "Speech threshold",
+    "threshold_hint": "High misses quiet talking; low turns typing into text. Ships at 0.50.",
+    "threads": "Inference threads",
+    "threads_hint": "0 follows the hardware probe.",
+    "reset_capture": "Back to the defaults"
   },
   "status": {
     "unreachable": "Cannot reach Summo on this machine.",
@@ -659,7 +674,9 @@
     "role_missing": "Missing",
     "role_none": "Not chosen",
     "role_endpoint": "Via {provider}",
-    "running_hint": "This is what runs when you press record."
+    "running_hint": "This is what runs when you press record.",
+    "use_refine": "Use for the second pass",
+    "in_use_refine": "Second pass"
   },
   "home": {
     "heading": "Your workspace",

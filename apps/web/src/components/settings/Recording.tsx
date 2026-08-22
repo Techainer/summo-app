@@ -6,6 +6,7 @@ import { SpokenLanguage } from "../record/SpokenLanguage";
 import { Plan } from "./Plan";
 import { load as loadCapture, save as saveCapture } from "../../lib/capture";
 import { useT } from "../../i18n/context";
+import { Capture } from "./Capture";
 
 /**
  * Everything that decides what a recording will be like before it starts: whether the microphone is
@@ -56,6 +57,11 @@ export function Recording() {
           }}
         />
       </section>
+
+      {/* Last, because it is the section nobody needs to open. Everything above decides what runs;
+          this decides how it is tuned, and the two numbers in it have been settings-file-only since
+          the daemon was written. */}
+      <Capture />
     </div>
   );
 }

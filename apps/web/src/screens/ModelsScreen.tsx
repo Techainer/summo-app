@@ -17,6 +17,7 @@ import {
   size,
   tags,
   type CatalogueModel,
+  type Role,
   type Task,
 } from "../lib/catalogue";
 import { useEngine } from "../lib/engine-context";
@@ -140,8 +141,8 @@ export function ModelsScreen() {
   );
 
   const choose = useCallback(
-    async (model: CatalogueModel) => {
-      const role = roleFor(model.task);
+    async (model: CatalogueModel, want?: Role) => {
+      const role = want ?? roleFor(model.task);
       if (!role) return;
       try {
         await catalogue.use(role, model.id);
@@ -309,7 +310,9 @@ export function ModelsScreen() {
                   job={installs.find((job) => job.model === model.id)}
                   onPull={() => void pull(model.id)}
                   onRemove={() => void remove(model.id)}
-                  onUse={() => void choose(model)}
+                  onUse={() => void choose(model, "live")}
+                  onRefine={() => void choose(model, "refine")}
+                  asRefine={chosen.refine === model.id && model.installed}
                   // Chosen *and* here. Naming a model in the settings does not make it usable, and
                   // a card reading "Đang dùng" over an Install button was the screen telling two
                   // opposite things at once.
@@ -480,7 +483,9 @@ function Card({
   onPull,
   onRemove,
   onUse,
+  onRefine,
   inUse,
+  asRefine,
   picked,
 }: {
   model: CatalogueModel;
@@ -488,7 +493,10 @@ function Card({
   onPull: () => void;
   onRemove: () => void;
   onUse: () => void;
+  onRefine: () => void;
   inUse: boolean;
+  /** Whether this is the model that re-decodes after the live pass. */
+  asRefine: boolean;
   /** Named in the settings, whether or not the files are on this machine. */
   picked: boolean;
 }) {
@@ -593,6 +601,20 @@ function Card({
                     {t("models.use")}
                   </Button>
                 )}
+            {/* The second job a speech model can hold: re-decoding a finished utterance more
+                carefully than the live pass managed. The daemon has had the role since the
+                pipeline did — `models.refine` — and nothing in the app could point at it, so the
+                accurate-but-slow models in the catalogue had no use anybody could reach. */}
+            {model.task === "asr" &&
+              (asRefine ? (
+                <span className="border-accent/40 text-accent text-micro rounded-full border px-2 py-0.5">
+                  {t("models.in_use_refine")}
+                </span>
+              ) : (
+                <Button size="sm" variant="ghost" onClick={onRefine}>
+                  {t("models.use_refine")}
+                </Button>
+              ))}
             {/* No second "Đã cài" here: the state chip lives on the title line now, where the eye
                 lands first. Two of them meant the same word twice on one card. */}
             <Button

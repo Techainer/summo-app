@@ -353,7 +353,22 @@
     "general_hint": "Ngôn ngữ của giao diện, và sáng hay tối.",
     "recording_hint": "Quyền micro và ngôn ngữ mặc định khi bắt đầu ghi.",
     "vault_at": "Mọi thứ nằm trong",
-    "mt_ready": "Đã cài {model}, sẵn sàng dịch."
+    "mt_ready": "Đã cài {model}, sẵn sàng dịch.",
+    "capture_heading": "Cách thu và cắt câu",
+    "capture_hint": "Những số này quyết định lúc nào một câu được coi là xong. Không rõ thì cứ để nguyên.",
+    "capture_system": "Thu cả tiếng phát ra từ máy",
+    "capture_system_hint": "Để ghi được người nói trong Zoom, Meet hay video đang mở.",
+    "suggest_on_meeting": "Nhắc ghi khi thấy có cuộc gọi",
+    "suggest_on_meeting_hint": "Chỉ nhắc, không bao giờ tự ghi.",
+    "silence": "Im lặng bao lâu thì kết câu — {ms} ms",
+    "silence_label": "Thời gian im lặng kết câu",
+    "silence_hint": "Ngắn thì chữ hiện nhanh nhưng dễ cắt giữa câu. Mặc định 500 ms.",
+    "threshold": "To bao nhiêu thì coi là tiếng nói — {value}",
+    "threshold_label": "Ngưỡng tiếng nói",
+    "threshold_hint": "Cao thì bỏ sót lời nói nhỏ; thấp thì tiếng gõ phím cũng thành chữ. Mặc định 0.50.",
+    "threads": "Số luồng xử lý",
+    "threads_hint": "0 là để máy tự quyết theo phần cứng.",
+    "reset_capture": "Về mặc định"
   },
   "status": {
     "unreachable": "Không kết nối được với Summo trên máy này.",
@@ -659,7 +674,9 @@
     "role_missing": "Chưa có",
     "role_none": "Chưa chọn",
     "role_endpoint": "Qua {provider}",
-    "running_hint": "Đây là những gì sẽ chạy khi bạn bấm ghi."
+    "running_hint": "Đây là những gì sẽ chạy khi bạn bấm ghi.",
+    "use_refine": "Dùng để chạy lại",
+    "in_use_refine": "Đang chạy lại"
   },
   "home": {
     "heading": "Không gian của bạn",

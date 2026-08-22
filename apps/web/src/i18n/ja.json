@@ -353,7 +353,22 @@
     "general_hint": "アプリの表示言語と、ライト/ダークの切り替え。",
     "recording_hint": "マイクの許可と、録音を始めるときの言語。",
     "vault_at": "すべての保存先",
-    "mt_ready": "{model} をインストール済み。翻訳できます。"
+    "mt_ready": "{model} をインストール済み。翻訳できます。",
+    "capture_heading": "音声の取り込みと区切り",
+    "capture_hint": "文の終わりを判断する値です。問題がなければ触らないでください。",
+    "capture_system": "パソコンが再生している音も録音する",
+    "capture_system_hint": "Zoom や Meet、動画の音声も文字にできます。",
+    "suggest_on_meeting": "通話が始まったら録音をすすめる",
+    "suggest_on_meeting_hint": "すすめるだけで、勝手に録音はしません。",
+    "silence": "文を区切る無音の長さ — {ms} ms",
+    "silence_label": "無音の長さ",
+    "silence_hint": "短いほど早く出ますが、途中で切れやすくなります。初期値 500 ms。",
+    "threshold": "音声とみなす大きさ — {value}",
+    "threshold_label": "音声しきい値",
+    "threshold_hint": "高いと小声を逃し、低いとタイプ音まで文字になります。初期値 0.50。",
+    "threads": "推論スレッド数",
+    "threads_hint": "0 はハードウェアに合わせます。",
+    "reset_capture": "初期値に戻す"
   },
   "status": {
     "unreachable": "このマシンの Summo に接続できません。",
@@ -659,7 +674,9 @@
     "role_missing": "未インストール",
     "role_none": "未選択",
     "role_endpoint": "{provider} 経由",
-    "running_hint": "録音ボタンを押すとこれが動きます。"
+    "running_hint": "録音ボタンを押すとこれが動きます。",
+    "use_refine": "再デコードに使う",
+    "in_use_refine": "再デコード"
   },
   "home": {
     "heading": "あなたのワークスペース",

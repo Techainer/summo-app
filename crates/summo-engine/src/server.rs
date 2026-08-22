@@ -235,6 +235,7 @@ impl Server {
             .route("/languages", get(languages))
             .route("/settings/language", post(set_language))
             .route("/settings/storage", post(set_storage))
+            .route("/settings/recording", post(set_recording))
             .route("/installs", get(list_installs).post(start_install))
             .route("/installs/{id}", get(get_install))
             .route("/meetings/{id}/summarize", post(summarize_meeting))
@@ -958,6 +959,81 @@ struct StorageBody {
     keep_days: Option<u32>,
     /// Keep the audio beside the transcript at all.
     keep_audio: Option<bool>,
+}
+
+/// What the recording half of the settings file holds, one field at a time.
+///
+/// Every one of these existed in `settings.toml` and could be changed only by editing it. The two
+/// at the bottom decide how a sentence is cut: how loud counts as speech, and how much silence ends
+/// an utterance — the second is added directly to the delay before final text appears, which makes
+/// it the most felt number in the product and the one nobody could reach.
+#[derive(Deserialize)]
+struct RecordingBody {
+    capture_system_audio: Option<bool>,
+    /// Input device id, or an empty string to go back to "whichever is best".
+    device_id: Option<String>,
+    hotkey: Option<String>,
+    suggest_on_meeting: Option<bool>,
+    vad_threshold: Option<f32>,
+    min_silence_ms: Option<u32>,
+    /// Inference threads, or zero to follow the hardware probe.
+    threads: Option<usize>,
+}
+
+/// Change one recording setting, or several.
+async fn set_recording(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<RecordingBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    as_response((|| {
+        let path = state.engine.paths().settings();
+        let mut settings = summo_core::Settings::load(&path)?;
+        if let Some(on) = body.capture_system_audio {
+            settings.recording.capture_system_audio = on;
+        }
+        if let Some(device) = body.device_id {
+            // Empty means "no opinion", which is a different thing from a device called "".
+            settings.recording.device_id = (!device.trim().is_empty()).then_some(device);
+        }
+        if let Some(hotkey) = body.hotkey
+            && !hotkey.trim().is_empty()
+        {
+            settings.recording.hotkey = hotkey;
+        }
+        if let Some(on) = body.suggest_on_meeting {
+            settings.recording.suggest_on_meeting = on;
+        }
+        if let Some(threshold) = body.vad_threshold {
+            // Clamped rather than rejected: this arrives from a slider, and a value outside the
+            // range is a bug in the caller that must not leave the file holding a probability of
+            // 1.4 — which would mean nothing is ever speech.
+            settings.recording.vad_threshold = threshold.clamp(0.05, 0.95);
+        }
+        if let Some(ms) = body.min_silence_ms {
+            // Below 120 ms an utterance is cut mid-word; above three seconds the text arrives long
+            // after the sentence did, and people ask whether it is still recording.
+            settings.recording.min_silence_ms = ms.clamp(120, 3000);
+        }
+        if let Some(threads) = body.threads {
+            settings.models.threads = (threads > 0).then_some(threads);
+        }
+        settings.save(&path)?;
+        Ok(serde_json::json!({
+            "capture_system_audio": settings.recording.capture_system_audio,
+            "device_id": settings.recording.device_id,
+            "hotkey": settings.recording.hotkey,
+            "suggest_on_meeting": settings.recording.suggest_on_meeting,
+            "vad_threshold": settings.recording.vad_threshold,
+            "min_silence_ms": settings.recording.min_silence_ms,
+            "threads": settings.models.threads,
+        }))
+    })())
 }
 
 /// Fill in the models a session did not name.
@@ -6731,6 +6807,61 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
             "pruning deleted a transcript"
         );
         server.shutdown();
+    }
+
+    /// The numbers that decide how a sentence is cut, from the app rather than from a text editor.
+    #[tokio::test]
+    async fn how_speech_is_cut_can_be_set_from_the_app() {
+        let (tmp, server) = running().await;
+
+        let body: serde_json::Value = client()
+            .post(format!("http://{}/settings/recording", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "min_silence_ms": 900, "vad_threshold": 0.4 }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(body["min_silence_ms"], 900);
+
+        let settings = summo_core::Settings::load(&Paths::at(tmp.path()).settings()).unwrap();
+        assert_eq!(settings.recording.min_silence_ms, 900);
+        assert!((settings.recording.vad_threshold - 0.4).abs() < f32::EPSILON);
+
+        // Out of range is clamped rather than stored. A threshold of 1.4 means nothing is ever
+        // speech, which is a recording that runs and produces silence — the failure this whole
+        // screen exists to make impossible.
+        let body: serde_json::Value = client()
+            .post(format!("http://{}/settings/recording", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "vad_threshold": 1.4, "min_silence_ms": 10 }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        // `f32` through JSON: 0.95 arrives as 0.949999988079071, and comparing a float for
+        // equality across that boundary is a test that fails for arithmetic reasons rather than
+        // behavioural ones.
+        let clamped = body["vad_threshold"].as_f64().unwrap();
+        assert!((clamped - 0.95).abs() < 1e-6, "got {clamped}");
+        assert_eq!(body["min_silence_ms"], 120);
+
+        // An empty device id is "whichever is best", not a device with an empty name.
+        let body: serde_json::Value = client()
+            .post(format!("http://{}/settings/recording", server.addr()))
+            .bearer_auth(server.token().as_str())
+            .json(&serde_json::json!({ "device_id": "" }))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert!(body["device_id"].is_null());
     }
 
     #[tokio::test]
