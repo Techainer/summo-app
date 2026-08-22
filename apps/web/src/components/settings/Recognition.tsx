@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { useI18n } from "../../i18n/context";
-import { CatalogueClient, type CatalogueModel } from "../../lib/catalogue";
+import { CatalogueClient } from "../../lib/catalogue";
 import { useEngine } from "../../lib/engine-context";
 import { useErrorText } from "../../lib/errors";
 import { fetchLanguages, languageName, rememberLanguage } from "../../lib/languages";
@@ -50,7 +50,7 @@ export function Recognition() {
 
   const catalogue = useLoad(
     useCallback(
-      async () => new CatalogueClient(handshake).list(),
+      async () => new CatalogueClient(handshake).load(),
       // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read after a write.
       [handshake, generation],
     ),
@@ -75,7 +75,10 @@ export function Recognition() {
   );
 
   const current = languages.data?.current ?? "";
-  const chosen = languages.data?.model ?? "";
+  // Which model the `live` role points at. `/catalogue` reports it because the models screen needs
+  // the same fact; `/languages` deliberately does not — it answers "what would serve this
+  // language", which is the question this form is here to let somebody overrule.
+  const chosen = catalogue.data?.chosen?.live ?? "";
   const model = installed.find((m) => m.id === chosen);
   const [mode, setMode] = useState<"language" | "model">(chosen ? "model" : "language");
 
@@ -122,7 +125,10 @@ export function Recognition() {
     recommended?.model && model && recommended.model !== model.id ? recommended : undefined;
 
   return (
-    <section className="border-line bg-bg-raised mt-6 rounded-2xl border p-5" data-testid="settings-recognition">
+    <section
+      className="border-line bg-bg-raised mt-6 rounded-2xl border p-5"
+      data-testid="settings-recognition"
+    >
       <h3 className="font-medium">{t("settings.recognition_heading")}</h3>
       <p className="text-fg-dim text-meta mt-1 mb-3">{t("settings.recognition_hint")}</p>
 
