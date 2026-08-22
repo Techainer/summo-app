@@ -113,7 +113,10 @@ export function Recognition() {
   // recording banner already sends people there.
   if (catalogue.data && installed.length === 0) {
     return (
-      <section className="border-line bg-bg-raised mt-6 rounded-2xl border p-5">
+      <section
+        className="border-line bg-bg-raised mt-6 rounded-2xl border p-5"
+        data-testid="settings-recognition"
+      >
         <h3 className="font-medium">{t("settings.recognition_heading")}</h3>
         <p className="text-fg-dim text-meta mt-1">{t("settings.recognition_none")}</p>
       </section>

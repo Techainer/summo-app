@@ -17,8 +17,21 @@
 import { chromium } from "playwright";
 
 import { daemon } from "./daemon.mjs";
+import { mirror } from "./mirror.mjs";
 
-const engine = await daemon(process.argv, { name: "language" });
+// The 73 MB the download step fetches, served from this machine.
+//
+// This suite presses "download the model for Vietnamese" and waits for it to land. Pointed at the
+// real registry that is a 73 MB transfer over whatever the network is that day — it timed out on a
+// CI runner and on a developer machine within the same hour, both times reporting "the download
+// never finished", which says nothing about the screen this suite exists to check.
+const local = await mirror(["gipformer-65m"], { name: "language" });
+if (local.unreachable.length > 0) {
+  for (const { id, why } of local.unreachable) console.error(`${id}: ${why}`);
+  process.exit(1);
+}
+
+const engine = await daemon(process.argv, { name: "language", registry: local.registry });
 const browser = await chromium.launch({
   args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
 });
@@ -92,19 +105,25 @@ page.on("websocket", (socket) => {
 
   await download.click();
 
-  // Progress, then the offer disappears because there is nothing left to download.
-  let sawProgress = false;
-  for (let i = 0; i < 60; i++) {
-    await page.waitForTimeout(1000);
+  // The offer disappears, because there is nothing left to download.
+  //
+  // Progress is not asserted. Served from this machine the transfer finishes between two polls, and
+  // a check that demands to *see* "Đang tải" is a check that fails when the download is fast — the
+  // opposite of what it is for. What has to hold is that the button resolves rather than spinning
+  // forever, which is the failure a user reports.
+  let landed = false;
+  for (let i = 0; i < 120; i++) {
+    await page.waitForTimeout(500);
     const busy = await page
       .getByRole("button", { name: /Tải model|Đang tải/ })
       .innerText()
       .catch(() => null);
-    if (busy === null) break;
-    if (/Đang tải/.test(busy)) sawProgress = true;
-    if (i === 59) problems.push("the download never finished");
+    if (busy === null) {
+      landed = true;
+      break;
+    }
   }
-  if (!sawProgress) problems.push("the download reported no progress at all");
+  if (!landed) problems.push("the download never finished");
 
   const chosen = await picker.locator("option:checked").innerText();
   if (!/Tiếng Việt/.test(chosen)) problems.push(`the choice did not stick: "${chosen}"`);
@@ -140,6 +159,7 @@ page.on("websocket", (socket) => {
 }
 
 await browser.close();
+await local.stop();
 await engine.stop();
 
 if (problems.length > 0) {
