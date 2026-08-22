@@ -280,7 +280,9 @@ function Marked({
     else if (mark.type === "italic") out = <em>{out}</em>;
     else if (mark.type === "strike") out = <s className="text-fg-faint">{out}</s>;
     else if (mark.type === "code")
-      out = <code className="bg-bg-soft rounded px-1 py-0.5 text-[0.9em]">{out}</code>;
+      // `break-all`, because the longest inline code in this app is a sha256 — one 64-character
+      // token with nowhere to break, which pushes a table wider than the panel holding it.
+      out = <code className="bg-bg-soft rounded px-1 py-0.5 text-[0.9em] break-all">{out}</code>;
     else if (mark.type === "link") {
       // Only a string is a link. Anything else in that attribute came from a document this
       // converter did not write, and `[object Object]` is not an address.

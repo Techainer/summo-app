@@ -660,7 +660,31 @@ async fn catalogue(
                 "name": m.name,
                 "task": m.task,
                 "mode": m.mode,
-                "langs": m.langs,
+                // `*` expanded, rather than sent as a star.
+                //
+                // A manifest writes `langs: ["*"]` when it means "the multilingual set", which is
+                // honest in the file and useless on the wire: the catalogue screen skipped any
+                // model whose list contained a star, so Whisper — the only model here that covers
+                // ninety-nine languages, Vietnamese among them — was the one model whose card
+                // listed no languages at all. Beside a Gipformer card reading `vi`, that says
+                // Whisper cannot do Vietnamese, which is the opposite of true.
+                //
+                // Search had the same hole from the same cause. It matches over the language codes,
+                // so `vi` found every specialised model and never the multilingual one — the code
+                // comment there promised `whisper vi` would work and it could not.
+                //
+                // Expanded here rather than in the interface, so the list stays in one place: it is
+                // `summo_models::languages::MULTILINGUAL`, which is also what `/languages` builds
+                // its hundred entries from. The detail page has always rendered the star as "any
+                // language" (`page.rs`), which is why this looked correct anywhere anyone checked.
+                "langs": if m.langs.iter().any(|l| l == "*") {
+                    summo_models::languages::MULTILINGUAL
+                        .iter()
+                        .map(|l| (*l).to_string())
+                        .collect::<Vec<_>>()
+                } else {
+                    m.langs.clone()
+                },
                 "license": m.license,
                 "attribution": m.attribution,
                 "redistributable": m.redistributable,
@@ -2702,12 +2726,21 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
 
     // What a session would pick, by the same rules a session picks it — `pick_models` when nothing
     // is pinned, the pin when there is one.
-    let chosen = settings.models.live.clone().or_else(|| {
-        let code = language.clone().unwrap_or_else(|| "*".into());
-        summo_models::recommend(&installed, state.engine.hardware(), &code)
-            .best()
-            .map(|s| s.id.clone())
-    });
+    let chosen = settings
+        .models
+        .live
+        .clone()
+        .or_else(|| {
+            let code = language.clone().unwrap_or_else(|| "*".into());
+            summo_models::recommend(&installed, state.engine.hardware(), &code)
+                .best()
+                .map(|s| s.id.clone())
+        })
+        // Nothing pinned, no language set, and no multilingual model installed — which is the
+        // ordinary state after installing one specialised recogniser. Ranking for `*` rejects it
+        // (it declares `vi`, not "everything"), so the table said "nothing chosen" while the card
+        // beside it said "installed" and a recording used that very model.
+        .or_else(|| installed.first().map(|m| m.id.to_string()));
 
     let manifest = chosen
         .as_ref()

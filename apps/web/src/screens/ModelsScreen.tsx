@@ -642,7 +642,7 @@ function Card({
       )}
 
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        {tags(model).map((tag) => (
+        {tags(model, locale).map((tag) => (
           <span
             key={tag.label}
             className={cn(

@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { m } from "motion/react";
 
 import { LiveBar } from "./LiveBar";
+import { ListeningIn } from "../record/ListeningIn";
 import { Transcript } from "../Transcript";
 import { SectionTitle } from "../ui";
 import { useT } from "../../i18n/context";
@@ -67,6 +68,20 @@ export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
       {/* Across both columns, above everything. Whether this is recording is the question the
           screen exists to answer, and it was being answered by a pill in the window header. */}
       <LiveBar />
+
+      {/* What it is hearing, and the way to correct it without losing the recording.
+       *
+       * This banner already existed and already worked — it names the language the running
+       * pipeline is decoding, and changing it calls `retune`, which swaps the decoder mid-session.
+       * It was only ever rendered on the old `/record` screen, and pressing record now opens the
+       * note it is recording into, so the whole mechanism became unreachable the day that screen
+       * left the sidebar. Nothing was broken; it simply had nowhere left to appear.
+       *
+       * It is the wrong-language case that makes this matter: the app guesses from the interface
+       * locale, and the meeting that switches to English at minute three is the one it guesses
+       * wrong. Under the bar rather than in it — the bar answers "is it recording", and this
+       * answers "is it hearing me correctly", which is the question you ask second. */}
+      <ListeningIn />
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
         <section className="flex min-h-0 flex-col gap-2.5">

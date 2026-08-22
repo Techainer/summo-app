@@ -165,17 +165,38 @@ export function shortLicense(license: string): string {
   return trimmed.length > 22 ? `${trimmed.slice(0, 21)}…` : trimmed;
 }
 
-export function tags(model: CatalogueModel): { label: string; kind: "plain" | "warn" | "good" }[] {
+export function tags(
+  model: CatalogueModel,
+  /**
+   * The language the reader is using, put first when this model covers it.
+   *
+   * A hundred-language model truncated to the first four shows `en · zh · de · es +95`, and the one
+   * question somebody opens this screen with — can it hear *me* — is answered ninety-five entries
+   * into a list they cannot see. The order in the manifest is by number of speakers, which is a
+   * reasonable default and is not about this reader.
+   *
+   * Optional, because two callers render a card with no locale to hand and a slightly worse chip is
+   * better than a required argument threaded through both.
+   */
+  locale?: string,
+): { label: string; kind: "plain" | "warn" | "good" }[] {
   const out: { label: string; kind: "plain" | "warn" | "good" }[] = [];
   // The licence, short enough to read at a glance. "FunASR Model Open Source License Agreement
   // v1.1" is a chip wider than the card it sits in, and the full text is on the model's own page —
   // what belongs here is which licence it is, not its full legal title.
   out.push({ label: shortLicense(model.license), kind: "plain" });
-  if (model.langs.length > 0 && !model.langs.includes("*")) {
+  // No `*` case any more: the daemon expands it before this ever sees it — see the note beside
+  // `"langs"` in `server.rs`. A model that still arrives with a star would show it as a language,
+  // which is visibly odd rather than silently missing, and that is the right way round.
+  if (model.langs.length > 0) {
+    const mine = locale?.toLowerCase().split("-")[0];
+    const first = mine && model.langs.some((code) => code.toLowerCase() === mine) ? [mine] : [];
+    const rest = model.langs.filter((code) => code.toLowerCase() !== mine);
     // Four is what fits on a phone before the row wraps twice.
-    const shown = model.langs.slice(0, 4).join(" · ");
+    const shown = [...first, ...rest].slice(0, 4);
+    const more = model.langs.length - shown.length;
     out.push({
-      label: model.langs.length > 4 ? `${shown} +${model.langs.length - 4}` : shown,
+      label: more > 0 ? `${shown.join(" · ")} +${more}` : shown.join(" · "),
       kind: "plain",
     });
   }
