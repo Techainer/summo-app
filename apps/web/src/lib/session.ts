@@ -240,9 +240,28 @@ export class Session {
    * somebody noticed, so this leaves the recording, the file and everything transcribed alone and
    * rebuilds only the decoder.
    */
-  retune(language: string): void {
+  retune(change: { language?: string; model?: string }): void {
     if (!this.state.recording) return;
-    this.client?.send({ cmd: "model_swap", language });
+    // Each field is only sent when the caller named it, because on the daemon an absent field means
+    // "leave this alone" and an empty one means something else entirely: an empty language is the
+    // model's own detection. Sending both every time would turn "use Whisper" into "use Whisper and
+    // stop decoding Vietnamese", which is not what the person clicking the model asked for.
+    this.client?.send({
+      cmd: "model_swap",
+      ...(change.model !== undefined ? { id: change.model } : {}),
+      ...(change.language !== undefined ? { language: change.language } : {}),
+    });
+  }
+
+  /**
+   * Change what finished lines are translated into, or switch translation off.
+   *
+   * The empty string is "off" rather than "unset" — the same convention the daemon uses — so the
+   * one control can do both. Lines already written keep the translation they were given.
+   */
+  translate(to: string): void {
+    if (!this.state.recording) return;
+    this.client?.send({ cmd: "translate", to });
   }
 
   stop(): void {

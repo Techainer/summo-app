@@ -602,6 +602,22 @@ body {
   }
 }
 
+/*
+ * A download whose size the server has not declared yet.
+ *
+ * Travels rather than pulses, because the thing being claimed is progress, not activity: a bar that
+ * breathes in place says "the app is alive", which nobody doubted. It is replaced by a real width
+ * the moment `total` arrives, which is usually within a second.
+ */
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

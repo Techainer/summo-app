@@ -12,13 +12,13 @@ export const FIELD = "mt-3.5 flex items-center gap-3 text-meta text-fg-dim";
 
 export const LABEL = "w-[150px] shrink-0";
 
-/** Controls are `Input`s that stretch; the field owns everything else about them. */
+/** Controls are `Input`s and `Select`s that stretch; the field owns everything else about them. */
 export const CONTROL = "flex-1";
 
-/** A native `<select>`, which cannot be an `Input` — same box, drawn by hand. */
-export const SELECT =
-  "h-9 flex-1 rounded-[var(--radius-card)] border border-line bg-bg-soft px-3 text-sm text-fg" +
-  " transition-colors hover:border-line-strong focus-visible:border-accent focus:outline-none";
+// `SELECT` used to live here — "a native `<select>`, which cannot be an `Input` — same box, drawn
+// by hand". It could, and the hand-drawn copy had drifted: no focus ring, and the native arrow
+// still sizing the control itself, so a dropdown never matched the input above it. `ui/Select`
+// draws both, and this constant is gone rather than left as a second way to do it.
 
 /** The note under a field. Indented to line up with the control it explains. */
 export const HINT = "mt-1.5 ml-[162px] text-micro leading-normal text-fg-faint";

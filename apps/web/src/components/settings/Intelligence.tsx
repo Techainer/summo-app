@@ -1,5 +1,5 @@
-import { Checkbox, Input } from "../ui";
-import { CONTROL, FIELD, HINT, LABEL, SELECT } from "./fields";
+import { Checkbox, Input, Select } from "../ui";
+import { CONTROL, FIELD, HINT, LABEL } from "./fields";
 import { useI18n, useT } from "../../i18n/context";
 import { languageName } from "../../lib/languages";
 import { CUSTOM, type LlmSettings } from "./llm";
@@ -68,8 +68,8 @@ export function Intelligence({ settings }: { settings: LlmSettings }) {
 
       <label className={FIELD}>
         <span className={LABEL}>{t("settings.provider")}</span>
-        <select
-          className={SELECT}
+        <Select
+          className={CONTROL}
           value={selected}
           aria-label={t("settings.provider")}
           onChange={(e) => {
@@ -95,7 +95,7 @@ export function Intelligence({ settings }: { settings: LlmSettings }) {
             ))}
           </optgroup>
           <option value={CUSTOM}>{t("settings.other_endpoint")}</option>
-        </select>
+        </Select>
       </label>
       <p className={HINT}>
         {selected === CUSTOM
@@ -135,8 +135,8 @@ export function Intelligence({ settings }: { settings: LlmSettings }) {
 
       <label className={FIELD}>
         <span className={LABEL}>{t("settings.summary_language")}</span>
-        <select
-          className={SELECT}
+        <Select
+          className={CONTROL}
           value={llm.language}
           aria-label={t("settings.summary_language")}
           onChange={(e) => void save({ ...llm, language: e.target.value })}
@@ -151,7 +151,7 @@ export function Intelligence({ settings }: { settings: LlmSettings }) {
               {languageName(code, locale)}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
 
       <Checkbox

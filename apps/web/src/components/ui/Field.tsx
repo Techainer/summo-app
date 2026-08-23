@@ -1,4 +1,5 @@
-import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { ChevronDown } from "lucide-react";
 
 import { cn } from "../../lib/cn";
 
@@ -39,6 +40,44 @@ export function Input({
 
 export function TextArea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea className={cn(BASE, "resize-y px-3 py-2 text-sm", className)} {...props} />;
+}
+
+/**
+ * One dropdown, everywhere — the control the pass above forgot.
+ *
+ * `Input` and `TextArea` were unified and the sixteen `<select>` elements were not, so every form in
+ * the app pairs a 36px input against a dropdown the operating system sized itself. That is what
+ * "the dropdowns are misaligned" means: on macOS a native select is 21px tall with its own rounding
+ * and its own inset shadow, so a field and the dropdown beside it sit on different baselines, in
+ * different shapes, with different focus rings. Two of the call sites had also drifted to their own
+ * spellings of the same border classes.
+ *
+ * `appearance-none` is what makes that fixable — it costs the native arrow, so one is drawn back.
+ * The wrapper exists only to position it; the arrow is `pointer-events-none` so the whole control
+ * still opens on a click, and the end padding leaves room so a long option never runs underneath.
+ *
+ * Padding is logical and the chevron is placed with `end-*`, for the same reason as the base: a
+ * right-to-left locale should move the arrow without anybody editing this file.
+ *
+ * Unlike `Input`, `className` lands on the *wrapper* rather than the control. Every caller was
+ * using it for layout — `flex-1`, `ms-auto` — and layout applied to a control inside a positioned
+ * wrapper does nothing at all, which would have made this a silent regression at each call site.
+ * Height and text size are `size` instead, which is the part that has to stay on the select.
+ */
+export function Select({
+  size = "md",
+  className,
+  ...props
+}: Omit<SelectHTMLAttributes<HTMLSelectElement>, "size"> & { size?: keyof typeof SIZES }) {
+  return (
+    <span className={cn("relative block min-w-0", className)}>
+      <select className={cn(BASE, SIZES[size], "cursor-pointer appearance-none pe-8")} {...props} />
+      <ChevronDown
+        aria-hidden="true"
+        className="text-fg-faint pointer-events-none absolute end-2.5 top-1/2 size-4 -translate-y-1/2"
+      />
+    </span>
+  );
 }
 
 /**

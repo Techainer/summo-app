@@ -39,8 +39,16 @@ export interface EngineValue {
   start: () => Promise<void>;
   stop: () => void;
   toggle: () => void;
-  /** Change the language mid-meeting, without ending it. */
-  retune: (language: string) => void;
+  /**
+   * Change the language or the model mid-meeting, without ending it.
+   *
+   * Either alone, or both together. An omitted field is left as it is, which is what makes "switch
+   * to Whisper and keep decoding Vietnamese" expressible — the pair a language-only signature could
+   * not say, and the reason the in-meeting banner could offer a language and nothing else.
+   */
+  retune: (change: { language?: string; model?: string }) => void;
+  /** Change the live translation target mid-meeting; the empty string turns it off. */
+  translate: (to: string) => void;
   /**
    * Save what the user has typed into the meeting that is running.
    *

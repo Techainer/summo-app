@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 
 import { useI18n } from "../../i18n/context";
-import { CatalogueClient } from "../../lib/catalogue";
+import { CatalogueClient, size } from "../../lib/catalogue";
 import { useEngine } from "../../lib/engine-context";
 import { useErrorText } from "../../lib/errors";
-import { fetchLanguages, languageName, rememberLanguage } from "../../lib/languages";
+import { fetchLanguages, languageName, ordered, rememberLanguage } from "../../lib/languages";
 import { url } from "../../lib/library";
 import { useLoad } from "../../lib/use-load";
-import { SegmentedControl } from "../ui";
+import { SegmentedControl, Select } from "../ui";
 
 /**
  * Which model does the listening, and in which language.
@@ -42,6 +43,7 @@ import { SegmentedControl } from "../ui";
 export function Recognition() {
   const { t, locale } = useI18n();
   const say = useErrorText();
+  const navigate = useNavigate();
   const { handshake } = useEngine();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -65,12 +67,26 @@ export function Recognition() {
     [handshake, generation],
   );
 
-  /** Only what is on this machine: a model that is not installed cannot do the listening. */
-  const installed = useMemo(
+  /**
+   * Every speech model the registry offers, installed or not.
+   *
+   * This filtered to `installed` and that was the whole of the "I cannot select whisper-tiny" bug:
+   * the model was in the catalogue, visible on the models screen, one click from being downloaded —
+   * and absent from the only control that selects one, with nothing on screen to say why. A picker
+   * that silently omits the thing you are looking for is worse than one that lists it and tells you
+   * it needs 153 MB first.
+   *
+   * The uninstalled ones are still offered, marked with their size, and selecting one says what to
+   * do rather than pinning a model the daemon cannot load.
+   */
+  const speech = useMemo(
     () =>
-      (catalogue.data?.models ?? []).filter(
-        (model) => model.installed && model.task === "asr" && model.langs.length > 0,
-      ),
+      (catalogue.data?.models ?? [])
+        .filter((model) => model.task === "asr" && model.langs.length > 0)
+        .sort((a, b) => {
+          if (a.installed !== b.installed) return a.installed ? -1 : 1;
+          return a.size_bytes - b.size_bytes;
+        }),
     [catalogue.data],
   );
 
@@ -79,7 +95,7 @@ export function Recognition() {
   // the same fact; `/languages` deliberately does not — it answers "what would serve this
   // language", which is the question this form is here to let somebody overrule.
   const chosen = catalogue.data?.chosen?.live ?? "";
-  const model = installed.find((m) => m.id === chosen);
+  const model = speech.find((m) => m.id === chosen);
   const [mode, setMode] = useState<"language" | "model">(chosen ? "model" : "language");
 
   /** What the daemon would pick for a language, so an override can be named as one. */
@@ -109,9 +125,11 @@ export function Recognition() {
     }
   };
 
-  // Nothing installed is not an error and not a form: it is the models screen's job, and the
-  // recording banner already sends people there.
-  if (catalogue.data && installed.length === 0) {
+  // An empty *registry* is not an error and not a form: it is the models screen's job, and the
+  // recording banner already sends people there. Nothing *installed* no longer lands here — the
+  // form lists what could be installed, which is the state a new user is actually in and the one
+  // where a blank panel saying "install something first" is least useful.
+  if (catalogue.data && speech.length === 0) {
     return (
       <section
         className="border-line bg-bg-raised mt-6 rounded-2xl border p-5"
@@ -155,46 +173,68 @@ export function Recognition() {
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="text-fg-faint text-meta">{t("settings.the_model")}</span>
-            <select
+            <Select
+              className="mt-1"
               value={model?.id ?? ""}
               aria-label={t("settings.the_model")}
               disabled={busy}
               onChange={(e) => void write({ model: e.target.value })}
-              className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent mt-1 h-9 w-full rounded-[var(--radius-card)] border px-2 text-sm transition-colors focus:outline-none"
             >
               <option value="">{t("settings.pick_a_model")}</option>
-              {installed.map((each) => (
+              {speech.map((each) => (
                 <option key={each.id} value={each.id}>
-                  {each.name}
+                  {/* The size on the ones that are not here yet, so the list is a list of choices
+                      with prices rather than a list that quietly omits the expensive ones. */}
+                  {each.installed ? each.name : `${each.name} · ${size(each.size_bytes)}`}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           <label className="block">
             <span className="text-fg-faint text-meta">{t("settings.the_language")}</span>
-            <select
+            <Select
+              className="mt-1"
               value={current}
               aria-label={t("settings.the_language")}
               // Every language *this* model claims, which for a multilingual one is the ninety-nine
-              // the card now lists. Sorted by name in the reader's own language: a list ordered by
-              // ISO code puts Vietnamese between Urdu and Yiddish.
+              // the card lists. Ordered by `ordered`, which puts the reader's own language first:
+              // sorted by name, "Tiếng Việt" is eightieth of ninety-nine, and a Vietnamese speaker
+              // who scrolled a screen and a half concluded Whisper does not support Vietnamese.
               disabled={busy || !model}
               onChange={(e) => void write({ language: e.target.value })}
-              className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent mt-1 h-9 w-full rounded-[var(--radius-card)] border px-2 text-sm transition-colors focus:outline-none disabled:opacity-[var(--disabled-opacity)]"
             >
               <option value="">{t("settings.detect_it")}</option>
-              {[...(model?.langs ?? [])]
-                .map((code) => ({ code, label: languageName(code, locale) }))
-                .sort((a, b) => a.label.localeCompare(b.label, locale))
-                .map((each) => (
-                  <option key={each.code} value={each.code}>
-                    {each.label}
-                  </option>
-                ))}
-            </select>
+              {ordered(model?.langs ?? [], locale).map((each) => (
+                <option key={each.code} value={each.code}>
+                  {each.label}
+                </option>
+              ))}
+            </Select>
           </label>
         </div>
+      )}
+
+      {/* Chosen but not on disk. Not an error — it is a decision the user has made and a download
+          they have not — so it reads as the next step rather than as a rejection. Recording with
+          this pinned would fail at the moment of pressing record, which is the wrong place to find
+          out. */}
+      {mode === "model" && model && !model.installed && (
+        <p className="border-accent/30 bg-accent-soft text-meta mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
+          <span className="text-fg-dim">
+            {t("settings.model_not_installed", {
+              model: model.name,
+              size: size(model.size_bytes),
+            })}
+          </span>
+          <button
+            type="button"
+            onClick={() => void navigate({ to: "/models" })}
+            className="text-accent font-medium underline"
+          >
+            {t("record.manage_models")}
+          </button>
+        </p>
       )}
 
       {/* Overruling the ranking is allowed and is worth saying out loud, once, without a number

@@ -73,6 +73,11 @@ export type Command =
   // Both fields optional on purpose: the interface changes a language and lets the daemon pick the
   // model that hears it, while a client comparing two models names one and keeps the language.
   | { cmd: "model_swap"; id?: string; language?: string }
+  // The same idea for the other half of the pipeline. Omitted or empty `to` switches translation
+  // off, which is as necessary as turning it on: it was previously readable only from
+  // `session_start`, so a meeting that turned out not to need it paid for a translator on every
+  // line until it ended.
+  | { cmd: "translate"; to?: string }
   | { cmd: "ping" };
 
 /** Whether an event carries transcript text. */

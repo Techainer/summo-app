@@ -76,7 +76,11 @@
     "recording_now": "Đang ghi",
     "elapsed": "Thời gian đã ghi",
     "listening_hint": "Câu nói xong sẽ hiện ở đây. Cứ nói bình thường.",
-    "open_meeting": "Mở buổi đang ghi"
+    "open_meeting": "Mở buổi đang ghi",
+    "translating_into": "đang dịch sang {language}",
+    "translate_off": "Tắt",
+    "translate_needs_model": "Chưa cài mô hình dịch nào.",
+    "manage_models": "Quản lý mô hình"
   },
   "import": {
     "title": "Nhập bản ghi có sẵn",
@@ -368,7 +372,8 @@
     "threshold_hint": "Cao thì bỏ sót lời nói nhỏ; thấp thì tiếng gõ phím cũng thành chữ. Mặc định 0.50.",
     "threads": "Số luồng xử lý",
     "threads_hint": "0 là để máy tự quyết theo phần cứng.",
-    "reset_capture": "Về mặc định"
+    "reset_capture": "Về mặc định",
+    "model_not_installed": "Đã chọn nhưng chưa cài — {model} cần tải {size} trước khi ghi âm dùng được."
   },
   "status": {
     "unreachable": "Không kết nối được với Summo trên máy này.",
@@ -395,7 +400,8 @@
     "close": "Đóng",
     "loading": "Đang tải…",
     "saving": "Đang lưu…",
-    "dismiss": "Đóng"
+    "dismiss": "Đóng",
+    "done": "Xong"
   },
   "setup": {
     "title": "Chào mừng tới Summo",
@@ -676,7 +682,12 @@
     "role_endpoint": "Qua {provider}",
     "running_hint": "Đây là những gì sẽ chạy khi bạn bấm ghi.",
     "use_refine": "Dùng để chạy lại",
-    "in_use_refine": "Đang chạy lại"
+    "in_use_refine": "Đang chạy lại",
+    "unpacking": "Đang giải nén…",
+    "of_total": "{done} / {total}",
+    "left_sec": "còn khoảng {value} giây",
+    "left_min": "còn khoảng {value} phút",
+    "left_hour": "còn khoảng {value} giờ"
   },
   "home": {
     "heading": "Không gian của bạn",
@@ -746,7 +757,7 @@
     "system_title": "Thu âm thanh hệ thống",
     "system_linux": "Được: Summo dùng nguồn “monitor” của thiết bị ra mặc định qua PulseAudio/PipeWire. Không cần cài gì thêm.",
     "system_windows": "Được: Summo dùng WASAPI loopback. Không cần cài gì thêm.",
-    "system_macos": "macOS không có đường thu âm hệ thống sẵn. Cách duy nhất là cài một thiết bị ảo (BlackHole, Loopback) rồi chọn nó làm nguồn vào — Summo không xin quyền Screen Recording để làm việc này, vì một ứng dụng ghi âm không nên đòi quyền quay màn hình.",
+    "system_macos": "Summo nghe được micro nhưng không nghe được loa: macOS không có sẵn đường thu âm thanh đang phát. Muốn thu cả tiếng người bên kia, hãy cài một thiết bị âm thanh ảo miễn phí — BlackHole là lựa chọn phổ biến — rồi chọn nó làm nguồn vào trong mục Ghi. Summo không xin quyền Screen Recording: đó là cách duy nhất còn lại và là quyền quá lớn đối với một ứng dụng ghi âm.",
     "system_unknown": "Chưa xác định được máy này thu được âm thanh hệ thống hay không.",
     "fix_macos_any": "macOS cấp quyền micro cho **ứng dụng**, mà ứng dụng ở đây là trình duyệt bạn đang mở Summo: System Settings → Privacy & Security → Microphone → bật nó. Nếu bạn khởi động Summo từ Terminal thì bật cho Terminal.",
     "open": "Mở cài đặt quyền",
@@ -761,6 +772,11 @@
     "notify_windows": "Windows: Settings → System → Notifications → bật cho trình duyệt, và tắt Focus assist / Do not disturb.",
     "notify_linux": "Linux: kiểm tra chế độ “Do Not Disturb” của môi trường desktop, và trình duyệt trong Flatpak cần quyền truy cập D-Bus notifications.",
     "notify_unsupported": "Trình duyệt này không có API thông báo — Summo sẽ nhắc trong ứng dụng thay vì gửi thông báo hệ thống.",
+    "notify_test": "Gửi thử một thông báo",
+    "notify_test_title": "Summo",
+    "notify_test_body": "Thông báo đang hoạt động. Lời nhắc sẽ trông như thế này.",
+    "notify_test_sent": "Đã gửi. Nếu không thấy gì hiện lên thì một chế độ Focus đang chặn — quyền vẫn được cấp bình thường.",
+    "notify_test_blocked": "Trình duyệt từ chối vẽ thông báo. Xem lại các bước ở trên.",
     "mic_title": "Micro"
   },
   "ask": {

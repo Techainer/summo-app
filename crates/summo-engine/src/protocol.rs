@@ -49,6 +49,24 @@ pub enum Command {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         language: Option<String>,
     },
+    /// Change what finished lines are translated into, without ending the meeting.
+    ///
+    /// The counterpart to [`Command::ModelSwap`], and missing for the same reason it was: the
+    /// translation target was read once out of `session_start` and never looked at again, so the
+    /// one setting a person most often gets wrong — a call that turned out to be in a language they
+    /// do not read — could only be corrected by stopping the recording.
+    ///
+    /// `None`, or an empty string, turns translation off. That direction matters as much as the
+    /// other: a user who turned it on for a talk and then joined a call in their own language is
+    /// paying for a translator on every line, and had no way to say stop.
+    ///
+    /// Lines already committed keep the translation they were given. Retranslating the transcript
+    /// so far would rewrite text the user has been reading and possibly quoting, which is a larger
+    /// surprise than a file whose second half is translated differently from its first.
+    Translate {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to: Option<String>,
+    },
     /// Keepalive. Some proxies drop an idle WebSocket, and a dropped socket mid-meeting is data loss.
     Ping,
 }

@@ -28,6 +28,15 @@ pub enum SessionStatus {
         /// while the daemon confidently decoded Vietnamese.
         #[serde(skip_serializing_if = "Option::is_none")]
         language: Option<String>,
+        /// What finished lines are being translated into, or `None` for no translation.
+        ///
+        /// Reported for the same reason as `language`, and it was the half that was missing: the
+        /// in-meeting banner could say what was being heard and had no way to say whether anything
+        /// was being translated, so the one visible sign that translation was on at all was a
+        /// second line of text appearing under the first — or not appearing, with nothing on screen
+        /// to say why.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        translate_to: Option<String>,
         /// Utterances committed so far.
         segments: u64,
         /// The document this session is writing into.
@@ -176,6 +185,7 @@ impl EngineState {
             live_model: spec.live_model.clone(),
             refine_model: spec.refine_model.clone(),
             language: spec.language.clone(),
+            translate_to: spec.translate_to.clone(),
             segments: 0,
             meeting,
         };
@@ -192,12 +202,14 @@ impl EngineState {
             live_model,
             refine_model,
             language,
+            translate_to,
             ..
         } = &mut *status
         {
             live_model.clone_from(&spec.live_model);
             refine_model.clone_from(&spec.refine_model);
             language.clone_from(&spec.language);
+            translate_to.clone_from(&spec.translate_to);
         }
     }
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import { SegmentedControl } from "../ui";
-import { FIELD, LABEL, SELECT } from "./fields";
+import { SegmentedControl, Select } from "../ui";
+import { CONTROL, FIELD, LABEL } from "./fields";
 import { useI18n, useT } from "../../i18n/context";
 import { SCHEMES, choose as chooseScheme, read as readScheme, type Scheme } from "../../lib/theme";
 
@@ -36,8 +36,8 @@ function LanguagePicker() {
     <>
       <label className={FIELD}>
         <span className={LABEL}>{t("settings.language")}</span>
-        <select
-          className={SELECT}
+        <Select
+          className={CONTROL}
           value={locale}
           aria-label={t("settings.language")}
           onChange={(e) => setLocale(e.target.value)}
@@ -47,7 +47,7 @@ function LanguagePicker() {
               {language.label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <p className="text-fg-faint text-micro mt-1.5 ml-[162px] leading-normal">
         {t("settings.language_hint")}

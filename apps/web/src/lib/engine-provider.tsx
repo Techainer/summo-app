@@ -152,12 +152,29 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   }, [controller]);
 
   // Mid-meeting, and it also updates what the *next* meeting starts from: somebody who corrects
-  // the language during a call has told us the setting was wrong, not only this recording.
+  // the language during a call has told us the setting was wrong, not only this recording. Only
+  // the language is remembered locally — the model belongs to `settings.models.live`, which the
+  // daemon owns and the settings screen writes, and mirroring it into the browser's capture
+  // preferences would give two places an opinion about the same thing.
   const retune = useCallback(
-    (language: string) => {
+    (change: { language?: string; model?: string }) => {
+      if (change.language !== undefined) {
+        const current = loadCapture();
+        saveCapture({ ...current, spoken: change.language });
+      }
+      controller?.retune(change);
+    },
+    [controller],
+  );
+
+  // Same bargain as `retune`: the change applies to this meeting and to the next one. Somebody who
+  // turns translation off mid-call has said they do not want it, not that they do not want it for
+  // the next four minutes.
+  const translate = useCallback(
+    (to: string) => {
       const current = loadCapture();
-      saveCapture({ ...current, spoken: language });
-      controller?.retune(language);
+      saveCapture({ ...current, translateTo: to });
+      controller?.translate(to);
     },
     [controller],
   );
@@ -235,6 +252,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       stop,
       toggle,
       retune,
+      translate,
       notes,
     }),
     [
@@ -251,6 +269,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       stop,
       toggle,
       retune,
+      translate,
       notes,
     ],
   );

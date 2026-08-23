@@ -76,7 +76,11 @@
     "recording_now": "Recording",
     "elapsed": "Time recorded",
     "listening_hint": "Sentences appear here as they finish. Speak normally.",
-    "open_meeting": "Open the running meeting"
+    "open_meeting": "Open the running meeting",
+    "translating_into": "translating into {language}",
+    "translate_off": "Off",
+    "translate_needs_model": "No translation model is installed yet.",
+    "manage_models": "Manage models"
   },
   "import": {
     "title": "Import a recording",
@@ -368,7 +372,8 @@
     "threshold_hint": "High misses quiet talking; low turns typing into text. Ships at 0.50.",
     "threads": "Inference threads",
     "threads_hint": "0 follows the hardware probe.",
-    "reset_capture": "Back to the defaults"
+    "reset_capture": "Back to the defaults",
+    "model_not_installed": "Chosen, but not installed yet — {model} needs {size} downloading before a recording can use it."
   },
   "status": {
     "unreachable": "Cannot reach Summo on this machine.",
@@ -395,7 +400,8 @@
     "close": "Close",
     "loading": "Loading…",
     "saving": "Saving…",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "done": "Done"
   },
   "setup": {
     "title": "Welcome to Summo",
@@ -676,7 +682,12 @@
     "role_endpoint": "Via {provider}",
     "running_hint": "This is what runs when you press record.",
     "use_refine": "Use for the second pass",
-    "in_use_refine": "Second pass"
+    "in_use_refine": "Second pass",
+    "unpacking": "Unpacking…",
+    "of_total": "{done} of {total}",
+    "left_sec": "about {value} seconds left",
+    "left_min": "about {value} minutes left",
+    "left_hour": "about {value} hours left"
   },
   "home": {
     "heading": "Your workspace",
@@ -746,7 +757,7 @@
     "system_title": "Capturing system audio",
     "system_linux": "Supported: Summo uses the default output's monitor source through PulseAudio/PipeWire. Nothing to install.",
     "system_windows": "Supported: Summo uses WASAPI loopback. Nothing to install.",
-    "system_macos": "macOS has no built-in route for this. The only way is a virtual device (BlackHole, Loopback) selected as an input — Summo does not ask for the Screen Recording permission to do it, because an audio recorder should not demand the right to watch your screen.",
+    "system_macos": "Summo can hear your microphone but not your speakers: macOS has no built-in route for what is playing. To catch the other side of a call, install a free virtual audio device — BlackHole is the usual choice — and then pick it as the input under Recording. Summo will not ask for Screen Recording permission, which is the only other way and far more than an audio recorder should hold.",
     "system_unknown": "Whether this machine can capture system audio has not been determined.",
     "fix_macos_any": "macOS grants microphone access to the **application**, and here that is the browser you have Summo open in: System Settings → Privacy & Security → Microphone → enable it. If you started Summo from a terminal, enable it for the terminal.",
     "open": "Open permission settings",
@@ -761,6 +772,11 @@
     "notify_windows": "Windows: Settings → System → Notifications → enable it for the browser, and turn off Focus assist / Do not disturb.",
     "notify_linux": "Linux: check your desktop's Do Not Disturb setting, and note that a Flatpak browser needs access to the D-Bus notification service.",
     "notify_unsupported": "This browser has no notification API — Summo will remind you inside the app instead.",
+    "notify_test": "Send a test notification",
+    "notify_test_title": "Summo",
+    "notify_test_body": "Notifications are working. This is what a reminder will look like.",
+    "notify_test_sent": "Sent. If nothing appeared, a Focus mode is swallowing it — the permission is granted either way.",
+    "notify_test_blocked": "The browser refused to draw it. Check the steps above.",
     "mic_title": "Microphone"
   },
   "ask": {

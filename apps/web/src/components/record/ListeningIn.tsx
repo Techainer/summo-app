@@ -1,49 +1,49 @@
-import { useCallback, useState } from "react";
+import { Suspense, lazy, useCallback, useState } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { X } from "lucide-react";
 
 import { useI18n } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { url } from "../../lib/library";
-import {
-  AUTO,
-  autoAvailable,
-  fetchLanguages,
-  languageName,
-  quality,
-  ready,
-} from "../../lib/languages";
+import { AUTO, fetchLanguages, languageName, quality } from "../../lib/languages";
 import { useLoad } from "../../lib/use-load";
-import { X } from "lucide-react";
 
 /**
- * What the recording is listening for, said out loud while it records.
+ * What the recording is doing, said out loud while it does it.
  *
- * A default is not enough, and this is the reason: a language preference is right most of the time
- * and wrong exactly when it matters — the customer call in English, the standup that switched. The
- * old shape asked once, at install, and then never mentioned it again, so a meeting recorded in the
- * wrong language looked identical to one recorded in the right one until somebody read the
- * transcript.
+ * A default is not enough, and this is the reason: a preference is right most of the time and wrong
+ * exactly when it matters — the customer call in English, the standup that switched, the talk that
+ * turned out to need subtitles. The old shape asked once, at install, and then never mentioned it
+ * again, so a meeting recorded with the wrong settings looked identical to one recorded correctly
+ * until somebody read the transcript.
  *
- * So while recording, the app says which language it is hearing and offers to change it. Changing
- * is not a restart: the daemon rebuilds the decoder under the running session, and the file, the
- * timing and everything already transcribed continue. That is what makes this honest to show at
- * second three rather than as a question before the first word.
+ * So while recording, the app says what it is hearing and what it is translating into, and offers
+ * to change either. Changing is not a restart: the daemon rebuilds only what changed under the
+ * running session, and the file, the timing and everything already transcribed continue. That is
+ * what makes this honest to show at second three rather than as a question before the first word.
  *
  * It is deliberately not a modal. The promise is that pressing record records — anything that
- * stands between the press and the capture is a bug, including a dialog asking to confirm what the
- * user already chose.
+ * stands between the press and the capture is a bug, including a dialog confirming what the user
+ * already chose.
+ *
+ * The controls themselves are in `ListeningPanel`, loaded when somebody asks for them. This banner
+ * is on screen for the whole of every recording on every screen; the panel is opened by a minority
+ * of them, and it carries the catalogue client and a hundred-entry language table.
  */
+const ListeningPanel = lazy(() =>
+  import("./ListeningPanel").then((m) => ({ default: m.ListeningPanel })),
+);
+
 export function ListeningIn() {
-  const { session, retune } = useEngine();
+  const { session, handshake } = useEngine();
   const { t, locale } = useI18n();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  // Bumped after a change, to re-read what the daemon now says rather than what this component
-  // asked for — the two differ when a swap fails and the old pipeline keeps running.
+  // Bumped after a change, to re-read what the daemon now says rather than what the panel asked
+  // for — the two differ when a swap fails and the old pipeline keeps running.
   const [generation, setGeneration] = useState(0);
-  const { handshake } = useEngine();
 
   const probe = useLoad(
     useCallback(async () => fetchLanguages(handshake), [handshake]),
@@ -67,6 +67,7 @@ export function ListeningIn() {
         state?: string;
         live_model?: string;
         language?: string;
+        translate_to?: string;
       };
     }, [handshake]),
     [handshake, session.recording, generation],
@@ -88,76 +89,75 @@ export function ListeningIn() {
   const current = languages.find((language) => language.code === spoken);
   const auto = spoken === AUTO;
   const label = auto ? t("record.spoken_auto") : languageName(spoken, locale);
+  const into = recording?.translate_to ?? "";
 
-  // Only languages that can be used right now. Mid-meeting is the wrong moment to start a 153 MB
-  // download, and offering one would be offering to lose the next four minutes of the call.
-  const usable = languages.filter((language) => ready(language));
-  const canAuto = autoAvailable(languages);
+  // The daemon answers a change before the pipeline is actually swapped, so an immediate read
+  // reports the state being replaced.
+  const settle = () => window.setTimeout(() => setGeneration((n) => n + 1), 600);
 
   return (
-    <div className="border-accent/30 bg-accent-soft text-meta flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border px-3 py-2">
-      <span className="text-fg-dim">
-        {t("record.listening_in", { language: label })}
-        {recording?.live_model ? ` · ${recording.live_model}` : ""}
-        {current && quality(current) === "poor" ? ` · ${t("record.spoken_poor")}` : ""}
-      </span>
+    <div className="border-accent/30 bg-accent-soft rounded-[var(--radius-card)] border px-3 py-2">
+      <div className="text-meta flex flex-wrap items-center gap-2">
+        <span className="text-fg-dim">
+          {t("record.listening_in", { language: label })}
+          {recording?.live_model ? ` · ${recording.live_model}` : ""}
+          {current && quality(current) === "poor" ? ` · ${t("record.spoken_poor")}` : ""}
+          {/* Whether anything is being translated, which the banner could not say before. Silence
+              here used to be indistinguishable from a translator that was quietly failing. */}
+          {into
+            ? ` · ${t("record.translating_into", { language: languageName(into, locale) })}`
+            : ""}
+        </span>
 
-      {!open ? (
-        <>
-          {/* Back to the meeting. A recording survives navigation, so somebody who wandered off to
-              the library while it ran had the red clock in the header — which stops the recording —
-              and no way at all to return to the page the words are landing on. */}
-          {session.meeting && !pathname.startsWith(`/pages/${session.meeting}`) && (
-            <button
-              type="button"
-              data-testid="back-to-meeting"
-              onClick={() =>
-                void navigate({
-                  to: "/pages/$pageId",
-                  params: { pageId: session.meeting as string },
-                })
-              }
-              className="text-accent font-medium underline"
-            >
-              {t("record.open_meeting")}
-            </button>
-          )}
-          <button type="button" onClick={() => setOpen(true)} className="font-medium underline">
-            {t("record.listening_change")}
-          </button>
+        {/* Back to the meeting. A recording survives navigation, so somebody who wandered off to
+            the library while it ran had the red clock in the header — which stops the recording —
+            and no way at all to return to the page the words are landing on. */}
+        {session.meeting && !pathname.startsWith(`/pages/${session.meeting}`) && (
           <button
             type="button"
-            onClick={() => setDismissed(true)}
-            className="text-fg-faint ms-auto"
-            aria-label={t("common.dismiss")}
+            data-testid="back-to-meeting"
+            onClick={() =>
+              void navigate({
+                to: "/pages/$pageId",
+                params: { pageId: session.meeting as string },
+              })
+            }
+            className="text-accent font-medium underline"
           >
-            <X aria-hidden="true" className="size-3.5" />
+            {t("record.open_meeting")}
           </button>
-        </>
-      ) : (
-        <label className="flex items-center gap-2">
-          <span className="sr-only">{t("record.spoken")}</span>
-          <select
-            aria-label={t("record.spoken")}
-            value={spoken}
-            onChange={(event) => {
-              retune(event.target.value);
-              setOpen(false);
-              // The daemon rebuilds the decoder before it answers; a moment later `/status` is the
-              // truth about whether it worked.
-              window.setTimeout(() => setGeneration((n) => n + 1), 600);
-            }}
-            className="border-line bg-bg-soft text-fg h-7 rounded-[var(--radius-card)] border px-2 text-sm"
-          >
-            {canAuto && <option value={AUTO}>{t("record.spoken_auto")}</option>}
-            {usable.map((language) => (
-              <option key={language.code} value={language.code}>
-                {languageName(language.code, locale)}
-              </option>
-            ))}
-          </select>
-          <span className="text-fg-faint text-micro">{t("record.listening_note")}</span>
-        </label>
+        )}
+        <button
+          type="button"
+          data-testid="listening-change"
+          aria-expanded={open}
+          onClick={() => setOpen((was) => !was)}
+          className="font-medium underline"
+        >
+          {open ? t("common.done") : t("record.listening_change")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          className="text-fg-faint ms-auto"
+          aria-label={t("common.dismiss")}
+        >
+          <X aria-hidden="true" className="size-3.5" />
+        </button>
+      </div>
+
+      {open && (
+        // No fallback: the chunk is small and local, and a spinner appearing under a banner for
+        // one frame is more distracting than the panel simply arriving.
+        <Suspense fallback={null}>
+          <ListeningPanel
+            live_model={recording?.live_model}
+            spoken={spoken}
+            into={into}
+            languages={languages}
+            onChanged={settle}
+          />
+        </Suspense>
       )}
     </div>
   );
