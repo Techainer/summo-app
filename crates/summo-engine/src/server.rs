@@ -4253,9 +4253,30 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
         let reply = match message {
             #[cfg(feature = "models")]
             Message::Text(text) => {
-                let (events, next) = handle_command_with_models(&text, &engine, session.take());
-                session = next;
-                events
+                // Turning translation on is the one command that has to be handled here rather
+                // than in the synchronous handler below, because it is the one that loads a model
+                // *while audio is arriving*.
+                //
+                // SMALL100 is 610 MB and initialising its ONNX sessions takes seconds. Doing that
+                // inside `handle_command_with_models` blocks this task, so the socket stops being
+                // read while the browser goes on pushing a frame every 100 ms — and the connection
+                // breaks. The daemon then sees a client that vanished mid-recording and ends the
+                // session. Measured: selecting a translation language ended the meeting within a
+                // second, every time, and `translate_to` never even took effect.
+                //
+                // A model swap does not hit this: `warm` usually has the decoder, and a cold one is
+                // a fraction of the size. Translation is the case where the load is unavoidable and
+                // large, so it goes to a blocking thread and this task stays free to serve the
+                // socket.
+                match parse_translate(&text) {
+                    Some(to) => set_live_translation(&engine, session.as_mut(), to).await,
+                    None => {
+                        let (events, next) =
+                            handle_command_with_models(&text, &engine, session.take());
+                        session = next;
+                        events
+                    }
+                }
             }
             #[cfg(not(feature = "models"))]
             Message::Text(text) => handle_command(&text, &engine),
@@ -4281,6 +4302,108 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
     if engine.status().is_recording() {
         tracing::warn!("client disconnected while recording; ending the session");
         engine.end();
+    }
+}
+
+/// A mid-meeting change that did not work, reported without ending the meeting.
+///
+/// `Event::error` marks an error transient only if the *error* is retryable — a network blip, say.
+/// That is the wrong question here. What matters is whether the **session** survived, and for a
+/// refused change it always does: `ModelSwap` and `set_live_translation` both build the new thing
+/// before dropping the old, so the meeting carries on with exactly what it had.
+///
+/// The client cannot know that. `Session` treats any non-transient error as the daemon refusing the
+/// session and calls `abandon()` — microphone released, socket closed, recording over — and the
+/// daemon then sees a client that vanished mid-recording and ends its side too. So asking for a
+/// translation the build could not provide *ended the meeting*, which is a catastrophic answer to
+/// a dropdown. Measured end to end: the socket closed within a second of selecting a language.
+///
+/// `transient: true` is what the flag already means to the client: "the pipeline is still running".
+/// The message is unchanged, so the user still learns what went wrong.
+#[cfg(feature = "models")]
+fn change_refused(e: &summo_core::Error) -> Event {
+    Event::Error {
+        message: e.to_string(),
+        transient: true,
+        code: e.code().map(str::to_string),
+    }
+}
+
+/// `Some(target)` when this message is a translation change, so the socket can take it itself.
+///
+/// Returns the target rather than the whole command because that is all the caller needs, and
+/// `Some(None)` — "turn it off" — has to stay distinguishable from "this was some other command".
+#[cfg(feature = "models")]
+fn parse_translate(text: &str) -> Option<Option<String>> {
+    match serde_json::from_str::<Command>(text) {
+        Ok(Command::Translate { to }) => Some(to),
+        _ => None,
+    }
+}
+
+/// Change what finished lines are translated into, without blocking the socket while it happens.
+///
+/// The awaiting version of what used to be an arm of `handle_command_with_models`. Everything about
+/// the behaviour is the same — only `active.live` is rebuilt, so the decoder, the recorder, the
+/// archive and every line already written are untouched — and the difference is where the model is
+/// loaded.
+///
+/// Building a translator means initialising ONNX sessions over several hundred megabytes. On the
+/// socket task that stops the socket being read, and the browser is sending an audio frame every
+/// 100 ms, so the connection breaks and the daemon ends the meeting. That was not theoretical:
+/// selecting a translation language killed the recording within a second, and `translate_to` never
+/// took effect. `spawn_blocking` puts the load on a thread that is allowed to block, and this task
+/// stays free.
+///
+/// The new translator is built before the old one is dropped, so a target with no model behind it
+/// leaves the meeting translating into the previous language rather than into nothing.
+#[cfg(feature = "models")]
+async fn set_live_translation(
+    engine: &EngineState,
+    session: Option<&mut ActiveSession>,
+    to: Option<String>,
+) -> Vec<Event> {
+    let Some(active) = session else {
+        return vec![Event::error(&summo_core::Error::Config(
+            "no recording to change; set the translation language in settings instead".into(),
+        ))];
+    };
+
+    let wanted = to.as_deref().map(str::trim).unwrap_or_default().to_string();
+    if wanted.is_empty() {
+        active.live = None;
+        active.spec.translate_to = None;
+        engine.retuned(&active.spec);
+        return vec![Event::info("live translation off".to_string())];
+    }
+
+    let paths = engine.paths().clone();
+    let built = tokio::task::spawn_blocking(move || {
+        summo_core::settings::Settings::load(&paths.settings())
+            .and_then(|settings| crate::translate::Translator::from_settings(&paths, &settings))
+    })
+    .await;
+
+    match built {
+        Ok(Ok(translator)) => {
+            active.live = Some(crate::live::LiveTranslator::new(
+                translator,
+                crate::live::LiveConfig {
+                    lang: wanted.clone(),
+                    glossary: summo_llm::prompt::Glossary::default(),
+                },
+            ));
+            active.spec.translate_to = Some(wanted.clone());
+            engine.retuned(&active.spec);
+            vec![Event::info(format!("now translating into {wanted}"))]
+        }
+        Ok(Err(e)) => vec![change_refused(&e)],
+        // The blocking thread panicked or was cancelled. Reported rather than swallowed: silence
+        // here looks exactly like a translator that is loading, and the user waits for subtitles
+        // that are never coming.
+        Err(e) => vec![change_refused(&summo_core::Error::Other(format!(
+            "the translation model could not be loaded: {e}"
+        )))],
     }
 }
 
@@ -4590,60 +4713,21 @@ fn handle_command_with_models(
                 // The old pipeline is still in `active` and still working, so a failed swap leaves
                 // the meeting recording rather than ending it. Losing a meeting because a model
                 // would not load is the worst possible answer to "change the language".
-                Err(e) => (vec![Event::error(&e)], Some(active)),
+                //
+                // The daemon has always kept the session here; the client did not, and tore it down
+                // on any non-transient error. See `change_refused`.
+                Err(e) => (vec![change_refused(&e)], Some(active)),
             }
         }
-        // Change the translation target, or switch translation off, mid-meeting.
-        //
-        // Only `active.live` is rebuilt: the decoder, the recorder, the archive and every line
-        // already written stay exactly as they are. The spec is updated too, so `/status` — and the
-        // banner reading it — reports what is true now rather than what the session started with.
-        Command::Translate { to } => {
-            let Some(mut active) = session else {
-                return (
-                    vec![Event::error(&summo_core::Error::Config(
-                        "no recording to change; set the translation language in settings instead"
-                            .into(),
-                    ))],
-                    None,
-                );
-            };
-
-            let wanted = to.as_deref().map(str::trim).unwrap_or_default().to_string();
-            if wanted.is_empty() {
-                active.live = None;
-                active.spec.translate_to = None;
-                engine.retuned(&active.spec);
-                return (
-                    vec![Event::info("live translation off".to_string())],
-                    Some(active),
-                );
-            }
-
-            // The translator is built before anything is replaced, so a target with no model behind
-            // it leaves the meeting translating into the old language rather than into nothing. A
-            // failed change must not be a silent downgrade to no subtitles at all.
-            match summo_core::settings::Settings::load(&engine.paths().settings()).and_then(
-                |settings| crate::translate::Translator::from_settings(engine.paths(), &settings),
-            ) {
-                Ok(translator) => {
-                    active.live = Some(crate::live::LiveTranslator::new(
-                        translator,
-                        crate::live::LiveConfig {
-                            lang: wanted.clone(),
-                            glossary: summo_llm::prompt::Glossary::default(),
-                        },
-                    ));
-                    active.spec.translate_to = Some(wanted.clone());
-                    engine.retuned(&active.spec);
-                    (
-                        vec![Event::info(format!("now translating into {wanted}"))],
-                        Some(active),
-                    )
-                }
-                Err(e) => (vec![Event::error(&e)], Some(active)),
-            }
-        }
+        // Handled by `set_live_translation` on the socket task, which can await. Reaching this arm
+        // means a caller bypassed that path; building the translator here would block the socket
+        // for as long as the model takes to load, which is the bug that route exists to avoid.
+        Command::Translate { .. } => (
+            vec![Event::error(&summo_core::Error::Other(
+                "translation is applied on the socket task, not here".into(),
+            ))],
+            session,
+        ),
         other => {
             let events = handle_command(&serde_json::to_string(&other).unwrap_or_default(), engine);
             (events, session)
@@ -7087,19 +7171,81 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
     /// The same contract for translation: no recording, no change, and a sentence pointing at the
     /// place the setting does live rather than a silent no-op.
     #[cfg(feature = "models")]
-    #[test]
-    fn a_translate_with_no_recording_says_where_the_setting_lives() {
+    #[tokio::test]
+    async fn a_translate_with_no_recording_says_where_the_setting_lives() {
         let (_tmp, engine) = engine();
-        let command = serde_json::to_string(&Command::Translate {
-            to: Some("vi".into()),
-        })
-        .unwrap();
-        let (events, session) = handle_command_with_models(&command, &engine, None);
+        let events = set_live_translation(&engine, None, Some("vi".into())).await;
         assert!(
             matches!(&events[0], Event::Error { message, .. } if message.contains("settings")),
             "{events:?}"
         );
-        assert!(session.is_none());
+    }
+
+    /// The socket has to recognise a translation change before the synchronous handler sees it,
+    /// because the synchronous handler is the thing that must not do this work. Every shape the
+    /// interface sends is claimed; nothing else is.
+    #[cfg(feature = "models")]
+    #[test]
+    fn the_socket_claims_translation_and_leaves_every_other_command_alone() {
+        assert_eq!(
+            parse_translate(r#"{"cmd":"translate","to":"ja"}"#),
+            Some(Some("ja".into()))
+        );
+        // "Off" must be claimed too. Falling through to the synchronous handler would answer it
+        // with "translation is applied on the socket task", and turning translation off would be
+        // an error message instead of an action.
+        assert_eq!(
+            parse_translate(r#"{"cmd":"translate","to":""}"#),
+            Some(Some(String::new()))
+        );
+        assert_eq!(parse_translate(r#"{"cmd":"translate"}"#), Some(None));
+
+        assert_eq!(parse_translate(r#"{"cmd":"session_stop"}"#), None);
+        assert_eq!(parse_translate(r#"{"cmd":"model_swap","id":"x"}"#), None);
+        assert_eq!(parse_translate("{not json"), None);
+    }
+
+    /// A refused change must never read as a refused *session*.
+    ///
+    /// The client abandons a recording — microphone, socket and all — on any non-transient error,
+    /// and the daemon then sees a vanished client and ends its side too. So a translation the build
+    /// could not provide ended the meeting. Observed end to end before this: `{"cmd":"translate",
+    /// "to":"en"}` → one error frame → socket closed → session idle, in under a second.
+    ///
+    /// The meeting is always fine here: both change paths build the replacement before dropping
+    /// what they had. `transient` is the flag that tells the client so.
+    #[cfg(feature = "models")]
+    #[test]
+    fn a_refused_change_does_not_read_as_a_refused_session() {
+        let refused = change_refused(&summo_core::Error::Config("no translator here".into()));
+        match refused {
+            Event::Error {
+                transient, message, ..
+            } => {
+                assert!(
+                    transient,
+                    "a failed mid-meeting change tears down the recording unless it says the \
+                     pipeline survived"
+                );
+                assert!(
+                    message.contains("no translator here"),
+                    "the reason must survive: {message}"
+                );
+            }
+            other => panic!("expected an error event, got {other:?}"),
+        }
+    }
+
+    /// Turning translation off never loads anything, so it must answer immediately even on a
+    /// machine with no translator configured at all — the state a user reaches by turning it on,
+    /// changing their mind, and turning it off again.
+    #[cfg(feature = "models")]
+    #[tokio::test]
+    async fn translation_off_needs_no_model_and_no_settings() {
+        let (_tmp, engine) = engine();
+        // No session: the "no recording" answer, not a panic and not a model load.
+        let events = set_live_translation(&engine, None, None).await;
+        assert!(matches!(&events[0], Event::Error { .. }), "{events:?}");
     }
 
     /// Three shapes on the wire, all of which the interface sends. `{"to":""}` and `{}` both mean

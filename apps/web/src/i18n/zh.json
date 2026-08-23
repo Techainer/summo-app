@@ -373,7 +373,9 @@
     "threads": "推理线程数",
     "threads_hint": "0 表示按硬件自动决定。",
     "reset_capture": "恢复默认",
-    "model_not_installed": "已选择但尚未安装——{model} 需要先下载 {size} 才能用于录音。"
+    "model_not_installed": "已选择但尚未安装——{model} 需要先下载 {size} 才能用于录音。",
+    "served_by": "由 {model} 识别，这是本机已安装的模型中对该语言最准确的一个。",
+    "served_by_missing": "{model} 对该语言最准确，但尚未安装——{size}。"
   },
   "status": {
     "unreachable": "无法连接到本机上的 Summo。",

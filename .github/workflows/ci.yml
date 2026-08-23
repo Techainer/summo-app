@@ -717,7 +717,11 @@ jobs:
       #
       # `bundled,models` is a heavier build — it links sherpa-onnx — so it is a second step rather
       # than a change to the one above: the ten fast suites should not wait for it to fail.
-      - run: cargo build --bin summo-engine --features bundled,models
+      # `mt-onnx` because that is what ships: `scripts/bundle.sh` builds every release with
+      # `bundled,mcp,models,dub,mt-onnx`, and CI was building without it. So the binary under test
+      # could not run the in-app translator at all, and every suite that touched translation was
+      # exercising a build the users do not have. Translation shipped broken twice behind that gap.
+      - run: cargo build --bin summo-engine --features bundled,models,mt-onnx
       # sherpa-onnx ships as a shared library, and it is the crate's *build script* that puts it
       # beside the binary — so a cache hit, which skips the build script, produces a binary linked
       # with an `$ORIGIN` rpath and nothing at `$ORIGIN` to find. The daemon then dies with
@@ -731,7 +735,7 @@ jobs:
           ls -l target/debug/libsherpa* 2>/dev/null || echo "not beside the binary"
           if [ ! -e target/debug/libsherpa-onnx-c-api.so ]; then
             cargo clean -p sherpa-rs-sys
-            cargo build --bin summo-engine --features bundled,models
+            cargo build --bin summo-engine --features bundled,models,mt-onnx
             ls -l target/debug/libsherpa*
           fi
       - run: pnpm -C apps/web e2e:full-flow
@@ -742,6 +746,18 @@ jobs:
           # refuses it as `404` — indistinguishable from a file that moved, and it failed this job
           # on a suite about installing models. The token is sent to GitHub's own hosts only; a
           # manifest may point anywhere, and a credential must not follow it there.
+          GITHUB_TOKEN: ${{ github.token }}
+
+      # Changing a meeting while it runs: the model, the spoken language, and live translation on
+      # and off. Separate from `full-flow` because it costs another 865 MB of models — Whisper to
+      # switch *to*, SMALL100 to translate with — and because the thing it proves is different:
+      # `full-flow` says audio becomes text, this says the settings over that text do something.
+      #
+      # It is here rather than in `pnpm e2e` for the same reason `full-flow` is: both need a real
+      # recording, and the suites in that list do not.
+      - run: pnpm -C apps/web e2e:in-meeting
+        env:
+          SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
           GITHUB_TOKEN: ${{ github.token }}
 
       # The pictures, when something went wrong.

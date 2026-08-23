@@ -373,7 +373,9 @@
     "threads": "推論スレッド数",
     "threads_hint": "0 はハードウェアに合わせます。",
     "reset_capture": "初期値に戻す",
-    "model_not_installed": "選択済みですが未インストールです。録音で使うには {model}（{size}）のダウンロードが必要です。"
+    "model_not_installed": "選択済みですが未インストールです。録音で使うには {model}（{size}）のダウンロードが必要です。",
+    "served_by": "この言語でインストール済みのうち最も正確な {model} が聞き取ります。",
+    "served_by_missing": "この言語には {model} が最も正確ですが、まだインストールされていません（{size}）。"
   },
   "status": {
     "unreachable": "このマシンの Summo に接続できません。",

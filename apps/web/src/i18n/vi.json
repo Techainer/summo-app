@@ -305,7 +305,7 @@
     "recognition_none": "Chưa cài model nhận dạng nào. Cài một cái ở màn Mô hình.",
     "by_language": "Theo ngôn ngữ",
     "by_model": "Theo model",
-    "the_model": "Model",
+    "the_model": "Mô hình",
     "the_language": "Ngôn ngữ",
     "pick_a_model": "Chọn một model",
     "detect_it": "Tự nhận từng câu",
@@ -373,7 +373,9 @@
     "threads": "Số luồng xử lý",
     "threads_hint": "0 là để máy tự quyết theo phần cứng.",
     "reset_capture": "Về mặc định",
-    "model_not_installed": "Đã chọn nhưng chưa cài — {model} cần tải {size} trước khi ghi âm dùng được."
+    "model_not_installed": "Đã chọn nhưng chưa cài — {model} cần tải {size} trước khi ghi âm dùng được.",
+    "served_by": "{model} sẽ nghe, đây là mô hình chính xác nhất đang cài cho ngôn ngữ này.",
+    "served_by_missing": "{model} là mô hình chính xác nhất cho ngôn ngữ này nhưng chưa được cài — {size}."
   },
   "status": {
     "unreachable": "Không kết nối được với Summo trên máy này.",
