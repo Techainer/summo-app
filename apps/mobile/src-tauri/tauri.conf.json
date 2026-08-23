@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Summo",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "identifier": "app.summo.mobile",
   "build": {
     "frontendDist": "../../web/dist",
