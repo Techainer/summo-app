@@ -2888,10 +2888,22 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
             "better": better,
         },
         // Translation: a model inside the app, or a provider the user pointed it at.
+        //
+        // `installed` is here for the same reason the three roles above have it, and it was the one
+        // role missing it. Without it the panel had to guess from "is it local and does it name a
+        // model", which is true of an installed model and an uninstalled one alike — so a machine
+        // with SMALL100 on disk and in use was offered an "Install" button for it, on the same
+        // screen whose card beside it said "in use, installed".
         "translation": {
             "local": settings.llm.translator.as_ref().is_some_and(summo_core::settings::Translator::is_local),
             "provider": settings.llm.translator.as_ref().map(|t| t.provider.clone()),
             "model": settings.llm.translator.as_ref().and_then(|t| t.model.clone()),
+            "installed": settings
+                .llm
+                .translator
+                .as_ref()
+                .and_then(|t| t.model.as_deref())
+                .is_some_and(|id| installed.iter().any(|m| m.id.as_str() == id)),
         },
         // Summaries and answers: usually somebody else's server, which is the one part of this that
         // can leave the machine — so it is named rather than implied.
@@ -2915,6 +2927,8 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
             "local": settings.llm.translator.as_ref().is_some_and(summo_core::settings::Translator::is_local),
             "provider": settings.llm.translator.as_ref().map(|t| t.provider.clone()),
             "model": settings.llm.translator.as_ref().and_then(|t| t.model.clone()),
+            // No store to ask, and nothing here could run a local model anyway.
+            "installed": false,
         },
         "language_model": { "provider": settings.llm.provider, "model": settings.llm.model },
     }))
@@ -4327,6 +4341,15 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
             transient: false,
             code: None,
         }],
+        // Same shape as the arm above and a separate one because it has no model id to name: a
+        // build with no recognition has nothing to translate, since nothing produces the lines.
+        Command::Translate { .. } => vec![Event::Error {
+            message: "cannot translate: this binary was built without recognition support. \
+                      Rebuild with `--features models`."
+                .into(),
+            transient: false,
+            code: None,
+        }],
     }
 }
 
@@ -4567,6 +4590,57 @@ fn handle_command_with_models(
                 // The old pipeline is still in `active` and still working, so a failed swap leaves
                 // the meeting recording rather than ending it. Losing a meeting because a model
                 // would not load is the worst possible answer to "change the language".
+                Err(e) => (vec![Event::error(&e)], Some(active)),
+            }
+        }
+        // Change the translation target, or switch translation off, mid-meeting.
+        //
+        // Only `active.live` is rebuilt: the decoder, the recorder, the archive and every line
+        // already written stay exactly as they are. The spec is updated too, so `/status` — and the
+        // banner reading it — reports what is true now rather than what the session started with.
+        Command::Translate { to } => {
+            let Some(mut active) = session else {
+                return (
+                    vec![Event::error(&summo_core::Error::Config(
+                        "no recording to change; set the translation language in settings instead"
+                            .into(),
+                    ))],
+                    None,
+                );
+            };
+
+            let wanted = to.as_deref().map(str::trim).unwrap_or_default().to_string();
+            if wanted.is_empty() {
+                active.live = None;
+                active.spec.translate_to = None;
+                engine.retuned(&active.spec);
+                return (
+                    vec![Event::info("live translation off".to_string())],
+                    Some(active),
+                );
+            }
+
+            // The translator is built before anything is replaced, so a target with no model behind
+            // it leaves the meeting translating into the old language rather than into nothing. A
+            // failed change must not be a silent downgrade to no subtitles at all.
+            match summo_core::settings::Settings::load(&engine.paths().settings())
+                .and_then(|settings| crate::translate::Translator::from_settings(engine.paths(), &settings))
+            {
+                Ok(translator) => {
+                    active.live = Some(crate::live::LiveTranslator::new(
+                        translator,
+                        crate::live::LiveConfig {
+                            lang: wanted.clone(),
+                            glossary: summo_llm::prompt::Glossary::default(),
+                        },
+                    ));
+                    active.spec.translate_to = Some(wanted.clone());
+                    engine.retuned(&active.spec);
+                    (
+                        vec![Event::info(format!("now translating into {wanted}"))],
+                        Some(active),
+                    )
+                }
                 Err(e) => (vec![Event::error(&e)], Some(active)),
             }
         }
@@ -7007,6 +7081,56 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
             parsed,
             Command::ModelSwap { ref id, ref language }
                 if id.is_empty() && language.as_deref() == Some("en")
+        ));
+    }
+
+    /// The same contract for translation: no recording, no change, and a sentence pointing at the
+    /// place the setting does live rather than a silent no-op.
+    #[cfg(feature = "models")]
+    #[test]
+    fn a_translate_with_no_recording_says_where_the_setting_lives() {
+        let (_tmp, engine) = engine();
+        let command = serde_json::to_string(&Command::Translate {
+            to: Some("vi".into()),
+        })
+        .unwrap();
+        let (events, session) = handle_command_with_models(&command, &engine, None);
+        assert!(
+            matches!(&events[0], Event::Error { message, .. } if message.contains("settings")),
+            "{events:?}"
+        );
+        assert!(session.is_none());
+    }
+
+    /// Three shapes on the wire, all of which the interface sends. `{"to":""}` and `{}` both mean
+    /// off — the dropdown's empty option produces the first and a client that has never turned it
+    /// on produces the second — and a schema that accepted only one of them would make "off" a
+    /// state reachable from one code path and not the other.
+    #[test]
+    fn translate_parses_a_target_and_both_spellings_of_off() {
+        let named: Command = serde_json::from_str(r#"{"cmd":"translate","to":"ja"}"#).expect("parses");
+        assert!(matches!(named, Command::Translate { ref to } if to.as_deref() == Some("ja")));
+
+        let empty: Command = serde_json::from_str(r#"{"cmd":"translate","to":""}"#).expect("parses");
+        assert!(matches!(empty, Command::Translate { ref to } if to.as_deref() == Some("")));
+
+        let absent: Command = serde_json::from_str(r#"{"cmd":"translate"}"#).expect("parses");
+        assert!(matches!(absent, Command::Translate { to: None }));
+    }
+
+    /// A build with no recognition has nothing to translate, and must say so rather than accepting
+    /// the command and doing nothing — which is the failure mode `ModelLoad` shipped with for
+    /// months.
+    #[test]
+    fn translate_is_refused_by_a_build_with_no_pipeline() {
+        let (_tmp, engine) = engine();
+        let events = handle_command(r#"{"cmd":"translate","to":"vi"}"#, &engine);
+        assert!(matches!(
+            &events[0],
+            Event::Error {
+                transient: false,
+                ..
+            }
         ));
     }
 

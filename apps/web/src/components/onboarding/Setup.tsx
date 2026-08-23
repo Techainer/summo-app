@@ -23,7 +23,7 @@ import {
   type Status,
 } from "../../lib/onboarding";
 import { shortLicense } from "../../lib/catalogue";
-import { Button, Card, CardBody, PageGlow, Sticker } from "../ui";
+import { Button, Card, CardBody, PageGlow, Select, Sticker } from "../ui";
 import { load as loadCapture, save as saveCapture } from "../../lib/capture";
 import { languageName, rememberLanguage } from "../../lib/languages";
 import { Permissions } from "./Permissions";
@@ -64,9 +64,14 @@ const VOICE_DETECTOR = "silero-vad-v5";
  */
 const SPEAKER_MODEL = "campplus-sv";
 
-/** The two pickers below, so the pair reads as one control rather than two unrelated ones. */
-const PICKER =
-  "border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-10 w-full rounded-[var(--radius-card)] border px-3 text-sm transition-colors focus:outline-none sm:w-auto sm:min-w-56";
+/**
+ * The two pickers below, so the pair reads as one control rather than two unrelated ones.
+ *
+ * Only the width: `Select` owns the border, the height and the focus ring, which is the point of
+ * it. This constant used to own all of them and had drifted a hover colour away from every other
+ * dropdown in the app.
+ */
+const PICKER = "w-full sm:w-auto sm:min-w-56";
 
 const LABEL = "text-fg-dim text-meta mb-1.5 block";
 
@@ -315,7 +320,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
         <Step index={1} icon={Languages} title={t("setup.language")} done>
           <label className="mt-1 block">
             <span className={LABEL}>{t("setup.interface")}</span>
-            <select
+            <Select
               value={locale}
               aria-label={t("setup.interface")}
               onChange={(event) => {
@@ -339,7 +344,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
                   {language.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           {asks && (
@@ -349,7 +354,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
                   thing, and a user said so. The step title asks; these two name what each answer
                   is; the sentence underneath says what the second one decides. */}
               <span className={LABEL}>{t("record.spoken")}</span>
-              <select
+              <Select
                 value={spoken}
                 aria-label={t("record.spoken")}
                 onChange={(event) => {
@@ -379,7 +384,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
                     {languageName(code, locale)}
                   </option>
                 ))}
-              </select>
+              </Select>
               <p className="text-fg-dim text-meta mt-2">{t("setup.spoken_hint")}</p>
             </label>
           )}

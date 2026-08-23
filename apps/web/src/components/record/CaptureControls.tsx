@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Checkbox } from "../ui";
+import { Checkbox, Select } from "../ui";
 import { useI18n } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { TARGETS, hearsOthers, load, save, translating, type Capture } from "../../lib/capture";
@@ -84,18 +84,18 @@ export function CaptureControls() {
 
           <label className="text-fg-faint ms-auto flex items-center gap-2 text-sm">
             {t("record.translate_live")}
-            <select
+            <Select
+              size="sm"
               value={capture.translateTo}
               aria-label={t("record.translate_live")}
               onChange={(e) => update({ ...capture, translateTo: e.target.value })}
-              className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-8 rounded-[var(--radius-card)] border px-2 text-sm transition-colors focus:outline-none"
             >
               {TARGETS.map((target) => (
                 <option key={target.code} value={target.code}>
                   {target.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
       </fieldset>

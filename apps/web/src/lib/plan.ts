@@ -41,7 +41,19 @@ export interface Plan {
   detector: { installed: boolean; id: string };
   /** The voice fingerprint, which is what lets a transcript name who spoke. */
   speakers: { installed: boolean; id: string };
-  translation: { local: boolean; provider: string | null; model: string | null };
+  /**
+   * The translator, and whether it is actually here.
+   *
+   * `installed` is only meaningful when `local` is true — an endpoint has nothing to install — and
+   * it exists because the panel used to infer readiness from `local && model !== null`, which is
+   * equally true of a model on disk and a model that has never been downloaded.
+   */
+  translation: {
+    local: boolean;
+    provider: string | null;
+    model: string | null;
+    installed: boolean;
+  };
   language_model: { provider: string; model: string | null };
 }
 

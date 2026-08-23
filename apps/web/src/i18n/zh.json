@@ -76,7 +76,11 @@
     "recording_now": "正在录音",
     "elapsed": "已录时长",
     "listening_hint": "说完的句子会出现在这里。正常说话就好。",
-    "open_meeting": "打开正在录制的会议"
+    "open_meeting": "打开正在录制的会议",
+    "translating_into": "正在翻译为{language}",
+    "translate_off": "关闭",
+    "translate_needs_model": "尚未安装任何翻译模型。",
+    "manage_models": "管理模型"
   },
   "import": {
     "title": "导入录音",
@@ -368,7 +372,8 @@
     "threshold_hint": "过高会漏掉小声说话，过低连打字声都会变成文字。默认 0.50。",
     "threads": "推理线程数",
     "threads_hint": "0 表示按硬件自动决定。",
-    "reset_capture": "恢复默认"
+    "reset_capture": "恢复默认",
+    "model_not_installed": "已选择但尚未安装——{model} 需要先下载 {size} 才能用于录音。"
   },
   "status": {
     "unreachable": "无法连接到本机上的 Summo。",
@@ -395,7 +400,8 @@
     "close": "关闭",
     "loading": "加载中…",
     "saving": "保存中…",
-    "dismiss": "关闭"
+    "dismiss": "关闭",
+    "done": "完成"
   },
   "setup": {
     "title": "欢迎使用 Summo",
@@ -676,7 +682,12 @@
     "role_endpoint": "通过 {provider}",
     "running_hint": "按下录音时运行的就是这些。",
     "use_refine": "用于二次转写",
-    "in_use_refine": "二次转写"
+    "in_use_refine": "二次转写",
+    "unpacking": "正在解压…",
+    "of_total": "{done} / {total}",
+    "left_sec": "约剩 {value} 秒",
+    "left_min": "约剩 {value} 分钟",
+    "left_hour": "约剩 {value} 小时"
   },
   "home": {
     "heading": "你的工作区",
@@ -746,7 +757,7 @@
     "system_title": "录制系统声音",
     "system_linux": "支持：通过 PulseAudio/PipeWire 的 monitor 源录制，无需安装任何东西。",
     "system_windows": "支持：使用 WASAPI 回环录制，无需安装任何东西。",
-    "system_macos": "macOS 没有内置通道。唯一的办法是安装虚拟设备（BlackHole、Loopback）并将其选为输入——Summo 不会为此申请「屏幕录制」权限，因为录音应用不该要求看你的屏幕。",
+    "system_macos": "Summo 能听到麦克风，但听不到扬声器：macOS 没有内置通道来采集正在播放的声音。要录下通话另一端，请安装一个免费的虚拟音频设备（通常选 BlackHole），然后在「录音」中把它选为输入。Summo 不会申请「屏幕录制」权限——那是仅剩的另一条路，但对一个录音应用来说权限过大。",
     "system_unknown": "尚未确定本机能否录制系统声音。",
     "fix_macos_any": "macOS 把麦克风权限授予**应用程序**，这里指你打开 Summo 的浏览器：系统设置 → 隐私与安全性 → 麦克风 → 启用它。若你从终端启动 Summo，请为终端启用。",
     "open": "打开权限设置",
@@ -761,6 +772,11 @@
     "notify_windows": "Windows：设置 → 系统 → 通知 → 为浏览器开启，并关闭「专注助手 / 免打扰」。",
     "notify_linux": "Linux：检查桌面环境的「免打扰」设置；Flatpak 中的浏览器需要访问 D-Bus 通知服务。",
     "notify_unsupported": "此浏览器没有通知 API——Summo 将在应用内提醒你。",
+    "notify_test": "发送测试通知",
+    "notify_test_title": "Summo",
+    "notify_test_body": "通知功能正常。提醒就会是这个样子。",
+    "notify_test_sent": "已发送。如果什么都没出现，说明专注模式拦下了它——权限本身是正常的。",
+    "notify_test_blocked": "浏览器拒绝显示。请查看上面的步骤。",
     "mic_title": "麦克风"
   },
   "ask": {

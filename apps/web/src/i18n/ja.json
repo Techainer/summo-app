@@ -76,7 +76,11 @@
     "recording_now": "録音中",
     "elapsed": "録音時間",
     "listening_hint": "話し終えた文がここに出ます。普段どおりで大丈夫です。",
-    "open_meeting": "録音中の会議を開く"
+    "open_meeting": "録音中の会議を開く",
+    "translating_into": "{language} に翻訳中",
+    "translate_off": "オフ",
+    "translate_needs_model": "翻訳モデルがまだインストールされていません。",
+    "manage_models": "モデルを管理"
   },
   "import": {
     "title": "録音ファイルを取り込む",
@@ -368,7 +372,8 @@
     "threshold_hint": "高いと小声を逃し、低いとタイプ音まで文字になります。初期値 0.50。",
     "threads": "推論スレッド数",
     "threads_hint": "0 はハードウェアに合わせます。",
-    "reset_capture": "初期値に戻す"
+    "reset_capture": "初期値に戻す",
+    "model_not_installed": "選択済みですが未インストールです。録音で使うには {model}（{size}）のダウンロードが必要です。"
   },
   "status": {
     "unreachable": "このマシンの Summo に接続できません。",
@@ -395,7 +400,8 @@
     "close": "閉じる",
     "loading": "読み込み中…",
     "saving": "保存中…",
-    "dismiss": "閉じる"
+    "dismiss": "閉じる",
+    "done": "完了"
   },
   "setup": {
     "title": "Summoへようこそ",
@@ -676,7 +682,12 @@
     "role_endpoint": "{provider} 経由",
     "running_hint": "録音ボタンを押すとこれが動きます。",
     "use_refine": "再デコードに使う",
-    "in_use_refine": "再デコード"
+    "in_use_refine": "再デコード",
+    "unpacking": "展開中…",
+    "of_total": "{total} 中 {done}",
+    "left_sec": "残り約 {value} 秒",
+    "left_min": "残り約 {value} 分",
+    "left_hour": "残り約 {value} 時間"
   },
   "home": {
     "heading": "あなたのワークスペース",
@@ -746,7 +757,7 @@
     "system_title": "システム音声の録音",
     "system_linux": "対応: PulseAudio/PipeWire の monitor ソースを使用します。追加インストールは不要です。",
     "system_windows": "対応: WASAPI ループバックを使用します。追加インストールは不要です。",
-    "system_macos": "macOS には標準の経路がありません。仮想デバイス（BlackHole、Loopback）を入力として選ぶ方法のみです。録音アプリが画面収録の権限を要求すべきではないため、Summo はその権限を求めません。",
+    "system_macos": "Summo はマイクを聞けますが、スピーカーは聞けません。macOS には再生中の音を取り込む標準の経路がないためです。通話の相手側も録るには、無料の仮想オーディオデバイス（BlackHole が一般的）をインストールし、「録音」で入力として選んでください。Summo は画面収録の権限を求めません。それが唯一の代替手段ですが、録音アプリが持つには大きすぎる権限です。",
     "system_unknown": "この端末でシステム音声を録音できるかは判定できていません。",
     "fix_macos_any": "macOS はマイクの許可を**アプリ単位**で与えます。ここでのアプリは Summo を開いているブラウザーです: システム設定 → プライバシーとセキュリティ → マイク → 有効化。ターミナルから起動した場合はターミナルを有効化してください。",
     "open": "権限設定を開く",
@@ -761,6 +772,11 @@
     "notify_windows": "Windows: 設定 → システム → 通知 → ブラウザーを有効化し、集中モードをオフに。",
     "notify_linux": "Linux: デスクトップ環境の「通知を停止」設定を確認してください。Flatpak のブラウザーは D-Bus 通知サービスへのアクセスが必要です。",
     "notify_unsupported": "このブラウザーには通知 API がありません。Summo はアプリ内でお知らせします。",
+    "notify_test": "テスト通知を送る",
+    "notify_test_title": "Summo",
+    "notify_test_body": "通知は動作しています。リマインダーはこのように表示されます。",
+    "notify_test_sent": "送信しました。何も表示されない場合は集中モードが遮っています。権限は付与されたままです。",
+    "notify_test_blocked": "ブラウザが表示を拒否しました。上の手順を確認してください。",
     "mic_title": "マイク"
   },
   "ask": {

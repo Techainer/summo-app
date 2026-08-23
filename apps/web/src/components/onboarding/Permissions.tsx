@@ -13,6 +13,7 @@ import {
   requestMic,
   requestNotifications,
   systemAudio,
+  testNotification,
   type MicState,
   type Platform,
   type Step,
@@ -75,6 +76,8 @@ export function Permissions({ compact = false }: { compact?: boolean }) {
   const [asked, setAsked] = useState<{ mic?: MicState; notify?: MicState } | null>(null);
   const [busy, setBusy] = useState<"mic" | "notify" | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[] | null>(null);
+  /** Whether the test notification was drawn, so the button reports back rather than just firing. */
+  const [tested, setTested] = useState<"sent" | "blocked" | null>(null);
 
   const mic = asked?.mic ?? probe.data?.mic ?? "unknown";
   const notify = asked?.notify ?? probe.data?.notify ?? "unknown";
@@ -83,6 +86,7 @@ export function Permissions({ compact = false }: { compact?: boolean }) {
   const recheck = () => {
     setAsked(null);
     setDevices(null);
+    setTested(null);
     probe.reload();
   };
 
@@ -168,7 +172,32 @@ export function Permissions({ compact = false }: { compact?: boolean }) {
           platform={platform}
           onPlatform={setChosen}
           unsupported={t("permissions.notify_unsupported")}
-        />
+        >
+          {/* Granted is not the same as working, and this is the permission where the difference
+              bites: a Focus mode swallows every notification while the browser goes on reporting
+              the permission as granted. So the granted state offers proof rather than a claim. */}
+          {notify === "granted" && (
+            <div className="mt-3">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setTested(
+                    testNotification(t("permissions.notify_test_title"), t("permissions.notify_test_body"))
+                      ? "sent"
+                      : "blocked",
+                  );
+                }}
+              >
+                {t("permissions.notify_test")}
+              </Button>
+              {tested && (
+                <p className="text-fg-dim text-micro mt-2">
+                  {t(tested === "sent" ? "permissions.notify_test_sent" : "permissions.notify_test_blocked")}
+                </p>
+              )}
+            </div>
+          )}
+        </Row>
       )}
 
       {!compact && (
@@ -233,12 +262,19 @@ function Row({
 
       {missing && <p className="text-fg-faint text-micro mt-3">{unsupported}</p>}
 
+      {/* Asking is only offered while asking can still do something. Once the answer is a refusal
+          the browser will not prompt again — `Notification.requestPermission` resolves instantly
+          with the old answer, `getUserMedia` rejects — so the button sat there looking like the fix
+          and did nothing at all when pressed. What follows a refusal is the steps below and then
+          "check again", which is a different sentence and now the only one offered. */}
       {!missing && state !== "granted" && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button onClick={onAsk} disabled={busy}>
-            {busy ? t("permissions.asking") : askLabel}
-          </Button>
-          <Button variant="ghost" onClick={onRecheck}>
+          {state !== "denied" && (
+            <Button onClick={onAsk} disabled={busy}>
+              {busy ? t("permissions.asking") : askLabel}
+            </Button>
+          )}
+          <Button variant={state === "denied" ? "primary" : "ghost"} onClick={onRecheck}>
             {t("permissions.recheck")}
           </Button>
         </div>

@@ -12,7 +12,7 @@ import {
 import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Recent } from "./library/Recent";
-import { Avatar, Button, Empty, SectionTitle, Wave } from "./ui";
+import { Avatar, Button, Empty, SectionTitle, Select, Wave } from "./ui";
 import { cn } from "../lib/cn";
 import { formatDuration } from "../lib/duration";
 import { useI18n, useT } from "../i18n/context";
@@ -910,8 +910,8 @@ function MeetingPane({
         <div className="border-line mt-2 flex flex-wrap items-center gap-x-4 gap-y-2.5 border-b pb-4">
           <label className="text-fg-faint text-meta flex items-center gap-1.5">
             {t("library.by_folder")}
-            <select
-              className="border-line bg-bg-soft text-fg focus-visible:border-accent text-meta rounded-lg border px-2 py-1 focus:outline-none"
+            <Select
+              size="sm"
               value={summary.folder}
               disabled={busy}
               onChange={(e) => onMove(e.target.value)}
@@ -922,7 +922,7 @@ function MeetingPane({
                   {f === "" ? t("library.unfiled") : f}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="text-fg-faint text-meta flex min-w-0 grow basis-56 items-center gap-1.5">
             {t("library.by_tag")}

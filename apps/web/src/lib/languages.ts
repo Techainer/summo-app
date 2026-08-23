@@ -73,6 +73,46 @@ export function languageName(code: string, locale: string): string {
 }
 
 /**
+ * Language codes as a list somebody can find their own language in.
+ *
+ * Alphabetical by name is the obvious answer and is wrong for this list. Sorted that way in a
+ * Vietnamese interface, "Tiếng Việt" lands under T — eightieth of ninety-nine, past the fold of any
+ * dropdown — so a Vietnamese speaker who installed Whisper concluded it does not support
+ * Vietnamese. It supports ninety-nine languages and hid theirs behind seventy-nine others.
+ *
+ * So: the reader's own language first, then the interface languages Summo ships in, then everything
+ * else alphabetically in the reader's language. The first two groups are three or four entries and
+ * cover almost every real answer; the tail is where somebody browses, and there alphabetical is
+ * right.
+ *
+ * Returns `{ code, label }` because every caller needs the name it sorted by, and computing
+ * `Intl.DisplayNames` twice for ninety-nine codes is work nobody needs to repeat.
+ */
+export function ordered(codes: string[], locale: string): { code: string; label: string }[] {
+  const mine = locale.toLowerCase().split("-")[0] ?? locale;
+  // The interface locales, minus the reader's own — which is already the head of the list.
+  const near = ["vi", "en", "ja", "zh"].filter((code) => code !== mine);
+  const rank = (code: string) => {
+    const base = code.toLowerCase().split("-")[0] ?? code;
+    if (base === mine) return 0;
+    const at = near.indexOf(base);
+    return at === -1 ? 2 : 1;
+  };
+  return codes
+    .map((code) => ({ code, label: languageName(code, locale) }))
+    .sort((a, b) => {
+      const byGroup = rank(a.code) - rank(b.code);
+      if (byGroup !== 0) return byGroup;
+      // Within the "near" group, the order of `near` rather than the alphabet: it is a shortlist,
+      // and a shortlist that reorders itself per locale is a shortlist nobody learns.
+      if (rank(a.code) === 1) {
+        return near.indexOf(a.code.toLowerCase()) - near.indexOf(b.code.toLowerCase());
+      }
+      return a.label.localeCompare(b.label, locale);
+    });
+}
+
+/**
  * Whether a language can be recorded right now, with nothing to download.
  *
  * The record button asks this. A model that is not installed is not an error — it is a download

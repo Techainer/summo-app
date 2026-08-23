@@ -99,15 +99,41 @@ export function detectBrowser(nav: Navigator = navigator): Browser {
  * in others, and a permission *check* that breaks the screen it is on is worse than no check.
  */
 export async function micState(nav: Navigator = navigator): Promise<MicState> {
+  let queried: MicState = "unknown";
   try {
     const status = await nav.permissions?.query({ name: "microphone" });
-    if (!status) return "unknown";
-    if (status.state === "granted" || status.state === "denied" || status.state === "prompt") {
-      return status.state;
+    if (status?.state === "granted" || status?.state === "denied" || status?.state === "prompt") {
+      queried = status.state;
     }
-    return "unknown";
   } catch {
-    return "unknown";
+    // Unsupported name, or no `permissions` at all. Fall through to the device check, which is the
+    // only answer Safari and the desktop webview ever give.
+  }
+  if (queried === "granted" || queried === "denied") return queried;
+  return (await labelled(nav)) ? "granted" : queried;
+}
+
+/**
+ * Whether the browser is naming the inputs, which only a granted microphone makes it do.
+ *
+ * `permissions.query` is not the truth on two of the platforms Summo ships to. WKWebView — which is
+ * both Safari and the desktop shell — answers `prompt` for a microphone macOS has already granted,
+ * and Chromium answers `prompt` again after a stream is released. So the panel told people who had
+ * granted access, and were recording with it, that they had never been asked.
+ *
+ * `enumerateDevices` cannot be fooled the same way: the specification hides device labels until a
+ * capture permission is granted, so a non-empty label *is* the grant. It can only be wrong in the
+ * safe direction — a machine with no inputs at all reports nothing, and the state stays whatever
+ * the query said.
+ */
+async function labelled(nav: Navigator = navigator): Promise<boolean> {
+  try {
+    const all = await nav.mediaDevices?.enumerateDevices();
+    return (all ?? []).some(
+      (device) => device.kind === "audioinput" && device.label.trim().length > 0,
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -249,6 +275,30 @@ export async function requestNotifications(): Promise<MicState> {
   if (Notification.permission !== "default") return notificationState();
   const answer = await Notification.requestPermission();
   return answer === "granted" ? "granted" : answer === "denied" ? "denied" : "prompt";
+}
+
+/**
+ * Draw one notification, so a person can see whether granting it achieved anything.
+ *
+ * The permission is not the feature. macOS and Windows both grant it and then swallow every
+ * notification while a Focus mode is on, so "granted" is a claim the user has no way to check —
+ * and the advice for that case is three lines further down a panel they have already stopped
+ * reading. One button, one notification, and the answer is on screen or it is not.
+ *
+ * Returns whether the call was made at all, not whether anything appeared: no API tells us that.
+ */
+export function testNotification(title: string, body: string): boolean {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return false;
+  try {
+    // No tag: two presses should draw two notifications. A replaced one looks like a button that
+    // did nothing, which is the confusion this exists to end.
+    new Notification(title, { body });
+    return true;
+  } catch {
+    // Some browsers require a service worker for `new Notification` and throw here. Nothing to
+    // recover, and a thrown constructor must not take the settings screen down with it.
+    return false;
+  }
 }
 
 /**

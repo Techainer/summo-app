@@ -69,6 +69,73 @@ describe("micState", () => {
     } as unknown as Navigator;
     await expect(micState(throws)).resolves.toBe("unknown");
   });
+
+  /// The reported bug: a Mac with the microphone granted, recording happily, and a settings panel
+  /// insisting the permission had never been asked for. WKWebView answers `prompt` for a permission
+  /// macOS has already given, and Chromium does the same once a granted stream is released.
+  ///
+  /// Device labels cannot lie the same way — the specification hides them until a capture
+  /// permission is granted — so a named input outranks the query.
+  it("believes a named device over a browser that says prompt", async () => {
+    const navigator = {
+      permissions: { query: vi.fn().mockResolvedValue({ state: "prompt" }) },
+      mediaDevices: {
+        enumerateDevices: vi
+          .fn()
+          .mockResolvedValue([{ kind: "audioinput", label: "MacBook Pro Microphone" }]),
+      },
+    } as unknown as Navigator;
+    await expect(micState(navigator)).resolves.toBe("granted");
+  });
+
+  /// Safari, where the query says nothing at all. The labels are the only evidence there is.
+  it("uses labels where there is no query to ask", async () => {
+    const navigator = {
+      mediaDevices: {
+        enumerateDevices: vi.fn().mockResolvedValue([{ kind: "audioinput", label: "USB Mic" }]),
+      },
+    } as unknown as Navigator;
+    await expect(micState(navigator)).resolves.toBe("granted");
+  });
+
+  /// Unlabelled devices prove nothing: that is exactly what a browser shows *before* permission.
+  /// The state has to stay whatever the query said rather than being upgraded on a device count.
+  it("does not read an unnamed device as a grant", async () => {
+    const navigator = {
+      permissions: { query: vi.fn().mockResolvedValue({ state: "prompt" }) },
+      mediaDevices: {
+        enumerateDevices: vi.fn().mockResolvedValue([{ kind: "audioinput", label: "" }]),
+      },
+    } as unknown as Navigator;
+    await expect(micState(navigator)).resolves.toBe("prompt");
+  });
+
+  /// A refusal is never overridden. Labels can outlive a permission that has since been revoked,
+  /// and reporting "granted" there would hide the recovery steps from the one person who needs
+  /// them.
+  it("never talks a refusal up into a grant", async () => {
+    const navigator = {
+      permissions: { query: vi.fn().mockResolvedValue({ state: "denied" }) },
+      mediaDevices: {
+        enumerateDevices: vi.fn().mockResolvedValue([{ kind: "audioinput", label: "Built-in" }]),
+      },
+    } as unknown as Navigator;
+    await expect(micState(navigator)).resolves.toBe("denied");
+  });
+
+  /// An output device is not an input. Speaker labels are exposed on the same call and would be a
+  /// grant this app never asked for.
+  it("ignores everything that is not an audio input", async () => {
+    const navigator = {
+      permissions: { query: vi.fn().mockResolvedValue({ state: "prompt" }) },
+      mediaDevices: {
+        enumerateDevices: vi
+          .fn()
+          .mockResolvedValue([{ kind: "audiooutput", label: "External Headphones" }]),
+      },
+    } as unknown as Navigator;
+    await expect(micState(navigator)).resolves.toBe("prompt");
+  });
 });
 
 describe("requestMic", () => {

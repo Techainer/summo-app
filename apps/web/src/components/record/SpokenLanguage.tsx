@@ -16,7 +16,7 @@ import {
 } from "../../lib/languages";
 import { OnboardingClient, percent } from "../../lib/onboarding";
 import { useLoad } from "../../lib/use-load";
-import { Button } from "../ui";
+import { Button, Select } from "../ui";
 
 /**
  * Which language is being spoken, and the model that can hear it.
@@ -122,7 +122,8 @@ export function SpokenLanguage({
     <div className={compact ? "flex flex-wrap items-center gap-2" : ""}>
       <label className="text-fg-faint flex items-center gap-2 text-sm">
         {t("record.spoken")}
-        <select
+        <Select
+          size="sm"
           value={value}
           aria-label={t("record.spoken")}
           onChange={(event) => {
@@ -138,7 +139,7 @@ export function SpokenLanguage({
             // could not be saved must not stop it.
             void rememberLanguage(handshake, code).catch(() => undefined);
           }}
-          className="border-line bg-bg-soft text-fg hover:border-line-strong focus-visible:border-accent h-8 max-w-56 rounded-[var(--radius-card)] border px-2 text-sm transition-colors focus:outline-none"
+          className="max-w-56"
         >
           {/* Detection first when it is possible, because somebody who does not know what will be
               spoken is exactly who needs it. */}
@@ -168,7 +169,7 @@ export function SpokenLanguage({
               {language.installed ? "" : ` · ${megabytes(language.size_bytes)}`}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       {/* The way out of a list that does not have what somebody wants: the catalogue, filtered to
           the language they just chose. Every model that serves it, with its size, its measured

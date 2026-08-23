@@ -1,14 +1,14 @@
 import { Check, HardDriveDownload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button, Checkbox, Input } from "../ui";
-import { CONTROL, FIELD, HINT, LABEL, SELECT } from "./fields";
+import { Button, Checkbox, Input, Progress, Select } from "../ui";
+import { CONTROL, FIELD, HINT, LABEL } from "./fields";
 import { useT } from "../../i18n/context";
 import { CatalogueClient, size, type CatalogueModel } from "../../lib/catalogue";
 import { cn } from "../../lib/cn";
 import { useEngine } from "../../lib/engine-context";
 import { useErrorText } from "../../lib/errors";
-import { OnboardingClient, POLL_MS, isFinished, percent, type Install } from "../../lib/onboarding";
+import { OnboardingClient, POLL_MS, isFinished, type Install } from "../../lib/onboarding";
 import { useRefresh } from "../../lib/use-load";
 import { LOCAL, type LlmSettings } from "./llm";
 
@@ -50,8 +50,8 @@ export function Translation({ settings }: { settings: LlmSettings }) {
         <>
           <label className={FIELD}>
             <span className={LABEL}>{t("settings.mt_where")}</span>
-            <select
-              className={SELECT}
+            <Select
+              className={CONTROL}
               value={llm.translator.provider === LOCAL ? LOCAL : "endpoint"}
               aria-label={t("settings.mt_where")}
               onChange={(e) =>
@@ -66,7 +66,7 @@ export function Translation({ settings }: { settings: LlmSettings }) {
             >
               <option value={LOCAL}>{t("settings.mt_in_app")}</option>
               <option value="endpoint">{t("settings.mt_endpoint")}</option>
-            </select>
+            </Select>
           </label>
 
           {llm.translator.provider !== LOCAL && (
@@ -178,7 +178,6 @@ function LocalModel({ model }: { model: string | null }) {
 
   const installed = entry?.installed === true;
   const running = job !== null && !isFinished(job);
-  const done = job ? percent(job) : null;
 
   if (installed) {
     return (
@@ -209,9 +208,9 @@ function LocalModel({ model }: { model: string | null }) {
         {t("settings.mt_pull")}
         {entry && entry.size_bytes > 0 && ` · ${size(entry.size_bytes)}`}
       </Button>
-      {running && (
-        <p className={cn(HINT, "nums")}>{done === null ? t("models.starting") : `${done}%`}</p>
-      )}
+      {/* The whole story rather than a percentage. This said `0%` for the first minute of a 611 MB
+          download and somebody reasonably read that as broken. */}
+      {running && job && <Progress install={job} className="ml-[162px] max-w-sm" />}
       {job?.state === "failed" && <p className="text-rec text-micro mt-2">{job.error}</p>}
       {error && <p className="text-rec text-micro mt-2">{error}</p>}
     </div>

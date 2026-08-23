@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
 import { Markdown } from "../components/page/Markdown";
-import { Button, Empty, Page, PageGlow, SectionTitle, Sheet } from "../components/ui";
+import { Button, Empty, Page, PageGlow, Progress, SectionTitle, Sheet } from "../components/ui";
 import { useI18n, useT } from "../i18n/context";
 import { cn } from "../lib/cn";
 import {
@@ -24,7 +24,7 @@ import { useEngine } from "../lib/engine-context";
 import { fetchPlan, type Plan } from "../lib/plan";
 import { useErrorText } from "../lib/errors";
 import { listItem, stagger } from "../lib/motion";
-import { OnboardingClient, POLL_MS, isFinished, percent, type Install } from "../lib/onboarding";
+import { OnboardingClient, POLL_MS, isFinished, type Install } from "../lib/onboarding";
 import { languageName } from "../lib/languages";
 import { url } from "../lib/library";
 import { useRefresh } from "../lib/use-load";
@@ -383,7 +383,9 @@ function Running({
           : plan.translation.provider
             ? t("models.role_endpoint", { provider: plan.translation.provider })
             : null,
-        ready: !plan.translation.local || plan.translation.model === null,
+        // An endpoint is always ready — there is nothing to install. A local model is ready when
+        // it is on disk, which the daemon now reports rather than the interface assuming.
+        ready: !plan.translation.local || plan.translation.installed,
         ...(plan.translation.local && plan.translation.model ? { id: plan.translation.model } : {}),
       },
     ];
@@ -544,7 +546,6 @@ function Card({
   }, [open, page, handshake, model.id, locale]);
 
   const running = job !== undefined && !isFinished(job);
-  const done = percent(job ?? ({} as Install));
 
   return (
     <m.article
@@ -760,19 +761,10 @@ function Card({
         </p>
       )}
 
-      {running && (
-        <div className="mt-3">
-          <div className="bg-bg-soft h-1.5 overflow-hidden rounded-full">
-            <div
-              className="bg-accent h-full rounded-full transition-[width] duration-300"
-              style={{ width: `${done ?? 0}%` }}
-            />
-          </div>
-          <p className="text-fg-faint nums text-micro mt-1">
-            {done === null ? t("models.starting") : `${done}%`}
-          </p>
-        </div>
-      )}
+      {/* The bar here was honest about the percentage and silent about everything else, which on a
+          611 MB model over a slow link is a bar that appears not to move. `Progress` adds the rate
+          and the estimate, and is shared with the settings panel so the two agree. */}
+      {running && job && <Progress install={job} className="mt-3" />}
       {job?.state === "failed" && (
         <p className="text-rec text-micro mt-2">{job.error ?? t("models.failed")}</p>
       )}
