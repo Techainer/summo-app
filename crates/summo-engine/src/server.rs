@@ -889,6 +889,27 @@ async fn set_models(
         let mut settings = summo_core::Settings::load(&path)?;
         let id = body.model.trim();
 
+        // An empty id un-pins the role, rather than being a malformed one.
+        //
+        // Every role here has a "let the app decide" state — `live` falls back to ranking the
+        // installed models for the language, `translator` to the general language model — and
+        // until now there was no way to *return* to it. The recognition settings tried the obvious
+        // thing, posting an empty string, and got
+        // `configuration error: model id must be 1..=128 chars, got 0` in the user's face: a
+        // parser error surfaced as a product error, for an action that is meant to be ordinary.
+        if id.is_empty() {
+            match body.role.as_str() {
+                "live" => settings.models.live = None,
+                "refine" => settings.models.refine = None,
+                "vad" => settings.models.vad = None,
+                "speaker" => settings.models.speaker = None,
+                "translator" => settings.llm.translator = None,
+                other => return Err(Error::Config(format!("no such model role: `{other}`"))),
+            }
+            settings.save(&path)?;
+            return Ok(settings);
+        }
+
         // Only something that is here. A setting naming a model that was never installed fails at
         // the start of a recording, which is the worst moment to find out.
         let model_id = summo_core::ModelId::parse(id).map_err(Error::Config)?;
