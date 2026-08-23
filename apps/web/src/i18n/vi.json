@@ -689,7 +689,16 @@
     "of_total": "{done} / {total}",
     "left_sec": "còn khoảng {value} giây",
     "left_min": "còn khoảng {value} phút",
-    "left_hour": "còn khoảng {value} giờ"
+    "left_hour": "còn khoảng {value} giờ",
+    "too_slow": "chậm hơn",
+    "vs_realtime": "so với thời gian thực",
+    "while_running": "khi đang chạy",
+    "measured_accuracy": "Độ chính xác đo được",
+    "on_this_machine": "Trên máy tương tự máy này",
+    "latency": "Từ lúc dứt lời tới lúc ra chữ",
+    "accelerator": "Tăng tốc phần cứng",
+    "accuracy_note": "Tỉ lệ từ nghe đúng trên bộ đo công khai. Ngôn ngữ chưa đo thì không liệt kê.",
+    "measured_elsewhere": "Đo trên lớp máy khác; chưa có số liệu cho máy này."
   },
   "home": {
     "heading": "Không gian của bạn",

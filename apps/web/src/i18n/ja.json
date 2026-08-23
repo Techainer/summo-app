@@ -689,7 +689,16 @@
     "of_total": "{total} 中 {done}",
     "left_sec": "残り約 {value} 秒",
     "left_min": "残り約 {value} 分",
-    "left_hour": "残り約 {value} 時間"
+    "left_hour": "残り約 {value} 時間",
+    "too_slow": "遅い",
+    "vs_realtime": "実時間比",
+    "while_running": "実行中",
+    "measured_accuracy": "実測精度",
+    "on_this_machine": "この種のマシンでの実測",
+    "latency": "発話終了から文字化まで",
+    "accelerator": "アクセラレータ",
+    "accuracy_note": "公開ベンチマークで正しく認識された語の割合。未測定の言語は載せません。",
+    "measured_elsewhere": "別種のマシンでの実測値です。本機向けの数値は未公開です。"
   },
   "home": {
     "heading": "あなたのワークスペース",

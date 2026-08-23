@@ -689,7 +689,16 @@
     "of_total": "{done} of {total}",
     "left_sec": "about {value} seconds left",
     "left_min": "about {value} minutes left",
-    "left_hour": "about {value} hours left"
+    "left_hour": "about {value} hours left",
+    "too_slow": "slower",
+    "vs_realtime": "vs real time",
+    "while_running": "while running",
+    "measured_accuracy": "Measured accuracy",
+    "on_this_machine": "On a machine like this one",
+    "latency": "End of speech to text",
+    "accelerator": "Accelerator",
+    "accuracy_note": "Words transcribed correctly on a public benchmark. Unmeasured languages are not listed.",
+    "measured_elsewhere": "Measured on another class of machine; none published for this one yet."
   },
   "home": {
     "heading": "Your workspace",

@@ -698,6 +698,27 @@ async fn catalogue(
                 "fits": m.profile.min_ram_mb == 0
                     || m.profile.min_ram_mb <= hardware.total_ram_mb,
                 "min_ram_mb": m.profile.min_ram_mb,
+                // What the model actually costs and what it is worth, which the manifests have
+                // carried since they were written and nothing has ever shown.
+                //
+                // A card that says "745 MB, MIT, 99 languages" answers none of the questions
+                // somebody choosing between two models is asking: is it accurate, is it fast
+                // enough on *this* machine, will it fit in memory while everything else is open.
+                // All three are measured and published per model; they were being dropped here.
+                //
+                // `rtf` is keyed by hardware class, so the number is chosen for the machine asking
+                // rather than shipped as a range nobody can apply to themselves.
+                "speed": rtf_here(&m.profile.rtf, hardware),
+                "latency_ms": m.profile.latency_ms.finalize_p50,
+                "accuracy": accuracy_of(&m.profile.quality),
+                "rss_peak_mb": m.profile.rss_mb.peak,
+                // Whether this machine has an accelerator the model can use. Not a promise of a
+                // speed-up — the `rtf` above already accounts for the class — but the reason a
+                // Mac is faster than the CPU numbers suggest.
+                "accel": m.profile.accel.iter()
+                    .filter(|a| hardware.accel.contains(a))
+                    .map(|a| serde_json::to_value(a).unwrap_or(serde_json::Value::Null))
+                    .collect::<Vec<_>>(),
             })
         })
         .collect();
@@ -1248,6 +1269,89 @@ fn in_use(settings: &summo_core::settings::Settings, id: &str) -> Option<&'stati
         return Some("translation");
     }
     None
+}
+
+/// How fast this model runs *on this machine*, as a real-time factor.
+///
+/// Manifests publish `rtf` keyed by hardware class — `cpu_x86_avx512vnni_8t` — because the same
+/// model is three times faster on a machine with VNNI than one without, and a card that printed a
+/// range would be asking the reader to work out which end applies to them.
+///
+/// `measured_here` is the honest half. Every published number today is x86, so on Apple Silicon
+/// nothing matches, and the choice is between saying nothing and saying "this is what it did
+/// somewhere else". The second is more useful as long as it admits which it is, so the slowest
+/// published figure is offered and flagged — slowest because an estimate that disappoints is worse
+/// than one that surprises.
+fn rtf_here(
+    rtf: &std::collections::BTreeMap<String, f32>,
+    hw: &summo_models::hw::HwProfile,
+) -> serde_json::Value {
+    if rtf.is_empty() {
+        return serde_json::Value::Null;
+    }
+
+    let arch = if hw.arch.contains("aarch64") || hw.arch.contains("arm") {
+        "arm"
+    } else {
+        "x86"
+    };
+    let feature = if hw.features.vnni {
+        "avx512vnni"
+    } else if hw.features.avx512 {
+        "avx512"
+    } else if hw.features.avx2 {
+        "avx2"
+    } else {
+        "base"
+    };
+    // The daemon lets ONNX Runtime pick its own thread count, which tracks the core count. Eight
+    // is the published high end; below that the four-thread figure is the closer one.
+    let threads = if hw.cores >= 8 { "8t" } else { "4t" };
+
+    let exact = format!("cpu_{arch}_{feature}_{threads}");
+    if let Some(found) = rtf.get(&exact) {
+        return serde_json::json!({ "rtf": found, "measured_here": true });
+    }
+    // Same silicon, different thread count: still this machine's class, and the closest honest
+    // answer there is.
+    let prefix = format!("cpu_{arch}_{feature}_");
+    if let Some((_, found)) = rtf.iter().find(|(key, _)| key.starts_with(&prefix)) {
+        return serde_json::json!({ "rtf": found, "measured_here": true });
+    }
+    // Nothing for this class. The slowest published number, clearly labelled as somebody else's.
+    let slowest = rtf.values().copied().fold(f32::MIN, f32::max);
+    serde_json::json!({ "rtf": slowest, "measured_here": false })
+}
+
+/// Measured accuracy per language, from whatever benchmarks the manifest carries.
+///
+/// Per language rather than one number, because for a multilingual model one number is a lie in
+/// both directions: Whisper tiny is 4.5 % word error on English and 67.6 % on Vietnamese. Averaging
+/// those would recommend it to a Vietnamese speaker, and quoting the worse one would hide the
+/// reason anybody installs it.
+///
+/// Only `wer_*` keys, whose language is the last segment of the key. `cer_*` measures characters
+/// and `f1_*` measures a voice detector, and neither is "how much of a sentence it gets right" —
+/// showing them beside each other under one heading would be comparing three different things.
+fn accuracy_of(quality: &std::collections::BTreeMap<String, f32>) -> Vec<serde_json::Value> {
+    let mut out: Vec<serde_json::Value> = quality
+        .iter()
+        .filter_map(|(key, wer)| {
+            let lang = key.strip_prefix("wer_")?.rsplit('_').next()?;
+            // A word error rate above 1.0 is possible — insertions — and would render as negative
+            // accuracy, so the floor is zero rather than whatever the arithmetic says.
+            let accuracy = (1.0 - wer).max(0.0);
+            Some(serde_json::json!({ "lang": lang, "accuracy": accuracy }))
+        })
+        .collect();
+    // Best first: the reader is looking for what this model is good at.
+    out.sort_by(|a, b| {
+        let score = |v: &serde_json::Value| v["accuracy"].as_f64().unwrap_or(0.0);
+        score(b)
+            .partial_cmp(&score(a))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    out
 }
 
 /// Turn a vault failure into a status a client can act on.
@@ -7203,6 +7307,77 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
         assert_eq!(parse_translate(r#"{"cmd":"session_stop"}"#), None);
         assert_eq!(parse_translate(r#"{"cmd":"model_swap","id":"x"}"#), None);
         assert_eq!(parse_translate("{not json"), None);
+    }
+
+    /// One number per language, because for a multilingual model one number is a lie both ways.
+    ///
+    /// Whisper tiny really is 4.5 % word error on English and 67.6 % on Vietnamese. An average
+    /// would recommend it to a Vietnamese speaker; the worse figure alone would hide why anybody
+    /// installs it.
+    #[test]
+    fn accuracy_is_reported_per_language_best_first() {
+        let quality = std::collections::BTreeMap::from([
+            ("wer_fleurs_vi".to_string(), 0.676_f32),
+            ("wer_whisper_testset_en".to_string(), 0.045_f32),
+            // Neither of these is "how much of a sentence it gets right", and putting them under
+            // the same heading would compare three different measurements.
+            ("cer_fleurs_vi".to_string(), 0.451_f32),
+            ("f1_ten_testset".to_string(), 0.94_f32),
+        ]);
+        let out = accuracy_of(&quality);
+        assert_eq!(out.len(), 2, "only word error rates are accuracy: {out:?}");
+        assert_eq!(out[0]["lang"], "en");
+        assert!((out[0]["accuracy"].as_f64().unwrap() - 0.955).abs() < 1e-6);
+        assert_eq!(out[1]["lang"], "vi");
+        assert!((out[1]["accuracy"].as_f64().unwrap() - 0.324).abs() < 1e-6);
+    }
+
+    /// Insertions can push a word error rate above 1.0, and "−12 % accurate" is not a thing.
+    #[test]
+    fn accuracy_never_goes_negative() {
+        let quality = std::collections::BTreeMap::from([("wer_x_vi".to_string(), 1.12_f32)]);
+        assert_eq!(accuracy_of(&quality)[0]["accuracy"], 0.0);
+    }
+
+    #[test]
+    fn a_model_with_no_benchmarks_claims_nothing() {
+        assert!(accuracy_of(&std::collections::BTreeMap::new()).is_empty());
+    }
+
+    /// The speed shown must be the one for the machine reading it, and must say so when it is not.
+    #[test]
+    fn speed_prefers_this_machine_and_admits_when_it_cannot() {
+        let rtf = std::collections::BTreeMap::from([
+            ("cpu_x86_avx2_4t".to_string(), 0.3_f32),
+            ("cpu_x86_avx512vnni_8t".to_string(), 0.12_f32),
+        ]);
+
+        let mut hw = summo_models::hw::HwProfile::detect();
+        hw.arch = "x86_64".into();
+        hw.cores = 8;
+        hw.features.avx2 = true;
+        hw.features.avx512 = true;
+        hw.features.vnni = true;
+        // Approximately, because an `f32` widened into JSON is 0.11999999731779099.
+        let near = |v: &serde_json::Value, want: f64| (v.as_f64().unwrap() - want).abs() < 1e-6;
+        let fast = rtf_here(&rtf, &hw);
+        assert!(near(&fast["rtf"], 0.12), "{fast:?}");
+        assert_eq!(fast["measured_here"], true);
+
+        // An older x86: VNNI absent, so the AVX2 figure is the one that applies.
+        hw.features.avx512 = false;
+        hw.features.vnni = false;
+        hw.cores = 4;
+        assert!(near(&rtf_here(&rtf, &hw)["rtf"], 0.3));
+
+        // Apple Silicon, where nothing is published. The slowest figure, flagged as somebody
+        // else's — an estimate that disappoints beats one that surprises.
+        hw.arch = "aarch64".into();
+        let elsewhere = rtf_here(&rtf, &hw);
+        assert!(near(&elsewhere["rtf"], 0.3));
+        assert_eq!(elsewhere["measured_here"], false);
+
+        assert!(rtf_here(&std::collections::BTreeMap::new(), &hw).is_null());
     }
 
     /// A refused change must never read as a refused *session*.

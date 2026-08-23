@@ -33,6 +33,45 @@ export interface CatalogueModel {
   /** Whether this machine has the memory. */
   fits: boolean;
   min_ram_mb: number;
+  /**
+   * What the model costs and what it is worth, measured.
+   *
+   * The manifests have carried all of this since they were written and the catalogue dropped every
+   * field of it, so a card could say "745 MB · MIT · 99 languages" and answer none of the three
+   * questions somebody comparing two models is actually asking.
+   *
+   * All optional: a model with no published benchmarks says nothing rather than showing zeros,
+   * because "0 % accurate" and "nobody measured this" look identical and are not.
+   */
+  speed?: Speed | null;
+  /** Milliseconds from the end of speech to the committed line. */
+  latency_ms?: number;
+  /** Measured accuracy per language, best first. Empty when nothing was benchmarked. */
+  accuracy?: LanguageAccuracy[];
+  /** Peak resident memory while decoding, in MB. */
+  rss_peak_mb?: number;
+  /** Accelerators this model can use *and this machine has* — already intersected by the daemon. */
+  accel?: string[];
+}
+
+export interface Speed {
+  /** Seconds of compute per second of audio. Below 1.0 keeps up with a live meeting. */
+  rtf: number;
+  /**
+   * Whether the figure was measured on hardware like this one.
+   *
+   * `false` means every published number is for another class of machine — today that is every
+   * Apple Silicon Mac, since the benchmarks are all x86 — and the slowest one is being shown. The
+   * interface has to say so; a speed presented as this machine's when it is not is the kind of
+   * number people make decisions on.
+   */
+  measured_here: boolean;
+}
+
+export interface LanguageAccuracy {
+  lang: string;
+  /** `0..1`, from the published word error rate. */
+  accuracy: number;
 }
 
 /** Which job a model is being pointed at. */
