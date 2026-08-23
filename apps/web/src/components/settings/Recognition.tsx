@@ -5,7 +5,13 @@ import { useI18n } from "../../i18n/context";
 import { CatalogueClient, size } from "../../lib/catalogue";
 import { useEngine } from "../../lib/engine-context";
 import { useErrorText } from "../../lib/errors";
-import { fetchLanguages, languageName, ordered, rememberLanguage } from "../../lib/languages";
+import {
+  autoAvailable,
+  fetchLanguages,
+  languageName,
+  ordered,
+  rememberLanguage,
+} from "../../lib/languages";
 import { url } from "../../lib/library";
 import { useLoad } from "../../lib/use-load";
 import { SegmentedControl, Select } from "../ui";
@@ -104,6 +110,9 @@ export function Recognition() {
     [languages.data],
   );
 
+  /** What the ranking would use for the chosen language, named so the mode can be checked. */
+  const serving = mode === "language" ? bestFor(current) : undefined;
+
   const write = async (next: { model?: string; language?: string }) => {
     setBusy(true);
     setError(null);
@@ -168,6 +177,58 @@ export function Recognition() {
           if (next === "language") void write({ model: "" });
         }}
       />
+
+      {/* The other half of the choice, which this form did not have.
+
+          "By model" got two dropdowns and "by language" got nothing at all — the heading, the
+          sentence and the switch, and then the panel ended. The language was set somewhere else
+          entirely (the picker above the record button, and the first-run screen), so a user who
+          came to Settings to choose a language found a section named after the decision, offering
+          no way to make it. One dropdown, and a line naming what will serve the answer, which is
+          the fact that makes "by language" a defensible default rather than a black box. */}
+      {mode === "language" && (
+        <div className="mt-4">
+          <label className="block sm:max-w-xs">
+            <span className="text-fg-faint text-meta">{t("record.spoken")}</span>
+            <Select
+              className="mt-1"
+              value={current}
+              aria-label={t("record.spoken")}
+              disabled={busy}
+              onChange={(e) => void write({ language: e.target.value })}
+            >
+              {/* Detection is only offered where an installed model can actually do it. Naming it
+                  otherwise would promise a behaviour the machine cannot perform. */}
+              {autoAvailable(languages.data?.languages ?? []) && (
+                <option value="">{t("record.spoken_auto")}</option>
+              )}
+              {ordered(
+                (languages.data?.languages ?? [])
+                  .filter((l) => !l.multilingual_only)
+                  .map((l) => l.code),
+                locale,
+              ).map((each) => (
+                <option key={each.code} value={each.code}>
+                  {each.label}
+                </option>
+              ))}
+            </Select>
+          </label>
+
+          {/* Which model the ranking picked, and whether it is here. Without this the mode is a
+              promise that something sensible happens and no way to check that it did. */}
+          {serving && (
+            <p className="text-fg-faint text-micro mt-2">
+              {serving.installed && serving.model_name
+                ? t("settings.served_by", { model: serving.model_name })
+                : t("settings.served_by_missing", {
+                    model: serving.model_name ?? serving.model ?? "",
+                    size: size(serving.size_bytes),
+                  })}
+            </p>
+          )}
+        </div>
+      )}
 
       {mode === "model" && (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">

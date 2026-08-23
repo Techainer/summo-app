@@ -215,6 +215,12 @@ export function Transcript({
                       said, and anyone checking a subtitle against the speaker needs both. */}
                   {segment.translation && (
                     <p
+                      // A promise to the tests, for the same reason as `transcript-line` above: the
+                      // suite that proves live translation works was matching
+                      // `[data-testid="transcript-line"] p[lang]`, and this is a *sibling* of that
+                      // element rather than a child — so it found nothing and reported translation
+                      // as broken while it was working perfectly on screen.
+                      data-testid="transcript-translation"
                       lang={segment.translation.lang}
                       className={cn(
                         "text-fg-dim mt-0.5 mb-0 leading-relaxed opacity-[0.72]",

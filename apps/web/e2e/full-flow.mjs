@@ -144,7 +144,26 @@ await page
   if (before.state !== "recording")
     problems.push(`not recording before the change: ${before.state}`);
 
-  await page.getByRole("button", { name: "Đổi", exact: true }).click();
+  // Exactly one, and inside the meeting's own bar.
+  //
+  // These controls used to live only in the shell's banner, which is drawn *above* the page — so
+  // the settings for the meeting sat outside the meeting, and that banner has a dismiss button, so
+  // one click removed the only way to change the model, the language or the translation for the
+  // rest of the recording. `LiveBar` carries them now and `ListeningIn` yields on this page.
+  //
+  // The count is asserted because the obvious way to implement that is to render both, and an
+  // earlier attempt did exactly that: two buttons named "Đổi", ambiguous to a reader and fatal to
+  // this selector.
+  const changers = page.getByRole("button", { name: "Đổi", exact: true });
+  if ((await changers.count()) !== 1) {
+    problems.push(`expected one "Đổi" on the meeting page, found ${await changers.count()}`);
+  }
+  if ((await page.getByTestId("live-bar").getByRole("button", { name: "Đổi" }).count()) !== 1) {
+    problems.push("the in-meeting controls are not inside the recording bar");
+  }
+
+  await changers.first().click();
+  await page.screenshot({ path: "/tmp/shots/in-meeting-config.png" });
   await page.getByLabel("Ngôn ngữ nói").selectOption("vi");
   await page.waitForTimeout(3000);
 
