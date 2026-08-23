@@ -39,8 +39,27 @@ import { basename, join } from "node:path";
  * of about thirty-eight, and rather more than the fifteen this comment used to estimate, because
  * four copies of the same key names compressed better together than they cost apart. It also
  * changes the slope: a new sentence of copy now costs its own bytes rather than four times them.
+ *
+ * 208 against a measured 200. Raised on purpose, which is the answer this file has always said is
+ * available as long as somebody makes it out loud.
+ *
+ * Four changes crossed it in one release — the in-meeting controls, download progress with a rate,
+ * the permission repairs, and measured accuracy and speed on the model cards — and the honest
+ * accounting is that almost all of it is *copy*, not code. The controls are behind `lazy`, the
+ * models screen is a lazy route, and the two helpers it needed moved there rather than staying in
+ * `catalogue.ts`; what is left in the first load is a locale catalogue that ships whole.
+ *
+ * The number was grazed four times getting here — 199.5, 199.6, 199.7, 200.0 — and each time the
+ * cheap fix was to shorten a sentence. That is a budget acting as a tripwire on the writing rather
+ * than a brake on the bundle, which is not what it is for. Eight kB restores the headroom the
+ * comment above already argues for.
+ *
+ * The structural fix, when this is next hit: the locale catalogue is loaded whole before the first
+ * screen, and most of it is text for screens the reader has not opened. Splitting it the way the
+ * screens were split is worth about as much again — and is a change to make deliberately, not
+ * under deadline with a sentence to shave.
  */
-const BUDGET = 200;
+const BUDGET = 208;
 
 const dist = join(import.meta.dirname, "..", "dist");
 const html = readFileSync(join(dist, "index.html"), "utf8");

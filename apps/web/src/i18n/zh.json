@@ -689,7 +689,16 @@
     "of_total": "{done} / {total}",
     "left_sec": "约剩 {value} 秒",
     "left_min": "约剩 {value} 分钟",
-    "left_hour": "约剩 {value} 小时"
+    "left_hour": "约剩 {value} 小时",
+    "too_slow": "较慢",
+    "vs_realtime": "相对实时",
+    "while_running": "运行时",
+    "measured_accuracy": "实测准确率",
+    "on_this_machine": "在同类机器上",
+    "latency": "话音结束到出字",
+    "accelerator": "硬件加速",
+    "accuracy_note": "公开基准上正确识别的词占比。未测过的语言不列出。",
+    "measured_elsewhere": "在另一类机器上测得；本机尚无公开数据。"
   },
   "home": {
     "heading": "你的工作区",

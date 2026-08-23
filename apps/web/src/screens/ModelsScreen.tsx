@@ -17,9 +17,33 @@ import {
   size,
   tags,
   type CatalogueModel,
+  type LanguageAccuracy,
   type Role,
   type Task,
 } from "../lib/catalogue";
+
+/**
+ * A real-time factor as the thing a person wants to know: how much faster than the meeting.
+ *
+ * `0.06` is unreadable; "17× faster than real time" is the same fact and answers "will this keep
+ * up". Below 1.0 it keeps up; at or above, it falls behind and the phrasing changes to say so.
+ */
+function speedLabel(rtf: number): { times: number; keepsUp: boolean } {
+  const keepsUp = rtf > 0 && rtf < 1;
+  return { times: rtf > 0 ? Math.round(1 / rtf) : 0, keepsUp };
+}
+
+/**
+ * Accuracy for the reader's own language, when it was measured.
+ *
+ * The one number a person actually wants from this list, and picking it here rather than showing
+ * the whole list on a card is what keeps the card a card. The full list is on the detail sheet.
+ */
+function accuracyFor(model: CatalogueModel, locale: string): LanguageAccuracy | undefined {
+  const mine = locale.toLowerCase().split("-")[0];
+  return model.accuracy?.find((each) => each.lang.toLowerCase() === mine);
+}
+
 import { useEngine } from "../lib/engine-context";
 import { fetchPlan, type Plan } from "../lib/plan";
 import { useErrorText } from "../lib/errors";
@@ -439,6 +463,75 @@ function Running({
 }
 
 /**
+ * What was measured, in the three numbers a choice actually turns on.
+ *
+ * Accuracy, speed, memory — for *this* reader and *this* machine. Every one of them has been in the
+ * manifests since the registry existed and none of them reached the screen, so choosing between
+ * Gipformer and Whisper meant comparing two names and two file sizes. The file size is the one
+ * thing that does not matter once both are installed.
+ *
+ * Three deliberate choices:
+ *
+ * **Accuracy is for the reader's language, not an average.** Whisper tiny is 95 % on English and
+ * 32 % on Vietnamese. One number would recommend it to a Vietnamese speaker or hide why anybody
+ * installs it, depending which one you picked. When this reader's language was never benchmarked
+ * the cell is absent rather than empty — "not measured" is information, "—" is furniture.
+ *
+ * **Speed is "× faster than real time", not a real-time factor.** `0.06` is a number for a
+ * benchmark table; "17× faster" answers "will this keep up with my meeting". Where the published
+ * figures are for another class of machine — every Apple Silicon Mac today, since the benchmarks
+ * are x86 — it says so rather than passing somebody else's hardware off as yours.
+ *
+ * **Nothing is shown that was not measured.** A model with no published benchmarks renders no row
+ * at all. Zeros in these positions read as "this model is bad", which is a different claim from
+ * "nobody has tested it".
+ */
+function Measured({ model }: { model: CatalogueModel }) {
+  const { t, locale } = useI18n();
+  const mine = accuracyFor(model, locale);
+  const speed = model.speed ? speedLabel(model.speed.rtf) : null;
+
+  const cells: { value: string; label: string; dim?: boolean }[] = [];
+  if (mine) {
+    cells.push({
+      value: `${Math.round(mine.accuracy * 100)}%`,
+      label: languageName(mine.lang, locale),
+    });
+  }
+  if (speed && speed.times > 0) {
+    cells.push({
+      value: speed.keepsUp ? `${speed.times}×` : t("models.too_slow"),
+      label: t("models.vs_realtime"),
+      // Greyed when it is somebody else's hardware, and the detail sheet says whose.
+      dim: model.speed?.measured_here === false,
+    });
+  }
+  if (model.rss_peak_mb) {
+    cells.push({ value: `${model.rss_peak_mb} MB`, label: t("models.while_running") });
+  }
+  if (cells.length === 0) return null;
+
+  return (
+    <dl className="border-line mt-3 grid grid-cols-3 gap-2 border-t pt-2.5">
+      {cells.map((cell) => (
+        <div key={cell.label}>
+          <dt className="sr-only">{cell.label}</dt>
+          <dd
+            className={cn(
+              "nums text-sm leading-none font-semibold tabular-nums",
+              cell.dim ? "text-fg-faint" : "text-fg",
+            )}
+          >
+            {cell.value}
+          </dd>
+          <p className="text-fg-faint text-micro mt-1 truncate leading-none">{cell.label}</p>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
  * A card-sized version of a model's own description.
  *
  * The first sentence, capped. Registry descriptions run to a paragraph — SMALL100's is nine lines
@@ -590,61 +683,6 @@ function Card({
             {model.size_bytes > 0 && ` · ${size(model.size_bytes)}`}
           </p>
         </div>
-        {model.installed ? (
-          <div className="flex shrink-0 items-center gap-2">
-            {/* Installed and *chosen* are different states, and conflating them is what made the
-                catalogue decorative: a user could install a Japanese model and record in
-                Vietnamese with no indication of why. */}
-            {inUse
-              ? null
-              : roleFor(model.task) !== null && (
-                  <Button size="sm" variant="secondary" onClick={onUse}>
-                    {t("models.use")}
-                  </Button>
-                )}
-            {/* The second job a speech model can hold: re-decoding a finished utterance more
-                carefully than the live pass managed. The daemon has had the role since the
-                pipeline did — `models.refine` — and nothing in the app could point at it, so the
-                accurate-but-slow models in the catalogue had no use anybody could reach. */}
-            {model.task === "asr" &&
-              (asRefine ? (
-                <span className="border-accent/40 text-accent text-micro rounded-full border px-2 py-0.5">
-                  {t("models.in_use_refine")}
-                </span>
-              ) : (
-                <Button size="sm" variant="ghost" onClick={onRefine}>
-                  {t("models.use_refine")}
-                </Button>
-              ))}
-            {/* No second "Đã cài" here: the state chip lives on the title line now, where the eye
-                lands first. Two of them meant the same word twice on one card. */}
-            <Button
-              size="sm"
-              variant={confirming ? "danger" : "ghost"}
-              onClick={() => {
-                if (confirming) onRemove();
-                setConfirming(!confirming);
-              }}
-              onBlur={() => setConfirming(false)}
-            >
-              <Trash2 aria-hidden="true" className="me-1 size-3.5" />
-              {confirming ? t("models.remove_confirm") : t("models.remove")}
-            </Button>
-          </div>
-        ) : (
-          <Button
-            size="sm"
-            variant="primary"
-            busy={running}
-            // A model the machine cannot hold is not offered. The download would finish and the
-            // load would fail, which is the most expensive possible way to find out.
-            disabled={!model.fits}
-            onClick={onPull}
-          >
-            <HardDriveDownload aria-hidden="true" className="me-1 size-3.5" />
-            {t("models.install")}
-          </Button>
-        )}
       </div>
 
       {/* Clamped, and the registry's own text is not shortened to match.
@@ -680,10 +718,78 @@ function Card({
         ))}
       </div>
 
-      {/* The rest of what a model card owes a reader: measured accuracy, measured speed, memory,
+      {/* The three numbers somebody comparing two models is actually comparing.
+          A name, a size and three chips is what this card had, and none of it answers "is it
+          accurate", "is it fast enough" or "will it fit". All three are measured and published per
+          model and were being dropped by `/catalogue`. */}
+      <Measured model={model} />
+
+      {/* Actions last, and on a line of their own.
+          They used to sit beside the title, and for an installed speech model that is three
+          buttons — use, use-for-refine, remove — competing with the name for one row. The name
+          lost: "Gipformer 65M · Vietnamese" wrapped onto three lines next to a column of controls.
+          A card reads identity, then facts, then what you can do about them. */}
+      <div className="border-line mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+        {model.installed ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Installed and *chosen* are different states, and conflating them is what made the
+              catalogue decorative: a user could install a Japanese model and record in
+              Vietnamese with no indication of why. */}
+            {inUse
+              ? null
+              : roleFor(model.task) !== null && (
+                  <Button size="sm" variant="secondary" onClick={onUse}>
+                    {t("models.use")}
+                  </Button>
+                )}
+            {/* The second job a speech model can hold: re-decoding a finished utterance more
+              carefully than the live pass managed. The daemon has had the role since the
+              pipeline did — `models.refine` — and nothing in the app could point at it, so the
+              accurate-but-slow models in the catalogue had no use anybody could reach. */}
+            {model.task === "asr" &&
+              (asRefine ? (
+                <span className="border-accent/40 text-accent text-micro rounded-full border px-2 py-0.5">
+                  {t("models.in_use_refine")}
+                </span>
+              ) : (
+                <Button size="sm" variant="ghost" onClick={onRefine}>
+                  {t("models.use_refine")}
+                </Button>
+              ))}
+            {/* No second "Đã cài" here: the state chip lives on the title line now, where the eye
+              lands first. Two of them meant the same word twice on one card. */}
+            <Button
+              size="sm"
+              variant={confirming ? "danger" : "ghost"}
+              onClick={() => {
+                if (confirming) onRemove();
+                setConfirming(!confirming);
+              }}
+              onBlur={() => setConfirming(false)}
+            >
+              <Trash2 aria-hidden="true" className="me-1 size-3.5" />
+              {confirming ? t("models.remove_confirm") : t("models.remove")}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            variant="primary"
+            busy={running}
+            // A model the machine cannot hold is not offered. The download would finish and the
+            // load would fail, which is the most expensive possible way to find out.
+            disabled={!model.fits}
+            onClick={onPull}
+          >
+            <HardDriveDownload aria-hidden="true" className="me-1 size-3.5" />
+            {t("models.install")}
+          </Button>
+        )}
+      </div>
+
+      {/* The rest of what a model card owes a reader: the full per-language accuracy table,
           checksums, and the publisher's own README. All of it has existed in `summo_models::page`
-          since the registry did — rendered for the CLI and never shown here, so somebody choosing
-          between two models had a name, a size and three chips to do it with. */}
+          since the registry did — rendered for the CLI and never shown here. */}
       {/* A panel, not an accordion. Expanding a card in a two-column grid pushed its neighbour
           down the page and left the reader scrolling a card that had grown to four screens — and
           the thing being read is a document, which wants a column of its own. */}
@@ -730,6 +836,77 @@ function Card({
               </Button>
             )}
           </div>
+          {/* Every language anybody benchmarked, which is the comparison the card had to reduce
+              to one number. Whisper's own table is the argument for and against it in four rows:
+              95 % on English, 32 % on Vietnamese. */}
+          {model.accuracy && model.accuracy.length > 0 && (
+            <div className="border-line mt-4 border-t pt-4">
+              <h4 className="text-meta font-medium">{t("models.measured_accuracy")}</h4>
+              <dl className="mt-2 space-y-1.5">
+                {model.accuracy.map((each) => (
+                  <div key={each.lang} className="flex items-center gap-3">
+                    <dt className="text-meta w-28 shrink-0 truncate">
+                      {languageName(each.lang, locale)}
+                    </dt>
+                    <dd className="flex min-w-0 flex-1 items-center gap-2">
+                      {/* A bar as well as a number: the gap between 95 % and 32 % is the whole
+                          point and is far easier to see than to read. */}
+                      <span className="bg-bg-soft h-1.5 min-w-0 flex-1 overflow-hidden rounded-full">
+                        <span
+                          className={cn(
+                            "block h-full rounded-full",
+                            each.accuracy >= 0.8 ? "bg-done" : "bg-blocked",
+                          )}
+                          style={{ width: `${Math.round(each.accuracy * 100)}%` }}
+                        />
+                      </span>
+                      <span className="nums text-meta w-10 shrink-0 text-right tabular-nums">
+                        {Math.round(each.accuracy * 100)}%
+                      </span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="text-fg-faint text-micro mt-2">{t("models.accuracy_note")}</p>
+            </div>
+          )}
+
+          {/* Speed and latency, with the caveat attached rather than implied. */}
+          {(model.speed || model.latency_ms) && (
+            <div className="border-line mt-4 border-t pt-4">
+              <h4 className="text-meta font-medium">{t("models.on_this_machine")}</h4>
+              <dl className="text-meta mt-2 space-y-1">
+                {model.speed && speedLabel(model.speed.rtf).times > 0 && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-fg-dim">{t("models.vs_realtime")}</dt>
+                    <dd className="nums tabular-nums">{speedLabel(model.speed.rtf).times}×</dd>
+                  </div>
+                )}
+                {model.latency_ms ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-fg-dim">{t("models.latency")}</dt>
+                    <dd className="nums tabular-nums">{model.latency_ms} ms</dd>
+                  </div>
+                ) : null}
+                {model.rss_peak_mb ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-fg-dim">{t("models.while_running")}</dt>
+                    <dd className="nums tabular-nums">{model.rss_peak_mb} MB</dd>
+                  </div>
+                ) : null}
+                {model.accel && model.accel.length > 0 && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-fg-dim">{t("models.accelerator")}</dt>
+                    <dd>{model.accel.join(" · ")}</dd>
+                  </div>
+                )}
+              </dl>
+              {model.speed?.measured_here === false && (
+                <p className="text-fg-faint text-micro mt-2">{t("models.measured_elsewhere")}</p>
+              )}
+            </div>
+          )}
+
           <div className="border-line mt-4 border-t pt-4">
             {page === null ? (
               <p className="text-fg-faint text-micro">{t("common.loading")}</p>
