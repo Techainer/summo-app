@@ -182,7 +182,10 @@ export function Permissions({ compact = false }: { compact?: boolean }) {
                 variant="ghost"
                 onClick={() => {
                   setTested(
-                    testNotification(t("permissions.notify_test_title"), t("permissions.notify_test_body"))
+                    testNotification(
+                      t("permissions.notify_test_title"),
+                      t("permissions.notify_test_body"),
+                    )
                       ? "sent"
                       : "blocked",
                   );
@@ -192,7 +195,11 @@ export function Permissions({ compact = false }: { compact?: boolean }) {
               </Button>
               {tested && (
                 <p className="text-fg-dim text-micro mt-2">
-                  {t(tested === "sent" ? "permissions.notify_test_sent" : "permissions.notify_test_blocked")}
+                  {t(
+                    tested === "sent"
+                      ? "permissions.notify_test_sent"
+                      : "permissions.notify_test_blocked",
+                  )}
                 </p>
               )}
             </div>

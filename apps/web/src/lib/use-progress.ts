@@ -120,7 +120,9 @@ export function perSecond(bytes: number | null): string {
  * minutes and four seconds left, and a seconds field ticking down beside a fifty-minute estimate
  * claims a precision the estimate does not have.
  */
-export function roughly(seconds: number | null): { unit: "sec" | "min" | "hour"; value: number } | null {
+export function roughly(
+  seconds: number | null,
+): { unit: "sec" | "min" | "hour"; value: number } | null {
   if (seconds === null || seconds <= 0 || !Number.isFinite(seconds)) return null;
   // Five is the floor as well as the step. "About 1 second left" is a claim the estimate cannot
   // support, and it is followed by several more seconds of the same sentence.

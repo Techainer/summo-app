@@ -4623,9 +4623,9 @@ fn handle_command_with_models(
             // The translator is built before anything is replaced, so a target with no model behind
             // it leaves the meeting translating into the old language rather than into nothing. A
             // failed change must not be a silent downgrade to no subtitles at all.
-            match summo_core::settings::Settings::load(&engine.paths().settings())
-                .and_then(|settings| crate::translate::Translator::from_settings(engine.paths(), &settings))
-            {
+            match summo_core::settings::Settings::load(&engine.paths().settings()).and_then(
+                |settings| crate::translate::Translator::from_settings(engine.paths(), &settings),
+            ) {
                 Ok(translator) => {
                     active.live = Some(crate::live::LiveTranslator::new(
                         translator,
@@ -7108,10 +7108,12 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
     /// state reachable from one code path and not the other.
     #[test]
     fn translate_parses_a_target_and_both_spellings_of_off() {
-        let named: Command = serde_json::from_str(r#"{"cmd":"translate","to":"ja"}"#).expect("parses");
+        let named: Command =
+            serde_json::from_str(r#"{"cmd":"translate","to":"ja"}"#).expect("parses");
         assert!(matches!(named, Command::Translate { ref to } if to.as_deref() == Some("ja")));
 
-        let empty: Command = serde_json::from_str(r#"{"cmd":"translate","to":""}"#).expect("parses");
+        let empty: Command =
+            serde_json::from_str(r#"{"cmd":"translate","to":""}"#).expect("parses");
         assert!(matches!(empty, Command::Translate { ref to } if to.as_deref() == Some("")));
 
         let absent: Command = serde_json::from_str(r#"{"cmd":"translate"}"#).expect("parses");
