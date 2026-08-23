@@ -62,6 +62,20 @@ pub struct Language {
     pub live: bool,
     /// Whether the only model covering it does so through `*` rather than by being measured on it.
     pub multilingual_only: bool,
+    /// The best model for it *that is already installed* — what a recording would actually use.
+    ///
+    /// Distinct from `model`, which is the best that exists, installed or not. Conflating the two
+    /// is what let every screen name a model the machine does not have: on a laptop with only
+    /// Whisper, `/languages` reported Vietnamese as `gipformer-65m`, `installed: false` — and the
+    /// interface duly announced that Gipformer would be listening. It would not. Whisper would,
+    /// and did, and the recording was fine; only the description of it was wrong.
+    ///
+    /// `None` when nothing on this machine covers the language at all, which is the one case where
+    /// a download really is required before it can be recorded.
+    pub serving: Option<String>,
+    pub serving_name: Option<String>,
+    /// Measured accuracy of `serving` on this language — what you will actually get today.
+    pub serving_accuracy: f32,
 }
 
 /// Every language the given manifests can serve, best model first for each.
@@ -95,7 +109,24 @@ pub fn available(manifests: &[Manifest], hw: &HwProfile, installed: &[String]) -
             let ranked = recommend(manifests, hw, &code);
             let best = ranked.best();
             let manifest = best.and_then(|s| manifests.iter().find(|m| m.id.as_str() == s.id));
+
+            // The same ranking over only what is here. Ranked rather than "whichever is installed",
+            // because a machine can hold two models that both cover a language and the better one
+            // is still the answer.
+            let here: Vec<Manifest> = manifests
+                .iter()
+                .filter(|m| installed.iter().any(|id| id == m.id.as_str()))
+                .cloned()
+                .collect();
+            let serving = recommend(&here, hw, &code).best().cloned();
+            let serving_manifest = serving
+                .as_ref()
+                .and_then(|s| here.iter().find(|m| m.id.as_str() == s.id));
+
             Language {
+                serving: serving.as_ref().map(|s| s.id.clone()),
+                serving_name: serving.as_ref().map(|s| s.name.clone()),
+                serving_accuracy: serving_manifest.map_or(0.0, |m| measured(m, &code)),
                 model: best.map(|s| s.id.clone()),
                 model_name: best.map(|s| s.name.clone()),
                 size_bytes: manifest.map_or(0, |m| download_size(m, hw)),
@@ -157,6 +188,67 @@ fn measured(manifest: &Manifest, code: &str) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The bug a user reported in one sentence: "don't default to Gipformer for Vietnamese — if
+    /// this machine only has Whisper, just use Whisper".
+    ///
+    /// The recording engine already did exactly that. This endpoint did not: it reported the best
+    /// model *that exists* and said `installed: false`, so every screen reading it announced that
+    /// an absent Gipformer would be doing the listening. Whisper was, and the transcript was fine;
+    /// only the description of it was wrong — and it made the interface look like it was about to
+    /// switch models behind the user's back.
+    ///
+    /// `model` stays the recommendation, because a 92 %-vs-32 % gap is worth telling somebody
+    /// about. `serving` is what will actually happen if they change nothing.
+    #[test]
+    fn a_machine_with_only_whisper_serves_vietnamese_with_whisper() {
+        let manifests = vec![
+            manifest("gipformer-65m", &["vi"], Some(("wer_fleurs_vi", 0.085))),
+            manifest("whisper-tiny", &["*"], Some(("wer_fleurs_vi", 0.676))),
+        ];
+        let hw = HwProfile::detect();
+        let out = available(&manifests, &hw, &["whisper-tiny".to_string()]);
+        let vi = out.iter().find(|l| l.code == "vi").expect("vietnamese");
+
+        // What is recommended: the specialised model, and it is not here.
+        assert_eq!(vi.model.as_deref(), Some("gipformer-65m"));
+        assert!(!vi.installed, "gipformer is not on this machine");
+
+        // What will actually run: the one that is.
+        assert_eq!(
+            vi.serving.as_deref(),
+            Some("whisper-tiny"),
+            "a Whisper-only machine records Vietnamese with Whisper; saying otherwise is the bug"
+        );
+        assert!((vi.serving_accuracy - 0.324).abs() < 1e-5, "{vi:?}");
+    }
+
+    /// With the better model installed too, both answers agree — and no recommendation is due.
+    #[test]
+    fn serving_matches_the_recommendation_once_it_is_installed() {
+        let manifests = vec![
+            manifest("gipformer-65m", &["vi"], Some(("wer_fleurs_vi", 0.085))),
+            manifest("whisper-tiny", &["*"], Some(("wer_fleurs_vi", 0.676))),
+        ];
+        let hw = HwProfile::detect();
+        let installed = ["gipformer-65m".to_string(), "whisper-tiny".to_string()];
+        let out = available(&manifests, &hw, &installed);
+        let vi = out.iter().find(|l| l.code == "vi").expect("vietnamese");
+        assert_eq!(vi.serving.as_deref(), vi.model.as_deref());
+        assert!(vi.installed);
+    }
+
+    /// Nothing installed covers it: `serving` is `None`, which is the one case where a download
+    /// genuinely is required before the language can be recorded at all.
+    #[test]
+    fn nothing_installed_serves_nothing() {
+        let manifests = vec![manifest("gipformer-65m", &["vi"], None)];
+        let out = available(&manifests, &HwProfile::detect(), &[]);
+        let vi = out.iter().find(|l| l.code == "vi").expect("vietnamese");
+        assert_eq!(vi.model.as_deref(), Some("gipformer-65m"));
+        assert!(vi.serving.is_none());
+    }
+
     use crate::manifest::{FileEntry, Mode, Profile, RssProfile, Task};
     use summo_core::ModelId;
 

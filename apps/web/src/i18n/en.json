@@ -374,8 +374,11 @@
     "threads_hint": "0 follows the hardware probe.",
     "reset_capture": "Back to the defaults",
     "model_not_installed": "Chosen, but not installed yet — {model} needs {size} downloading before a recording can use it.",
-    "served_by": "Heard by {model}, which is the most accurate one installed for this language.",
-    "served_by_missing": "{model} would be the most accurate for this language and is not installed — {size}."
+    "served_by": "{model} will hear this.",
+    "served_by_none": "Nothing installed covers this language yet.",
+    "better_available": "{model} is more accurate for {language} — {better}% against {current}%. {size} to download.",
+    "install_and_use": "Install and use it",
+    "keep_current": "Keep what I have"
   },
   "status": {
     "unreachable": "Cannot reach Summo on this machine.",

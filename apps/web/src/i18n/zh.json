@@ -374,8 +374,11 @@
     "threads_hint": "0 表示按硬件自动决定。",
     "reset_capture": "恢复默认",
     "model_not_installed": "已选择但尚未安装——{model} 需要先下载 {size} 才能用于录音。",
-    "served_by": "由 {model} 识别，这是本机已安装的模型中对该语言最准确的一个。",
-    "served_by_missing": "{model} 对该语言最准确，但尚未安装——{size}。"
+    "served_by": "将由 {model} 识别。",
+    "served_by_none": "尚未安装可用于该语言的模型。",
+    "better_available": "{language} 用 {model} 更准确——{better}% 对 {current}%。需下载 {size}。",
+    "install_and_use": "安装并使用",
+    "keep_current": "保持现状"
   },
   "status": {
     "unreachable": "无法连接到本机上的 Summo。",

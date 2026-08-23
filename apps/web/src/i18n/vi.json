@@ -374,8 +374,11 @@
     "threads_hint": "0 là để máy tự quyết theo phần cứng.",
     "reset_capture": "Về mặc định",
     "model_not_installed": "Đã chọn nhưng chưa cài — {model} cần tải {size} trước khi ghi âm dùng được.",
-    "served_by": "{model} sẽ nghe, đây là mô hình chính xác nhất đang cài cho ngôn ngữ này.",
-    "served_by_missing": "{model} là mô hình chính xác nhất cho ngôn ngữ này nhưng chưa được cài — {size}."
+    "served_by": "{model} sẽ nghe.",
+    "served_by_none": "Chưa có mô hình nào đang cài phục vụ ngôn ngữ này.",
+    "better_available": "{model} chính xác hơn cho {language} — {better}% so với {current}%. Cần tải {size}.",
+    "install_and_use": "Cài và dùng",
+    "keep_current": "Giữ nguyên"
   },
   "status": {
     "unreachable": "Không kết nối được với Summo trên máy này.",

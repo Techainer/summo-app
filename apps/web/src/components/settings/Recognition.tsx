@@ -7,6 +7,7 @@ import { useEngine } from "../../lib/engine-context";
 import { useErrorText } from "../../lib/errors";
 import {
   autoAvailable,
+  betterFor,
   fetchLanguages,
   languageName,
   ordered,
@@ -14,16 +15,15 @@ import {
 } from "../../lib/languages";
 import { url } from "../../lib/library";
 import { useLoad } from "../../lib/use-load";
-import { SegmentedControl, Select } from "../ui";
+import { Button, SegmentedControl, Select } from "../ui";
 
 /**
  * Which model does the listening, and in which language.
  *
- * The app has always answered this the other way round. You pick a *language*, it ranks the
- * installed models for it and uses the winner — which is the right default and is not a choice.
- * Vietnamese always resolves to Gipformer, because on Vietnamese Gipformer measures 91.5 % and
- * Whisper 34.5 %, so Whisper is never offered for it. Somebody who wants Whisper anyway — for a
- * meeting that will switch languages, or to compare the two — had no way to say so.
+ * The app used to answer this one way round only. You picked a *language*, it ranked the installed
+ * models for it and used the winner — the right default, and not a choice. Somebody who wanted
+ * Whisper anyway, for a meeting that will switch languages or to compare the two, had no way to
+ * say so.
  *
  * Both directions live here, as one choice with two positions:
  *
@@ -37,14 +37,22 @@ import { SegmentedControl, Select } from "../ui";
  * and `settings.models.language` has always been the language. This screen is the first thing that
  * writes both deliberately, so the pair says what it means.
  *
- * ## It says when the choice is worse
+ * ## Nothing is ever swapped on your behalf
  *
- * The point of letting somebody overrule the ranking is that they sometimes should. The point of
- * measuring models is that usually they should not. So when the chosen model is not the one the
- * daemon would have picked for that language, this names the one it would have — without inventing
- * a number for the pair, because `/languages` reports accuracy for the *best* model per language
- * and not for whichever one is being overruled. Saying "Gipformer is recommended here" is
- * supportable; printing a percentage for Whisper-on-Vietnamese from that endpoint would not be.
+ * The ranking recommends; it does not act. This panel used to describe a language by the best model
+ * that *exists* for it, so a machine holding only Whisper was told "Gipformer sẽ nghe" — naming a
+ * model it did not have and was never going to run. The recording engine was right all along and
+ * used Whisper; only the description was wrong, and it read as though the app were about to change
+ * models by itself.
+ *
+ * So there are two facts and they are kept apart. `serving` is what will actually hear you, and it
+ * is what the panel states. `model` is the best that exists, and when it is meaningfully better it
+ * becomes an *offer* — both accuracy figures, the download size, and a button. Declining leaves
+ * everything exactly as it was, and changing language never re-points the model: `resolve_models`
+ * returns early whenever `settings.models.live` names one.
+ *
+ * The five-point floor on the gap is in `betterFor`. Advice worth less than that costs more
+ * attention than it saves.
  */
 export function Recognition() {
   const { t, locale } = useI18n();
@@ -112,6 +120,38 @@ export function Recognition() {
 
   /** What the ranking would use for the chosen language, named so the mode can be checked. */
   const serving = mode === "language" ? bestFor(current) : undefined;
+
+  /**
+   * Languages whose recommendation the user has waved away, for this visit.
+   *
+   * Not persisted. A dismissal that outlives the session would hide the advice from somebody who
+   * has since installed something or changed their mind, and the whole point of the panel is that
+   * it reflects what is true now.
+   */
+  const [declined, setDeclined] = useState<string[]>([]);
+  const better = declined.includes(current) ? undefined : betterFor(serving);
+
+  /** Install the recommended model and point the `live` role at it — both, or neither. */
+  const adopt = async (id: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const started = await fetch(url(handshake, "/installs"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!started.ok) throw new Error(await started.text());
+      // Pinned now rather than after the download: the daemon honours the setting when the files
+      // arrive, and a user who pressed "use this one" has said what they want regardless of how
+      // long the bytes take.
+      await write({ model: id });
+    } catch (e) {
+      setError(say(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const write = async (next: { model?: string; language?: string }) => {
     setBusy(true);
@@ -215,17 +255,50 @@ export function Recognition() {
             </Select>
           </label>
 
-          {/* Which model the ranking picked, and whether it is here. Without this the mode is a
-              promise that something sensible happens and no way to check that it did. */}
+          {/* What will actually hear you, which is not the same as what is recommended.
+              This named the *recommended* model, so a machine with only Whisper was told
+              "Gipformer sẽ nghe" — a model it does not have and was never going to use. */}
           {serving && (
             <p className="text-fg-faint text-micro mt-2">
-              {serving.installed && serving.model_name
-                ? t("settings.served_by", { model: serving.model_name })
-                : t("settings.served_by_missing", {
-                    model: serving.model_name ?? serving.model ?? "",
-                    size: size(serving.size_bytes),
-                  })}
+              {serving.serving_name
+                ? t("settings.served_by", { model: serving.serving_name })
+                : t("settings.served_by_none")}
             </p>
+          )}
+
+          {/* A recommendation, offered rather than applied.
+              The app must never swap a model on somebody's behalf — least of all to one that is
+              not installed. So the gap is stated with both numbers and closed by a button, and
+              declining it leaves everything exactly as it is. */}
+          {better && (
+            <div className="border-accent/30 bg-accent-soft text-meta mt-3 rounded-lg border px-3 py-2">
+              <p className="text-fg-dim">
+                {t("settings.better_available", {
+                  model: better.model_name ?? better.model ?? "",
+                  better: String(Math.round(better.accuracy * 100)),
+                  current: String(Math.round(better.serving_accuracy * 100)),
+                  language: languageName(current, locale),
+                  size: size(better.size_bytes),
+                })}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  busy={busy}
+                  onClick={() => void adopt(better.model as string)}
+                >
+                  {t("settings.install_and_use")}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setDeclined((was) => [...was, better.code])}
+                  className="text-fg-faint text-micro underline"
+                >
+                  {t("settings.keep_current")}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}

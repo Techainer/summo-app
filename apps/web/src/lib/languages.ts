@@ -29,6 +29,37 @@ export interface Language {
   live: boolean;
   /** Covered only through a multilingual model's `*`, never measured on it. */
   multilingual_only: boolean;
+  /**
+   * The best *installed* model for this language — what a recording would actually use.
+   *
+   * `model` above is the best that exists, downloaded or not, and conflating the two is what made
+   * every screen name a model the machine does not have. On a laptop with only Whisper, Vietnamese
+   * reported `gipformer-65m, installed: false`, so the interface announced Gipformer would be
+   * listening. Whisper was, and the transcript was fine — only the description was wrong, and it
+   * read as though the app were about to swap models on its own.
+   *
+   * `null` only when nothing here covers the language at all.
+   */
+  serving: string | null;
+  serving_name: string | null;
+  /** Measured accuracy of `serving`, which is the number you will actually get today. */
+  serving_accuracy: number;
+}
+
+/**
+ * A better model exists for this language than the one that would run, and it is worth offering.
+ *
+ * Worth offering, not worth doing: the app must never swap a model on somebody's behalf. It returns
+ * the recommendation only when there is a real gap to close — something is already serving the
+ * language, something better exists, and the difference is big enough to be worth a download.
+ *
+ * Five points of accuracy is the floor. Below that the advice costs more attention than it saves,
+ * and the numbers come from different benchmark runs anyway.
+ */
+export function betterFor(language: Language | undefined): Language | undefined {
+  if (!language?.serving || !language.model) return undefined;
+  if (language.installed || language.model === language.serving) return undefined;
+  return language.accuracy - language.serving_accuracy >= 0.05 ? language : undefined;
 }
 
 export interface Languages {
