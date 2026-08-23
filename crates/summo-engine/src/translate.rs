@@ -176,7 +176,7 @@ impl Translator {
     }
 
     /// Whichever the settings ask for: the dedicated translator when one is configured, otherwise
-    /// the general model.
+    /// the translation model on this machine, otherwise the general model.
     ///
     /// `source` comes from `models.language`, the language the speech model was told to expect. It
     /// is `None` when recognition was left on auto, which is a normal state and not an error.
@@ -193,6 +193,34 @@ impl Translator {
                 )?;
                 Self::mt(provider, settings.models.language.clone())
             }
+            // Nothing configured. The translation model already on disk before the endpoint nobody
+            // set up: `llm.provider` defaults to `ollama`, and `resolve_in` is happy to build a
+            // client for a server that is not running — so this arm used to accept "translate into
+            // English" from somebody with SMALL100 installed, report success, and then fail every
+            // line against `localhost:11434`. Measured end to end: `now translating into en`
+            // followed by no subtitle, ever.
+            //
+            // Not a swap and not a download: the only candidate is a model the user already chose
+            // to install for exactly this. Nothing is written to the settings — the choice stays
+            // theirs to make explicit, and `/settings/plan` names what would actually run.
+            //
+            // Only in a build that can run one. Without `mt-any` an installed SMALL100 is bytes on
+            // disk this process cannot load, and preferring it over a working endpoint would break
+            // translation for the one configuration where it currently works.
+            #[cfg(feature = "mt-any")]
+            None => match installed_translator(paths) {
+                Some(mt) => local_translator(paths, settings, &mt),
+                None => {
+                    let provider = summo_llm::Provider::resolve_in(
+                        &catalogue,
+                        &settings.llm.provider,
+                        settings.llm.model.as_deref(),
+                        None,
+                    )?;
+                    Self::chat(provider)
+                }
+            },
+            #[cfg(not(feature = "mt-any"))]
             None => {
                 let provider = summo_llm::Provider::resolve_in(
                     &catalogue,
@@ -436,41 +464,74 @@ pub async fn translate(
     })
 }
 
-/// The in-process translator named by the settings, loaded once per process.
+/// The translation model on this machine, when the settings name none.
 ///
-/// Cached in a `OnceLock` keyed by nothing, because there is one translation model at a time and
-/// it is hundreds of megabytes. The daemon builds a `Translator` per request; loading the weights
-/// each time would spend a second and a gigabyte to translate one line.
+/// One candidate or none in practice — the registry publishes SMALL100 and M2M100, and nobody
+/// installs both — so "the smallest installed one" is a tie-break that will rarely be reached and
+/// is the right answer when it is: these are the same architecture at two sizes.
 ///
-/// A changed model id is therefore not picked up until the daemon restarts. That is a deliberate
-/// trade and the settings screen says so — the alternative is holding two models resident to make
-/// a setting nobody changes twice take effect a few seconds sooner.
+/// Deliberately *not* a ranking, and deliberately never a download. It answers one question — is
+/// there already a model here that can do this — and the alternative to answering it was accepting
+/// the request and failing every line against a server the user never set up.
+#[cfg(feature = "mt-any")]
+pub fn installed_translator(paths: &Paths) -> Option<summo_core::settings::Translator> {
+    let mut found: Vec<_> = summo_models::ModelStore::new(paths.clone())
+        .list()
+        .into_iter()
+        .filter(|m| m.task == summo_models::Task::Translate)
+        .collect();
+    found.sort_by_key(|m| m.size_bytes);
+    found.first().map(|m| summo_core::settings::Translator {
+        provider: summo_core::settings::LOCAL.to_string(),
+        model: Some(m.id.to_string()),
+    })
+}
+
+/// The in-process translator named by the settings, loaded once and kept.
+///
+/// Cached because the daemon builds a `Translator` per request and the weights are hundreds of
+/// megabytes; loading them each time would spend a second and a gigabyte to translate one line.
+///
+/// Keyed by model id, and failures are not kept. It was a `OnceLock` holding a `Result`, which made
+/// the *first* attempt permanent — so the ordinary sequence of turning translation on before the
+/// model finished installing, or with the id mistyped, left the daemon answering
+/// `model not found: milmmt-46-1b` to every later attempt including the correct one, until it was
+/// restarted. Measured: pointing the setting at SMALL100 after a failed attempt still failed, with
+/// the old model's name in the message.
+///
+/// The lock is held across the load on purpose. Two callers arriving together should wait for one
+/// model rather than each build their own copy of six hundred megabytes.
 #[cfg(feature = "mt-any")]
 fn local_translator(
     paths: &Paths,
     settings: &Settings,
     mt: &summo_core::settings::Translator,
 ) -> Result<Translator> {
-    use std::sync::{Arc, OnceLock};
-    static LOADED: OnceLock<std::result::Result<Arc<LocalModel>, String>> = OnceLock::new();
+    use std::sync::{Arc, Mutex};
+    static LOADED: Mutex<Option<(String, Arc<LocalModel>)>> = Mutex::new(None);
 
     let id = mt.model.as_deref().unwrap_or("small100").to_string();
     let store = summo_models::ModelStore::new(paths.clone());
     let threads = settings.models.threads;
 
-    let model = LOADED
-        .get_or_init(move || {
-            load_local(&store, &id, threads)
-                .map(Arc::new)
-                .map_err(|e| e.to_string())
-        })
+    // A poisoned lock means a previous loader panicked mid-load. The cache is still readable and a
+    // panic in ONNX initialisation says nothing about the next attempt, so the guard is taken
+    // anyway rather than turning one bad load into a permanently broken translator — which is the
+    // failure this function was just rewritten to stop having.
+    let mut cached = LOADED.lock().unwrap_or_else(|e| e.into_inner());
+    if !matches!(&*cached, Some((have, _)) if *have == id) {
+        // Dropped before the new one is built: two of these do not fit in memory on the machines
+        // this is for, and the old model is by definition not the one being asked for.
+        *cached = None;
+        *cached = Some((id.clone(), Arc::new(load_local(&store, &id, threads)?)));
+    }
+    let model = cached
         .as_ref()
-        .map_err(|e| Error::Other(e.clone()))?;
+        .map(|(_, model)| model.clone())
+        .expect("just loaded");
+    drop(cached);
 
-    Ok(Translator::local(
-        model.clone(),
-        settings.models.language.clone(),
-    ))
+    Ok(Translator::local(model, settings.models.language.clone()))
 }
 
 /// Find the GGUF for `id` in the blob store and load it.
@@ -658,6 +719,81 @@ mod tests {
     use super::*;
     use summo_core::segment::{Lane, Segment};
     use summo_vault::meeting::Frontmatter;
+
+    /// Write a manifest, which is what "installed" means to `ModelStore::list`.
+    #[cfg(feature = "mt-any")]
+    fn pretend_installed(paths: &Paths, id: &str, task: &str, size: u64) {
+        std::fs::create_dir_all(paths.manifests()).unwrap();
+        std::fs::write(
+            paths.manifests().join(format!("{id}.json")),
+            format!(
+                r#"{{"schema":1,"id":"{id}","name":"{id}","task":"{task}","mode":"batch",
+                    "runtime":"test","langs":["*"],"license":"MIT","size_bytes":{size},
+                    "files":[{{"name":"m.onnx","sha256":"{sha}","size":1,
+                              "url":"https://example.invalid/m"}}]}}"#,
+                sha = "a".repeat(64)
+            ),
+        )
+        .unwrap();
+    }
+
+    /// The failure this closes: SMALL100 installed, nothing configured, and the daemon accepted
+    /// "translate into English" by building a client for `ollama` — the default provider — and then
+    /// failing every line against a server that was never running.
+    #[cfg(feature = "mt-any")]
+    #[test]
+    fn an_installed_translation_model_is_used_before_an_endpoint_nobody_set_up() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        pretend_installed(&paths, "whisper-tiny", "asr", 75_000_000);
+        assert!(
+            installed_translator(&paths).is_none(),
+            "a speech model is not a translator"
+        );
+
+        pretend_installed(&paths, "small100", "translate", 610_000_000);
+        let found = installed_translator(&paths).expect("the model on disk");
+        assert!(found.is_local());
+        assert_eq!(found.model.as_deref(), Some("small100"));
+    }
+
+    /// Two of them is a tie-break, not a ranking: they are the same architecture at two sizes, and
+    /// the one that keeps up with live audio is the smaller.
+    #[cfg(feature = "mt-any")]
+    #[test]
+    fn the_smaller_translation_model_wins_when_both_are_here() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        pretend_installed(&paths, "m2m100-418m", "translate", 1_900_000_000);
+        pretend_installed(&paths, "small100", "translate", 610_000_000);
+        assert_eq!(
+            installed_translator(&paths)
+                .and_then(|mt| mt.model)
+                .as_deref(),
+            Some("small100")
+        );
+    }
+
+    /// A translator the user configured is the answer even when something else is on disk. This is
+    /// the line between "resolve what was left unsaid" and "override what was said".
+    #[cfg(feature = "mt-any")]
+    #[test]
+    fn a_configured_endpoint_is_not_overridden_by_a_model_on_disk() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        pretend_installed(&paths, "small100", "translate", 610_000_000);
+
+        let mut settings = Settings::default();
+        settings.llm.translator = Some(summo_core::settings::Translator {
+            provider: "llama-cpp".into(),
+            model: Some("milmmt-46-1b".into()),
+        });
+        // Resolving the provider is all this can check without a server to talk to; what matters is
+        // that it took the HTTP path at all rather than loading the local model.
+        let built = Translator::from_settings(&paths, &settings).expect("an endpoint client");
+        assert_eq!(built.style(), Style::Mt);
+        assert_eq!(built.model(), "milmmt-46-1b");
+    }
 
     fn doc_with(texts: &[&str]) -> MeetingDoc {
         let mut doc = MeetingDoc::new(Frontmatter::new(MeetingId::new(), "2026-08-10"), "Họp");

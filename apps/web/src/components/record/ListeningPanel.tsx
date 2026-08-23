@@ -6,6 +6,7 @@ import { CatalogueClient } from "../../lib/catalogue";
 import { useEngine } from "../../lib/engine-context";
 import { AUTO, autoAvailable, ordered, type Language } from "../../lib/languages";
 import { url } from "../../lib/library";
+import { fetchPlan } from "../../lib/plan";
 import { useLoad } from "../../lib/use-load";
 import { Select } from "../ui";
 
@@ -64,10 +65,34 @@ export function ListeningPanel({
     [handshake],
   );
 
+  // What the daemon would actually translate *with*, which the catalogue cannot answer: an
+  // installed translation model and a configured one are different facts, and the daemon resolves
+  // between them. Asked here so this panel offers translation only when it would work.
+  const plan = useLoad(
+    useCallback(async () => fetchPlan(handshake), [handshake]),
+    [handshake],
+  );
+
   const models = catalogue.data?.models ?? [];
   const speech = models.filter((m) => m.installed && m.task === "asr");
   const translators = models.filter((m) => m.installed && m.task === "translate");
   const chosen = speech.find((m) => m.id === live_model);
+
+  // The model that will do it, named. `using` is the daemon's own answer; the catalogue supplies
+  // the readable name for it.
+  const using = plan.data?.translation.using ?? null;
+  const usingName = translators.find((m) => m.id === using)?.name ?? using;
+  // An endpoint is a translator too, and one this panel cannot see in the catalogue. Offering the
+  // target languages only when a *file* is installed would have refused the one configuration that
+  // has always worked.
+  const endpoint =
+    plan.data?.translation.local === false && plan.data.translation.provider !== null;
+  // Unknown until the daemon has answered, and unknown is not "no". A panel opened while the plan
+  // is still in flight used to render the translation control greyed out under the words "no
+  // translation model is installed" — on a machine with one installed — and then quietly come
+  // right a moment later. Whoever read it in that moment had been told something false.
+  const known = plan.data !== null;
+  const canTranslate = !known || using !== null || endpoint;
 
   const spokenOptions = chosen
     ? ordered(chosen.langs, locale)
@@ -129,7 +154,7 @@ export function ListeningPanel({
             size="sm"
             aria-label={t("record.translate_live")}
             value={into}
-            disabled={translators.length === 0}
+            disabled={!canTranslate}
             onChange={(event) => {
               translate(event.target.value);
               onChanged();
@@ -152,7 +177,7 @@ export function ListeningPanel({
             <Select
               size="sm"
               aria-label={t("settings.mt_model")}
-              value={catalogue.data?.chosen?.translator ?? ""}
+              value={using ?? ""}
               onChange={(event) => {
                 void pointTranslatorAt(handshake, event.target.value).finally(onChanged);
               }}
@@ -168,7 +193,14 @@ export function ListeningPanel({
       </div>
 
       <p className="text-fg-faint text-micro mt-2.5">
-        {t("record.listening_note")} {translators.length === 0 && t("record.translate_needs_model")}{" "}
+        {t("record.listening_note")}{" "}
+        {/* Which model translates, when there is no dropdown saying so. One installed translator
+            needs no chooser, but it still has a name — and leaving it unsaid is what let the panel
+            offer translation that silently resolved to an endpoint nobody was running. */}
+        {canTranslate && translators.length < 2 && usingName
+          ? `${t("record.translate_with", { model: usingName })} `
+          : ""}
+        {!canTranslate && `${t("record.translate_needs_model")} `}
         <button
           type="button"
           onClick={() => void navigate({ to: "/models" })}

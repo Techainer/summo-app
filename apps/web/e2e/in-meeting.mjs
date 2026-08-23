@@ -64,21 +64,26 @@ for (const id of MODELS) {
   await install(id);
 }
 
-// Translation only runs when a translator is configured, and the setting is what the daemon reads
-// when it builds one. Set before recording, so the session starts with the capability and the
-// suite is testing the switch rather than the setup.
-// `/settings` to read, `/settings/llm` to write — the read side of the llm settings is part of
-// the whole settings document, and POSTing a partial one would blank the rest of it.
-const { settings } = await (await fetch(at("/settings"))).json();
-const llm = settings.llm;
-const wrote = await fetch(at("/settings/llm"), {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ ...llm, translator: { provider: "local", model: "small100" } }),
-});
-if (!wrote.ok) {
-  console.error(`could not configure the translator: ${wrote.status} ${await wrote.text()}`);
-  process.exit(1);
+// Nothing is configured here on purpose, and that is the point of this line.
+//
+// This suite used to POST `llm.translator = small100` before recording, and in doing so it tested
+// a setup no user performs: somebody who presses Install on the models screen has the model on
+// disk and an empty `llm.translator`. In that state the daemon resolved translation to the default
+// `ollama` provider, accepted "translate into English", reported success and then failed every
+// line against a server that was never running — with the suite green throughout, because the
+// suite had written the setting the user never writes.
+//
+// So the plan is *asked* instead, and it has to name the model already. `using` is the daemon
+// answering "what would actually do this", which is a different question from "what does the
+// settings file say" — see `translator_here` in `server.rs`.
+{
+  const plan = await (await fetch(at("/settings/plan"))).json();
+  if (plan.translation.using !== "small100") {
+    console.error(
+      "installing SMALL100 is not enough to translate with it: " + JSON.stringify(plan.translation),
+    );
+    process.exit(1);
+  }
 }
 
 // Pinned, so the swap below is a genuine change. Without it the ranking may already have chosen
@@ -136,7 +141,26 @@ await page
     problems.push("the controls are not inside the recording bar — they are back in the chrome");
   }
   await changers.first().click();
-  await page.getByTestId("listening-panel").waitFor({ timeout: 5000 });
+  const panel = page.getByTestId("listening-panel");
+  await panel.waitFor({ timeout: 5000 });
+
+  // The panel names the translator. With one installed there is no dropdown to say so, and saying
+  // nothing is what let it offer a translation that resolved to an endpoint nobody was running.
+  //
+  // Polled, because the panel asks the daemon two questions when it opens and the answer here needs
+  // both — the plan for *which* model, the catalogue for its name. Case-insensitively: what appears
+  // is the catalogue's name, `SMALL100 · translation, 100 languages`, not the id.
+  let note = "";
+  for (let i = 0; i < 20 && !note.includes("small100"); i++) {
+    note = (await panel.innerText()).toLowerCase();
+    if (!note.includes("small100")) await page.waitForTimeout(250);
+  }
+  if (!note.includes("small100")) {
+    problems.push(`the panel does not say what will translate: ${JSON.stringify(note)}`);
+  }
+  if (await page.getByLabel("Dịch trực tiếp").isDisabled()) {
+    problems.push("translation is offered as unavailable with SMALL100 installed");
+  }
   await page.screenshot({ path: "/tmp/shots/in-meeting-panel.png" });
 }
 

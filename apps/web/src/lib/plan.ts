@@ -53,6 +53,15 @@ export interface Plan {
     provider: string | null;
     model: string | null;
     installed: boolean;
+    /**
+     * The model that would actually do the work, which is not always `model`.
+     *
+     * With nothing configured the daemon uses the translation model on disk, so `model: null` next
+     * to a translator that works is a normal state — and reading `model` as the answer is how the
+     * meeting panel offered a translation that resolved to an Ollama endpoint nobody was running.
+     * `null` here means the request would go to the general language model, or nowhere.
+     */
+    using: string | null;
   };
   language_model: { provider: string; model: string | null };
 }

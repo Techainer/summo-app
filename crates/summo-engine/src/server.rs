@@ -3008,6 +3008,14 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
                 .as_ref()
                 .and_then(|t| t.model.as_deref())
                 .is_some_and(|id| installed.iter().any(|m| m.id.as_str() == id)),
+            // Which model would actually do the work, which is not always the one named above.
+            //
+            // With nothing configured the daemon uses the translation model on disk — see
+            // `Translator::from_settings` — and `model: null` beside a working translator is the
+            // same class of lie the speech row was fixed for last release: an interface reporting
+            // its settings file rather than its behaviour. `null` here means the request would go
+            // to the general language model, or nowhere.
+            "using": translator_here(&settings, state.engine.paths(), &installed),
         },
         // Summaries and answers: usually somebody else's server, which is the one part of this that
         // can leave the machine — so it is named rather than implied.
@@ -3016,6 +3024,39 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
             "model": settings.llm.model,
         },
     }))
+}
+
+/// The translation model that would run on this machine, or `None` for "not a local model".
+///
+/// The same three-way question `Translator::from_settings` answers, asked without loading six
+/// hundred megabytes to find out: the configured local model, else whichever translation model is
+/// installed, else nothing — the request would go to a language model over HTTP, which this cannot
+/// name a *file* for and should not pretend to.
+///
+/// Separate from the settings fields beside it because they answer "what did the user write" and
+/// this answers "what will happen", and the two disagree in the case that matters: SMALL100 on disk
+/// with nothing configured, which is what somebody who pressed Install has.
+#[cfg(feature = "models")]
+fn translator_here(
+    settings: &summo_core::Settings,
+    paths: &summo_core::paths::Paths,
+    installed: &[summo_models::Manifest],
+) -> Option<String> {
+    match &settings.llm.translator {
+        Some(mt) if mt.is_local() => mt
+            .model
+            .clone()
+            .filter(|id| installed.iter().any(|m| m.id.as_str() == id)),
+        // An endpoint was chosen on purpose; nothing on disk overrides it.
+        Some(_) => None,
+        #[cfg(feature = "mt-any")]
+        None => crate::translate::installed_translator(paths).and_then(|mt| mt.model),
+        #[cfg(not(feature = "mt-any"))]
+        None => {
+            let _ = paths;
+            None
+        }
+    }
 }
 
 /// Without recognition compiled in there is no speech model to report.
@@ -3033,6 +3074,7 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
             "model": settings.llm.translator.as_ref().and_then(|t| t.model.clone()),
             // No store to ask, and nothing here could run a local model anyway.
             "installed": false,
+            "using": null,
         },
         "language_model": { "provider": settings.llm.provider, "model": settings.llm.model },
     }))
@@ -4490,6 +4532,10 @@ async fn set_live_translation(
 
     match built {
         Ok(Ok(translator)) => {
+            // Named, because which model is doing this is not always the one in the settings file
+            // and the difference is the whole of the bug above: an unconfigured translator used to
+            // resolve to the default `ollama` endpoint and report plain success.
+            let by = translator.model().to_string();
             active.live = Some(crate::live::LiveTranslator::new(
                 translator,
                 crate::live::LiveConfig {
@@ -4499,7 +4545,9 @@ async fn set_live_translation(
             ));
             active.spec.translate_to = Some(wanted.clone());
             engine.retuned(&active.spec);
-            vec![Event::info(format!("now translating into {wanted}"))]
+            vec![Event::info(format!(
+                "now translating into {wanted} with {by}"
+            ))]
         }
         Ok(Err(e)) => vec![change_refused(&e)],
         // The blocking thread panicked or was cancelled. Reported rather than swallowed: silence
