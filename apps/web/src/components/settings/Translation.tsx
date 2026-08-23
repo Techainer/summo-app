@@ -9,7 +9,8 @@ import { cn } from "../../lib/cn";
 import { useEngine } from "../../lib/engine-context";
 import { useErrorText } from "../../lib/errors";
 import { OnboardingClient, POLL_MS, isFinished, type Install } from "../../lib/onboarding";
-import { useRefresh } from "../../lib/use-load";
+import { fetchPlan } from "../../lib/plan";
+import { useLoad, useRefresh } from "../../lib/use-load";
 import { LOCAL, type LlmSettings } from "./llm";
 
 /**
@@ -22,7 +23,22 @@ import { LOCAL, type LlmSettings } from "./llm";
  */
 export function Translation({ settings }: { settings: LlmSettings }) {
   const t = useT();
+  const { handshake } = useEngine();
   const { llm, edit, save } = settings;
+
+  // What the daemon would translate with, which is not always what this section says.
+  //
+  // With nothing configured it uses the translation model on disk rather than the summary model —
+  // otherwise pressing Install on the models screen bought a model the app then declined to use,
+  // and asking for subtitles resolved to the default `ollama` endpoint and failed every line. That
+  // resolution has to be visible here, or this checkbox describes a decision the daemon is not
+  // making.
+  const plan = useLoad(
+    useCallback(async () => fetchPlan(handshake), [handshake]),
+    [handshake],
+  );
+  const using = plan.data?.translation.using ?? null;
+
   if (!llm) return null;
 
   return (
@@ -45,6 +61,14 @@ export function Translation({ settings }: { settings: LlmSettings }) {
       >
         {t("settings.mt_enable")}
       </Checkbox>
+
+      {/* Unchecked, with a translation model on disk. The box says "use a separate model" and the
+          daemon is using one anyway, because the alternative — sending subtitles to a summary
+          endpoint that is usually not running — is the failure this replaced. Said out loud rather
+          than left as a discrepancy somebody discovers during a meeting. */}
+      {llm.translator == null && using && (
+        <p className={cn(HINT, "text-done")}>{t("record.translate_with", { model: using })}</p>
+      )}
 
       {llm.translator != null && (
         <>
