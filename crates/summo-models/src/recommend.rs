@@ -181,7 +181,23 @@ pub fn recommend(candidates: &[Manifest], hw: &HwProfile, language: &str) -> Rec
 /// sense. Two answers to that question would eventually disagree.
 #[must_use]
 pub fn covers_language(manifest: &Manifest, language: &str) -> bool {
-    manifest.langs.iter().any(|l| {
+    langs_cover(&manifest.langs, language)
+}
+
+/// The same question asked of a bare list of codes.
+///
+/// The comment above turned out to be a prediction rather than a warning: the refine router held
+/// the second answer, and it was wrong. It kept `Vec<String>` rather than a `Manifest` — the langs
+/// of an installed model, or an empty list when the manifest could not be read — so it could not
+/// call [`covers_language`], and reimplemented the comparison as `claims.contains(&language)`.
+///
+/// That drops the star. `whisper-tiny` and `whisper-base` both publish `langs: ["*"]`, and a star
+/// equals no language code, so a Whisper chosen as the second opinion refined nothing at all and
+/// said so only at `debug`. Splitting the predicate out is what makes the promise above true: there
+/// is one comparison, and holding a list instead of a manifest no longer costs you a copy of it.
+#[must_use]
+pub fn langs_cover(langs: &[String], language: &str) -> bool {
+    langs.iter().any(|l| {
         l == "*" || l.eq_ignore_ascii_case(language)
             // `en-US` should match a manifest that says `en`.
             || language.split('-').next().is_some_and(|base| l.eq_ignore_ascii_case(base))
