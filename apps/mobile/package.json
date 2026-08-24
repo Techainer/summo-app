@@ -1,7 +1,7 @@
 {
   "name": "@summo/mobile",
   "private": true,
-  "version": "0.5.5",
+  "version": "0.6.0",
   "scripts": {
     "android": "tauri android dev",
     "ios": "tauri ios dev",
