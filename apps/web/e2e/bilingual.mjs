@@ -160,8 +160,22 @@ await firstLine.waitFor({ timeout: 120000 }).catch((error) => {
     console.log("--- daemon log ---\n" + engine.log().slice(-3000));
     problems.push("the second model never revised anything — the refine pass did not run");
   } else {
-    const line = await firstLine.innerText().catch(() => "");
-    console.log(`refined, transcript reads: ${JSON.stringify(line.slice(0, 60))}`);
+    // And the revision reaches the screen, which the log cannot say. `Event::Revise` travels the
+    // same socket as everything else and the reducer only accepts it over a `final`
+    // (`accepts` in `protocol.ts`); a rule that said otherwise would drop every revision silently,
+    // with the daemon still logging that it had made one.
+    const revised = page.locator('[data-testid="transcript-line"][data-source="revised"]');
+    const shown = await revised
+      .first()
+      .waitFor({ timeout: 30000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!shown) {
+      problems.push("the daemon revised a line and the transcript still shows the first version");
+    } else {
+      const line = await revised.first().innerText().catch(() => "");
+      console.log(`refined and on screen: ${JSON.stringify(line.slice(0, 60))}`);
+    }
   }
 
   const during = await status();
