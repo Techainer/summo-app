@@ -4793,9 +4793,17 @@ async fn set_live_translation(
             active.live = Some(live);
             active.spec.translate_into = wanted;
             engine.retuned(&active.spec);
-            vec![Event::info(format!(
-                "now translating into {named} with {by}"
-            ))]
+            // How many earlier lines are being filled in, so a long meeting does not look stalled
+            // while the backlog drains behind current speech.
+            if waiting > 0 {
+                vec![Event::info(format!(
+                    "now translating into {named} with {by}, and filling in {waiting} earlier lines"
+                ))]
+            } else {
+                vec![Event::info(format!(
+                    "now translating into {named} with {by}"
+                ))]
+            }
         }
         Ok(Err(e)) => vec![change_refused(&e)],
         // The blocking thread panicked or was cancelled. Reported rather than swallowed: silence
