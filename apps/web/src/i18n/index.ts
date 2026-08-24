@@ -76,6 +76,30 @@ const FILES: Record<string, () => Promise<{ default: unknown }>> = {
   zh: () => import("./zh.json"),
 };
 
+/**
+ * The other half of each catalogue: the copy only a lazy screen can show.
+ *
+ * Splitting the *screens* out of the entry chunk left the *words* whole, and the words had quietly
+ * become the larger half — 14 kB gzipped per locale, of which the settings form, the in-app manual,
+ * the agent roster and the analytics labels are six. All of it downloaded before the first pixel,
+ * for screens most sessions never open. `budget.mjs` has named this as the next structural fix for
+ * three releases; this is it.
+ *
+ * The division is not a judgement call. `split.test.ts` walks the statically-imported module graph
+ * from `main.tsx` and asserts every namespace it can reach lives in the eager file — so importing a
+ * settings string into the shell fails a test rather than flashing a key name on somebody's screen.
+ *
+ * Fetched two ways, both of which normally beat the user to it: `warmScreens()` asks for it on idle
+ * alongside the screen chunks, and every lazy screen awaits it before rendering. A screen's own
+ * chunk is larger than this file and requested no earlier, so the wait it adds is none.
+ */
+const MORE: Record<string, () => Promise<{ default: unknown }>> = {
+  vi: () => import("./vi.more.json"),
+  en: () => import("./en.more.json"),
+  ja: () => import("./ja.more.json"),
+  zh: () => import("./zh.more.json"),
+};
+
 /** The tags {@link FILES} can serve, for code that only needs to know what exists. */
 export const BUILT_IN_CODES: string[] = Object.keys(FILES);
 
@@ -85,18 +109,19 @@ const loaded = new Map<string, Catalog>();
 /** Loads in flight, so two components asking at once cause one fetch rather than two. */
 const inflight = new Map<string, Promise<void>>();
 
-function fetchCatalog(code: string): Promise<void> {
-  if (loaded.has(code)) return Promise.resolve();
-  const running = inflight.get(code);
+function fetchCatalog(code: string, from = FILES, half = ""): Promise<void> {
+  const slot = code + half;
+  if (loaded.has(slot)) return Promise.resolve();
+  const running = inflight.get(slot);
   if (running) return running;
 
-  const file = FILES[code];
+  const file = from[code];
   if (!file) return Promise.resolve();
 
   const task = file()
     .then(
       (module) => {
-        loaded.set(code, flatten(module.default));
+        loaded.set(slot, flatten(module.default));
       },
       () => {
         // A chunk that will not load must not leave the app blank forever. Nothing is cached, so a
@@ -104,11 +129,14 @@ function fetchCatalog(code: string): Promise<void> {
         // the screen renders key names, which is the same thing a missing key has always done.
       },
     )
-    .finally(() => inflight.delete(code));
+    .finally(() => inflight.delete(slot));
 
-  inflight.set(code, task);
+  inflight.set(slot, task);
   return task;
 }
+
+/** The key under which a locale's lazy half is cached. Never a locale tag, so the two cannot collide. */
+const MORE_SLOT = "+more";
 
 /**
  * Which shipped catalogs {@link catalogFor} will layer for this locale.
@@ -136,7 +164,31 @@ export function ready(locale: string): boolean {
 
 /** Fetch whatever this locale needs. Resolves even when a chunk fails — see {@link fetchCatalog}. */
 export function ensure(locale: string): Promise<void> {
-  return Promise.all(layersOf(locale).map(fetchCatalog)).then(() => undefined);
+  remembered = locale;
+  return Promise.all(layersOf(locale).map((code) => fetchCatalog(code))).then(() => undefined);
+}
+
+/**
+ * The locale {@link ensure} was last asked for.
+ *
+ * So that {@link ensureMore} can be called from the router, which is outside React and has no
+ * context to read. Kept here rather than passed down because there is exactly one active locale in
+ * a running app, and threading it through `lazyRouteComponent` would mean the router importing the
+ * provider.
+ */
+let remembered = DEFAULT;
+
+/**
+ * Fetch the half of the catalogue that only lazy screens can show.
+ *
+ * Safe to call repeatedly and from anywhere: the second call gets the promise the first one made.
+ * Resolves even on failure, for the same reason {@link ensure} does — a screen rendering key names
+ * is visibly wrong, a screen that never renders is a hang.
+ */
+export function ensureMore(locale: string = remembered): Promise<void> {
+  return Promise.all(layersOf(locale).map((code) => fetchCatalog(code, MORE, MORE_SLOT))).then(
+    () => undefined,
+  );
 }
 
 /// `zh` is Simplified Chinese, and is deliberately the bare tag rather than `zh-Hans`: a browser
@@ -310,7 +362,13 @@ export function detectLocale(available: string[], saved?: string | null): string
  * for their own language should be able to change it without asking.
  */
 export function catalogFor(locale: string, extra?: Catalog): Catalog {
-  const layers: Catalog[] = layersOf(locale).map((code) => loaded.get(code) ?? {});
+  // Eager half first, then the lazy one when it has arrived. Both under the locale, so a user file
+  // still wins over either — and so a screen opened before the lazy half lands renders key names
+  // rather than nothing, which is the behaviour a missing key has always had.
+  const layers: Catalog[] = layersOf(locale).flatMap((code) => [
+    loaded.get(code) ?? {},
+    loaded.get(code + MORE_SLOT) ?? {},
+  ]);
   if (extra) layers.push(extra);
   return mergeCatalogs(...layers);
 }

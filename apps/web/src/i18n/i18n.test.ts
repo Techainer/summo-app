@@ -16,10 +16,21 @@ import {
   ready,
   translator,
 } from ".";
-import enJson from "./en.json";
-import jaJson from "./ja.json";
-import viJson from "./vi.json";
-import zhJson from "./zh.json";
+import enCore from "./en.json";
+import enMore from "./en.more.json";
+import jaCore from "./ja.json";
+import jaMore from "./ja.more.json";
+import viCore from "./vi.json";
+import viMore from "./vi.more.json";
+import zhCore from "./zh.json";
+import zhMore from "./zh.more.json";
+
+// Each language is one catalogue in two files — eager and lazy, see `split.test.ts`. Every
+// assertion below is about coverage, and a key is covered wherever it lives.
+const enJson = { ...enCore, ...enMore };
+const jaJson = { ...jaCore, ...jaMore };
+const viJson = { ...viCore, ...viMore };
+const zhJson = { ...zhCore, ...zhMore };
 
 /**
  * The catalogues, read from disk rather than through the loader.

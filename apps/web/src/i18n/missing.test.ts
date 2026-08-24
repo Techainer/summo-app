@@ -2,7 +2,15 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import vi from "./vi.json";
+import viCore from "./vi.json";
+import viMore from "./vi.more.json";
+
+/**
+ * The catalogue is two files — the eager half and the half only lazy screens can show — and every
+ * question in this directory is about the union of them. Which half a key lives in is
+ * `split.test.ts`'s business and nobody else's.
+ */
+const vi = { ...viCore, ...viMore };
 
 /**
  * Every key the source asks for is in the catalogue.

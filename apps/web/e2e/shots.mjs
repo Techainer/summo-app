@@ -209,6 +209,29 @@ for (const scheme of ["light", "dark"]) {
         problems.push(`${scheme}/${width}/${name}: page scrolls sideways by ${overflow}px`);
       }
 
+      // A key name where a sentence should be.
+      //
+      // `t()` falls back to the key it was given, so an untranslated string is not an error or a
+      // blank — it is the literal text `settings.mt_where` sitting in a form. Two tests already
+      // guard the catalogue's *contents*; this guards its *delivery*, which became a separate thing
+      // the moment the catalogue was split into an eager half and a lazy one. A namespace filed in
+      // the wrong half renders exactly this, on exactly these screens, and only on a cold load.
+      const keyNames = await page.evaluate(() => {
+        const shape = /^[a-z][a-z_]*\.[a-z_][a-z_0-9]*$/;
+        const found = new Set();
+        for (const element of document.querySelectorAll("body *")) {
+          for (const node of element.childNodes) {
+            if (node.nodeType !== Node.TEXT_NODE) continue;
+            const text = (node.textContent ?? "").trim();
+            if (shape.test(text)) found.add(text);
+          }
+        }
+        return [...found];
+      });
+      for (const key of keyNames) {
+        problems.push(`${scheme}/${width}/${name}: untranslated key on screen — ${key}`);
+      }
+
       for (const run of await textColours(page)) {
         // WCAG AA: 4.5 for body text, 3.0 for large text (18.66px bold, or 24px).
         const large = run.size >= 24 || (run.size >= 18.66 && run.weight >= 700);

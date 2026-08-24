@@ -8,6 +8,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 
+import { ensureMore } from "./i18n";
 import { claimHandshake } from "./lib/session";
 import { isSection } from "./lib/settings";
 import { RootLayout } from "./components/shell/RootLayout";
@@ -32,20 +33,34 @@ import { HomeScreen } from "./screens/HomeScreen";
  * screen is on the glass instead of before it.
  */
 const screens = {
-  record: () => import("./screens/RecordScreen"),
-  library: () => import("./screens/LibraryScreen"),
-  page: () => import("./screens/PageScreen"),
-  notes: () => import("./screens/NotesScreen"),
-  agenda: () => import("./screens/AgendaScreen"),
-  chat: () => import("./screens/ChatScreen"),
-  agents: () => import("./screens/AgentsScreen"),
-  tasks: () => import("./screens/TasksScreen"),
-  people: () => import("./screens/PeopleScreen"),
-  analytics: () => import("./screens/AnalyticsScreen"),
-  models: () => import("./screens/ModelsScreen"),
-  settings: () => import("./screens/SettingsScreen"),
-  help: () => import("./screens/HelpScreen"),
+  record: () => withWords(import("./screens/RecordScreen")),
+  library: () => withWords(import("./screens/LibraryScreen")),
+  page: () => withWords(import("./screens/PageScreen")),
+  notes: () => withWords(import("./screens/NotesScreen")),
+  agenda: () => withWords(import("./screens/AgendaScreen")),
+  chat: () => withWords(import("./screens/ChatScreen")),
+  agents: () => withWords(import("./screens/AgentsScreen")),
+  tasks: () => withWords(import("./screens/TasksScreen")),
+  people: () => withWords(import("./screens/PeopleScreen")),
+  analytics: () => withWords(import("./screens/AnalyticsScreen")),
+  models: () => withWords(import("./screens/ModelsScreen")),
+  settings: () => withWords(import("./screens/SettingsScreen")),
+  help: () => withWords(import("./screens/HelpScreen")),
 };
+
+/**
+ * A screen's code and the words it needs, together.
+ *
+ * The lazy half of the locale catalogue is fetched on idle beside these chunks and almost always
+ * wins the race — it is smaller and asked for at the same moment. Almost always is not a guarantee,
+ * and the failure it leaves is a settings form briefly labelled `settings.mt_where`. Awaiting both
+ * costs nothing when the words are already here, which is the ordinary case, and removes the race
+ * when they are not.
+ */
+async function withWords<T>(chunk: Promise<T>): Promise<T> {
+  const [screen] = await Promise.all([chunk, ensureMore()]);
+  return screen;
+}
 
 /**
  * Fetch every screen's chunk, for when the browser has nothing better to do.
@@ -58,6 +73,7 @@ const screens = {
  * user has not asked for.
  */
 export function warmScreens() {
+  void ensureMore();
   for (const fetch of Object.values(screens)) void fetch().catch(() => undefined);
 }
 

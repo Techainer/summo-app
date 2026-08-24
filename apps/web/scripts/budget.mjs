@@ -54,12 +54,17 @@ import { basename, join } from "node:path";
  * than a brake on the bundle, which is not what it is for. Eight kB restores the headroom the
  * comment above already argues for.
  *
- * The structural fix, when this is next hit: the locale catalogue is loaded whole before the first
- * screen, and most of it is text for screens the reader has not opened. Splitting it the way the
- * screens were split is worth about as much again — and is a change to make deliberately, not
- * under deadline with a sentence to shave.
+ * 200 against a measured 194.7. The structural fix this comment kept prescribing is done: the
+ * locale catalogue is two files per language, and the second one holds the copy only a lazy screen
+ * can show — the settings form, the in-app manual, the agent roster, the analytics labels. It is
+ * fetched on idle beside the screen chunks and awaited by every lazy route, so nothing waits on it
+ * and no screen can render a key name because of it. Worth 5.5 kB, and it changes the slope again:
+ * a paragraph written for the settings screen no longer costs the first load anything at all.
+ *
+ * `src/i18n/split.test.ts` is what keeps it true — it walks the statically-imported graph from
+ * `main.tsx` and fails if the shell can reach a string from the lazy half.
  */
-const BUDGET = 208;
+const BUDGET = 200;
 
 const dist = join(import.meta.dirname, "..", "dist");
 const html = readFileSync(join(dist, "index.html"), "utf8");
