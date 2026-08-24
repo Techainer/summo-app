@@ -50,6 +50,13 @@ export interface EngineValue {
   /** Change the live translation targets mid-meeting; the empty list turns it off. */
   translate: (into: string[]) => void;
   /**
+   * Change the second speech model mid-meeting; the empty id turns it off.
+   *
+   * The one that re-decodes finished utterances in the language it is good at. Live, because which
+   * languages a call turns out to be in is something you find out during it.
+   */
+  refine: (id: string) => void;
+  /**
    * Save what the user has typed into the meeting that is running.
    *
    * On the context rather than reached through the session object, because the editor that calls

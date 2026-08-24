@@ -88,6 +88,7 @@ export function SessionControls({
         live_model?: string;
         language?: string;
         translate_into?: string[];
+        refine_model?: string;
       };
     }, [handshake]),
     [handshake, session.recording, generation],
@@ -171,6 +172,7 @@ export function SessionControls({
             live_model={recording?.live_model}
             spoken={spoken}
             into={into}
+            refine={recording?.refine_model ?? ""}
             languages={languages}
             onChanged={settle}
           />

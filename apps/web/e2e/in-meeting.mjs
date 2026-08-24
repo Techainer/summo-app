@@ -202,6 +202,27 @@ async function settled(what, check) {
   }
 }
 
+// ---- the second speech model, mid-meeting --------------------------------
+//
+// It shipped with no live control at all: choosable on the models screen and nowhere else, so the
+// one decision somebody makes *because of what they are hearing* — this call turned out to be half
+// in English — could only be made before the call began. Recognition gets what translation got.
+{
+  const before = await status();
+  await page.getByLabel("Mô hình phụ").selectOption("gipformer-65m");
+  const on = await settled("second model on", (s) => s.refine_model === "gipformer-65m");
+  console.log(
+    `second model: ${before.refine_model ?? "(none)"} → ${on.refine_model}, still ${on.state}`,
+  );
+  if (on.state !== "recording") problems.push("the meeting ended when the second model was chosen");
+
+  await page.getByLabel("Mô hình phụ").selectOption("");
+  const off = await settled("second model off", (s) => s.refine_model === undefined);
+  console.log(`second model off: ${JSON.stringify(off.refine_model)}, still ${off.state}`);
+  if (off.state !== "recording")
+    problems.push("the meeting ended when the second model was cleared");
+}
+
 // ---- a language the *model* supports, not one the ranking would pick ------
 //
 // The bug this pins down: the list used to come from "what would serve this language", which ranks

@@ -159,7 +159,8 @@
     "served_by_none": "この言語に対応するモデルはまだ入っていません。",
     "better_available": "{language} は {model} のほうが正確です（{better}% 対 {current}%）。{size} のダウンロードが必要です。",
     "install_and_use": "インストールして使う",
-    "keep_current": "このままにする"
+    "keep_current": "このままにする",
+    "mt_second": "二つ目のモデル"
   },
   "about": {
     "title": "Summoについて",

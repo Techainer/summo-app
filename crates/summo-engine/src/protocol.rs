@@ -75,6 +75,20 @@ pub enum Command {
         )]
         into: Vec<String>,
     },
+    /// Change the second model — the one that re-decodes finished utterances — mid-meeting.
+    ///
+    /// Its own command rather than a field on [`Command::ModelSwap`] for the reason `Translate` is
+    /// its own: loading a decoder blocks, and this one is handled on the socket task where it can
+    /// be awaited. Folding it into `ModelSwap` would mean the arm that rebuilds the whole pipeline
+    /// synchronously also had to load a second model without blocking, which is two jobs.
+    ///
+    /// An empty id turns refinement off. That direction matters as much as the other: somebody who
+    /// turned it on for a bilingual call and then joined a monolingual one is paying for a second
+    /// decode on every Vietnamese sentence for no benefit.
+    RefineSwap {
+        #[serde(default)]
+        id: String,
+    },
     /// Keepalive. Some proxies drop an idle WebSocket, and a dropped socket mid-meeting is data loss.
     Ping,
 }

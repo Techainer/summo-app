@@ -4539,14 +4539,17 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
                 // a fraction of the size. Translation is the case where the load is unavoidable and
                 // large, so it goes to a blocking thread and this task stays free to serve the
                 // socket.
-                match parse_translate(&text) {
-                    Some(into) => set_live_translation(&engine, session.as_mut(), into).await,
-                    None => {
-                        let (events, next) =
-                            handle_command_with_models(&text, &engine, session.take());
-                        session = next;
-                        events
-                    }
+                match parse_refine(&text) {
+                    Some(id) => set_refine_model(&engine, session.as_mut(), &id).await,
+                    None => match parse_translate(&text) {
+                        Some(into) => set_live_translation(&engine, session.as_mut(), into).await,
+                        None => {
+                            let (events, next) =
+                                handle_command_with_models(&text, &engine, session.take());
+                            session = next;
+                            events
+                        }
+                    },
                 }
             }
             #[cfg(not(feature = "models"))]
@@ -4610,6 +4613,87 @@ fn parse_translate(text: &str) -> Option<Vec<String>> {
     match serde_json::from_str::<Command>(text) {
         Ok(Command::Translate { into }) => Some(into),
         _ => None,
+    }
+}
+
+/// `Some(id)` when this message asks for a different second model, so the socket can take it.
+#[cfg(feature = "models")]
+fn parse_refine(text: &str) -> Option<String> {
+    match serde_json::from_str::<Command>(text) {
+        Ok(Command::RefineSwap { id }) => Some(id),
+        _ => None,
+    }
+}
+
+/// Change the model that re-decodes finished utterances, without ending the meeting.
+///
+/// The same shape as [`set_live_translation`] and for the same reason: loading a decoder is
+/// hundreds of megabytes of ONNX initialisation, and doing it on this task stops the socket being
+/// read while the browser goes on sending an audio frame every 100 ms — which breaks the connection
+/// and ends the recording. `spawn_blocking` puts the load somewhere allowed to block.
+///
+/// The new refiner is built before the old one is dropped, so a model that will not load leaves the
+/// meeting refining with the previous one rather than with nothing.
+#[cfg(feature = "models")]
+async fn set_refine_model(
+    engine: &EngineState,
+    session: Option<&mut ActiveSession>,
+    id: &str,
+) -> Vec<Event> {
+    let Some(active) = session else {
+        return vec![Event::error(&summo_core::Error::Config(
+            "no recording to change; choose the second model on the models screen instead".into(),
+        ))];
+    };
+
+    let wanted = id.trim().to_string();
+    if wanted.is_empty() {
+        active.refiner = None;
+        active.spec.refine_model = None;
+        engine.retuned(&active.spec);
+        return vec![Event::info("second model off".to_string())];
+    }
+
+    // The pair `SessionSpec::validate` refuses. Refused here rather than silently ignored, because
+    // unlike the settings path this is somebody choosing it in front of the meeting.
+    if wanted == active.spec.live_model {
+        return vec![change_refused(&summo_core::Error::Config(format!(
+            "`{wanted}` is already the model doing the listening"
+        )))];
+    }
+
+    let paths = engine.paths().clone();
+    let store = engine.store();
+    let threads = engine.hardware().recommended_threads();
+    let language = active.spec.language.clone();
+    let named = wanted.clone();
+    let built = tokio::task::spawn_blocking(move || {
+        let _ = &paths;
+        let claims = summo_core::ModelId::parse(&named)
+            .ok()
+            .and_then(|parsed| store.installed(&parsed).ok())
+            .map(|manifest| manifest.langs.clone())
+            .unwrap_or_default();
+        crate::runner::load_decoder(&named, language.as_deref(), &store, threads)
+            .map(|decoder| (decoder, claims))
+    })
+    .await;
+
+    match built {
+        Ok(Ok((decoder, claims))) => {
+            active.refiner = Some(crate::refine::Refiner::new(
+                decoder,
+                claims,
+                summo_asr::HallucinationFilter::default(),
+            ));
+            active.spec.refine_model = Some(wanted.clone());
+            engine.retuned(&active.spec);
+            vec![Event::info(format!("now checking the text with {wanted}"))]
+        }
+        Ok(Err(e)) => vec![change_refused(&e)],
+        Err(e) => vec![change_refused(&summo_core::Error::Other(format!(
+            "the second model could not be loaded: {e}"
+        )))],
     }
 }
 
@@ -4746,6 +4830,12 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
                 code: None,
             }]
         }
+        // A build with no recognition has no pipeline to give a second opinion on.
+        Command::RefineSwap { .. } => vec![Event::Error {
+            message: "this build cannot recognise speech, so it has no second model".into(),
+            transient: false,
+            code: None,
+        }],
         Command::ModelLoad { id } | Command::ModelSwap { id, .. } => vec![Event::Error {
             message: format!(
                 "cannot load `{id}`: this binary was built without recognition support. \
@@ -5020,6 +5110,13 @@ fn handle_command_with_models(
         Command::Translate { .. } => (
             vec![Event::error(&summo_core::Error::Other(
                 "translation is applied on the socket task, not here".into(),
+            ))],
+            session,
+        ),
+        // Same arrangement, same reason: loading a decoder here would stop the socket being read.
+        Command::RefineSwap { .. } => (
+            vec![Event::error(&summo_core::Error::Other(
+                "the second model is applied on the socket task, not here".into(),
             ))],
             session,
         ),
