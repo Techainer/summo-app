@@ -90,7 +90,7 @@ export function LiveBar() {
           only way to change the model, the language or the translation for the rest of the
           recording. `ListeningIn` yields to this one on this page, so there is exactly one. */}
       <div className="border-rec/20 mt-2.5 border-t pt-2">
-        <SessionControls quiet />
+        <SessionControls quiet expanded />
       </div>
     </m.div>
   );

@@ -80,7 +80,7 @@
     "translating_into": "{language} に翻訳中",
     "translate_off": "オフ",
     "translate_needs_model": "翻訳モデルがまだインストールされていません。",
-    "translate_all_off": "オフ — すべての言語",
+    "translate_add": "言語を追加",
     "translate_drop": "{language} への翻訳をやめる",
     "translate_with": "翻訳は {model} が行います。",
     "manage_models": "モデルを管理"

@@ -44,13 +44,24 @@ export function SessionControls({
   extras,
   /** Set on the meeting page, where the bar around this is already the recording's own. */
   quiet = false,
+  expanded = false,
 }: {
   extras?: ReactNode;
   quiet?: boolean;
+  /**
+   * Start with the controls on screen rather than behind the link.
+   *
+   * True on the meeting page, which is the screen somebody is *on* while the call runs — the model,
+   * the spoken language and the translation target are the whole reason to be looking at it, and
+   * putting them one unlabelled click away meant a person hunting for them mid-call and reporting
+   * that they had been removed. False in the banner the shell draws on every other screen, where
+   * the same three dropdowns across the top of an unrelated page would be noise.
+   */
+  expanded?: boolean;
 }) {
   const { handshake, session } = useEngine();
   const { t, locale } = useI18n();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(expanded);
   // Bumped after a change, to re-read what the daemon now says rather than what the panel asked
   // for — the two differ when a swap fails and the old pipeline keeps running.
   const [generation, setGeneration] = useState(0);

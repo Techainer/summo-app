@@ -134,15 +134,27 @@ await page
 
 // ---- the controls are in the meeting, and there is one of them ------------
 {
-  const changers = page.getByRole("button", { name: "Đổi", exact: true });
-  const count = await changers.count();
-  if (count !== 1) problems.push(`expected one "Đổi" on the meeting page, found ${count}`);
-  if ((await page.getByTestId("live-bar").getByRole("button", { name: "Đổi" }).count()) !== 1) {
+  // Open already, without anybody pressing anything.
+  //
+  // They used to be behind a small "Đổi" link, and the report that made this an assertion was a
+  // person on a live call saying the place to change the model, the language and the translation
+  // had been removed. It had not; it was one unlabelled click away on the screen whose entire
+  // purpose is running the meeting.
+  const panel = page.getByTestId("listening-panel");
+  await panel.waitFor({ timeout: 10000 });
+  if ((await page.getByTestId("live-bar").getByTestId("listening-panel").count()) !== 1) {
     problems.push("the controls are not inside the recording bar — they are back in the chrome");
   }
-  await changers.first().click();
-  const panel = page.getByTestId("listening-panel");
-  await panel.waitFor({ timeout: 5000 });
+  for (const control of ["Mô hình", "Ngôn ngữ nói", "Dịch trực tiếp"]) {
+    if ((await panel.getByLabel(control, { exact: true }).count()) !== 1) {
+      problems.push(`the live controls do not offer ${control}`);
+    }
+  }
+  // And they can still be put away, by the same control that used to be the only way in.
+  const toggle = page.getByTestId("live-bar").getByRole("button", { name: "Xong", exact: true });
+  if ((await toggle.count()) !== 1) {
+    problems.push("the controls cannot be collapsed again");
+  }
 
   // The panel names the translator. With one installed there is no dropdown to say so, and saying
   // nothing is what let it offer a translation that resolved to an endpoint nobody was running.
@@ -281,7 +293,10 @@ async function settled(what, check) {
   // dropdown made that a choice about whose language mattered.
   {
     const before = await page.getByTestId("transcript-translation").count();
-    await page.getByLabel("Dịch trực tiếp").selectOption("ja");
+    // Through the `+`, not the main dropdown. The main one *is* the answer — choosing a language
+    // there replaces what is being translated into, which is what somebody with one subtitle
+    // expects and what the previous design got wrong by leaving the box permanently on "Tắt".
+    await page.getByLabel("Thêm một ngôn ngữ nữa").selectOption("ja");
     const both = await settled("second target", (s) => {
       const into = s.translate_into ?? [];
       return into.includes("en") && into.includes("ja");
