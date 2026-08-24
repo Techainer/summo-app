@@ -4758,13 +4758,39 @@ async fn set_live_translation(
             // resolve to the default `ollama` endpoint and report plain success.
             let by = translator.model().to_string();
             let named = wanted.join(", ");
-            active.live = Some(crate::live::LiveTranslator::new(
+            let mut live = crate::live::LiveTranslator::new(
                 translator,
                 crate::live::LiveConfig {
                     langs: wanted.clone(),
                     glossary: summo_llm::prompt::Glossary::default(),
                 },
-            ));
+            );
+
+            // The meeting so far, not just the rest of it.
+            //
+            // Turning translation on used to mean "from the next sentence", and nothing said so —
+            // the banner reported translation was on over a transcript with nothing translated in
+            // it. Twice reported as translation being broken, which from that screen is the only
+            // reasonable conclusion.
+            //
+            // The objection recorded on `Command::Translate` is about *retranslating*: rewriting
+            // text somebody has been reading and may have quoted. A subtitle is added beside the
+            // line, not over it. There is nothing to rewrite, so there is nothing to protect.
+            //
+            // Every line, oldest first. `LiveTranslator` drains this only into room the live path
+            // is not using, so a long meeting fills in from the top without a single subtitle for
+            // current speech arriving late.
+            let already: Vec<(u64, String)> = active
+                .recorder
+                .document()
+                .transcript
+                .iter()
+                .map(|segment| (segment.seq, segment.text.clone()))
+                .collect();
+            let waiting = already.len();
+            live.backfill(already);
+
+            active.live = Some(live);
             active.spec.translate_into = wanted;
             engine.retuned(&active.spec);
             vec![Event::info(format!(

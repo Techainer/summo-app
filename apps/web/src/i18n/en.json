@@ -78,6 +78,7 @@
     "listening_hint": "Sentences appear here as they finish. Speak normally.",
     "open_meeting": "Open the running meeting",
     "translating_into": "translating into {language}",
+    "translate_pending": "Translation starts from the next sentence — lines already finished keep the text they have.",
     "translate_same": "You are translating into {language}, which is the language being spoken — the subtitle will be the same sentence.",
     "translate_off": "Off",
     "translate_needs_model": "No translation model is installed yet.",

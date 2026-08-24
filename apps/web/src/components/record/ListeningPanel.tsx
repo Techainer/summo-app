@@ -63,7 +63,7 @@ export function ListeningPanel({
   onChanged: () => void;
 }) {
   const { t, locale } = useI18n();
-  const { handshake, retune, translate, refine: setRefine } = useEngine();
+  const { handshake, retune, translate, refine: setRefine, transcript } = useEngine();
   const navigate = useNavigate();
   const say = useErrorText();
   // A refused translator swap, said out loud. See `pointTranslatorAt`.
@@ -243,6 +243,21 @@ export function ListeningPanel({
           </Field>
         )}
       </div>
+
+      {/* Turned on, and nothing translated yet.
+          
+          Lines already finished keep whatever they were given — turning translation on does not go
+          back over the transcript, which is deliberate and documented on `Command::Translate`. The
+          consequence was not: somebody who turns it on a minute into a call sees the banner say
+          `đang dịch sang Tiếng Việt` over a transcript with no translation anywhere in it, and the
+          honest conclusion from that screen is that the feature is broken. It is not — it is
+          waiting for the next sentence, and SMALL100 spends several seconds loading before even
+          that one. Reported exactly that way, twice.
+          
+          Only while the wait is real: the moment any line has a subtitle, this has nothing to say. */}
+      {into.length > 0 && !transcript.segments.some((segment) => segment.translation) && (
+        <p className="text-fg-dim text-micro mt-2">{t("record.translate_pending")}</p>
+      )}
 
       {/* Translating into the language being spoken, which is the one target that cannot show you
           anything. `Tiếng Việt` is pinned first in that list — it is the reader's own language and

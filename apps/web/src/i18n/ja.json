@@ -78,6 +78,7 @@
     "listening_hint": "話し終えた文がここに出ます。普段どおりで大丈夫です。",
     "open_meeting": "録音中の会議を開く",
     "translating_into": "{language} に翻訳中",
+    "translate_pending": "翻訳は次の発言から始まります — すでに確定した行はそのままです。",
     "translate_same": "話している言語と同じ {language} に翻訳しています — 字幕は同じ文になります。",
     "translate_off": "オフ",
     "translate_needs_model": "翻訳モデルがまだインストールされていません。",

@@ -291,6 +291,13 @@ async function settled(what, check) {
     process.exit(problems.length ? 1 : 0);
   }
 
+  // How many lines were already finished when translation was turned on. Every one has to end up
+  // with a subtitle: turning translation on used to mean "from the next sentence", and the banner
+  // reported translation was on over a transcript with nothing translated in it.
+  const earlier = await page
+    .locator('[data-testid="transcript-line"][data-source="final"]')
+    .count();
+
   const on = await settled("translate on", (s) => (s.translate_into ?? []).includes("en"));
   console.log(`translate: → ${on.translate_into}, still ${on.state}`);
   if (on.state !== "recording") problems.push("the meeting ended when translation was turned on");
@@ -325,6 +332,25 @@ async function settled(what, check) {
         problems.push("lines disappeared when translation was turned on");
     }
   }
+
+  // The backlog, filled in. Polled because it drains only into room the live path is not using, so
+  // on a busy meeting it arrives a batch at a time behind current speech — which is the whole point
+  // of keeping it separate from the live queue.
+  if (earlier > 0) {
+    let filled = 0;
+    for (let i = 0; i < 120 && filled < earlier; i++) {
+      await page.waitForTimeout(500);
+      filled = await page.getByTestId("transcript-translation").count();
+    }
+    console.log(`backfilled ${filled}/${earlier} lines said before translation was on`);
+    if (filled < earlier) {
+      console.log("--- daemon log ---\n" + engine.log().slice(-2000));
+      problems.push(
+        `turning translation on left ${earlier - filled} earlier lines with no subtitle`,
+      );
+    }
+  }
+
   await page.screenshot({ path: "/tmp/shots/in-meeting-translated.png" });
 
   // ---- a second target, added on top of the first --------------------------
