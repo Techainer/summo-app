@@ -256,12 +256,13 @@ export class Session {
   /**
    * Change what finished lines are translated into, or switch translation off.
    *
-   * The empty string is "off" rather than "unset" — the same convention the daemon uses — so the
-   * one control can do both. Lines already written keep the translation they were given.
+   * The whole list every time, not an add or a remove: two windows on one meeting cannot then
+   * disagree about what is on, and the empty list is "off" without being a separate message. Lines
+   * already written keep the translation they were given.
    */
-  translate(to: string): void {
+  translate(into: string[]): void {
     if (!this.state.recording) return;
-    this.client?.send({ cmd: "translate", to });
+    this.client?.send({ cmd: "translate", into });
   }
 
   stop(): void {

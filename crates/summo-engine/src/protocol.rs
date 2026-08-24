@@ -56,16 +56,24 @@ pub enum Command {
     /// one setting a person most often gets wrong — a call that turned out to be in a language they
     /// do not read — could only be corrected by stopping the recording.
     ///
-    /// `None`, or an empty string, turns translation off. That direction matters as much as the
-    /// other: a user who turned it on for a talk and then joined a call in their own language is
-    /// paying for a translator on every line, and had no way to say stop.
+    /// An empty list — or `null`, or `""` — turns translation off. That direction matters as much
+    /// as the other: a user who turned it on for a talk and then joined a call in their own
+    /// language is paying for a translator on every line, and had no way to say stop.
+    ///
+    /// The whole list every time, not an add or a remove. Two clients on one meeting cannot then
+    /// disagree about what is on, and the "off" case stops being a special message.
     ///
     /// Lines already committed keep the translation they were given. Retranslating the transcript
     /// so far would rewrite text the user has been reading and possibly quoting, which is a larger
     /// surprise than a file whose second half is translated differently from its first.
     Translate {
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        to: Option<String>,
+        #[serde(
+            default,
+            alias = "to",
+            deserialize_with = "one_or_many",
+            skip_serializing_if = "Vec::is_empty"
+        )]
+        into: Vec<String>,
     },
     /// Keepalive. Some proxies drop an idle WebSocket, and a dropped socket mid-meeting is data loss.
     Ping,
@@ -93,13 +101,24 @@ pub struct SessionSpec {
     /// Attribute speakers within the remote lane.
     #[serde(default)]
     pub diarize: bool,
-    /// Translate finished lines into this language as they land.
+    /// Translate finished lines into these languages as they land.
     ///
     /// This is the "watch a talk in another language" switch. There is no separate feature behind
     /// it: system-audio capture already hears whatever is playing, so turning this on while
     /// something plays gives live bilingual subtitles for it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub translate_to: Option<String>,
+    ///
+    /// More than one, because a meeting can have more than one reader. A Vietnamese standup with a
+    /// Japanese contractor and an English investor on the call needed the transcript twice, and the
+    /// single field here meant picking whose subtitle mattered — even though the cost of the second
+    /// one is another pass through a model that is already loaded, not another model. See
+    /// [`crate::live::LiveConfig`].
+    #[serde(
+        default,
+        alias = "translate_to",
+        deserialize_with = "one_or_many",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub translate_into: Vec<String>,
     /// Capture device id, or `None` to pick the best one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_id: Option<String>,
@@ -107,6 +126,37 @@ pub struct SessionSpec {
 
 fn default_lanes() -> Vec<Lane> {
     vec![Lane::Mic]
+}
+
+/// Accept `"en"` where `["en"]` is meant, and `null` where `[]` is.
+///
+/// The field used to be one optional string and the desktop shell, the CLI and every saved session
+/// spec on disk still say so. A daemon that refused `"translate_to": "en"` would refuse the
+/// recording, not the field — and it would do it to somebody whose app is a version behind, mid
+/// meeting. One direction only: what this daemon *writes* is always a list.
+fn one_or_many<'de, D>(deserializer: D) -> std::result::Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany {
+        One(String),
+        Many(Vec<String>),
+        Off,
+    }
+
+    Ok(match OneOrMany::deserialize(deserializer)? {
+        // An empty string is how "off" has always been spelled on this field, and it must not
+        // become a request to translate into the language whose tag is "".
+        OneOrMany::One(one) if one.trim().is_empty() => Vec::new(),
+        OneOrMany::One(one) => vec![one],
+        OneOrMany::Many(many) => many
+            .into_iter()
+            .filter(|lang| !lang.trim().is_empty())
+            .collect(),
+        OneOrMany::Off => Vec::new(),
+    })
 }
 
 impl SessionSpec {
@@ -118,7 +168,7 @@ impl SessionSpec {
             lanes: default_lanes(),
             language: None,
             diarize: false,
-            translate_to: None,
+            translate_into: Vec::new(),
             device_id: None,
         }
     }

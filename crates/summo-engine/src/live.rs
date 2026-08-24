@@ -181,17 +181,23 @@ pub fn pair(batch: &[Pending], parsed: &[Option<String>], lang: &str) -> Vec<Eve
 }
 
 /// What the user turned on.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct LiveConfig {
-    /// Target language tag. Empty means live translation is off.
-    pub lang: String,
+    /// Target language tags. Empty means live translation is off.
+    ///
+    /// A list, because a meeting can have more than one reader and the second one is nearly free.
+    /// SMALL100 is a single multilingual model and the target language is a token it is started
+    /// with, so translating a batch into Japanese as well as English is another pass through
+    /// weights that are already resident — CPU, not another six hundred megabytes. Assuming
+    /// otherwise is why this was one language for as long as it was.
+    pub langs: Vec<String>,
     pub glossary: prompt::Glossary,
 }
 
 impl LiveConfig {
     #[must_use]
     pub fn enabled(&self) -> bool {
-        !self.lang.trim().is_empty()
+        !self.langs.is_empty()
     }
 }
 
@@ -235,8 +241,8 @@ impl LiveTranslator {
     }
 
     #[must_use]
-    pub fn language(&self) -> &str {
-        &self.config.lang
+    pub fn languages(&self) -> &[String] {
+        &self.config.langs
     }
 
     /// Feed the pipeline's events in; get translations and notices out.
@@ -290,26 +296,36 @@ impl LiveTranslator {
             return;
         }
         let translator = self.translator.clone();
-        let lang = self.config.lang.clone();
+        let langs = self.config.langs.clone();
         let glossary = self.config.glossary.clone();
         let tx = self.tx.clone();
         let in_flight = self.in_flight.clone();
 
+        // One task for the whole batch, targets done one after another inside it.
+        //
+        // Not one task per language, which was the obvious shape and the wrong one twice over. The
+        // in-process translator is CPU-bound, so two concurrent passes share the same cores and
+        // finish no sooner while doubling the peak; and `MAX_IN_FLIGHT` counts outstanding
+        // *requests*, so a task per language would quietly halve the number of batches allowed in
+        // the air the moment somebody added a second subtitle.
         in_flight.fetch_add(1, Ordering::Relaxed);
         tokio::spawn(async move {
-            let result = translate_batch(&translator, &batch, &lang, &glossary).await;
+            let mut events = Vec::new();
+            for lang in &langs {
+                match translate_batch(&translator, &batch, lang, &glossary).await {
+                    Ok(mut translated) => events.append(&mut translated),
+                    // One failed target costs its subtitles, not the other targets and not the
+                    // recording. Reported once per target, as a transient error, so the interface
+                    // can say so without stopping anything — and so a language whose model has no
+                    // token for it does not take the working one down with it.
+                    Err(e) => events.push(Event::Error {
+                        message: format!("không dịch được sang {lang}: {e}"),
+                        transient: true,
+                        code: None,
+                    }),
+                }
+            }
             in_flight.fetch_sub(1, Ordering::Relaxed);
-
-            let events = match result {
-                Ok(events) => events,
-                // One failed batch costs those lines, not the recording. Reported once, as a
-                // transient error, so the interface can say so without stopping anything.
-                Err(e) => vec![Event::Error {
-                    message: format!("không dịch được: {e}"),
-                    transient: true,
-                    code: None,
-                }],
-            };
             let _ = tx.send(events);
         });
     }
@@ -341,11 +357,11 @@ mod tests {
         summo_llm::Provider::custom("x", "http://127.0.0.1:1", "m")
     }
 
-    fn translator(lang: &str) -> LiveTranslator {
+    fn translator(langs: &[&str]) -> LiveTranslator {
         LiveTranslator::new(
             Translator::chat(unreachable_provider()).unwrap(),
             LiveConfig {
-                lang: lang.into(),
+                langs: langs.iter().map(|l| (*l).to_string()).collect(),
                 glossary: prompt::Glossary::default(),
             },
         )
@@ -365,7 +381,7 @@ mod tests {
     /// subtitle for words the speaker has not finished saying.
     #[tokio::test]
     async fn only_final_segments_are_queued() {
-        let mut live = translator("en");
+        let mut live = translator(&["en"]);
         let partial = Event::Partial(summo_core::segment::Segment::new(
             1,
             summo_core::segment::Lane::System,
@@ -383,7 +399,7 @@ mod tests {
     /// A few lines must not each cost a request; the batch waits for company.
     #[tokio::test]
     async fn a_short_run_of_lines_does_not_dispatch_yet() {
-        let mut live = translator("en");
+        let mut live = translator(&["en"]);
         for i in 0..3 {
             live.offer(&[final_of(i, "câu")]);
         }
@@ -394,7 +410,7 @@ mod tests {
     /// failure comes back as a transient error rather than vanishing or panicking.
     #[tokio::test]
     async fn a_full_batch_dispatches_and_a_failure_is_reported_as_transient() {
-        let mut live = translator("en");
+        let mut live = translator(&["en"]);
         for i in 0..BATCH {
             live.offer(&[final_of(i as u64, "câu")]);
         }
@@ -425,7 +441,7 @@ mod tests {
     /// The last few lines of a meeting must not be stranded in a batch that never fills.
     #[tokio::test]
     async fn finishing_sends_whatever_is_left() {
-        let mut live = translator("en");
+        let mut live = translator(&["en"]);
         live.offer(&[final_of(1, "câu cuối")]);
         assert_eq!(live.batcher.len(), 1);
 
@@ -434,8 +450,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_target_language_is_the_one_the_session_asked_for() {
-        assert_eq!(translator("ja").language(), "ja");
+    async fn the_target_languages_are_the_ones_the_session_asked_for() {
+        assert_eq!(translator(&["ja"]).languages(), ["ja"]);
+        assert_eq!(translator(&["ja", "en"]).languages(), ["ja", "en"]);
     }
 
     fn pending(seq: u64, text: &str) -> Pending {
@@ -559,15 +576,11 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_language_means_live_translation_is_off() {
-        let off = LiveConfig {
-            lang: "  ".into(),
-            glossary: prompt::Glossary::default(),
-        };
-        assert!(!off.enabled());
+    fn no_language_means_live_translation_is_off() {
+        assert!(!LiveConfig::default().enabled());
 
         let on = LiveConfig {
-            lang: "en".into(),
+            langs: vec!["en".into()],
             glossary: prompt::Glossary::default(),
         };
         assert!(on.enabled());

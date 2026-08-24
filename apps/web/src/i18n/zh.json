@@ -80,6 +80,8 @@
     "translating_into": "正在翻译为{language}",
     "translate_off": "关闭",
     "translate_needs_model": "尚未安装任何翻译模型。",
+    "translate_all_off": "关闭 — 全部语言",
+    "translate_drop": "不再翻译成 {language}",
     "translate_with": "由 {model} 负责翻译。",
     "manage_models": "管理模型"
   },

@@ -29,16 +29,19 @@ export interface Capture {
    */
   spoken: string;
   /**
-   * Language to translate finished lines into as they land. Empty means off.
+   * Languages to translate finished lines into as they land. Empty means off.
    *
    * Off by default and deliberately so: every line becomes a request to a language model, which
    * costs money on a hosted provider and battery on a local one. Nobody should discover that by
    * accident.
+   *
+   * A list, because a call can have more than one reader — and because the second target costs
+   * another pass through a model that is already loaded rather than another model.
    */
-  translateTo: string;
+  translateInto: string[];
 }
 
-export const DEFAULT: Capture = { lanes: ["mic"], translateTo: "", spoken: "" };
+export const DEFAULT: Capture = { lanes: ["mic"], translateInto: [], spoken: "" };
 
 /**
  * Read the saved choice.
@@ -79,16 +82,38 @@ export function normalize(input: Partial<Capture> | null | undefined): Capture {
   const unique = [...new Set(lanes)];
   return {
     lanes: unique.length > 0 ? unique : DEFAULT.lanes,
-    translateTo: typeof input?.translateTo === "string" ? input.translateTo.trim() : "",
+    translateInto: targets(input),
     // Lower-cased, because a language code is compared against the manifests' own spelling and
     // `VI` from an older build must not read as a language nothing covers.
     spoken: typeof input?.spoken === "string" ? input.spoken.trim().toLowerCase() : "",
   };
 }
 
+/**
+ * The saved targets, accepting the single string this used to be.
+ *
+ * `translateTo` was one language and is in every existing browser's local storage. Dropping it
+ * would silently turn translation off for everybody who had it on, at the start of their next
+ * meeting, with nothing on screen to say why.
+ */
+function targets(
+  input: (Partial<Capture> & { translateTo?: unknown }) | null | undefined,
+): string[] {
+  const raw = Array.isArray(input?.translateInto)
+    ? input.translateInto
+    : typeof input?.translateTo === "string"
+      ? [input.translateTo]
+      : [];
+  const clean = raw
+    .filter((code): code is string => typeof code === "string")
+    .map((code) => code.trim())
+    .filter((code) => code.length > 0);
+  return [...new Set(clean)];
+}
+
 /** Whether live translation is on. */
 export function translating(capture: Capture): boolean {
-  return capture.translateTo.length > 0;
+  return capture.translateInto.length > 0;
 }
 
 /**

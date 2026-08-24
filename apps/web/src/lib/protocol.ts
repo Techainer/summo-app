@@ -55,8 +55,8 @@ export interface SessionSpec {
   lanes?: Lane[];
   language?: string;
   diarize?: boolean;
-  /** Translate finished lines into this language as they land. */
-  translate_to?: string;
+  /** Translate finished lines into these languages as they land. */
+  translate_into?: string[];
   device_id?: string;
 }
 
@@ -77,7 +77,7 @@ export type Command =
   // off, which is as necessary as turning it on: it was previously readable only from
   // `session_start`, so a meeting that turned out not to need it paid for a translator on every
   // line until it ended.
-  | { cmd: "translate"; to?: string }
+  | { cmd: "translate"; into: string[] }
   | { cmd: "ping" };
 
 /** Whether an event carries transcript text. */

@@ -42,18 +42,33 @@ describe("normalize", () => {
   });
 
   it("trims a language tag rather than sending whitespace to the daemon", () => {
-    expect(normalize({ translateTo: "  en " }).translateTo).toBe("en");
+    expect(normalize({ translateInto: ["  en "] }).translateInto).toEqual(["en"]);
   });
 
   it("treats a non-string language as off", () => {
-    expect(normalize({ translateTo: 7 as never }).translateTo).toBe("");
+    expect(normalize({ translateInto: 7 as never }).translateInto).toEqual([]);
+    expect(normalize({ translateInto: [7 as never] }).translateInto).toEqual([]);
+  });
+
+  it("drops a language asked for twice, which would subtitle every line twice", () => {
+    expect(normalize({ translateInto: ["en", "en", "ja"] }).translateInto).toEqual(["en", "ja"]);
+  });
+
+  /**
+   * `translateTo` was a single string and is in every existing browser's local storage. Reading it
+   * back as nothing would turn translation off for everybody who had it on, at the start of their
+   * next meeting, with nothing on screen to say why.
+   */
+  it("reads the single language older versions saved", () => {
+    expect(normalize({ translateTo: "en" } as never).translateInto).toEqual(["en"]);
+    expect(normalize({ translateTo: "" } as never).translateInto).toEqual([]);
   });
 });
 
 describe("storage", () => {
   it("round-trips a choice", () => {
-    save({ lanes: ["system"], translateTo: "en", spoken: "vi" });
-    expect(load()).toEqual({ lanes: ["system"], translateTo: "en", spoken: "vi" });
+    save({ lanes: ["system"], translateInto: ["en", "ja"], spoken: "vi" });
+    expect(load()).toEqual({ lanes: ["system"], translateInto: ["en", "ja"], spoken: "vi" });
   });
 
   it("falls back to the default when nothing was saved", () => {
@@ -74,15 +89,15 @@ describe("storage", () => {
 
 describe("what the capture means", () => {
   it("knows when live translation is on", () => {
-    expect(translating({ lanes: ["mic"], translateTo: "", spoken: "" })).toBe(false);
-    expect(translating({ lanes: ["mic"], translateTo: "en", spoken: "" })).toBe(true);
+    expect(translating({ lanes: ["mic"], translateInto: [], spoken: "" })).toBe(false);
+    expect(translating({ lanes: ["mic"], translateInto: ["en"], spoken: "" })).toBe(true);
   });
 
   // Translating the microphone lane translates *you*. It is what happens when the system-audio
   // switch is forgotten, and it looks like the feature is broken.
   it("knows when nothing but the local user will be heard", () => {
-    expect(hearsOthers({ lanes: ["mic"], translateTo: "en", spoken: "" })).toBe(false);
-    expect(hearsOthers({ lanes: ["mic", "system"], translateTo: "en", spoken: "" })).toBe(true);
+    expect(hearsOthers({ lanes: ["mic"], translateInto: ["en"], spoken: "" })).toBe(false);
+    expect(hearsOthers({ lanes: ["mic", "system"], translateInto: ["en"], spoken: "" })).toBe(true);
   });
 });
 
@@ -90,7 +105,7 @@ describe("the spoken language", () => {
   /// An older build wrote no `spoken` at all, and a capture read back without one must record in
   /// whatever the daemon's settings say rather than refusing or guessing a language.
   it("defaults to empty, which the daemon reads as its own setting", () => {
-    expect(normalize({ lanes: ["mic"], translateTo: "" }).spoken).toBe("");
+    expect(normalize({ lanes: ["mic"], translateInto: [] }).spoken).toBe("");
     expect(DEFAULT.spoken).toBe("");
   });
 

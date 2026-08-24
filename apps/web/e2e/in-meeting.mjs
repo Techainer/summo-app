@@ -238,8 +238,8 @@ async function settled(what, check) {
     process.exit(problems.length ? 1 : 0);
   }
 
-  const on = await settled("translate on", (s) => s.translate_to === "en");
-  console.log(`translate: → ${on.translate_to}, still ${on.state}`);
+  const on = await settled("translate on", (s) => (s.translate_into ?? []).includes("en"));
+  console.log(`translate: → ${on.translate_into}, still ${on.state}`);
   if (on.state !== "recording") problems.push("the meeting ended when translation was turned on");
 
   // The real proof: a second line, in the target language, under an original. Nothing else in this
@@ -274,12 +274,53 @@ async function settled(what, check) {
   }
   await page.screenshot({ path: "/tmp/shots/in-meeting-translated.png" });
 
+  // ---- a second target, added on top of the first --------------------------
+  //
+  // A meeting can have more than one reader, and the second subtitle is another pass through a
+  // model that is already resident rather than another model. The control that used to be a single
+  // dropdown made that a choice about whose language mattered.
+  {
+    const before = await page.getByTestId("transcript-translation").count();
+    await page.getByLabel("Dịch trực tiếp").selectOption("ja");
+    const both = await settled("second target", (s) => {
+      const into = s.translate_into ?? [];
+      return into.includes("en") && into.includes("ja");
+    });
+    console.log(`translate: → ${both.translate_into}, still ${both.state}`);
+    if (both.state !== "recording")
+      problems.push("the meeting ended when a second target was added");
+
+    // The first target keeps working. Adding Japanese must not replace English, which is what a
+    // control that holds one value would have done.
+    let after = before;
+    for (let i = 0; i < 120 && after <= before; i++) {
+      await page.waitForTimeout(500);
+      after = await page.getByTestId("transcript-translation").count();
+    }
+    if (after <= before) {
+      console.log("--- daemon log ---\n" + engine.log().slice(-3000));
+      problems.push(`a second target produced no extra subtitle: ${before} → ${after}`);
+    } else {
+      console.log(`subtitles: ${before} → ${after} with two targets`);
+    }
+
+    // Dropping one leaves the other. The chip is the control, and its label says which it drops.
+    await page
+      .getByRole("button", { name: /Ngừng dịch sang/ })
+      .first()
+      .click();
+    const one = await settled("dropped one target", (s) => (s.translate_into ?? []).length === 1);
+    console.log(`translate: → ${one.translate_into}, still ${one.state}`);
+    if (one.state !== "recording") problems.push("the meeting ended when a target was dropped");
+    await page.screenshot({ path: "/tmp/shots/in-meeting-two-targets.png" });
+  }
+
   // Off is a state, not the absence of one. It could not be reached at all before: translation was
   // read once at session start, so a call that turned out not to need it paid for a translator on
   // every line until it ended.
   await page.getByLabel("Dịch trực tiếp").selectOption("");
-  const off = await settled("translate off", (s) => s.translate_to === undefined);
-  console.log(`translate off: ${JSON.stringify(off.translate_to)}, still ${off.state}`);
+  const off = await settled("translate off", (s) => s.translate_into === undefined);
+  console.log(`translate off: ${JSON.stringify(off.translate_into)}, still ${off.state}`);
   if (off.state !== "recording") problems.push("the meeting ended when translation was turned off");
 }
 

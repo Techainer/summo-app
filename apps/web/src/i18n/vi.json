@@ -80,6 +80,8 @@
     "translating_into": "đang dịch sang {language}",
     "translate_off": "Tắt",
     "translate_needs_model": "Chưa cài mô hình dịch nào.",
+    "translate_all_off": "Tắt — mọi ngôn ngữ",
+    "translate_drop": "Ngừng dịch sang {language}",
     "translate_with": "{model} sẽ dịch.",
     "manage_models": "Quản lý mô hình"
   },

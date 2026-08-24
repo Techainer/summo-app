@@ -10,6 +10,7 @@ import { url } from "../../lib/library";
 import { fetchPlan } from "../../lib/plan";
 import { useLoad } from "../../lib/use-load";
 import { Select } from "../ui";
+import { TranslateTargets } from "./TranslateTargets";
 
 /**
  * Everything about a running recording that can still be changed, in four controls.
@@ -52,7 +53,7 @@ export function ListeningPanel({
   /** What the daemon says it is decoding with, which is not always what this browser asked for. */
   live_model: string | undefined;
   spoken: string;
-  into: string;
+  into: string[];
   languages: Language[];
   /** Re-read `/status`; the daemon answers before the pipeline is actually swapped. */
   onChanged: () => void;
@@ -154,26 +155,19 @@ export function ListeningPanel({
         </Field>
 
         <Field label={t("record.translate_live")}>
-          <Select
-            size="sm"
-            aria-label={t("record.translate_live")}
+          {/* Every language the reader might want, not a shortlist: the translator is multilingual,
+              and a fixed seven-entry list was the same mistake as the spoken one — a capability
+              hidden behind an interface narrower than it. More than one at a time for the same
+              reason: the model is already loaded, and a call can have two readers. */}
+          <TranslateTargets
             value={into}
+            options={ordered(TRANSLATABLE, locale)}
             disabled={!canTranslate}
-            onChange={(event) => {
-              translate(event.target.value);
+            onChange={(next) => {
+              translate(next);
               onChanged();
             }}
-          >
-            <option value="">{t("record.translate_off")}</option>
-            {/* Every language the reader might want, not a shortlist: the translator is
-                multilingual, and a fixed seven-entry list was the same mistake as the spoken one —
-                a capability hidden behind an interface narrower than it. */}
-            {ordered(TRANSLATABLE, locale).map((each) => (
-              <option key={each.code} value={each.code}>
-                {each.label}
-              </option>
-            ))}
-          </Select>
+          />
         </Field>
 
         {translators.length > 1 && (
