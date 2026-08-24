@@ -128,19 +128,16 @@ const press = (page) =>
     // second or two after the page it lives on. Typing into the space where it is about to be goes
     // nowhere and looks exactly like an editor that refuses input.
     //
-    // Either editor, and that is not laxness. `RichNote` hands the note back as a plain `textarea`
-    // whenever it decides it cannot hold the text without changing it, and on this page it does so
-    // intermittently — measured at roughly one run in five, after a single line of ordinary
-    // Vietnamese has been typed. That is a real defect and it is written up as one; what it is not
-    // is a reason for this suite to report "the meeting has nowhere to type" when the meeting
-    // plainly does. What is being checked here is that a person can type into a running meeting and
-    // see their words, which is true in both shapes.
+    // The rich editor, by name. It used to be "either editor", because `RichNote` handed the note
+    // to its plain-text fallback about one run in five after a single line of ordinary Vietnamese —
+    // the faithfulness check was running on every render and comparing a document that had the
+    // keystroke against a prop that did not yet. Fixed at the check; asserted here, because "either
+    // is fine" would let it come back unnoticed.
     const rich = page.locator(".ProseMirror[contenteditable='true']").first();
-    const plain = page.locator("textarea").first();
-    const ready = await Promise.race([
-      rich.waitFor({ state: "visible", timeout: 20000 }).then(() => "rich"),
-      plain.waitFor({ state: "visible", timeout: 20000 }).then(() => "plain"),
-    ]).catch(() => null);
+    const ready = await rich
+      .waitFor({ state: "visible", timeout: 20000 })
+      .then(() => true)
+      .catch(() => false);
 
     if (!ready) {
       problems.push("the meeting has nowhere to type");
@@ -151,9 +148,8 @@ const press = (page) =>
       for (let attempt = 0; attempt < 3 && !landed; attempt += 1) {
         // Re-read each time: an attempt can change which editor is on screen, because typing is
         // exactly what makes `RichNote` decide it cannot hold the text.
-        const editor = (await plain.count()) > 0 ? plain : rich;
         try {
-          await editor.click({ timeout: 15000 });
+          await rich.click({ timeout: 15000 });
           await page.keyboard.type(said);
         } catch (error) {
           refused = error;
@@ -163,12 +159,11 @@ const press = (page) =>
         await page.waitForTimeout(800);
         // `innerText` misses a `textarea`'s value, so both are asked. A suite that only read the
         // rendered text reported "nothing was typed" about a textarea holding the sentence.
-        landed = await page.evaluate((text) => {
-          const typed = [...document.querySelectorAll("textarea")].some((box) =>
-            box.value.includes(text),
-          );
-          return typed || document.body.innerText.includes(text);
-        }, said);
+        landed = (await page.locator("body").innerText()).includes(said);
+        if (!landed && (await page.locator("textarea").count()) > 0) {
+          problems.push("the meeting note fell back to plain text on one typed line");
+          break;
+        }
       }
       if (!landed) {
         problems.push(
