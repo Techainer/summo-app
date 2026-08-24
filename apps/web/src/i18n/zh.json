@@ -78,6 +78,7 @@
     "listening_hint": "说完的句子会出现在这里。正常说话就好。",
     "open_meeting": "打开正在录制的会议",
     "translating_into": "正在翻译为{language}",
+    "translate_pending": "翻译从下一句开始 —— 已经完成的句子保持原样。",
     "translate_same": "你正在翻译成 {language}，也就是正在说的语言 —— 字幕会是同一句话。",
     "translate_off": "关闭",
     "translate_needs_model": "尚未安装任何翻译模型。",

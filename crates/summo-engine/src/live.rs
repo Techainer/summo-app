@@ -209,6 +209,19 @@ impl LiveConfig {
 /// paying for them at the next batch.
 pub struct LiveTranslator {
     batcher: Batcher,
+    /// Lines that were already finished when translation was turned on.
+    ///
+    /// Turning it on used to mean "from the next sentence", and the interface had no way to say so
+    /// — the banner reported that translation was on over a transcript with nothing translated in
+    /// it, which reads as broken and was reported as broken. The objection on `Command::Translate`
+    /// is about *retranslating*: rewriting text somebody has been reading. A subtitle is added
+    /// beside the line, not over it, so there is nothing to rewrite.
+    ///
+    /// Kept apart from `batcher` rather than pushed into it. The batcher is bounded and drops its
+    /// *oldest* line under pressure, which is right for live speech and exactly backwards for a
+    /// backlog — a whole meeting pushed through it would keep the last sixteen lines and discard
+    /// the rest. This drains only into space the live path is not using.
+    backlog: VecDeque<Pending>,
     /// When the oldest queued line arrived, for the deadline.
     since: Option<std::time::Instant>,
     translator: std::sync::Arc<Translator>,
@@ -231,6 +244,7 @@ impl LiveTranslator {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         Self {
             batcher: Batcher::new(),
+            backlog: VecDeque::new(),
             since: None,
             translator: std::sync::Arc::new(translator),
             config,
@@ -268,7 +282,43 @@ impl LiveTranslator {
             self.dispatch();
         }
 
+        // The backlog, only into room the live path is not using. Speech happening now outranks
+        // speech from a minute ago every time: a subtitle that arrives after the speaker has moved
+        // on is the failure this module already refuses to accept for live lines, and filling in
+        // the past must not cause it.
+        if self.batcher.is_empty() && self.in_flight.load(Ordering::Relaxed) < MAX_IN_FLIGHT {
+            let take = self.backlog.len().min(BATCH);
+            if take > 0 {
+                let batch: Vec<Pending> = self.backlog.drain(..take).collect();
+                self.spawn(batch);
+            }
+        }
+
         self.collect()
+    }
+
+    /// Take the lines that were already finished when translation was turned on.
+    ///
+    /// Oldest first, so a meeting fills in from the top the way somebody reads it. Blank lines are
+    /// skipped for the same reason the batcher skips them: paying for a request to render an empty
+    /// subtitle is the worst trade in this module.
+    pub fn backfill(&mut self, lines: impl IntoIterator<Item = (u64, String)>) {
+        for (seq, text) in lines {
+            let text = text.trim();
+            if text.is_empty() {
+                continue;
+            }
+            self.backlog.push_back(Pending {
+                seq,
+                text: text.to_string(),
+            });
+        }
+    }
+
+    /// How many old lines are still waiting, for the interface to say so.
+    #[must_use]
+    pub fn backlog_len(&self) -> usize {
+        self.backlog.len()
     }
 
     /// Send everything still queued, at the end of a session.
@@ -598,5 +648,74 @@ mod tests {
         .await
         .expect("no request needed");
         assert!(events.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod backfilling {
+    use super::*;
+
+    fn unreachable_provider() -> summo_llm::Provider {
+        summo_llm::Provider::custom("x", "http://127.0.0.1:1", "m")
+    }
+
+    fn live(langs: &[&str]) -> LiveTranslator {
+        LiveTranslator::new(
+            Translator::chat(unreachable_provider()).unwrap(),
+            LiveConfig {
+                langs: langs.iter().map(|l| (*l).to_string()).collect(),
+                glossary: prompt::Glossary::default(),
+            },
+        )
+    }
+
+    /// Turning translation on takes the meeting so far with it.
+    ///
+    /// It used to mean "from the next sentence", with nothing on screen to say so — the banner
+    /// reported translation was on over a transcript with nothing translated in it.
+    #[test]
+    fn the_lines_already_said_are_queued_too() {
+        let mut translator = live(&["en"]);
+        assert_eq!(translator.backlog_len(), 0);
+
+        translator.backfill([
+            (0, "xin chào".to_string()),
+            (1, "  ".to_string()),
+            (2, "hai".to_string()),
+        ]);
+        assert_eq!(
+            translator.backlog_len(),
+            2,
+            "a blank line is not worth a request"
+        );
+    }
+
+    /// And it never delays the sentence being spoken now.
+    ///
+    /// A subtitle arriving after the speaker has moved on is the failure this module refuses for
+    /// live lines; filling in the past must not cause it. So the backlog drains only when the live
+    /// batcher is empty — with a line waiting to go, the backlog stays exactly where it is.
+    #[test]
+    fn live_speech_is_never_held_up_by_the_backlog() {
+        let mut translator = live(&["en"]);
+        translator.backfill((0..20).map(|seq| (seq, format!("câu {seq}"))));
+        let before = translator.backlog_len();
+        assert_eq!(before, 20);
+
+        // One final arrives: it goes to the batcher, and the batcher is now not empty.
+        let segment = summo_core::segment::Segment::new(
+            99,
+            summo_core::segment::Lane::Mic,
+            "đang nói",
+            0.0,
+            1.0,
+        );
+        translator.offer(&[Event::Final(segment)]);
+
+        assert_eq!(
+            translator.backlog_len(),
+            before,
+            "the backlog waited for the live line"
+        );
     }
 }
