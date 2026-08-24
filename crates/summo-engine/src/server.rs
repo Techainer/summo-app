@@ -1079,7 +1079,6 @@ async fn set_recording(
 }
 
 /// Fill in the models a session did not name.
-#[cfg(feature = "models")]
 ///
 /// The interface used to send a hardcoded `gipformer-65m`, which made the whole model catalogue
 /// decorative: installing SenseVoice for a Japanese meeting changed nothing, because recording
@@ -1089,21 +1088,67 @@ async fn set_recording(
 /// Order: what the session asked for, then what the settings say, then the only installed speech
 /// model if there is exactly one. The last is the case that matters on a fresh install — one model
 /// is there, it is obviously the one to use, and asking would be asking a question with one answer.
+#[cfg(feature = "models")]
 fn resolve_models(
     spec: &crate::protocol::SessionSpec,
     engine: &EngineState,
 ) -> crate::protocol::SessionSpec {
+    let mut resolved = choose_models(spec, engine);
+    // The pair `SessionSpec::validate` refuses: refining with the model that is already decoding
+    // spends a second decode to produce the same text, and the session would not start at all.
+    //
+    // Here rather than at each of the five places below that settle on a live model, because those
+    // are five chances to forget — and the way this is reached is not a mistake anybody makes on
+    // purpose. Somebody pins one model for both roles on the models screen, or pins a live model
+    // that happens to be the one already chosen for refinement. Dropping the second role is the
+    // answer; refusing to record is not.
+    if resolved.refine_model.as_deref() == Some(resolved.live_model.as_str()) {
+        resolved.refine_model = None;
+    }
+    resolved
+}
+
+/// The live model, and the refine model when the settings name one.
+#[cfg(feature = "models")]
+fn choose_models(
+    spec: &crate::protocol::SessionSpec,
+    engine: &EngineState,
+) -> crate::protocol::SessionSpec {
     let mut spec = spec.clone();
+    let settings = summo_core::Settings::load(&engine.paths().settings()).unwrap_or_default();
+
+    // The second model, taken from the settings when the client did not name one.
+    //
+    // This is what made `models.refine` a setting that did nothing. The models screen has offered
+    // "use for refine" since it had buttons, `/settings/models` has accepted the role, and the
+    // value reached the settings file and stopped there — no client sends `refine_model`, so no
+    // session ever had one. A user could pick a refine model, see it marked as chosen, and record
+    // a meeting that ignored it entirely.
+    //
+    // Read before the early return below, because the live model being pinned says nothing about
+    // whether a refine model was also chosen.
+    if spec.refine_model.is_none() {
+        spec.refine_model = settings
+            .models
+            .refine
+            .clone()
+            .filter(|m| !m.trim().is_empty());
+    }
+
     if !spec.live_model.trim().is_empty() {
         return spec;
     }
 
-    let settings = summo_core::Settings::load(&engine.paths().settings()).unwrap_or_default();
     if spec.language.is_none() {
         spec.language = settings.models.language.clone();
     }
 
-    if let Some(chosen) = settings.models.live.filter(|m| !m.trim().is_empty()) {
+    if let Some(chosen) = settings
+        .models
+        .live
+        .clone()
+        .filter(|m| !m.trim().is_empty())
+    {
         spec.live_model = chosen;
         return spec;
     }
@@ -4653,6 +4698,11 @@ struct ActiveSession {
     started: std::time::Instant,
     /// Set when the session asked for live translation.
     live: Option<crate::live::LiveTranslator>,
+    /// Set when the session named a second, slower model to check the first one's work.
+    ///
+    /// `None` for everybody who has not asked for it, and the pipeline behind it is then exactly
+    /// what it was before refinement existed — same stage, same session, no audio retained.
+    refiner: Option<crate::refine::Refiner>,
 }
 
 /// Command handling when recognition is compiled in: owns creating and tearing down the pipeline.
@@ -4968,12 +5018,48 @@ fn start_session(
         }
     };
 
+    // The second model, when one is named. Built here rather than in the runner because it does
+    // not belong to the audio pipeline: the pipeline only hands out finished utterances, and what
+    // happens to them afterwards is this task's business.
+    //
+    // A refine model that will not load is reported and dropped, not fatal. It is a second opinion
+    // on a recording that is already working, and refusing the meeting over it would be the same
+    // mistake the diarizer's `?` made — a nice-to-have taking down the thing it is nice to have on
+    // top of.
+    let refiner = match &spec.refine_model {
+        Some(id) if !id.trim().is_empty() => {
+            let threads = engine.hardware().recommended_threads();
+            let store = engine.store();
+            let claims = summo_core::ModelId::parse(id)
+                .ok()
+                .and_then(|parsed| store.installed(&parsed).ok())
+                .map(|manifest| manifest.langs.clone())
+                .unwrap_or_default();
+            // The refine model decodes whole utterances and is never asked to detect: the language
+            // question was already answered by the live model, and this one is being run precisely
+            // because it is the specialist for that answer.
+            match crate::runner::load_decoder(id, spec.language.as_deref(), &store, threads) {
+                Ok(decoder) => Some(crate::refine::Refiner::new(
+                    decoder,
+                    claims,
+                    summo_asr::HallucinationFilter::default(),
+                )),
+                Err(e) => {
+                    tracing::warn!(error = %e, model = %id, "recording without a refine pass");
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
+
     Ok(ActiveSession {
         spec: spec.clone(),
         runner,
         recorder,
         archive,
         live,
+        refiner,
         started: std::time::Instant::now(),
     })
 }
@@ -5030,6 +5116,13 @@ fn handle_audio_with_models(
             if let Some(live) = active.live.as_mut() {
                 events.extend(live.offer(&events));
             }
+            // The second model, on the utterances it is the right model for. Same bargain as
+            // translation: the jobs go to a blocking thread and whatever finished earlier comes
+            // back now, so a slow refine model delays revisions and never audio.
+            if let Some(refiner) = active.refiner.as_mut() {
+                refiner.dispatch(active.runner.take_refine_jobs());
+                events.extend(refiner.collect());
+            }
             events
         }
         Err(e) => vec![Event::error(&e)],
@@ -5072,6 +5165,60 @@ mod resolve_tests {
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
         assert_eq!(resolved.live_model, "sense-voice-small");
         assert_eq!(resolved.language.as_deref(), Some("ja"));
+    }
+
+    /// `models.refine` was a setting nothing read.
+    ///
+    /// The models screen has offered "use for refine" since it had buttons, `/settings/models`
+    /// accepted the role and wrote it to disk, and no client has ever sent `refine_model` — so the
+    /// value went into the settings file and stopped. A user could choose a refine model, see it
+    /// marked as chosen, and record a meeting that never touched it.
+    #[test]
+    fn a_refine_model_in_the_settings_reaches_the_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("whisper-tiny".into());
+        settings.models.refine = Some("gipformer-65m".into());
+        settings.save(&path).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.live_model, "whisper-tiny");
+        assert_eq!(resolved.refine_model.as_deref(), Some("gipformer-65m"));
+    }
+
+    /// And it reaches a session that pinned its live model too, which the early return used to
+    /// skip: pinning what decodes says nothing about whether a second opinion was also chosen.
+    #[test]
+    fn pinning_the_live_model_does_not_lose_the_refine_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+        let mut settings = summo_core::Settings::default();
+        settings.models.refine = Some("gipformer-65m".into());
+        settings.save(&path).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new("whisper-tiny"), &engine);
+        assert_eq!(resolved.refine_model.as_deref(), Some("gipformer-65m"));
+    }
+
+    /// One model in both roles decodes everything twice for the same text, and `validate` refuses
+    /// the pair outright — so leaving it in place would turn a settings mistake into a record
+    /// button that fails. The second role goes; the recording happens.
+    #[test]
+    fn the_same_model_twice_drops_the_second_role_rather_than_the_meeting() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("whisper-tiny".into());
+        settings.models.refine = Some("whisper-tiny".into());
+        settings.save(&path).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.refine_model, None);
+        resolved.validate().expect("a session that can start");
     }
 
     /// The hole the language picker left when it was first built: the choice lived in one browser's

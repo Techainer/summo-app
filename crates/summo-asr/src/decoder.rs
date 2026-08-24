@@ -17,6 +17,16 @@ pub struct Transcript {
     pub no_speech_prob: Option<f32>,
     /// Word timings, where the runtime provides them. Drives click-to-seek and karaoke highlight.
     pub words: Vec<Word>,
+    /// The language the runtime says it heard, as a bare ISO code.
+    ///
+    /// Only the multilingual runtimes answer, and only when they were asked to detect rather than
+    /// told. `None` therefore means "this decoder does not know", which is not the same as "the
+    /// audio had no language" — so anything routing on this has to have an answer for `None` that
+    /// is not "skip it".
+    ///
+    /// Here rather than inferred from the text because guessing a language from a sentence is a
+    /// model in its own right, and the one that just ran already knows.
+    pub language: Option<String>,
 }
 
 impl Transcript {
@@ -118,6 +128,7 @@ pub(crate) mod test_support {
                 confidence: Some(0.9),
                 no_speech_prob: self.no_speech_prob,
                 words: Vec::new(),
+                language: None,
             })
         }
 

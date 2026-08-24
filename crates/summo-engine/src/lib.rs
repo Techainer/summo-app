@@ -39,6 +39,8 @@ pub mod recorder;
 #[cfg(feature = "models")]
 pub mod offline;
 #[cfg(feature = "models")]
+pub mod refine;
+#[cfg(feature = "models")]
 pub mod runner;
 pub mod server;
 #[cfg(feature = "models")]
