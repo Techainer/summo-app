@@ -136,13 +136,32 @@ const press = (page) =>
       problems.push("the meeting has nowhere to type");
     } else {
       let landed = false;
+      let refused = null;
       for (let attempt = 0; attempt < 3 && !landed; attempt += 1) {
-        await editor.click();
-        await page.keyboard.type("Ngân sách chốt thứ năm.");
+        // The whole attempt, including the click. The loop is here because this is a page that
+        // rerenders while a recording writes into it — a line arriving between `visible` and
+        // `click` detaches the node under the pointer — and a click that throws walked straight
+        // past the retry and out of the suite as an unhandled `TimeoutError`. Once in three runs,
+        // which is the worst frequency: often enough to fail a release, rare enough to rerun and
+        // call it green.
+        try {
+          await editor.click({ timeout: 5000 });
+          await page.keyboard.type("Ngân sách chốt thứ năm.");
+        } catch (error) {
+          refused = error;
+          await page.waitForTimeout(500);
+          continue;
+        }
         await page.waitForTimeout(800);
         landed = (await page.locator("body").innerText()).includes("Ngân sách chốt thứ năm");
       }
-      if (!landed) problems.push("typing into the meeting note put nothing on screen");
+      if (!landed) {
+        problems.push(
+          refused
+            ? `typing into the meeting note never landed: ${refused.message.split("\n")[0]}`
+            : "typing into the meeting note put nothing on screen",
+        );
+      }
     }
   }
 
