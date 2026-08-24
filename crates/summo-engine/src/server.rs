@@ -235,6 +235,7 @@ impl Server {
             .route("/languages", get(languages))
             .route("/settings/language", post(set_language))
             .route("/settings/storage", post(set_storage))
+            .route("/settings/interface", post(set_interface))
             .route("/settings/recording", post(set_recording))
             .route("/installs", get(list_installs).post(start_install))
             .route("/installs/{id}", get(get_install))
@@ -3159,6 +3160,62 @@ async fn set_storage(
     })())
 }
 
+/// What the app looks like, and in which language.
+///
+/// The other half of a preference that was written to disk and never read back. `interface.theme`
+/// and `interface.language` have existed, been validated and been defaulted since the settings file
+/// had a schema, and nothing on either side ever touched them: the browser kept its own copy in
+/// `localStorage`, so the choice stopped at the window that made it. A second window, a second
+/// machine, and the tray each started over.
+///
+/// Both fields optional, so the app can send the one the user just changed. Empty language is a
+/// value, not an omission — it means "follow the browser", which is the state a fresh install is in
+/// and the one somebody returns to by choosing nothing.
+async fn set_interface(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<InterfaceBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    as_response((|| {
+        let path = state.engine.paths().settings();
+        let mut settings = summo_core::Settings::load(&path)?;
+        if let Some(theme) = body.theme {
+            // Refused rather than repaired. `Settings::validate` quietly rewrites a bad theme to
+            // `system` when it reads the file, which is right for a file somebody hand-edited and
+            // wrong for a request: a client sending `neon` has a bug, and answering "saved" would
+            // hide it.
+            if !matches!(theme.as_str(), "system" | "light" | "dark") {
+                return Err(summo_core::Error::Config(format!(
+                    "`{theme}` is not a theme; expected system, light or dark"
+                )));
+            }
+            settings.interface.theme = theme;
+        }
+        if let Some(language) = body.language {
+            settings.interface.language = language.trim().to_lowercase();
+        }
+        settings.save(&path)?;
+        Ok(serde_json::json!({
+            "theme": settings.interface.theme,
+            "language": settings.interface.language,
+        }))
+    })())
+}
+
+/// The interface preferences a client is changing. Absent means "leave it".
+#[derive(Deserialize)]
+struct InterfaceBody {
+    #[serde(default)]
+    theme: Option<String>,
+    #[serde(default)]
+    language: Option<String>,
+}
+
 /// Build a decoder now, so the next recording does not wait for one.
 ///
 /// Over HTTP rather than only as the `model_load` socket command, because the socket exists only
@@ -5176,6 +5233,32 @@ mod resolve_tests {
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
         assert_eq!(resolved.live_model, "sense-voice-small");
         assert_eq!(resolved.language.as_deref(), Some("ja"));
+    }
+
+    /// The interface preference the daemon kept and nobody read.
+    ///
+    /// `interface.theme` and `interface.language` have been in the settings file, validated and
+    /// defaulted, since it had a schema. Nothing on either side touched them: the browser held its
+    /// own copy, so choosing dark mode in one window told the second window nothing, and a new
+    /// machine started over.
+    #[test]
+    fn the_interface_preference_is_written_and_read_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+
+        let saved = summo_core::Settings::load(&path).unwrap_or_default();
+        assert_eq!(saved.interface.theme, "system");
+        assert_eq!(saved.interface.language, "", "nobody has chosen yet");
+
+        let mut settings = summo_core::Settings::load(&path).unwrap_or_default();
+        settings.interface.theme = "dark".into();
+        settings.interface.language = "ja".into();
+        settings.save(&path).unwrap();
+
+        let back = summo_core::Settings::load(&path).unwrap();
+        assert_eq!(back.interface.theme, "dark");
+        assert_eq!(back.interface.language, "ja");
     }
 
     /// Turning the translator off has to be a message that differs from not mentioning it.

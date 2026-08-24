@@ -171,16 +171,29 @@ pub struct Storage {
     pub keep_audio: bool,
 }
 
+/// What the app looks like, and in which language.
+///
+/// Here rather than only in the browser's `localStorage` for the reason `models.language` is: a
+/// choice that lives in one browser is a choice a second window, a second machine and the tray have
+/// never heard of. The browser still decides what to paint *now* — reading this before first paint
+/// would add a round trip in front of the first pixel — but it adopts this when it has no choice of
+/// its own, and writes back when the user makes one.
+///
+/// `compact_while_recording` and `show_performance` used to be here. Both were dead: nothing in the
+/// daemon, the app or the shell ever read either one, and they named features that were never
+/// built — shrinking is a button somebody presses, and there is no performance readout to toggle.
+/// A field a user can set in `settings.json` that changes nothing is worse than no field.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Interface {
     /// `system`, `light` or `dark`.
     pub theme: String,
+    /// The interface language as a tag — `vi`, `en`, `ja`, `zh` — or empty to follow the browser.
+    ///
+    /// Empty is not the same as a language: it means nobody has chosen, and the app should keep
+    /// asking the browser. Storing today's answer instead would freeze a machine that later changes
+    /// its own locale.
     pub language: String,
-    /// Shrink to the compact window when a recording starts.
-    pub compact_while_recording: bool,
-    /// Show the real-time factor and memory readout.
-    pub show_performance: bool,
 }
 
 impl Default for Agents {
@@ -250,9 +263,11 @@ impl Default for Interface {
     fn default() -> Self {
         Self {
             theme: "system".into(),
-            language: "vi".into(),
-            compact_while_recording: false,
-            show_performance: true,
+            // Empty, not "vi". A default language here would speak for a user who has not chosen
+            // one, and it would speak louder than their browser — a fresh install on a Japanese
+            // machine would open in Vietnamese because a struct had an opinion. Nobody has chosen
+            // is a state, and the app already knows what to do with it: ask the browser.
+            language: String::new(),
         }
     }
 }

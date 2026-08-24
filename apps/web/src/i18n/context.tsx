@@ -29,6 +29,15 @@ export interface Props {
   extra?: ExtraLocales;
   /** Force a locale, for tests and screenshots. */
   locale?: string;
+  /**
+   * The vault's saved language, which loses to this browser's own choice and beats the browser's.
+   *
+   * Not the same as `locale` above: that one overrides everything, for a screenshot. This is a
+   * preference somebody set on another machine, and it applies only where nobody has chosen here.
+   */
+  preferred?: string;
+  /** Tell the vault what the user just picked. Absent in tests, where there is nothing to tell. */
+  onChosen?: (locale: string) => void;
 }
 
 export function read(): string | null {
