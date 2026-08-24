@@ -1135,6 +1135,18 @@ fn choose_models(
             .clone()
             .filter(|m| !m.trim().is_empty());
     }
+    // The detector and the fingerprint, same story: chosen on the models screen, written to the
+    // settings file, and never read by anything that records.
+    if spec.vad_model.is_none() {
+        spec.vad_model = settings.models.vad.clone().filter(|m| !m.trim().is_empty());
+    }
+    if spec.speaker_model.is_none() {
+        spec.speaker_model = settings
+            .models
+            .speaker
+            .clone()
+            .filter(|m| !m.trim().is_empty());
+    }
 
     if !spec.live_model.trim().is_empty() {
         return spec;
@@ -5233,6 +5245,29 @@ mod resolve_tests {
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
         assert_eq!(resolved.live_model, "sense-voice-small");
         assert_eq!(resolved.language.as_deref(), Some("ja"));
+    }
+
+    /// The detector and the fingerprint were chosen on a screen and ignored by every recording.
+    ///
+    /// `models.vad` and `models.speaker` are written by the models screen and accepted by
+    /// `/settings/models`, and the runner took the *first* installed model of each task instead.
+    /// With one of each installed that is invisible, which is why it survived: install a second
+    /// detector and the app records with whichever the registry lists first, under a tick beside
+    /// the other one.
+    #[test]
+    fn the_detector_and_the_fingerprint_come_from_the_settings_too() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("whisper-tiny".into());
+        settings.models.vad = Some("silero-vad-v5".into());
+        settings.models.speaker = Some("cam++".into());
+        settings.save(&path).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.vad_model.as_deref(), Some("silero-vad-v5"));
+        assert_eq!(resolved.speaker_model.as_deref(), Some("cam++"));
     }
 
     /// The interface preference the daemon kept and nobody read.
