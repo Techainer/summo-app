@@ -173,7 +173,10 @@ await firstLine.waitFor({ timeout: 120000 }).catch((error) => {
     if (!shown) {
       problems.push("the daemon revised a line and the transcript still shows the first version");
     } else {
-      const line = await revised.first().innerText().catch(() => "");
+      const line = await revised
+        .first()
+        .innerText()
+        .catch(() => "");
       console.log(`refined and on screen: ${JSON.stringify(line.slice(0, 60))}`);
     }
   }

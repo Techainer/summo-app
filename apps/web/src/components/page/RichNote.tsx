@@ -311,6 +311,21 @@ export function RichNote({
   // given, and that coercion is exactly the step a converter test cannot see. A ragged table is the
   // clearest case — the converter reproduces one exactly, and ProseMirror squares it up. Reported
   // through a ref so a re-render cannot raise it twice and put the caller in a loop.
+  //
+  // KNOWN DEFECT, not yet fixed: this fires on ordinary text.
+  //
+  // Measured on the live meeting page — type one line of plain Vietnamese into a new note and about
+  // one time in five the editor decides it cannot hold it and hands the note to the `textarea`
+  // fallback. `faithful()` is not the culprit: that sentence round-trips through `toDoc`/
+  // `toMarkdown` exactly, checked directly. It is the second half — `editor.getJSON()` against the
+  // `markdown` *prop* — and the prop is a render behind the editor it is being compared with, so
+  // the two are momentarily out of step through no fault of the content.
+  //
+  // Not fixed here because the obvious repair (skip the check while an edit is in flight) is a
+  // change to the rule that decides whether a user's note is safe to edit at all, and getting that
+  // wrong the other way silently rewrites somebody's file. It wants its own change, with the
+  // round-trip cases pinned first. `e2e/microphone.mjs` accepts either editor meanwhile and says
+  // why.
   const told = useRef(false);
   useEffect(() => {
     if (!editor || told.current) return;
