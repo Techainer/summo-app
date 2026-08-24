@@ -320,6 +320,41 @@ impl SessionRunner {
             .filter_map(|l| l.chain.stage::<Recognise>())
             .any(Recognise::is_speaking)
     }
+
+    /// How far into the meeting each lane has got: its next sequence number and its clock.
+    ///
+    /// Read before a mid-meeting change tears this runner down, and handed to the one that
+    /// replaces it. Sequence numbers and timestamps belong to the recording; the pipeline is only
+    /// what is currently serving it, and rebuilding it used to restart both — so a swap renumbered
+    /// new utterances from zero, they collided with lines already on screen, and the transcript
+    /// overwrote its own beginning while the clock went back to 00:00.
+    #[must_use]
+    pub fn position(&self) -> HashMap<Lane, (u64, usize)> {
+        self.lanes
+            .iter()
+            .filter_map(|(lane, runner)| {
+                runner
+                    .chain
+                    .stage::<Recognise>()
+                    .map(|r| (*lane, r.position()))
+            })
+            .collect()
+    }
+
+    /// Take over a meeting already in progress, lane by lane.
+    ///
+    /// A lane the previous runner did not have starts from nothing, which is right: it has no
+    /// history in this meeting.
+    pub fn resume_from(&mut self, position: &HashMap<Lane, (u64, usize)>) {
+        for (lane, runner) in &mut self.lanes {
+            let Some(&(seq, samples)) = position.get(lane) else {
+                continue;
+            };
+            if let Some(stage) = runner.chain.stage_mut::<Recognise>() {
+                stage.resume_at(seq, samples);
+            }
+        }
+    }
 }
 
 /// Find an installed voice detector.

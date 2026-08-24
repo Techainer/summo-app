@@ -135,6 +135,17 @@ impl<D: Decoder> PseudoSession<D> {
         self.last_final_language.take()
     }
 
+    /// Where the meeting has got to, so a rebuilt pipeline can carry on rather than start over.
+    #[must_use]
+    pub fn position(&self) -> (u64, usize) {
+        self.gate.position()
+    }
+
+    /// Take over a meeting already in progress. See [`summo_vad::VadGate::resume_at`].
+    pub fn resume_at(&mut self, seq: u64, samples_seen: usize) {
+        self.gate.resume_at(seq, samples_seen);
+    }
+
     #[must_use]
     pub fn decode_count(&self) -> u64 {
         self.decodes

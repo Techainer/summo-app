@@ -5,7 +5,7 @@ import { useI18n } from "../../i18n/context";
 import { CatalogueClient } from "../../lib/catalogue";
 import { useEngine } from "../../lib/engine-context";
 import { readJson, useErrorText } from "../../lib/errors";
-import { AUTO, autoAvailable, ordered, type Language } from "../../lib/languages";
+import { AUTO, autoAvailable, languageName, ordered, type Language } from "../../lib/languages";
 import { url } from "../../lib/library";
 import { fetchPlan } from "../../lib/plan";
 import { useLoad } from "../../lib/use-load";
@@ -230,6 +230,22 @@ export function ListeningPanel({
           </Field>
         )}
       </div>
+
+      {/* Translating into the language being spoken, which is the one target that cannot show you
+          anything. `Tiếng Việt` is pinned first in that list — it is the reader's own language and
+          for every *other* language control that is the right place for it — so on a Vietnamese
+          call it is also the easiest entry to hit by accident. The daemon dutifully translates
+          Vietnamese to Vietnamese, the subtitle is the sentence again, and the panel says
+          `đang dịch sang Tiếng Việt` over a transcript with no visible translation in it.
+
+          Said, not prevented: a meeting held in English by a Vietnamese speaker who set the spoken
+          language wrong has a real reason to want this, and refusing the choice would be guessing
+          which of the two settings is the mistake. */}
+      {spoken !== AUTO && into.includes(spoken) && (
+        <p className="text-fg-dim text-micro mt-2">
+          {t("record.translate_same", { language: languageName(spoken, locale) })}
+        </p>
+      )}
 
       {/* A swap the daemon refused. Without this the dropdown showed the new model and the meeting
           kept translating with the old one — the same silent disagreement between a control and the

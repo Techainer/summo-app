@@ -149,6 +149,16 @@ impl Pipeline {
             .find_map(|s| (s.as_ref() as &dyn std::any::Any).downcast_ref::<T>())
     }
 
+    /// The same, for a caller that has to change something a stage owns.
+    ///
+    /// Used to hand a rebuilt pipeline the position of the meeting it is taking over — the sequence
+    /// numbers and the clock belong to the recording, not to whichever decoder is serving it.
+    pub fn stage_mut<T: Processor + 'static>(&mut self) -> Option<&mut T> {
+        self.stages
+            .iter_mut()
+            .find_map(|s| (s.as_mut() as &mut dyn std::any::Any).downcast_mut::<T>())
+    }
+
     /// Ready every stage for a new stream.
     pub fn reset(&mut self) {
         for stage in &mut self.stages {

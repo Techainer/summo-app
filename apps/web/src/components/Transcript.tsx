@@ -192,6 +192,12 @@ export function Transcript({
                     // A `data-testid` is a promise to the tests; a utility class is not.
                     data-testid="transcript-line"
                     data-source={segment.source}
+                    // The utterance's number in this meeting, so a test can assert the transcript
+                    // is still one meeting in order. A mid-meeting model or language change used to
+                    // rebuild the pipeline with the numbering reset, so new lines took the numbers
+                    // of old ones and overwrote them at the top — invisible to any assertion that
+                    // counted lines, because an overwrite keeps the count.
+                    data-seq={segment.seq}
                     className={cn(
                       "mt-0.5 mb-0 leading-relaxed",
                       // Partial text is dimmed rather than hidden, so the eye can follow it

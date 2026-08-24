@@ -200,6 +200,26 @@ async function settled(what, check) {
       `segments went backwards on the model swap: ${before.segments} → ${after.segments}`,
     );
   }
+
+  // And the transcript is still one meeting, in order.
+  //
+  // A swap rebuilds the pipeline, and every sequence number and timestamp used to restart at zero
+  // with it — so the next thing said was numbered the same as the first thing said, and the
+  // transcript, which indexes by sequence number, overwrote its own beginning. On screen the clock
+  // went back to 00:00 and new lines appeared at the top. Reported from a real call as "the time
+  // keeps looping, and choosing the language again puts it back at the top".
+  //
+  // By sequence number, not by counting lines: an overwrite keeps the count.
+  await page.waitForTimeout(8000);
+  const seqs = await page
+    .locator('[data-testid="transcript-line"]')
+    .evaluateAll((nodes) => nodes.map((n) => Number(n.getAttribute("data-seq"))));
+  const wrong = seqs.findIndex((seq, i) => i > 0 && seq <= seqs[i - 1]);
+  if (seqs.length > 1 && wrong !== -1) {
+    problems.push(`the transcript renumbered itself after the swap: ${seqs.join(",")}`);
+  } else {
+    console.log(`transcript after the swap: seq ${seqs.join(",")}`);
+  }
 }
 
 // ---- the second speech model, mid-meeting --------------------------------

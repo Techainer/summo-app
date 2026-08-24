@@ -178,6 +178,33 @@ impl VadGate {
         self.cfg
     }
 
+    /// Where this gate has got to: the next sequence number, and the clock behind it.
+    ///
+    /// Both belong to the *meeting*, not to the pipeline decoding it — and a mid-meeting model or
+    /// language change rebuilds the pipeline. Without carrying these across, the new gate started
+    /// at zero: fresh utterances were numbered from 0 again, collided with lines already on screen,
+    /// and the transcript — which indexes by sequence number — overwrote its own beginning. Every
+    /// timestamp restarted with them, so a recording that had reached 00:24 went back to 00:00.
+    /// Reported as "the time keeps looping, and changing the language puts it back at the top".
+    #[must_use]
+    pub fn position(&self) -> (u64, usize) {
+        (self.seq, self.samples_seen)
+    }
+
+    /// Continue a meeting that a new pipeline is taking over.
+    ///
+    /// Only ever called on a gate that has consumed nothing. Seeding one mid-flight would move the
+    /// clock under an utterance it is already buffering.
+    pub fn resume_at(&mut self, seq: u64, samples_seen: usize) {
+        debug_assert!(
+            self.samples_seen == 0 && matches!(self.state, State::Idle),
+            "a gate is only resumed before it has heard anything"
+        );
+        self.seq = seq;
+        self.samples_seen = samples_seen;
+        self.buf_start = samples_seen;
+    }
+
     /// Audio accumulated for the open utterance, for partial re-decodes.
     #[must_use]
     pub fn open_pcm(&self) -> &[f32] {
@@ -607,5 +634,45 @@ mod tests {
         gate.reset();
         assert_eq!(gate.now(), 0.0);
         assert!(!gate.is_speaking());
+    }
+}
+
+#[cfg(test)]
+mod carrying_a_meeting {
+    use super::*;
+
+    /// A rebuilt pipeline continues the meeting instead of starting a new one.
+    ///
+    /// Changing the model or the spoken language mid-recording builds a fresh `SessionRunner`, and
+    /// every gate in it used to begin at sequence zero with a zeroed clock. The transcript indexes
+    /// by sequence number, so the next utterance after a swap was numbered 0 — the same as the
+    /// first thing anybody said — and overwrote it, at the top, with a timestamp of 00:00 on a
+    /// recording that had reached 00:24.
+    #[test]
+    fn a_resumed_gate_keeps_numbering_and_timing_from_where_the_last_one_stopped() {
+        let fresh = VadGate::new(GateConfig::default());
+        assert_eq!(
+            fresh.position(),
+            (0, 0),
+            "a new meeting starts at the start"
+        );
+
+        let mut taking_over = VadGate::new(GateConfig::default());
+        taking_over.resume_at(7, SAMPLE_RATE as usize * 24);
+        assert_eq!(
+            taking_over.position(),
+            (7, SAMPLE_RATE as usize * 24),
+            "the next utterance is the eighth, not the first"
+        );
+    }
+
+    /// And `reset` still means "a new stream", which is a different thing from a swap: the same
+    /// gate reused for another meeting has to forget.
+    #[test]
+    fn reset_still_goes_back_to_the_beginning() {
+        let mut gate = VadGate::new(GateConfig::default());
+        gate.resume_at(7, SAMPLE_RATE as usize * 24);
+        gate.reset();
+        assert_eq!(gate.position().0, 0);
     }
 }
