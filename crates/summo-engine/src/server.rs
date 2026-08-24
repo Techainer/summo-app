@@ -4111,7 +4111,18 @@ struct LlmBody {
     /// Doubly optional on purpose. Absent means "leave it alone", which is what every existing
     /// caller sends; present-and-null means "turn it off". Collapsing the two would make every
     /// save from an older client silently delete the user's translator.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ///
+    /// `deserialize_with` is what makes that distinction real, and its absence is why turning the
+    /// translator off never worked. Serde maps a JSON `null` onto the *outer* `Option`, so
+    /// `{"translator": null}` arrived as `None` — indistinguishable from a field nobody sent — and
+    /// the handler below dutifully left the old translator in place. The interface reported a
+    /// successful save, re-read the settings, and drew the endpoint it had just been told to
+    /// forget.
+    /// The helper already existed a few hundred lines up, written for exactly this and applied to
+    /// something else. That is the whole bug: the type said `Option<Option<_>>`, the comment said
+    /// what the two levels meant, and the attribute that makes serde honour the distinction was
+    /// never added here.
+    #[serde(default, deserialize_with = "double_option")]
     translator: Option<Option<summo_core::settings::Translator>>,
 }
 
@@ -5165,6 +5176,44 @@ mod resolve_tests {
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
         assert_eq!(resolved.live_model, "sense-voice-small");
         assert_eq!(resolved.language.as_deref(), Some("ja"));
+    }
+
+    /// Turning the translator off has to be a message that differs from not mentioning it.
+    ///
+    /// `Option<Option<T>>` cannot tell those apart by itself: serde maps a JSON `null` onto the
+    /// outer `Option`, so `{"translator": null}` arrived as `None` — the same value a client that
+    /// never heard of the field sends — and the handler left the old translator in place. The
+    /// settings screen reported a successful save and then redrew the endpoint it had just been
+    /// asked to forget. The type and its comment were right the whole time; the attribute that
+    /// makes serde honour them was missing.
+    #[test]
+    fn a_null_translator_means_off_and_an_absent_one_means_leave_it() {
+        let off: LlmBody =
+            serde_json::from_str(r#"{"provider":"ollama","translator":null}"#).expect("parses");
+        assert_eq!(
+            off.translator,
+            Some(None),
+            "null is a request to turn it off"
+        );
+
+        let quiet: LlmBody = serde_json::from_str(r#"{"provider":"ollama"}"#).expect("parses");
+        assert_eq!(
+            quiet.translator, None,
+            "absent is a request to change nothing"
+        );
+
+        let named: LlmBody = serde_json::from_str(
+            r#"{"provider":"ollama","translator":{"provider":"local","model":"small100"}}"#,
+        )
+        .expect("parses");
+        assert_eq!(
+            named
+                .translator
+                .flatten()
+                .and_then(|mt| mt.model)
+                .as_deref(),
+            Some("small100")
+        );
     }
 
     /// `models.refine` was a setting nothing read.

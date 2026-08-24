@@ -172,10 +172,17 @@ if ((await page.getByTestId("settings-tab-about").getAttribute("aria-current")) 
     problems.push("automatic still asks which model, which is the question it exists to not ask");
   }
   // Left where it was found: everything after this reads the same settings file.
-  const cleared = await fetch(`${appUrl}/settings?token=${token}`).then((r) => r.json());
-  if (cleared.llm?.translator != null) {
+  // `.settings.llm`, not `.llm`. This endpoint answers `{settings, api_key_present}`, and the
+  // first version of this check read the top level through optional chaining — so it compared
+  // `undefined` against null, passed, and would have gone on passing if returning to Automatic had
+  // left the translator pinned. Asserted present first, so a shape change fails loudly instead of
+  // going quiet again.
+  const after = await fetch(`${appUrl}/settings?token=${token}`).then((r) => r.json());
+  if (after?.settings?.llm === undefined) {
+    problems.push(`/settings does not answer the shape this suite reads: ${JSON.stringify(after)}`);
+  } else if (after.settings.llm.translator != null) {
     problems.push(
-      `returning to automatic did not clear the translator: ${JSON.stringify(cleared.llm.translator)}`,
+      `returning to automatic did not clear the translator: ${JSON.stringify(after.settings.llm.translator)}`,
     );
   }
 
