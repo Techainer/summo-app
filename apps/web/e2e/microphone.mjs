@@ -127,22 +127,51 @@ const press = (page) =>
     // Waited for, not assumed: the editor is a lazy chunk, and on a loaded machine it mounts a
     // second or two after the page it lives on. Typing into the space where it is about to be goes
     // nowhere and looks exactly like an editor that refuses input.
-    const editor = page.locator(".ProseMirror[contenteditable='true']").first();
-    const ready = await editor
+    //
+    // The rich editor, by name. It used to be "either editor", because `RichNote` handed the note
+    // to its plain-text fallback about one run in five after a single line of ordinary Vietnamese —
+    // the faithfulness check was running on every render and comparing a document that had the
+    // keystroke against a prop that did not yet. Fixed at the check; asserted here, because "either
+    // is fine" would let it come back unnoticed.
+    const rich = page.locator(".ProseMirror[contenteditable='true']").first();
+    const ready = await rich
       .waitFor({ state: "visible", timeout: 20000 })
       .then(() => true)
       .catch(() => false);
+
     if (!ready) {
       problems.push("the meeting has nowhere to type");
     } else {
+      const said = "Ngân sách chốt thứ năm.";
       let landed = false;
+      let refused = null;
       for (let attempt = 0; attempt < 3 && !landed; attempt += 1) {
-        await editor.click();
-        await page.keyboard.type("Ngân sách chốt thứ năm.");
+        // Re-read each time: an attempt can change which editor is on screen, because typing is
+        // exactly what makes `RichNote` decide it cannot hold the text.
+        try {
+          await rich.click({ timeout: 15000 });
+          await page.keyboard.type(said);
+        } catch (error) {
+          refused = error;
+          await page.waitForTimeout(500);
+          continue;
+        }
         await page.waitForTimeout(800);
-        landed = (await page.locator("body").innerText()).includes("Ngân sách chốt thứ năm");
+        // `innerText` misses a `textarea`'s value, so both are asked. A suite that only read the
+        // rendered text reported "nothing was typed" about a textarea holding the sentence.
+        landed = (await page.locator("body").innerText()).includes(said);
+        if (!landed && (await page.locator("textarea").count()) > 0) {
+          problems.push("the meeting note fell back to plain text on one typed line");
+          break;
+        }
       }
-      if (!landed) problems.push("typing into the meeting note put nothing on screen");
+      if (!landed) {
+        problems.push(
+          refused
+            ? `typing into the meeting note never landed: ${String(refused.message).split("\n")[0]}`
+            : "typing into the meeting note put nothing on screen",
+        );
+      }
     }
   }
 

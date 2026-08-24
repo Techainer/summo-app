@@ -179,6 +179,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     [controller],
   );
 
+  // Not remembered locally, unlike the language: which model checks the text belongs to
+  // `settings.models.refine`, which the daemon owns and the models screen writes.
+  const refine = useCallback((id: string) => controller?.refine(id), [controller]);
+
   // Debounced by the editor, not here: this is the save, and the daemon writes the file the moment
   // it arrives.
   const notes = useCallback(
@@ -253,6 +257,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       toggle,
       retune,
       translate,
+      refine,
       notes,
     }),
     [
@@ -270,6 +275,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       toggle,
       retune,
       translate,
+      refine,
       notes,
     ],
   );

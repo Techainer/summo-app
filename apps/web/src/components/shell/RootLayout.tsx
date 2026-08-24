@@ -66,7 +66,8 @@ import { SNAPPY, screen as screenVariants } from "../../lib/motion";
 import { AssistantPanel } from "../assistant/AssistantPanel";
 import { Palette } from "../search/Palette";
 import type { Action } from "../../lib/palette";
-import { SCHEMES, choose as chooseScheme, read as readScheme, type Scheme } from "../../lib/theme";
+import { SCHEMES, remember as rememberScheme } from "../../lib/theme";
+import { useScheme } from "../../lib/use-scheme";
 import { usePaletteShortcut } from "../../lib/use-palette-shortcut";
 import { FirstRun } from "../onboarding/FirstRun";
 import { AppShell } from "./AppShell";
@@ -139,9 +140,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
   const memory = useMemory(engine.handshake);
   const navigate = useNavigate();
   const { languages, setLocale, locale } = useI18n();
-  // Read once. The document already carries the choice — `index.html` applies it before the first
-  // paint — so this is only what the palette needs in order to say which one is on.
-  const [scheme, setScheme] = useState<Scheme>(() => readScheme());
+  // Only what the palette needs in order to leave out the row for the theme already on. The
+  // document itself carries the choice — `index.html` applies it before the first paint — and this
+  // follows a change made anywhere: the header button, the settings screen, or the vault.
+  const scheme = useScheme();
   const matchRoute = useMatchRoute();
   const narrow = useIsNarrow();
   const t = useT();
@@ -522,10 +524,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           light: ["theme", "light", "giao dien", "sang"],
           dark: ["theme", "dark", "night", "giao dien", "toi"],
         }[one],
-        run: () => {
-          chooseScheme(one);
-          setScheme(one);
-        },
+        run: () => rememberScheme(engine.handshake, one),
       })),
       // Every language but the one already on. Labelled in its own language, because somebody
       // looking for English is not reading the Vietnamese word for it.

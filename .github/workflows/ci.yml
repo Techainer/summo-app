@@ -4,6 +4,17 @@ on:
   push:
     branches: [master, main]
   pull_request:
+  # Startable by hand, because the automatic triggers are not always enough.
+  #
+  # GitHub creates a `pull_request` run on `opened`, `synchronize` and `reopened`, and on
+  # 2026-08-24 it created none for two consecutive pushes to an open pull request — nor for a
+  # close-and-reopen, which is the documented way to force one. The branch sat with no checks at
+  # all, and `release.yml` could be started from the Actions tab while the thing that decides
+  # whether a release is safe could not.
+  #
+  # A tag is only supposed to go on green CI. Without this, "green" was not something anybody could
+  # ask for.
+  workflow_dispatch:
 
 # One run per branch. Pushing three times in ten minutes used to start three full matrices, and the
 # first two spend Windows and macOS minutes answering a question that is already out of date — while

@@ -23,7 +23,7 @@ import {
   type Language,
 } from "./index";
 
-export function I18nProvider({ children, extra, locale: forced }: Props) {
+export function I18nProvider({ children, extra, locale: forced, preferred, onChosen }: Props) {
   const languages = useMemo<Language[]>(() => {
     const added = Object.entries(extra ?? {})
       .filter(([code]) => !BUILT_IN_LANGUAGES.some((l) => l.code === code))
@@ -37,6 +37,30 @@ export function I18nProvider({ children, extra, locale: forced }: Props) {
       read(),
     ),
   );
+
+  /**
+   * The vault's language, adopted on the one visit that has none of its own.
+   *
+   * `interface.language` has been in the settings file since it had a schema and nothing read it,
+   * so choosing Japanese in one window told that window and nothing else — a second machine, or a
+   * reinstall, went back to whatever the browser asked for.
+   *
+   * Only when `localStorage` is empty, and only through `setLocaleState` rather than `setLocale`:
+   * writing it down here would turn "the vault prefers Japanese" into "this browser has chosen
+   * Japanese", and the next change made elsewhere would stop arriving. It also arrives after first
+   * paint by necessity — it comes over the network — so this is a switch, not the initial value.
+   */
+  useEffect(() => {
+    if (!preferred || read() !== null) return undefined;
+    if (!languages.some((language) => language.code === preferred)) return undefined;
+    let live = true;
+    void ensure(preferred).then(() => {
+      if (live) setLocaleState(preferred);
+    });
+    return () => {
+      live = false;
+    };
+  }, [preferred, languages]);
 
   // A user-added language that arrives after first paint must be selectable, and a saved choice
   // pointing at one must take effect once it loads rather than being silently ignored.
@@ -101,6 +125,9 @@ export function I18nProvider({ children, extra, locale: forced }: Props) {
           // Private browsing and locked-down webviews both throw here. The choice still applies to
           // this session; it just will not be remembered.
         }
+        // And the vault, so the choice survives this browser. Fire-and-forget: the language has
+        // already changed here, and a daemon that is not answering must not make the switch fail.
+        onChosen?.(next);
         // Fetched *before* the switch, not after. Setting the locale first would render one frame
         // against a catalog that is not there yet — a flash of key names, or of Vietnamese, on the
         // way to the language somebody just chose. The chunk is a few kB from the same origin, so
@@ -108,7 +135,7 @@ export function I18nProvider({ children, extra, locale: forced }: Props) {
         void ensure(next).then(() => setLocaleState(next));
       },
     };
-  }, [active, extra, languages, shipped]);
+  }, [active, extra, languages, shipped, onChosen]);
 
   useEffect(() => {
     // Screen readers announce in the wrong language without this, and CSS `:lang()` cannot match.

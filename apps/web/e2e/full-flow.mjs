@@ -154,15 +154,22 @@ await page
   // The count is asserted because the obvious way to implement that is to render both, and an
   // earlier attempt did exactly that: two buttons named "Đổi", ambiguous to a reader and fatal to
   // this selector.
-  const changers = page.getByRole("button", { name: "Đổi", exact: true });
-  if ((await changers.count()) !== 1) {
-    problems.push(`expected one "Đổi" on the meeting page, found ${await changers.count()}`);
+  //
+  // Open already, and only one of them. They start expanded on this page — a person on a live call
+  // reported that the place to change the model, the language and the translation had been removed,
+  // and it had not: it was one unlabelled click away on the screen that exists to run the meeting.
+  const panel = page.getByTestId("live-bar").getByTestId("listening-panel");
+  await panel.waitFor({ timeout: 10000 });
+  if ((await page.getByTestId("listening-panel").count()) !== 1) {
+    problems.push(
+      `expected one set of live controls, found ${await page.getByTestId("listening-panel").count()}`,
+    );
   }
-  if ((await page.getByTestId("live-bar").getByRole("button", { name: "Đổi" }).count()) !== 1) {
-    problems.push("the in-meeting controls are not inside the recording bar");
+  const toggle = page.getByRole("button", { name: "Xong", exact: true });
+  if ((await toggle.count()) !== 1) {
+    problems.push(`expected one control to put them away, found ${await toggle.count()}`);
   }
 
-  await changers.first().click();
   await page.screenshot({ path: "/tmp/shots/in-meeting-config.png" });
   await page.getByLabel("Ngôn ngữ nói").selectOption("vi");
   await page.waitForTimeout(3000);

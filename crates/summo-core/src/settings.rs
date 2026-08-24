@@ -43,6 +43,11 @@ pub struct Agents {
     /// Hour, local, after which it may happen. Late, because it is unattended work on a file that
     /// steers every later answer, and the user should be asleep rather than mid-sentence.
     pub dream_hour: u8,
+    /// Fields a newer build wrote that this one does not know, kept so a downgrade does not erase
+    /// them. See {@link Settings::unknown} — the guarantee has to hold at every level, because the
+    /// place a new setting appears is almost always inside one of these, not beside them.
+    #[serde(flatten)]
+    pub unknown: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -63,6 +68,11 @@ pub struct Recording {
     /// The single most felt setting: it is added directly to the delay before final text appears,
     /// and cutting it too far truncates sentences.
     pub min_silence_ms: u32,
+    /// Fields a newer build wrote that this one does not know, kept so a downgrade does not erase
+    /// them. See {@link Settings::unknown} — the guarantee has to hold at every level, because the
+    /// place a new setting appears is almost always inside one of these, not beside them.
+    #[serde(flatten)]
+    pub unknown: BTreeMap<String, serde_json::Value>,
 }
 
 /// Every field is `None` until the user or `summo setup` chooses, so a fresh install has no
@@ -80,6 +90,11 @@ pub struct Models {
     pub language: Option<String>,
     /// Threads for inference. `None` follows the hardware probe.
     pub threads: Option<usize>,
+    /// Fields a newer build wrote that this one does not know, kept so a downgrade does not erase
+    /// them. See {@link Settings::unknown} — the guarantee has to hold at every level, because the
+    /// place a new setting appears is almost always inside one of these, not beside them.
+    #[serde(flatten)]
+    pub unknown: BTreeMap<String, serde_json::Value>,
 }
 
 /// Where summaries, translation and answers come from.
@@ -104,6 +119,11 @@ pub struct Llm {
     pub translator: Option<Translator>,
     // No API key. Keys live in the OS keychain; one in a settings file would end up in backups,
     // sync and support bundles.
+    /// Fields a newer build wrote that this one does not know, kept so a downgrade does not erase
+    /// them. See {@link Settings::unknown} — the guarantee has to hold at every level, because the
+    /// place a new setting appears is almost always inside one of these, not beside them.
+    #[serde(flatten)]
+    pub unknown: BTreeMap<String, serde_json::Value>,
 }
 
 /// A dedicated machine-translation model.
@@ -169,18 +189,41 @@ pub struct Storage {
     pub audio_retention_days: u32,
     /// Keep the audio alongside the transcript at all.
     pub keep_audio: bool,
+    /// Fields a newer build wrote that this one does not know, kept so a downgrade does not erase
+    /// them. See {@link Settings::unknown} — the guarantee has to hold at every level, because the
+    /// place a new setting appears is almost always inside one of these, not beside them.
+    #[serde(flatten)]
+    pub unknown: BTreeMap<String, serde_json::Value>,
 }
 
+/// What the app looks like, and in which language.
+///
+/// Here rather than only in the browser's `localStorage` for the reason `models.language` is: a
+/// choice that lives in one browser is a choice a second window, a second machine and the tray have
+/// never heard of. The browser still decides what to paint *now* — reading this before first paint
+/// would add a round trip in front of the first pixel — but it adopts this when it has no choice of
+/// its own, and writes back when the user makes one.
+///
+/// `compact_while_recording` and `show_performance` used to be here. Both were dead: nothing in the
+/// daemon, the app or the shell ever read either one, and they named features that were never
+/// built — shrinking is a button somebody presses, and there is no performance readout to toggle.
+/// A field a user can set in `settings.json` that changes nothing is worse than no field.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Interface {
     /// `system`, `light` or `dark`.
     pub theme: String,
+    /// The interface language as a tag — `vi`, `en`, `ja`, `zh` — or empty to follow the browser.
+    ///
+    /// Empty is not the same as a language: it means nobody has chosen, and the app should keep
+    /// asking the browser. Storing today's answer instead would freeze a machine that later changes
+    /// its own locale.
     pub language: String,
-    /// Shrink to the compact window when a recording starts.
-    pub compact_while_recording: bool,
-    /// Show the real-time factor and memory readout.
-    pub show_performance: bool,
+    /// Fields a newer build wrote that this one does not know, kept so a downgrade does not erase
+    /// them. See {@link Settings::unknown} — the guarantee has to hold at every level, because the
+    /// place a new setting appears is almost always inside one of these, not beside them.
+    #[serde(flatten)]
+    pub unknown: BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for Agents {
@@ -188,6 +231,7 @@ impl Default for Agents {
         Self {
             dream: false,
             dream_hour: 3,
+            unknown: BTreeMap::new(),
         }
     }
 }
@@ -217,6 +261,7 @@ impl Default for Recording {
             // The production preset, measured on laptop microphones with fan noise present.
             vad_threshold: 0.35,
             min_silence_ms: 400,
+            unknown: BTreeMap::new(),
         }
     }
 }
@@ -233,6 +278,7 @@ impl Default for Llm {
             // translation into a connection error, which is worse than translating with the model
             // the user did configure.
             translator: None,
+            unknown: BTreeMap::new(),
         }
     }
 }
@@ -242,6 +288,7 @@ impl Default for Storage {
         Self {
             audio_retention_days: 30,
             keep_audio: true,
+            unknown: BTreeMap::new(),
         }
     }
 }
@@ -250,9 +297,12 @@ impl Default for Interface {
     fn default() -> Self {
         Self {
             theme: "system".into(),
-            language: "vi".into(),
-            compact_while_recording: false,
-            show_performance: true,
+            // Empty, not "vi". A default language here would speak for a user who has not chosen
+            // one, and it would speak louder than their browser — a fresh install on a Japanese
+            // machine would open in Vietnamese because a struct had an opinion. Nobody has chosen
+            // is a state, and the app already knows what to do with it: ask the browser.
+            language: String::new(),
+            unknown: BTreeMap::new(),
         }
     }
 }
@@ -534,5 +584,67 @@ mod tests {
                 "missing {expected} in {keys:?}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod downgrade {
+    use super::*;
+
+    /// A setting this build has never heard of survives being read and written back.
+    ///
+    /// `Settings` has carried an `unknown` catch-all since it had a schema, with a comment saying
+    /// why: somebody who runs a newer build, then an older one, must not have their configuration
+    /// quietly emptied by the older one saving over it. The guarantee held at the top level and
+    /// nowhere else — and the top level is the one place new settings almost never appear. They
+    /// appear inside `models`, `llm`, `recording`, which had no catch-all at all.
+    ///
+    /// Measured before the fix: `{"tomorrow": …}` survived, `{"models": {"tomorrow": …}}` did not.
+    /// So a user on a newer build who pinned a model with an option this build lacks, opened the
+    /// older one once, and touched any setting, lost it.
+    #[test]
+    fn a_field_from_a_newer_build_survives_an_older_one() {
+        let written = r#"{
+            "tomorrow": "beside",
+            "models": { "live": "whisper-tiny", "tomorrow": "inside" },
+            "llm": { "provider": "ollama", "tomorrow": 7 },
+            "recording": { "tomorrow": true },
+            "storage": { "tomorrow": [1] },
+            "interface": { "theme": "dark", "tomorrow": null },
+            "agents": { "tomorrow": {"a": 1} }
+        }"#;
+
+        let settings: Settings = serde_json::from_str(written).expect("parses");
+        let back = serde_json::to_string(&settings).expect("serialises");
+
+        // The settings this build *does* know are still themselves.
+        assert_eq!(settings.models.live.as_deref(), Some("whisper-tiny"));
+        assert_eq!(settings.interface.theme, "dark");
+
+        // And every stranger is still there, at whichever level it was found.
+        for (place, section) in [
+            ("beside", &settings.unknown),
+            ("inside", &settings.models.unknown),
+        ] {
+            assert_eq!(
+                section.get("tomorrow").and_then(|v| v.as_str()),
+                Some(place),
+                "a field this build does not know was dropped"
+            );
+        }
+        for section in [
+            &settings.llm.unknown,
+            &settings.recording.unknown,
+            &settings.storage.unknown,
+            &settings.interface.unknown,
+            &settings.agents.unknown,
+        ] {
+            assert!(section.contains_key("tomorrow"), "dropped from a section");
+        }
+        assert_eq!(
+            back.matches("tomorrow").count(),
+            7,
+            "all seven written back"
+        );
     }
 }

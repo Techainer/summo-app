@@ -25,7 +25,21 @@ const bg = (page) =>
     return { colour, lightness: Math.round((r + g + b) / 3) };
   });
 
+// The vault's copy of the choice, cleared before each pass.
+//
+// A choice now travels: `interface.theme` reaches the settings file, and a browser with nothing
+// saved adopts it. That is the feature, and it makes these two passes dependent — the first one
+// ends on Dark, so the second used to open dark on a light machine and the "start" reading stopped
+// being about the operating system at all. Reset, so each pass measures what it claims to.
+const forget = () =>
+  fetch(`${engine.url}/settings/interface?token=${engine.token}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ theme: "system" }),
+  });
+
 for (const system of ["dark", "light"]) {
+  await forget();
   const context = await browser.newContext({
     locale: "vi-VN",
     viewport: { width: 1280, height: 860 },
@@ -61,6 +75,40 @@ for (const system of ["dark", "light"]) {
     problems.push(`on a ${system} system, choosing Dark painted ${seen.dark.colour}`);
   }
   await context.close();
+}
+
+// ---- and the choice travels, which is the point of writing it down ---------
+//
+// A fresh context is a fresh `localStorage`: exactly the state of a second window, another machine
+// on the same vault, or a reinstall. Before the settings file was read, every one of those started
+// from `system` however many times the user had said otherwise.
+{
+  await fetch(`${engine.url}/settings/interface?token=${engine.token}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ theme: "dark" }),
+  });
+  const fresh = await browser.newContext({
+    locale: "vi-VN",
+    viewport: { width: 1280, height: 860 },
+    colorScheme: "light",
+  });
+  const page = await fresh.newPage();
+  await page.goto(`${engine.url}?port=${engine.port}&token=${engine.token}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.locator("header").waitFor({ timeout: 20000 });
+  // The settings read happens after first paint on purpose, so this is polled rather than sampled.
+  let seen = await bg(page);
+  for (let i = 0; i < 20 && seen.lightness > 60; i++) {
+    await page.waitForTimeout(250);
+    seen = await bg(page);
+  }
+  console.log(`a new browser on a light machine opened ${seen.colour}`);
+  if (seen.lightness > 60) {
+    problems.push(`the saved choice did not reach a fresh browser: ${seen.colour}`);
+  }
+  await fresh.close();
 }
 
 await browser.close();

@@ -159,7 +159,8 @@
     "served_by_none": "尚未安装可用于该语言的模型。",
     "better_available": "{language} 用 {model} 更准确——{better}% 对 {current}%。需下载 {size}。",
     "install_and_use": "安装并使用",
-    "keep_current": "保持现状"
+    "keep_current": "保持现状",
+    "mt_second": "第二个模型"
   },
   "about": {
     "title": "关于 Summo",

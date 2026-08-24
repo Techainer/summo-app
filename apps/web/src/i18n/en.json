@@ -80,7 +80,7 @@
     "translating_into": "translating into {language}",
     "translate_off": "Off",
     "translate_needs_model": "No translation model is installed yet.",
-    "translate_all_off": "Off — all languages",
+    "translate_add": "Add another language",
     "translate_drop": "Stop translating into {language}",
     "translate_with": "{model} does the translating.",
     "manage_models": "Manage models"

@@ -159,7 +159,8 @@
     "served_by_none": "Chưa có mô hình nào đang cài phục vụ ngôn ngữ này.",
     "better_available": "{model} chính xác hơn cho {language} — {better}% so với {current}%. Cần tải {size}.",
     "install_and_use": "Cài và dùng",
-    "keep_current": "Giữ nguyên"
+    "keep_current": "Giữ nguyên",
+    "mt_second": "Mô hình phụ"
   },
   "about": {
     "title": "Về Summo",

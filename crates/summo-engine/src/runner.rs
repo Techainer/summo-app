@@ -97,7 +97,7 @@ impl SessionRunner {
     ) -> Result<Self> {
         spec.validate()?;
 
-        let vad_model = resolve_vad(store)?;
+        let vad_model = resolve_vad(store, spec.vad_model.as_deref())?;
         let threads = hw.recommended_threads();
 
         let key = crate::warm::Key::new(&spec.live_model, spec.language.clone(), threads);
@@ -167,7 +167,10 @@ impl SessionRunner {
         // needs a speaker-embedding model nobody has installed, and the whole recording failed —
         // with a message about a model the user never asked for. Telling apart two voices is a
         // nice-to-have on top of a recording; a recording is not a nice-to-have on top of it.
-        let diarizer = match spec.diarize.then(|| resolve_speaker_model(store)) {
+        let diarizer = match spec
+            .diarize
+            .then(|| resolve_speaker_model(store, spec.speaker_model.as_deref()))
+        {
             Some(Ok(model)) => Some(Diarizer {
                 embedder: SpeakerEmbedder::load(model, 1)?,
                 clusterer: OnlineClusterer::new(ClusterConfig::default()),
@@ -320,22 +323,18 @@ impl SessionRunner {
 }
 
 /// Find an installed voice detector.
-fn resolve_vad(store: &ModelStore) -> Result<std::path::PathBuf> {
-    let manifest = store
-        .list()
-        .into_iter()
-        .find(|m| m.task == summo_models::Task::Vad)
-        .ok_or_else(|| {
-            // Coded, for the same reason `session.no_model` is: this is what a new user hits, and
-            // until now they hit it as an English sentence telling them to run a command in a
-            // terminal — from an app with no terminal in it. Worse, nothing showed it at all: the
-            // recogniser installs, setup says ready, the timer starts and no words ever arrive,
-            // because the pipeline needs a voice detector to decide where an utterance ends.
-            Error::msg(
-                "session.no_vad",
-                "no voice detector installed. Run `summo pull silero-vad-v5`.",
-            )
-        })?;
+fn resolve_vad(store: &ModelStore, pinned: Option<&str>) -> Result<std::path::PathBuf> {
+    let manifest = pick(store, summo_models::Task::Vad, pinned).ok_or_else(|| {
+        // Coded, for the same reason `session.no_model` is: this is what a new user hits, and
+        // until now they hit it as an English sentence telling them to run a command in a
+        // terminal — from an app with no terminal in it. Worse, nothing showed it at all: the
+        // recogniser installs, setup says ready, the timer starts and no words ever arrive,
+        // because the pipeline needs a voice detector to decide where an utterance ends.
+        Error::msg(
+            "session.no_vad",
+            "no voice detector installed. Run `summo pull silero-vad-v5`.",
+        )
+    })?;
 
     let installed = store.resolve(&manifest)?;
     installed
@@ -347,17 +346,51 @@ fn resolve_vad(store: &ModelStore) -> Result<std::path::PathBuf> {
         })
 }
 
+/// The model for a role: the one that was chosen, or the only sensible one if nobody chose.
+///
+/// `models.vad` and `models.speaker` have been settings the models screen writes and
+/// `/settings/models` accepts, and neither ever reached a recording — this took the *first*
+/// installed model of the task and the choice was decoration. With one detector installed that is
+/// invisible; install a second and the app records with whichever the registry happened to list
+/// first, while the screen shows a tick beside the other. The same shape as `refine_model`, which
+/// was disconnected in the other direction.
+///
+/// A pin that names something not installed falls back rather than failing. The alternative is a
+/// recording refused because of a model the user removed months ago and forgot was named here, and
+/// the fallback is exactly what they would have got before they ever chose.
+fn pick(
+    store: &ModelStore,
+    task: summo_models::Task,
+    pinned: Option<&str>,
+) -> Option<summo_models::Manifest> {
+    choose_from(&store.list(), task, pinned)
+}
+
+/// The decision itself, over a list somebody else read.
+///
+/// Separated from the store so it can be tested without a filesystem — the rule is four lines and
+/// the part worth pinning down, and a test that has to install two voice detectors to check which
+/// one wins is a test nobody writes.
+fn choose_from(
+    installed: &[summo_models::Manifest],
+    task: summo_models::Task,
+    pinned: Option<&str>,
+) -> Option<summo_models::Manifest> {
+    let mut of_task = installed.iter().filter(|m| m.task == task);
+    let named = pinned
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .and_then(|id| of_task.clone().find(|m| m.id.as_str() == id));
+    named.or_else(|| of_task.next()).cloned()
+}
+
 /// Find an installed speaker-embedding model.
-fn resolve_speaker_model(store: &ModelStore) -> Result<std::path::PathBuf> {
-    let manifest = store
-        .list()
-        .into_iter()
-        .find(|m| m.task == summo_models::Task::SpeakerEmbed)
-        .ok_or_else(|| {
-            Error::ModelNotFound(
-                "diarization needs a speaker-embedding model. Run `summo pull cam++`.".into(),
-            )
-        })?;
+fn resolve_speaker_model(store: &ModelStore, pinned: Option<&str>) -> Result<std::path::PathBuf> {
+    let manifest = pick(store, summo_models::Task::SpeakerEmbed, pinned).ok_or_else(|| {
+        Error::ModelNotFound(
+            "diarization needs a speaker-embedding model. Run `summo pull cam++`.".into(),
+        )
+    })?;
 
     let installed = store.resolve(&manifest)?;
     installed
@@ -531,5 +564,96 @@ mod tests {
             panic!("an invalid spec should not start a session")
         };
         assert!(err.to_string().contains("diarization"), "got: {err}");
+    }
+}
+
+#[cfg(test)]
+mod picking {
+    use super::*;
+
+    /// The smallest manifest the parser accepts, with the two fields this decision reads.
+    fn manifest(id: &str, task: summo_models::Task) -> summo_models::Manifest {
+        let task = match task {
+            summo_models::Task::Vad => "vad",
+            summo_models::Task::Asr => "asr",
+            summo_models::Task::SpeakerEmbed => "speaker-embed",
+            other => panic!("this helper does not build a {other:?}"),
+        };
+        let json = serde_json::json!({
+            "schema": 1,
+            "id": id,
+            "name": id,
+            "task": task,
+            "mode": "batch",
+            "runtime": "sherpa-onnx",
+            "langs": ["vi"],
+            "license": "Apache-2.0",
+            "attribution": "test",
+            "files": [{
+                "name": "model.onnx",
+                "sha256": "a".repeat(64),
+                "size": 1u64,
+                "url": "https://example.invalid/model.onnx"
+            }],
+            "params": {"model": "model.onnx"}
+        });
+        summo_models::Manifest::parse(&json.to_string()).expect("a manifest")
+    }
+
+    /// Nobody chose, so the only installed model of the task is the answer — which is what the app
+    /// did before any of this, and has to go on doing for everybody who never opens the screen.
+    #[test]
+    fn with_nothing_pinned_the_installed_one_is_used() {
+        let only = [manifest("silero-vad-v5", summo_models::Task::Vad)];
+        assert_eq!(
+            choose_from(&only, summo_models::Task::Vad, None)
+                .map(|m| m.id.to_string())
+                .as_deref(),
+            Some("silero-vad-v5")
+        );
+    }
+
+    /// And a choice is honoured, which is the part that never worked: `find` took the first of the
+    /// task and the pin was decoration.
+    #[test]
+    fn a_pinned_model_wins_over_the_first_one_listed() {
+        let both = [
+            manifest("silero-vad-v5", summo_models::Task::Vad),
+            manifest("ten-vad", summo_models::Task::Vad),
+        ];
+        assert_eq!(
+            choose_from(&both, summo_models::Task::Vad, Some("ten-vad"))
+                .map(|m| m.id.to_string())
+                .as_deref(),
+            Some("ten-vad")
+        );
+    }
+
+    /// A pin naming something no longer installed falls back rather than refusing the recording.
+    /// Failing would end a meeting over a model the user removed months ago and forgot was named.
+    #[test]
+    fn a_pin_that_is_no_longer_installed_falls_back() {
+        let one = [manifest("silero-vad-v5", summo_models::Task::Vad)];
+        assert_eq!(
+            choose_from(&one, summo_models::Task::Vad, Some("ten-vad"))
+                .map(|m| m.id.to_string())
+                .as_deref(),
+            Some("silero-vad-v5")
+        );
+    }
+
+    /// A model of the wrong task is not an answer, however precisely it was named.
+    #[test]
+    fn a_pin_of_the_wrong_task_is_not_used() {
+        let mixed = [
+            manifest("whisper-tiny", summo_models::Task::Asr),
+            manifest("silero-vad-v5", summo_models::Task::Vad),
+        ];
+        assert_eq!(
+            choose_from(&mixed, summo_models::Task::Vad, Some("whisper-tiny"))
+                .map(|m| m.id.to_string())
+                .as_deref(),
+            Some("silero-vad-v5")
+        );
     }
 }

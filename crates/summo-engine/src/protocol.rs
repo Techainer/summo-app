@@ -75,6 +75,20 @@ pub enum Command {
         )]
         into: Vec<String>,
     },
+    /// Change the second model — the one that re-decodes finished utterances — mid-meeting.
+    ///
+    /// Its own command rather than a field on [`Command::ModelSwap`] for the reason `Translate` is
+    /// its own: loading a decoder blocks, and this one is handled on the socket task where it can
+    /// be awaited. Folding it into `ModelSwap` would mean the arm that rebuilds the whole pipeline
+    /// synchronously also had to load a second model without blocking, which is two jobs.
+    ///
+    /// An empty id turns refinement off. That direction matters as much as the other: somebody who
+    /// turned it on for a bilingual call and then joined a monolingual one is paying for a second
+    /// decode on every Vietnamese sentence for no benefit.
+    RefineSwap {
+        #[serde(default)]
+        id: String,
+    },
     /// Keepalive. Some proxies drop an idle WebSocket, and a dropped socket mid-meeting is data loss.
     Ping,
 }
@@ -101,6 +115,16 @@ pub struct SessionSpec {
     /// Attribute speakers within the remote lane.
     #[serde(default)]
     pub diarize: bool,
+    /// The voice detector, and the voice fingerprint. Empty means "whichever is installed".
+    ///
+    /// Here for the same reason `live_model` is: the runner should be told what to load, not go
+    /// looking. Both were settings the models screen wrote and nothing read — the runner took the
+    /// first installed model of each task, so with two detectors installed the app recorded with
+    /// one and showed a tick beside the other.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vad_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speaker_model: Option<String>,
     /// Translate finished lines into these languages as they land.
     ///
     /// This is the "watch a talk in another language" switch. There is no separate feature behind
@@ -168,6 +192,8 @@ impl SessionSpec {
             lanes: default_lanes(),
             language: None,
             diarize: false,
+            vad_model: None,
+            speaker_model: None,
             translate_into: Vec::new(),
             device_id: None,
         }

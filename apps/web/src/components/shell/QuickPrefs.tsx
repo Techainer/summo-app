@@ -1,8 +1,10 @@
 import { Monitor, Moon, Sun } from "lucide-react";
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy } from "react";
 
 import { useI18n } from "../../i18n/context";
-import { choose, read, type Scheme } from "../../lib/theme";
+import { useEngine } from "../../lib/engine-context";
+import { remember, type Scheme } from "../../lib/theme";
+import { useScheme } from "../../lib/use-scheme";
 
 /**
  * Fetched when the header renders, not before it.
@@ -61,17 +63,15 @@ const NEXT: Record<Scheme, Scheme> = {
  */
 function ThemeButton() {
   const { t } = useI18n();
-  const [scheme, setScheme] = useState<Scheme>(() => read());
+  const { handshake } = useEngine();
+  const scheme = useScheme();
   const Icon = ICONS[scheme];
   const next = NEXT[scheme];
 
   return (
     <button
       type="button"
-      onClick={() => {
-        choose(next);
-        setScheme(next);
-      }}
+      onClick={() => remember(handshake, next)}
       aria-label={t("theme.heading")}
       title={t(`theme.${scheme}`)}
       className="text-fg-faint hover:bg-bg-soft hover:text-fg hidden rounded-lg px-2 py-1.5 transition-colors sm:block"

@@ -78,6 +78,7 @@ export type Command =
   // `session_start`, so a meeting that turned out not to need it paid for a translator on every
   // line until it ended.
   | { cmd: "translate"; into: string[] }
+  | { cmd: "refine_swap"; id: string }
   | { cmd: "ping" };
 
 /** Whether an event carries transcript text. */

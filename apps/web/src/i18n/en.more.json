@@ -159,7 +159,8 @@
     "served_by_none": "Nothing installed covers this language yet.",
     "better_available": "{model} is more accurate for {language} — {better}% against {current}%. {size} to download.",
     "install_and_use": "Install and use it",
-    "keep_current": "Keep what I have"
+    "keep_current": "Keep what I have",
+    "mt_second": "Second model"
   },
   "about": {
     "title": "About Summo",

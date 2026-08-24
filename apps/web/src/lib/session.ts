@@ -265,6 +265,18 @@ export class Session {
     this.client?.send({ cmd: "translate", into });
   }
 
+  /**
+   * Change the second speech model mid-meeting, or turn it off with an empty id.
+   *
+   * Beside `retune`, not inside it: `model_swap` rebuilds the whole pipeline synchronously, and a
+   * second decoder has to be loaded where the socket can go on being read. The daemon takes this
+   * one on the socket task for that reason.
+   */
+  refine(id: string): void {
+    if (!this.state.recording) return;
+    this.client?.send({ cmd: "refine_swap", id });
+  }
+
   stop(): void {
     this.microphone?.stop();
     this.microphone = null;

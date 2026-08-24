@@ -1,9 +1,9 @@
-import { useState } from "react";
-
 import { SegmentedControl, Select } from "../ui";
 import { CONTROL, FIELD, LABEL } from "./fields";
 import { useI18n, useT } from "../../i18n/context";
-import { SCHEMES, choose as chooseScheme, read as readScheme, type Scheme } from "../../lib/theme";
+import { useEngine } from "../../lib/engine-context";
+import { SCHEMES, remember as rememberScheme } from "../../lib/theme";
+import { useScheme } from "../../lib/use-scheme";
 
 /**
  * The two settings about the app rather than about the work: what language it speaks, and whether
@@ -64,8 +64,9 @@ function LanguagePicker() {
  * setting rather than for a shortcut.
  */
 function AppearanceSetting() {
+  const { handshake } = useEngine();
   const t = useT();
-  const [scheme, setScheme] = useState<Scheme>(() => readScheme());
+  const scheme = useScheme();
 
   return (
     <div className={FIELD}>
@@ -73,10 +74,7 @@ function AppearanceSetting() {
       <SegmentedControl
         label={t("theme.heading")}
         value={scheme}
-        onChange={(next) => {
-          chooseScheme(next);
-          setScheme(next);
-        }}
+        onChange={(next) => rememberScheme(handshake, next)}
         // Short labels here, the sentence in the palette. Three phrases like "Giao diện theo hệ
         // thống" side by side in a 390px column is a control that wraps out of its own pill — the
         // screenshot audit caught it as white text on nothing.

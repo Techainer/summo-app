@@ -47,6 +47,7 @@ export function ListeningPanel({
   live_model,
   spoken,
   into,
+  refine,
   languages,
   onChanged,
 }: {
@@ -54,12 +55,14 @@ export function ListeningPanel({
   live_model: string | undefined;
   spoken: string;
   into: string[];
+  /** The second speech model the daemon says it is checking the text with, or `""` for none. */
+  refine: string;
   languages: Language[];
   /** Re-read `/status`; the daemon answers before the pipeline is actually swapped. */
   onChanged: () => void;
 }) {
   const { t, locale } = useI18n();
-  const { handshake, retune, translate } = useEngine();
+  const { handshake, retune, translate, refine: setRefine } = useEngine();
   const navigate = useNavigate();
   const say = useErrorText();
   // A refused translator swap, said out loud. See `pointTranslatorAt`.
@@ -153,6 +156,36 @@ export function ListeningPanel({
             ))}
           </Select>
         </Field>
+
+        {/* The second speech model, live.
+            
+            Shipped without a control at all: it could be chosen on the models screen and nowhere
+            else, so the one decision you make *because of what you are hearing* — this call turned
+            out to be half in English — could only be made before the call started. Recognition gets
+            the same treatment as translation, which is the whole point of a panel that changes a
+            meeting while it runs. */}
+        {speech.length > 1 && (
+          <Field label={t("settings.mt_second")}>
+            <Select
+              size="sm"
+              aria-label={t("settings.mt_second")}
+              value={refine}
+              onChange={(event) => {
+                setRefine(event.target.value);
+                onChanged();
+              }}
+            >
+              <option value="">{t("record.translate_off")}</option>
+              {speech
+                .filter((m) => m.id !== live_model)
+                .map((each) => (
+                  <option key={each.id} value={each.id}>
+                    {each.name}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        )}
 
         <Field label={t("record.translate_live")}>
           {/* Every language the reader might want, not a shortlist: the translator is multilingual,

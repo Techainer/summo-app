@@ -521,7 +521,11 @@ jobs:
           HOOK: ${{ secrets.SITE_DEPLOY_HOOK }}
         run: |
           if [ -z "$HOOK" ]; then
-            echo "no SITE_DEPLOY_HOOK set — the site will show the release it was last built with"
+            # A warning, not an `echo`. This job is allowed to do nothing — a fork has no site to
+            # rebuild — but "did nothing" and "rebuilt the download page" both looked like a green
+            # tick in the run list, so the page went on offering the previous version and the only
+            # sign was a line of log nobody reads after a successful release.
+            echo "::warning title=The download page was not rebuilt::SITE_DEPLOY_HOOK is not set, so summo.techainer.com still advertises whichever release it was last built with. Deploy it by hand, or add the secret."
             exit 0
           fi
           # The URL *is* the credential, so it is handed over on standard input rather than as an

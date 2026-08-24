@@ -311,13 +311,35 @@ export function RichNote({
   // given, and that coercion is exactly the step a converter test cannot see. A ragged table is the
   // clearest case — the converter reproduces one exactly, and ProseMirror squares it up. Reported
   // through a ref so a re-render cannot raise it twice and put the caller in a loop.
+  // The check that decides whether this editor may be used at all — and *when* it may be asked.
+  //
+  // After the content has been through ProseMirror, not before: the schema coerces what it is
+  // given, and that coercion is exactly the step a converter test cannot see. A ragged table is the
+  // clearest case — the converter reproduces one exactly, and ProseMirror squares it up.
+  //
+  // Asked only when `markdown` changes, which is the only moment the two are meant to agree. It
+  // used to depend on `onUnsupported` as well, and both callers pass a fresh arrow on every render
+  // — so this ran on every render of a page that rerenders on every transcript line. A keystroke
+  // mutates the editor first and reaches this prop one render later, so any transcript line landing
+  // in that window compared the new document against the old text, found them different, and
+  // handed the note to the plain-text fallback for good. Measured: one line of ordinary Vietnamese
+  // typed into an empty meeting note, about one time in five.
+  //
+  // The callback goes through a ref rather than into the dependency array. Memoising it at the call
+  // sites would fix today's two callers and quietly wait for the third.
   const told = useRef(false);
+  const unsupported = useRef(onUnsupported);
+  useEffect(() => {
+    unsupported.current = onUnsupported;
+  });
   useEffect(() => {
     if (!editor || told.current) return;
     if (faithful(markdown) && same(toMarkdown(editor.getJSON()), markdown)) return;
     told.current = true;
-    onUnsupported();
-  }, [editor, markdown, onUnsupported]);
+    // Through the ref, so `onUnsupported` is not a dependency and a caller passing a fresh arrow
+    // cannot turn this into a per-render check again.
+    unsupported.current();
+  }, [editor, markdown]);
 
   // `/` at the start of an empty paragraph opens the block menu, the way it does in Notion. Read
   // from the *document* rather than from the keystroke, so deleting back to a bare `/` opens it
