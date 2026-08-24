@@ -65,11 +65,17 @@ if ((await page.getByTestId("settings-tab-about").getAttribute("aria-current")) 
   problems.push("a reload did not come back to the section that was open");
 }
 
-// ---- translation: turning it on has to leave you with a model -------------
+// ---- translation: the three states, and a way to get the model ------------
 //
 // The setting saved happily, the model was never downloaded, and the first translated line arrived
 // as an error in the middle of a meeting. The section now asks the catalogue whether that exact id
 // is on the machine and offers to fetch it here — no trip to another screen, and no terminal.
+//
+// There used to be a checkbox in front of all this, and this suite ticked it. That was the bug in
+// miniature: unticked is not "do not use a separate model", it is *unset*, and unset is the state
+// in which the daemon picks the translation model on disk. So nothing is toggled here now — the
+// default state has to offer the model by itself, because the default state is the one every user
+// is actually in.
 //
 // The 611 MB download is not run: `/installs` and `/catalogue` are answered by this suite, because
 // what is being checked is that the screen asks for the right model and shows what came back.
@@ -78,18 +84,22 @@ if ((await page.getByTestId("settings-tab-about").getAttribute("aria-current")) 
     waitUntil: "networkidle",
   });
   await page.getByTestId("settings-translation").waitFor({ timeout: 10_000 });
-
-  // The input is `sr-only` and the drawn box sits over it, so the label is what a person clicks
-  // and what this clicks too.
-  const enable = page.getByRole("checkbox", { name: "Dùng mô hình riêng để dịch" });
-  if (!(await enable.isChecked())) {
-    await page.getByText("Dùng mô hình riêng để dịch").click();
-  }
   await page.waitForTimeout(600);
+
+  // One control, three states — the three things `llm.translator` can be. A two-option dropdown
+  // under a checkbox could not express "unset", which is where everybody starts.
+  const where = page.getByLabel("Bộ dịch", { exact: true });
+  const states = await where.locator("option").evaluateAll((o) => o.map((each) => each.value));
+  if (states.join(",") !== "auto,local,endpoint") {
+    problems.push(`the translator control does not offer the three real states: ${states}`);
+  }
+  if ((await where.inputValue()) !== "auto") {
+    problems.push("a fresh install does not start in the state the daemon is actually in");
+  }
 
   const install = page.getByRole("button", { name: /Cài mô hình dịch/ });
   if ((await install.count()) === 0) {
-    problems.push("turning translation on offers no way to get the model");
+    problems.push("the default state offers no way to get a translation model");
   } else {
     // The size is on the button, because 611 MB is the fact that decides whether now is the moment.
     const label = await install.innerText();
@@ -147,7 +157,29 @@ if ((await page.getByTestId("settings-tab-about").getAttribute("aria-current")) 
     problems.push("a model that is already installed is still offered for download");
   }
   await page.unroute(/\/catalogue/);
-  console.log("translation: install offered here, and an installed model is named as installed");
+
+  // Each state shows the fields that state has and no others. Endpoint is the one worth checking:
+  // it is the only state with an address to type, and the field only existed at all because the
+  // checkbox happened to be ticked.
+  await where.selectOption("endpoint");
+  await page.waitForTimeout(600);
+  if ((await page.getByLabel("Ở một địa chỉ khác").count()) === 0) {
+    problems.push("choosing an endpoint gives nowhere to put its address");
+  }
+  await where.selectOption("auto");
+  await page.waitForTimeout(600);
+  if ((await page.getByLabel("Mô hình dịch").count()) !== 0) {
+    problems.push("automatic still asks which model, which is the question it exists to not ask");
+  }
+  // Left where it was found: everything after this reads the same settings file.
+  const cleared = await fetch(`${appUrl}/settings?token=${token}`).then((r) => r.json());
+  if (cleared.llm?.translator != null) {
+    problems.push(
+      `returning to automatic did not clear the translator: ${JSON.stringify(cleared.llm.translator)}`,
+    );
+  }
+
+  console.log("translation: three states, install offered here, an installed model named as such");
 }
 
 // ---- the numbers a recording is made with --------------------------------

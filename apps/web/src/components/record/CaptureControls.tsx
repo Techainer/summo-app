@@ -1,10 +1,11 @@
 import { useState } from "react";
 
-import { Checkbox, Select } from "../ui";
+import { Checkbox } from "../ui";
 import { useI18n } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { TARGETS, hearsOthers, load, save, translating, type Capture } from "../../lib/capture";
 import type { Lane } from "../../lib/protocol";
+import { TranslateTargets } from "./TranslateTargets";
 import { WarmUp } from "./WarmUp";
 import { SpokenLanguage } from "./SpokenLanguage";
 
@@ -82,21 +83,17 @@ export function CaptureControls() {
             compact
           />
 
-          <label className="text-fg-faint ms-auto flex items-center gap-2 text-sm">
+          <span className="text-fg-faint ms-auto flex items-center gap-2 text-sm">
             {t("record.translate_live")}
-            <Select
-              size="sm"
-              value={capture.translateTo}
-              aria-label={t("record.translate_live")}
-              onChange={(e) => update({ ...capture, translateTo: e.target.value })}
-            >
-              {TARGETS.map((target) => (
-                <option key={target.code} value={target.code}>
-                  {target.label}
-                </option>
-              ))}
-            </Select>
-          </label>
+            {/* The same control the running meeting uses, so a target added here and a target added
+                mid-call are one idea rather than two dropdowns that behave differently. `TARGETS`
+                already carries the empty "off" entry the shared control provides itself. */}
+            <TranslateTargets
+              value={capture.translateInto}
+              options={TARGETS.filter((target) => target.code !== "")}
+              onChange={(translateInto) => update({ ...capture, translateInto })}
+            />
+          </span>
         </div>
       </fieldset>
 

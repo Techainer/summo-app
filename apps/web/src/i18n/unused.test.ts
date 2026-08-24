@@ -2,7 +2,11 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import vi from "./vi.json";
+import viCore from "./vi.json";
+import viMore from "./vi.more.json";
+
+/** Both halves of the split catalogue; see `split.test.ts`. */
+const vi = { ...viCore, ...viMore };
 
 /**
  * Every string in the catalogue has somewhere it can appear.

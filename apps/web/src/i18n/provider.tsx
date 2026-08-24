@@ -15,6 +15,7 @@ import {
   catalogFor,
   detectLocale,
   ensure,
+  ensureMore,
   mergeCatalogs,
   ready,
   translator,
@@ -71,6 +72,11 @@ export function I18nProvider({ children, extra, locale: forced }: Props) {
     // not load leaves key names on screen, which is visibly wrong; waiting forever leaves nothing.
     void ensure(active).then(() => {
       if (live) setShipped(catalogFor(active));
+      // And then the half only lazy screens need, merged in when it lands. Not awaited with the
+      // first: the point of the split is that the app paints without it.
+      void ensureMore(active).then(() => {
+        if (live) setShipped(catalogFor(active));
+      });
     });
     return () => {
       live = false;

@@ -38,11 +38,26 @@ pub struct Summarized {
     pub sections: Vec<String>,
 }
 
-/// Transcripts shorter than this are not worth a request.
+/// Less material than this is not worth a request.
 ///
 /// A meeting that produced two lines is a false start or a test, and asking a model to summarise it
 /// yields a paraphrase of the two lines plus an apology.
-const MIN_CHARACTERS: usize = 400;
+///
+/// Counted across the transcript *and* the notes, because either one can carry the meeting. A
+/// twenty-minute call somebody typed a page of notes during, on a laptop whose microphone caught
+/// four words, was refused here with "the transcript is too short to summarise (31 characters)" —
+/// while the thing worth summarising sat in the same document, unread. The notes are an input to
+/// the summary; they are an input to the decision to make one.
+pub(crate) const MIN_CHARACTERS: usize = 400;
+
+/// How much there is to work with, in characters.
+///
+/// Shared with [`crate::draft`], which had its own copy of the `400` and its own transcript-only
+/// count — so the same meeting could be refused a draft and granted a summary, or the reverse, and
+/// the two answers came from two literals nobody would think to change together.
+pub(crate) fn material(transcript: &str, notes: Option<&str>) -> usize {
+    transcript.chars().count() + notes.map_or(0, |n| n.trim().chars().count())
+}
 
 /// Summarise one meeting and write the result into its Markdown file.
 ///
@@ -58,10 +73,14 @@ pub async fn run(
     let mut doc = summo_vault::open(&paths.vault(), &path)?;
 
     let transcript = prompt::render_transcript(&doc.transcript);
-    if transcript.chars().count() < MIN_CHARACTERS {
+    // What the user typed while it was happening, if they typed anything. Read from the document
+    // rather than passed in: whoever asks for a summary — the button, the draft, an agent — gets
+    // the same notes, because they are part of the meeting rather than part of the request.
+    let notes = doc.section(summo_vault::meeting::NOTES_HEADING);
+    let have = material(&transcript, notes);
+    if have < MIN_CHARACTERS {
         return Err(Error::Other(format!(
-            "the transcript is too short to summarise ({} characters)",
-            transcript.chars().count()
+            "there is too little here to summarise ({have} characters of transcript and notes)"
         )));
     }
 
@@ -79,11 +98,6 @@ pub async fn run(
         .into_iter()
         .find(|l| !l.is_empty())
         .unwrap_or("the language of the transcript");
-    // What the user typed while it was happening, if they typed anything. Read from the
-    // document rather than passed in: whoever asks for a summary — the button, the draft, an
-    // agent — gets the same notes, because they are part of the meeting rather than part of the
-    // request.
-    let notes = doc.section(summo_vault::meeting::NOTES_HEADING);
     let messages = prompt::summarize_with(&transcript, notes, &template.instructions(), language);
     let response = client.complete(&messages).await?;
 
@@ -268,6 +282,31 @@ mod tests {
             "2026-08-10T09:00:00+07:00",
         );
         MeetingDoc::new(frontmatter, "Họp tuần")
+    }
+
+    /// The refusal counts both inputs, and this is the meeting it was getting wrong: the microphone
+    /// caught almost nothing and the person typed the meeting down themselves. Transcript-only, that
+    /// was "too short to summarise" over a page of their own writing.
+    #[test]
+    fn notes_count_towards_being_worth_summarising() {
+        let barely = "Ừ. Vâng.";
+        let typed = "Chốt ngân sách quý tới, Ngọc gửi bản dự trù trước thứ Sáu. ".repeat(10);
+        assert!(
+            material(barely, None) < MIN_CHARACTERS,
+            "four words is not a meeting"
+        );
+        assert!(
+            material(barely, Some(&typed)) >= MIN_CHARACTERS,
+            "a page of notes is worth summarising however little was heard"
+        );
+    }
+
+    /// Whitespace is not material. A body that is one newline must not push a false start over the
+    /// line, which is what an untrimmed count would do for a note the editor autosaved empty.
+    #[test]
+    fn blank_notes_add_nothing() {
+        let said = "a".repeat(100);
+        assert_eq!(material(&said, Some("   \n\n  ")), material(&said, None));
     }
 
     #[test]

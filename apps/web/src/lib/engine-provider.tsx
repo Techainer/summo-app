@@ -147,7 +147,7 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       ...(chosen.spoken ? { language: chosen.spoken } : {}),
       // Diarization needs the system lane; asking for it on the microphone alone is refused.
       diarize: chosen.lanes.includes("system"),
-      ...(chosen.translateTo ? { translate_to: chosen.translateTo } : {}),
+      ...(chosen.translateInto.length > 0 ? { translate_into: chosen.translateInto } : {}),
     });
   }, [controller]);
 
@@ -171,10 +171,10 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   // turns translation off mid-call has said they do not want it, not that they do not want it for
   // the next four minutes.
   const translate = useCallback(
-    (to: string) => {
+    (into: string[]) => {
       const current = loadCapture();
-      saveCapture({ ...current, translateTo: to });
-      controller?.translate(to);
+      saveCapture({ ...current, translateInto: into });
+      controller?.translate(into);
     },
     [controller],
   );

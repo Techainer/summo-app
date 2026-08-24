@@ -241,10 +241,15 @@ pub async fn generate(
 ) -> Result<Draft> {
     let (_, doc) = read_note(paths, meeting)?;
     let transcript = prompt::render_transcript(&doc.transcript);
-    if transcript.chars().count() < 400 {
-        return Err(Error::Other(
-            "the transcript is too short to summarise".into(),
-        ));
+    // Counted with the notes, and with the same threshold the summary uses. A meeting whose audio
+    // failed but whose notes are a page is worth drafting from; refusing it left the user looking
+    // at a document with their own writing in it being told there was nothing to work with.
+    let notes = doc.section(summo_vault::meeting::NOTES_HEADING);
+    let have = crate::summarize::material(&transcript, notes);
+    if have < crate::summarize::MIN_CHARACTERS {
+        return Err(Error::Other(format!(
+            "there is too little here to summarise ({have} characters of transcript and notes)"
+        )));
     }
 
     let templates = Templates::load_or_seed(&paths.templates())?;
@@ -258,11 +263,6 @@ pub async fn generate(
     };
 
     let language = language(paths, &template.language);
-    // What the user typed while it was happening, if they typed anything. Read from the
-    // document rather than passed in: whoever asks for a summary — the button, the draft, an
-    // agent — gets the same notes, because they are part of the meeting rather than part of the
-    // request.
-    let notes = doc.section(summo_vault::meeting::NOTES_HEADING);
     let messages = prompt::summarize_with(&transcript, notes, &template.instructions(), &language);
     let response = client.complete(&messages).await?;
 

@@ -76,7 +76,7 @@ export function SessionControls({
         state?: string;
         live_model?: string;
         language?: string;
-        translate_to?: string;
+        translate_into?: string[];
       };
     }, [handshake]),
     [handshake, session.recording, generation],
@@ -95,7 +95,7 @@ export function SessionControls({
   const spoken = named ?? (covered.length === 1 ? (covered[0]?.code ?? AUTO) : AUTO);
   const current = languages.find((language) => language.code === spoken);
   const label = spoken === AUTO ? t("record.spoken_auto") : languageName(spoken, locale);
-  const into = recording?.translate_to ?? "";
+  const into = recording?.translate_into ?? [];
 
   // Kept in step with the daemon for as long as a recording is running.
   //
@@ -127,8 +127,13 @@ export function SessionControls({
           {current && quality(current) === "poor" ? ` · ${t("record.spoken_poor")}` : ""}
           {/* Whether anything is being translated, which this could not say before. Silence here
               used to be indistinguishable from a translator that was quietly failing. */}
-          {into
-            ? ` · ${t("record.translating_into", { language: languageName(into, locale) })}`
+          {/* Every target, not the first one. A meeting subtitled into two languages that said it
+              was subtitled into one is the same silence this line was added to end, one language
+              further along. */}
+          {into.length > 0
+            ? ` · ${t("record.translating_into", {
+                language: into.map((code) => languageName(code, locale)).join(", "),
+              })}`
             : ""}
         </span>
 

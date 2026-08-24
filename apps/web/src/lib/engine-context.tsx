@@ -47,8 +47,8 @@ export interface EngineValue {
    * not say, and the reason the in-meeting banner could offer a language and nothing else.
    */
   retune: (change: { language?: string; model?: string }) => void;
-  /** Change the live translation target mid-meeting; the empty string turns it off. */
-  translate: (to: string) => void;
+  /** Change the live translation targets mid-meeting; the empty list turns it off. */
+  translate: (into: string[]) => void;
   /**
    * Save what the user has typed into the meeting that is running.
    *

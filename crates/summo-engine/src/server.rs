@@ -4415,7 +4415,7 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
                 // large, so it goes to a blocking thread and this task stays free to serve the
                 // socket.
                 match parse_translate(&text) {
-                    Some(to) => set_live_translation(&engine, session.as_mut(), to).await,
+                    Some(into) => set_live_translation(&engine, session.as_mut(), into).await,
                     None => {
                         let (events, next) =
                             handle_command_with_models(&text, &engine, session.take());
@@ -4475,14 +4475,15 @@ fn change_refused(e: &summo_core::Error) -> Event {
     }
 }
 
-/// `Some(target)` when this message is a translation change, so the socket can take it itself.
+/// `Some(targets)` when this message is a translation change, so the socket can take it itself.
 ///
-/// Returns the target rather than the whole command because that is all the caller needs, and
-/// `Some(None)` — "turn it off" — has to stay distinguishable from "this was some other command".
+/// Returns the targets rather than the whole command because that is all the caller needs, and
+/// `Some(vec![])` — "turn it off" — has to stay distinguishable from `None`, "this was some other
+/// command".
 #[cfg(feature = "models")]
-fn parse_translate(text: &str) -> Option<Option<String>> {
+fn parse_translate(text: &str) -> Option<Vec<String>> {
     match serde_json::from_str::<Command>(text) {
-        Ok(Command::Translate { to }) => Some(to),
+        Ok(Command::Translate { into }) => Some(into),
         _ => None,
     }
 }
@@ -4507,7 +4508,7 @@ fn parse_translate(text: &str) -> Option<Option<String>> {
 async fn set_live_translation(
     engine: &EngineState,
     session: Option<&mut ActiveSession>,
-    to: Option<String>,
+    into: Vec<String>,
 ) -> Vec<Event> {
     let Some(active) = session else {
         return vec![Event::error(&summo_core::Error::Config(
@@ -4515,10 +4516,21 @@ async fn set_live_translation(
         ))];
     };
 
-    let wanted = to.as_deref().map(str::trim).unwrap_or_default().to_string();
+    // Deduplicated, keeping the order the user picked. Asking for the same language twice is a
+    // double click, not a request to pay for the same subtitle twice — and the second copy would
+    // arrive as a second `Translation` event for one `seq`, which the transcript renders as two
+    // identical lines under the original.
+    let mut wanted: Vec<String> = Vec::new();
+    for lang in into {
+        let lang = lang.trim().to_string();
+        if !lang.is_empty() && !wanted.contains(&lang) {
+            wanted.push(lang);
+        }
+    }
+
     if wanted.is_empty() {
         active.live = None;
-        active.spec.translate_to = None;
+        active.spec.translate_into.clear();
         engine.retuned(&active.spec);
         return vec![Event::info("live translation off".to_string())];
     }
@@ -4536,17 +4548,18 @@ async fn set_live_translation(
             // and the difference is the whole of the bug above: an unconfigured translator used to
             // resolve to the default `ollama` endpoint and report plain success.
             let by = translator.model().to_string();
+            let named = wanted.join(", ");
             active.live = Some(crate::live::LiveTranslator::new(
                 translator,
                 crate::live::LiveConfig {
-                    lang: wanted.clone(),
+                    langs: wanted.clone(),
                     glossary: summo_llm::prompt::Glossary::default(),
                 },
             ));
-            active.spec.translate_to = Some(wanted.clone());
+            active.spec.translate_into = wanted;
             engine.retuned(&active.spec);
             vec![Event::info(format!(
-                "now translating into {wanted} with {by}"
+                "now translating into {named} with {by}"
             ))]
         }
         Ok(Err(e)) => vec![change_refused(&e)],
@@ -4929,25 +4942,30 @@ fn start_session(
 
     // A translation the user asked for but cannot have — no provider configured — is reported when
     // the session starts rather than silently producing no subtitles for an hour.
-    let live = match spec.translate_to.as_deref().map(str::trim) {
-        Some(lang) if !lang.is_empty() => {
-            match summo_core::settings::Settings::load(&engine.paths().settings()).and_then(
-                |settings| crate::translate::Translator::from_settings(engine.paths(), &settings),
-            ) {
-                Ok(translator) => Some(crate::live::LiveTranslator::new(
-                    translator,
-                    crate::live::LiveConfig {
-                        lang: lang.to_string(),
-                        glossary: summo_llm::prompt::Glossary::default(),
-                    },
-                )),
-                Err(e) => {
-                    tracing::warn!(error = %e, "live translation asked for but no model is configured");
-                    None
-                }
+    let langs: Vec<String> = spec
+        .translate_into
+        .iter()
+        .map(|lang| lang.trim().to_string())
+        .filter(|lang| !lang.is_empty())
+        .collect();
+    let live = if langs.is_empty() {
+        None
+    } else {
+        match summo_core::settings::Settings::load(&engine.paths().settings()).and_then(
+            |settings| crate::translate::Translator::from_settings(engine.paths(), &settings),
+        ) {
+            Ok(translator) => Some(crate::live::LiveTranslator::new(
+                translator,
+                crate::live::LiveConfig {
+                    langs,
+                    glossary: summo_llm::prompt::Glossary::default(),
+                },
+            )),
+            Err(e) => {
+                tracing::warn!(error = %e, "live translation asked for but no model is configured");
+                None
             }
         }
-        _ => None,
     };
 
     Ok(ActiveSession {
@@ -7326,7 +7344,7 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
     #[tokio::test]
     async fn a_translate_with_no_recording_says_where_the_setting_lives() {
         let (_tmp, engine) = engine();
-        let events = set_live_translation(&engine, None, Some("vi".into())).await;
+        let events = set_live_translation(&engine, None, vec!["vi".into()]).await;
         assert!(
             matches!(&events[0], Event::Error { message, .. } if message.contains("settings")),
             "{events:?}"
@@ -7339,18 +7357,32 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
     #[cfg(feature = "models")]
     #[test]
     fn the_socket_claims_translation_and_leaves_every_other_command_alone() {
+        // `to` with a bare string is what every shipped client sends, and it has to keep working
+        // — a daemon a version ahead of the app must not refuse the command mid-meeting.
         assert_eq!(
             parse_translate(r#"{"cmd":"translate","to":"ja"}"#),
-            Some(Some("ja".into()))
+            Some(vec!["ja".to_string()])
+        );
+        assert_eq!(
+            parse_translate(r#"{"cmd":"translate","into":["ja","en"]}"#),
+            Some(vec!["ja".to_string(), "en".to_string()])
         );
         // "Off" must be claimed too. Falling through to the synchronous handler would answer it
         // with "translation is applied on the socket task", and turning translation off would be
         // an error message instead of an action.
         assert_eq!(
             parse_translate(r#"{"cmd":"translate","to":""}"#),
-            Some(Some(String::new()))
+            Some(Vec::new())
         );
-        assert_eq!(parse_translate(r#"{"cmd":"translate"}"#), Some(None));
+        assert_eq!(
+            parse_translate(r#"{"cmd":"translate","into":[]}"#),
+            Some(Vec::new())
+        );
+        assert_eq!(
+            parse_translate(r#"{"cmd":"translate","to":null}"#),
+            Some(Vec::new())
+        );
+        assert_eq!(parse_translate(r#"{"cmd":"translate"}"#), Some(Vec::new()));
 
         assert_eq!(parse_translate(r#"{"cmd":"session_stop"}"#), None);
         assert_eq!(parse_translate(r#"{"cmd":"model_swap","id":"x"}"#), None);
@@ -7467,26 +7499,40 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
     async fn translation_off_needs_no_model_and_no_settings() {
         let (_tmp, engine) = engine();
         // No session: the "no recording" answer, not a panic and not a model load.
-        let events = set_live_translation(&engine, None, None).await;
+        let events = set_live_translation(&engine, None, Vec::new()).await;
         assert!(matches!(&events[0], Event::Error { .. }), "{events:?}");
     }
 
-    /// Three shapes on the wire, all of which the interface sends. `{"to":""}` and `{}` both mean
-    /// off — the dropdown's empty option produces the first and a client that has never turned it
-    /// on produces the second — and a schema that accepted only one of them would make "off" a
-    /// state reachable from one code path and not the other.
+    /// Every shape on the wire, all of which some version of the interface sends. `{"to":""}`,
+    /// `{"into":[]}` and `{}` all mean off — the dropdown's empty option produces the first, and a
+    /// client that has never turned it on produces the last — and a schema that accepted only one
+    /// of them would make "off" a state reachable from one code path and not the other.
+    ///
+    /// `to` is the old spelling, one language, and it keeps working: the desktop shell ships
+    /// separately from the daemon and a version skew must not end somebody's meeting.
     #[test]
-    fn translate_parses_a_target_and_both_spellings_of_off() {
-        let named: Command =
+    fn translate_parses_every_spelling_of_a_target_and_of_off() {
+        let one: Command =
             serde_json::from_str(r#"{"cmd":"translate","to":"ja"}"#).expect("parses");
-        assert!(matches!(named, Command::Translate { ref to } if to.as_deref() == Some("ja")));
+        assert!(matches!(one, Command::Translate { ref into } if into == &["ja"]));
 
-        let empty: Command =
-            serde_json::from_str(r#"{"cmd":"translate","to":""}"#).expect("parses");
-        assert!(matches!(empty, Command::Translate { ref to } if to.as_deref() == Some("")));
+        let many: Command =
+            serde_json::from_str(r#"{"cmd":"translate","into":["ja","en"]}"#).expect("parses");
+        assert!(matches!(many, Command::Translate { ref into } if into == &["ja", "en"]));
 
-        let absent: Command = serde_json::from_str(r#"{"cmd":"translate"}"#).expect("parses");
-        assert!(matches!(absent, Command::Translate { to: None }));
+        for off in [
+            r#"{"cmd":"translate","to":""}"#,
+            r#"{"cmd":"translate","to":null}"#,
+            r#"{"cmd":"translate","into":[]}"#,
+            r#"{"cmd":"translate"}"#,
+        ] {
+            let parsed: Command =
+                serde_json::from_str(off).unwrap_or_else(|e| panic!("{off}: {e}"));
+            assert!(
+                matches!(parsed, Command::Translate { ref into } if into.is_empty()),
+                "{off} should mean off"
+            );
+        }
     }
 
     /// A build with no recognition has nothing to translate, and must say so rather than accepting
