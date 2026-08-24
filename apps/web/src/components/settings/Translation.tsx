@@ -1,7 +1,7 @@
 import { Check, HardDriveDownload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button, Checkbox, Input, Progress, Select } from "../ui";
+import { Button, Input, Progress, Select } from "../ui";
 import { CONTROL, FIELD, HINT, LABEL } from "./fields";
 import { useT } from "../../i18n/context";
 import { CatalogueClient, size, type CatalogueModel } from "../../lib/catalogue";
@@ -31,7 +31,7 @@ export function Translation({ settings }: { settings: LlmSettings }) {
   // With nothing configured it uses the translation model on disk rather than the summary model —
   // otherwise pressing Install on the models screen bought a model the app then declined to use,
   // and asking for subtitles resolved to the default `ollama` endpoint and failed every line. That
-  // resolution has to be visible here, or this checkbox describes a decision the daemon is not
+  // resolution has to be visible here, or this section describes a decision the daemon is not
   // making.
   const plan = useLoad(
     useCallback(async () => fetchPlan(handshake), [handshake]),
@@ -41,91 +41,93 @@ export function Translation({ settings }: { settings: LlmSettings }) {
 
   if (!llm) return null;
 
+  const mt = llm.translator ?? null;
+  const mode = mt === null ? AUTO : mt.provider === LOCAL ? LOCAL : ENDPOINT;
+
   return (
     <div data-testid="settings-translation">
       <p className="text-fg-faint text-meta mb-4 leading-normal">{t("settings.mt_hint")}</p>
 
-      <Checkbox
-        className="mt-3.5"
-        checked={llm.translator != null}
-        onChange={(on) =>
-          void save({
-            ...llm,
-            // Turning it on proposes the in-app model, not an endpoint. "Enable this, now go and
-            // install a model server" is not a setting anybody finishes, and the whole claim of
-            // this feature is that translation costs nothing — which stops being true the moment it
-            // depends on a second program.
-            translator: on ? { provider: LOCAL, model: "small100" } : null,
-          })
-        }
-      >
-        {t("settings.mt_enable")}
-      </Checkbox>
+      {/* One control for one decision, in three states.
 
-      {/* Unchecked, with a translation model on disk. The box says "use a separate model" and the
-          daemon is using one anyway, because the alternative — sending subtitles to a summary
-          endpoint that is usually not running — is the failure this replaced. Said out loud rather
-          than left as a discrepancy somebody discovers during a meeting. */}
-      {llm.translator == null && using && (
-        <p className={cn(HINT, "text-done")}>{t("record.translate_with", { model: using })}</p>
+          This was a checkbox — "use a separate model for translation" — above a two-option Runs
+          dropdown, and the checkbox had become a lie: unticked does not mean "do not use a separate
+          model", it means *unset*, and unset is exactly the state in which the daemon now picks the
+          translation model on disk. Somebody with SMALL100 installed read an empty box over a
+          working translator. The three things `llm.translator` can actually be are the three things
+          offered here. */}
+      <label className={FIELD}>
+        <span className={LABEL}>{t("settings.mt_where")}</span>
+        <Select
+          className={CONTROL}
+          value={mode}
+          aria-label={t("settings.mt_where")}
+          onChange={(e) =>
+            void save({
+              ...llm,
+              // "In Summo" proposes the in-app model, not an endpoint. "Enable this, now go and
+              // install a model server" is not a setting anybody finishes, and the whole claim of
+              // this feature is that translation costs nothing — which stops being true the moment
+              // it depends on a second program.
+              translator:
+                e.target.value === AUTO
+                  ? null
+                  : e.target.value === LOCAL
+                    ? { provider: LOCAL, model: "small100" }
+                    : { provider: "llama-cpp", model: "milmmt-46-1b" },
+            })
+          }
+        >
+          <option value={AUTO}>{t("settings.mt_auto")}</option>
+          <option value={LOCAL}>{t("settings.mt_in_app")}</option>
+          <option value={ENDPOINT}>{t("settings.mt_endpoint")}</option>
+        </Select>
+      </label>
+
+      {/* Automatic, resolved out loud. Either the daemon has named a model — say which — or it has
+          not, and then translation would fall through to the summary endpoint, which is the failure
+          this whole section exists to stop somebody discovering during a meeting. Held back until
+          the plan has actually answered: "no translation model" printed over a machine that has one
+          is worse than a moment of nothing. */}
+      {mode === AUTO &&
+        (using ? (
+          <p className={cn(HINT, "text-done")}>{t("record.translate_with", { model: using })}</p>
+        ) : (
+          plan.data !== null && <LocalModel model="small100" missing={t("settings.mt_auto_none")} />
+        ))}
+
+      {mode === ENDPOINT && (
+        <label className={FIELD}>
+          <span className={LABEL}>{t("settings.endpoint")}</span>
+          <Input
+            className={CONTROL}
+            value={mt?.provider ?? ""}
+            aria-label={t("settings.mt_endpoint")}
+            placeholder="llama-cpp"
+            onChange={(e) =>
+              edit({
+                ...llm,
+                translator: { model: mt?.model ?? null, provider: e.target.value },
+              })
+            }
+            onBlur={() => void save(llm)}
+          />
+        </label>
       )}
 
-      {llm.translator != null && (
+      {mode !== AUTO && (
         <>
-          <label className={FIELD}>
-            <span className={LABEL}>{t("settings.mt_where")}</span>
-            <Select
-              className={CONTROL}
-              value={llm.translator.provider === LOCAL ? LOCAL : "endpoint"}
-              aria-label={t("settings.mt_where")}
-              onChange={(e) =>
-                void save({
-                  ...llm,
-                  translator:
-                    e.target.value === LOCAL
-                      ? { provider: LOCAL, model: "small100" }
-                      : { provider: "llama-cpp", model: "milmmt-46-1b" },
-                })
-              }
-            >
-              <option value={LOCAL}>{t("settings.mt_in_app")}</option>
-              <option value="endpoint">{t("settings.mt_endpoint")}</option>
-            </Select>
-          </label>
-
-          {llm.translator.provider !== LOCAL && (
-            <label className={FIELD}>
-              <span className={LABEL}>{t("settings.endpoint")}</span>
-              <Input
-                className={CONTROL}
-                value={llm.translator.provider}
-                aria-label={t("settings.mt_endpoint")}
-                placeholder="llama-cpp"
-                onChange={(e) =>
-                  edit({
-                    ...llm,
-                    translator: { model: llm.translator?.model ?? null, provider: e.target.value },
-                  })
-                }
-                onBlur={() => void save(llm)}
-              />
-            </label>
-          )}
-
           <label className={FIELD}>
             <span className={LABEL}>{t("settings.model")}</span>
             <Input
               className={CONTROL}
-              value={llm.translator.model ?? ""}
+              value={mt?.model ?? ""}
               aria-label={t("settings.mt_model")}
               placeholder="small100"
               onChange={(e) =>
                 edit({
                   ...llm,
-                  translator: {
-                    provider: llm.translator?.provider ?? LOCAL,
-                    model: e.target.value,
-                  },
+                  translator: { provider: mt?.provider ?? LOCAL, model: e.target.value },
                 })
               }
               onBlur={() => void save(llm)}
@@ -137,8 +139,8 @@ export function Translation({ settings }: { settings: LlmSettings }) {
               the one thing they wanted, which was to have the model. Then it became a link to the
               catalogue, which is better and still asks somebody who has just turned translation on
               to go to another screen, find one row among ten and press the button on it. */}
-          {llm.translator.provider === LOCAL ? (
-            <LocalModel model={llm.translator.model} />
+          {mode === LOCAL ? (
+            <LocalModel model={mt?.model ?? null} />
           ) : (
             <p className={HINT}>{t("settings.mt_run")}</p>
           )}
@@ -148,6 +150,11 @@ export function Translation({ settings }: { settings: LlmSettings }) {
   );
 }
 
+/** `llm.translator == null`: no endpoint and no pinned model, so the daemon decides. */
+const AUTO = "auto";
+/** Somebody else's server. Not a provider id — the id is whatever they type in the next field. */
+const ENDPOINT = "endpoint";
+
 /**
  * Whether the named translation model is on this machine, and a button that puts it there.
  *
@@ -156,7 +163,7 @@ export function Translation({ settings }: { settings: LlmSettings }) {
  * meeting. Nothing here guesses — the catalogue is asked whether that exact id is installed, and the
  * three answers (have it, downloading it, do not have it) are the three things it can say.
  */
-function LocalModel({ model }: { model: string | null }) {
+function LocalModel({ model, missing }: { model: string | null; missing?: string }) {
   const t = useT();
   const { handshake } = useEngine();
   const say = useErrorText();
@@ -214,6 +221,10 @@ function LocalModel({ model }: { model: string | null }) {
 
   return (
     <div>
+      {/* Why the button is here at all, when the caller has one to say. In the automatic state
+          nothing is configured and nothing is on disk, so the sentence that matters is where the
+          translation would go instead — and it is only true while this branch is the one rendering. */}
+      {missing && <p className={cn(HINT, "mb-2")}>{missing}</p>}
       <Button
         variant="secondary"
         size="sm"

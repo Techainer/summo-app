@@ -1,9 +1,10 @@
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { useI18n } from "../../i18n/context";
 import { CatalogueClient } from "../../lib/catalogue";
 import { useEngine } from "../../lib/engine-context";
+import { readJson, useErrorText } from "../../lib/errors";
 import { AUTO, autoAvailable, ordered, type Language } from "../../lib/languages";
 import { url } from "../../lib/library";
 import { fetchPlan } from "../../lib/plan";
@@ -59,6 +60,9 @@ export function ListeningPanel({
   const { t, locale } = useI18n();
   const { handshake, retune, translate } = useEngine();
   const navigate = useNavigate();
+  const say = useErrorText();
+  // A refused translator swap, said out loud. See `pointTranslatorAt`.
+  const [swapFailed, setSwapFailed] = useState<string | null>(null);
 
   const catalogue = useLoad(
     useCallback(async () => new CatalogueClient(handshake).load(), [handshake]),
@@ -179,7 +183,15 @@ export function ListeningPanel({
               aria-label={t("settings.mt_model")}
               value={using ?? ""}
               onChange={(event) => {
-                void pointTranslatorAt(handshake, event.target.value).finally(onChanged);
+                setSwapFailed(null);
+                void pointTranslatorAt(handshake, event.target.value)
+                  .then(() => {
+                    // `using` is the daemon's answer, not this dropdown's — so the control only
+                    // moves once the daemon has been re-asked.
+                    plan.reload();
+                    onChanged();
+                  })
+                  .catch((error: unknown) => setSwapFailed(say(error)));
               }}
             >
               {translators.map((each) => (
@@ -191,6 +203,11 @@ export function ListeningPanel({
           </Field>
         )}
       </div>
+
+      {/* A swap the daemon refused. Without this the dropdown showed the new model and the meeting
+          kept translating with the old one — the same silent disagreement between a control and the
+          pipeline behind it that `in-meeting.mjs` checks `/status` to catch for the speech model. */}
+      {swapFailed && <p className="text-rec text-micro mt-2">{swapFailed}</p>}
 
       <p className="text-fg-faint text-micro mt-2.5">
         {t("record.listening_note")}{" "}
@@ -230,16 +247,23 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
  * — and because the socket's `translate` command is about the target language, not about which
  * model does the work. The change reaches the running session on the next line, since the live
  * translator is rebuilt from settings whenever the target changes.
+ *
+ * The answer is read rather than discarded. This was `await fetch(...)` with the response thrown
+ * away and `.finally(onChanged)` at the call site, so a refusal — an id the daemon does not have, a
+ * model whose task is not translation, a write to a read-only settings file — left the dropdown
+ * showing a model that was not translating anything.
  */
 async function pointTranslatorAt(
   handshake: { port: number; token: string },
   id: string,
 ): Promise<void> {
-  await fetch(url(handshake, "/settings/models"), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ role: "translator", model: id }),
-  });
+  await readJson<unknown>(
+    await fetch(url(handshake, "/settings/models"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role: "translator", model: id }),
+    }),
+  );
 }
 
 /**
