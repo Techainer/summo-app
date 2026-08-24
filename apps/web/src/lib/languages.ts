@@ -95,13 +95,27 @@ export function languageName(code: string, locale: string): string {
   if (code === AUTO) return code;
   try {
     const names = new Intl.DisplayNames([locale], { type: "language", fallback: "code" });
-    const name = names.of(code);
+    const name = names.of(SPELLED[code] ?? code);
     if (name && name !== code) return name;
   } catch {
     // `Intl.DisplayNames` is missing, or the code is not a valid language tag.
   }
   return code;
 }
+
+/**
+ * Tags a model spells one way and `Intl` knows by another.
+ *
+ * SMALL100's language list is the one M2M-100 was trained with, and a few of its tags are not the
+ * ones IANA registered. `ns` is Northern Sotho, which every browser knows as `nso` — so it fell
+ * through to being rendered as the literal text `ns`, and because a lowercase code sorts above
+ * `Tiếng …` it sat at the top of the translation list looking like a bug. It was the first thing a
+ * reader saw in a hundred-entry dropdown, and it made the whole list read as unsorted.
+ *
+ * Kept here rather than corrected in `TRANSLATABLE`, because the tag has to stay as the *model*
+ * spells it: it is what goes over the wire to the daemon and into the decoder.
+ */
+const SPELLED: Record<string, string> = { ns: "nso" };
 
 /**
  * Language codes as a list somebody can find their own language in.

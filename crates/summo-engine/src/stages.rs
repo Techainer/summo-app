@@ -203,6 +203,22 @@ impl Recognise {
             Engine::Hybrid { session, .. } => session.is_speaking(),
         }
     }
+
+    /// Where the meeting has got to, so a rebuilt lane carries on rather than starting over.
+    #[must_use]
+    pub fn position(&self) -> (u64, usize) {
+        match &self.engine {
+            Engine::Plain(session) => session.position(),
+            Engine::Hybrid { session, .. } => session.position(),
+        }
+    }
+
+    pub fn resume_at(&mut self, seq: u64, samples_seen: usize) {
+        match &mut self.engine {
+            Engine::Plain(session) => session.resume_at(seq, samples_seen),
+            Engine::Hybrid { session, .. } => session.resume_at(seq, samples_seen),
+        }
+    }
 }
 
 /// Finished utterances allowed to wait for the refine model.

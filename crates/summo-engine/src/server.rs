@@ -5075,14 +5075,19 @@ fn handle_command_with_models(
             // language and lets the daemon pick what hears it.
             let spec = resolve_models(&spec, engine);
 
+            // Read before the old runner is replaced: the sequence numbers and the clock belong to
+            // the meeting, and the pipeline is only what is serving it.
+            let carried = active.runner.position();
+
             match crate::runner::SessionRunner::with_warm(
                 &spec,
                 &engine.store(),
                 engine.hardware(),
                 Some(engine.warm()),
             ) {
-                Ok(runner) => {
+                Ok(mut runner) => {
                     let said = spec.language.clone().unwrap_or_else(|| "auto".into());
+                    runner.resume_from(&carried);
                     active.runner = runner;
                     active.spec = spec.clone();
                     // So `/status` — and the banner reading it — says what is true now.

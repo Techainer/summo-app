@@ -81,6 +81,16 @@ impl<D: Decoder> HybridSession<D> {
         }
     }
 
+    /// Where the meeting has got to, and how to take one over. See [`PseudoSession::position`].
+    #[must_use]
+    pub fn position(&self) -> (u64, usize) {
+        self.live.position()
+    }
+
+    pub fn resume_at(&mut self, seq: u64, samples_seen: usize) {
+        self.live.resume_at(seq, samples_seen);
+    }
+
     /// Utterances the fast model threw away as hallucinated, which a lane reports whichever
     /// arrangement is behind it.
     #[must_use]

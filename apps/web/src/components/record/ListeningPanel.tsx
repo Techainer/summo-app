@@ -2,10 +2,11 @@ import { useCallback, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { useI18n } from "../../i18n/context";
+import { cn } from "../../lib/cn";
 import { CatalogueClient } from "../../lib/catalogue";
 import { useEngine } from "../../lib/engine-context";
 import { readJson, useErrorText } from "../../lib/errors";
-import { AUTO, autoAvailable, ordered, type Language } from "../../lib/languages";
+import { AUTO, autoAvailable, languageName, ordered, type Language } from "../../lib/languages";
 import { url } from "../../lib/library";
 import { fetchPlan } from "../../lib/plan";
 import { useLoad } from "../../lib/use-load";
@@ -111,8 +112,17 @@ export function ListeningPanel({
 
   return (
     <div data-testid="listening-panel" className="border-accent/20 mt-2.5 border-t pt-3">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label={t("settings.the_model")}>
+      {/* Sized by how often each is reached for, not by how long its longest option is.
+          
+          An even four-column grid gave `Whisper tiny (99 languages)` the same width as `Tắt`, and
+          the model is the control somebody touches once a month while the translation target is the
+          one they touch during the call. Reported as "the most important thing is tiny and the model
+          picker is far too big".
+          
+          So: translation takes two columns of six and comes first on a narrow screen; the two model
+          pickers share the rest and truncate, which is what a name nobody is reading should do. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <Field label={t("settings.the_model")} className="lg:order-2 lg:col-span-2">
           <Select
             size="sm"
             aria-label={t("settings.the_model")}
@@ -136,7 +146,7 @@ export function ListeningPanel({
           </Select>
         </Field>
 
-        <Field label={t("record.spoken")}>
+        <Field label={t("record.spoken")} className="lg:order-3">
           <Select
             size="sm"
             aria-label={t("record.spoken")}
@@ -165,7 +175,7 @@ export function ListeningPanel({
             the same treatment as translation, which is the whole point of a panel that changes a
             meeting while it runs. */}
         {speech.length > 1 && (
-          <Field label={t("settings.mt_second")}>
+          <Field label={t("settings.mt_second")} className="lg:order-4">
             <Select
               size="sm"
               aria-label={t("settings.mt_second")}
@@ -187,7 +197,10 @@ export function ListeningPanel({
           </Field>
         )}
 
-        <Field label={t("record.translate_live")}>
+        <Field
+          label={t("record.translate_live")}
+          className="sm:col-span-2 lg:order-1 lg:col-span-2"
+        >
           {/* Every language the reader might want, not a shortlist: the translator is multilingual,
               and a fixed seven-entry list was the same mistake as the spoken one — a capability
               hidden behind an interface narrower than it. More than one at a time for the same
@@ -204,7 +217,7 @@ export function ListeningPanel({
         </Field>
 
         {translators.length > 1 && (
-          <Field label={t("settings.mt_model")}>
+          <Field label={t("settings.mt_model")} className="lg:order-5">
             <Select
               size="sm"
               aria-label={t("settings.mt_model")}
@@ -230,6 +243,22 @@ export function ListeningPanel({
           </Field>
         )}
       </div>
+
+      {/* Translating into the language being spoken, which is the one target that cannot show you
+          anything. `Tiếng Việt` is pinned first in that list — it is the reader's own language and
+          for every *other* language control that is the right place for it — so on a Vietnamese
+          call it is also the easiest entry to hit by accident. The daemon dutifully translates
+          Vietnamese to Vietnamese, the subtitle is the sentence again, and the panel says
+          `đang dịch sang Tiếng Việt` over a transcript with no visible translation in it.
+
+          Said, not prevented: a meeting held in English by a Vietnamese speaker who set the spoken
+          language wrong has a real reason to want this, and refusing the choice would be guessing
+          which of the two settings is the mistake. */}
+      {spoken !== AUTO && into.includes(spoken) && (
+        <p className="text-fg-dim text-micro mt-2">
+          {t("record.translate_same", { language: languageName(spoken, locale) })}
+        </p>
+      )}
 
       {/* A swap the daemon refused. Without this the dropdown showed the new model and the meeting
           kept translating with the old one — the same silent disagreement between a control and the
@@ -258,9 +287,17 @@ export function ListeningPanel({
 }
 
 /** A label above a control, sized for a banner rather than a settings page. */
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <label className="block">
+    <label className={cn("block min-w-0", className)}>
       <span className="text-fg-faint text-micro">{label}</span>
       <span className="mt-1 block">{children}</span>
     </label>

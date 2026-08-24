@@ -78,6 +78,7 @@
     "listening_hint": "Câu nói xong sẽ hiện ở đây. Cứ nói bình thường.",
     "open_meeting": "Mở buổi đang ghi",
     "translating_into": "đang dịch sang {language}",
+    "translate_same": "Bạn đang dịch sang {language}, đúng ngôn ngữ đang nói — phụ đề sẽ là chính câu đó.",
     "translate_off": "Tắt",
     "translate_needs_model": "Chưa cài mô hình dịch nào.",
     "translate_add": "Thêm một ngôn ngữ nữa",
