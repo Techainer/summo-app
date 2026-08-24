@@ -760,6 +760,18 @@ jobs:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
           GITHUB_TOKEN: ${{ github.token }}
 
+      # Two speech models on one meeting, routed per sentence. Here rather than in `pnpm e2e` for
+      # the third time and the same reason: it needs a real recording.
+      #
+      # The models it wants are already on this runner — Whisper from the suite above, Gipformer
+      # from `full-flow` — so it is the cheapest of the three despite being the one that proves the
+      # most: `refine_model` was a setting nothing read, and a unit test could not have noticed,
+      # because every unit involved was correct and none of them was connected.
+      - run: pnpm -C apps/web e2e:bilingual
+        env:
+          SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+          GITHUB_TOKEN: ${{ github.token }}
+
       # The pictures, when something went wrong.
       #
       # These suites fail with a sentence — "the drop target was never highlighted", "contrast 3.1

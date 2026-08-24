@@ -17,7 +17,10 @@
 //! What is proven here is that the stages behave: the tests drive gating, buffering, flushing and
 //! lane separation with fakes, which is exactly the logic a migration would be trusting.
 
-use summo_asr::{Decoder, PseudoSession, SessionConfig};
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
+
+use summo_asr::{Decoder, HybridSession, PseudoSession, RefineJob, SessionConfig};
 use summo_core::{Result, segment::Lane};
 use summo_pipeline::{Frame, Processor};
 use summo_vad::Vad;
@@ -87,9 +90,28 @@ impl Processor for Detect {
 ///
 /// It consumes audio and voice frames and emits only events. A stage downstream of this one is
 /// working with transcript, not with sound — which is exactly where a translator belongs.
+/// Whether this lane refines, and where the work goes when it does.
+///
+/// Two arrangements rather than one with an `Option` inside it, because a lane that does not refine
+/// must behave exactly as it did before this existed — same session, same configuration, no audio
+/// retained. `refine_model` is unset for everybody who has not asked for it, and the plain arm is
+/// what they keep running.
+enum Engine {
+    Plain(PseudoSession<Box<dyn Decoder>>),
+    /// The fast model, plus a queue of finished utterances for a slower one.
+    ///
+    /// The queue is shared rather than returned: this is a pipeline stage, and a stage emits
+    /// frames. A `RefineJob` is not a frame — nothing downstream of the recogniser wants audio
+    /// back — so it goes out of the side, the same way the diarizer's audio tap does.
+    Hybrid {
+        session: HybridSession<Box<dyn Decoder>>,
+        jobs: Arc<Mutex<VecDeque<RefineJob>>>,
+    },
+}
+
 pub struct Recognise {
     lane: Lane,
-    session: PseudoSession<Box<dyn Decoder>>,
+    engine: Engine,
     /// The audio for the frame whose probability has not arrived yet.
     ///
     /// `Detect` emits audio then probability, so this stage always has one frame in hand. Pairing
@@ -104,6 +126,46 @@ impl Recognise {
         Self::from_session(lane, PseudoSession::new(decoder, config))
     }
 
+    /// The same lane, keeping each finished utterance for a second, slower model.
+    ///
+    /// The jobs it fills are drained by the session runner and executed off the audio thread — a
+    /// refine decode is a second or more and this stage is called from the frame loop.
+    #[must_use]
+    pub fn refining(
+        lane: Lane,
+        decoder: Box<dyn Decoder>,
+        config: SessionConfig,
+        jobs: Arc<Mutex<VecDeque<RefineJob>>>,
+    ) -> Self {
+        Self {
+            lane,
+            engine: Engine::Hybrid {
+                session: HybridSession::new(decoder, config),
+                jobs,
+            },
+            pending: None,
+        }
+    }
+
+    /// Hand a finished utterance to whoever is draining the queue, if this lane has one.
+    fn offer(&self, job: Option<RefineJob>) {
+        let (Engine::Hybrid { jobs, .. }, Some(job)) = (&self.engine, job) else {
+            return;
+        };
+        let Ok(mut queue) = jobs.lock() else {
+            // A poisoned queue means a drainer panicked. The recording is not the thing that should
+            // end for it, and the cost is a sentence that keeps the fast model's text.
+            return;
+        };
+        // Bounded, and the *oldest* goes. Past this the refine model is losing to the speaker, and
+        // the same argument the live translator makes applies: a revision arriving three minutes
+        // after the line it corrects is worse than the line standing.
+        if queue.len() >= MAX_PENDING_REFINEMENTS {
+            queue.pop_front();
+        }
+        queue.push_back(job);
+    }
+
     /// Wrap a session somebody already built.
     ///
     /// The comparison path needs this: to prove the chain and the hand-written loop agree, both
@@ -113,26 +175,42 @@ impl Recognise {
     pub fn from_session(lane: Lane, session: PseudoSession<Box<dyn Decoder>>) -> Self {
         Self {
             lane,
-            session,
+            engine: Engine::Plain(session),
             pending: None,
         }
     }
 
     #[must_use]
     pub fn decode_count(&self) -> u64 {
-        self.session.decode_count()
+        match &self.engine {
+            Engine::Plain(session) => session.decode_count(),
+            Engine::Hybrid { session, .. } => session.decode_count(),
+        }
     }
 
     #[must_use]
     pub fn suppressed_count(&self) -> u64 {
-        self.session.suppressed_count()
+        match &self.engine {
+            Engine::Plain(session) => session.suppressed_count(),
+            Engine::Hybrid { session, .. } => session.suppressed_count(),
+        }
     }
 
     #[must_use]
     pub fn is_speaking(&self) -> bool {
-        self.session.is_speaking()
+        match &self.engine {
+            Engine::Plain(session) => session.is_speaking(),
+            Engine::Hybrid { session, .. } => session.is_speaking(),
+        }
     }
 }
+
+/// Finished utterances allowed to wait for the refine model.
+///
+/// Two is deliberate and small. The refine pass exists to improve text the user is already reading;
+/// a backlog means it is not keeping up, and every further job makes the revision land further from
+/// the moment it would have helped.
+const MAX_PENDING_REFINEMENTS: usize = 2;
 
 impl Processor for Recognise {
     fn name(&self) -> &'static str {
@@ -153,18 +231,28 @@ impl Processor for Recognise {
                     tracing::debug!("voice frame with no audio before it; ignoring");
                     return Ok(vec![]);
                 };
-                let events = self.session.accept(&samples, probability)?;
+                let events = match &mut self.engine {
+                    Engine::Plain(session) => session.accept(&samples, probability)?,
+                    Engine::Hybrid { session, .. } => {
+                        let out = session.accept(&samples, probability)?;
+                        self.offer(out.refine);
+                        out.events
+                    }
+                };
                 Ok(events.into_iter().map(Frame::Event).collect())
             }
             Frame::Flush | Frame::End => {
                 // The open utterance, before the control frame that ended it — otherwise the last
                 // sentence of every meeting arrives after the sink has stopped listening.
-                let mut out: Vec<Frame> = self
-                    .session
-                    .flush()?
-                    .into_iter()
-                    .map(Frame::Event)
-                    .collect();
+                let events = match &mut self.engine {
+                    Engine::Plain(session) => session.flush()?,
+                    Engine::Hybrid { session, .. } => {
+                        let closed = session.flush()?;
+                        self.offer(closed.refine);
+                        closed.events
+                    }
+                };
+                let mut out: Vec<Frame> = events.into_iter().map(Frame::Event).collect();
                 out.push(frame);
                 Ok(out)
             }
@@ -408,6 +496,140 @@ mod tests {
         assert!(
             !out.iter().any(|f| matches!(f, Frame::Audio(_))),
             "the reframer forgot its remainder: {out:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod refining_tests {
+    use super::*;
+    use summo_core::segment::Lane;
+
+    /// A decoder that names the language it heard, which is what routing needs.
+    struct Bilingual {
+        language: &'static str,
+    }
+
+    impl Decoder for Bilingual {
+        fn name(&self) -> &str {
+            "bilingual"
+        }
+        fn decode(&mut self, _samples: &[f32]) -> summo_core::Result<summo_asr::Transcript> {
+            Ok(summo_asr::Transcript {
+                text: "xin chào".into(),
+                language: Some(self.language.to_string()),
+                ..summo_asr::Transcript::default()
+            })
+        }
+    }
+
+    fn drive(stage: &mut Recognise, lane: Lane) {
+        // Loud, then quiet: the gate opens on speech and commits the utterance on trailing silence.
+        for _ in 0..40 {
+            let _ = stage
+                .push(Frame::audio(lane, vec![0.8; 160], 16_000))
+                .unwrap();
+            let _ = stage
+                .push(Frame::Voice {
+                    lane,
+                    probability: 0.95,
+                })
+                .unwrap();
+        }
+        for _ in 0..80 {
+            let _ = stage
+                .push(Frame::audio(lane, vec![0.0; 160], 16_000))
+                .unwrap();
+            let _ = stage
+                .push(Frame::Voice {
+                    lane,
+                    probability: 0.02,
+                })
+                .unwrap();
+        }
+        let _ = stage.push(Frame::Flush).unwrap();
+    }
+
+    /// A refining lane hands out the finished utterance — its audio, its text, and the language the
+    /// fast model reported. All three are needed downstream: the audio to decode again, the text to
+    /// beat, and the language to decide whether the second model is the right one at all.
+    #[test]
+    fn a_refining_lane_offers_the_utterance_it_just_closed() {
+        let jobs: Arc<Mutex<VecDeque<RefineJob>>> = Arc::new(Mutex::new(VecDeque::new()));
+        let lane = Lane::Mic;
+        let mut stage = Recognise::refining(
+            lane,
+            Box::new(Bilingual { language: "vi" }),
+            SessionConfig {
+                lane,
+                ..SessionConfig::default()
+            },
+            jobs.clone(),
+        );
+
+        drive(&mut stage, lane);
+
+        let queued = jobs.lock().unwrap();
+        let job = queued.front().expect("an utterance to refine");
+        assert_eq!(job.language.as_deref(), Some("vi"));
+        assert_eq!(job.text, "xin chào");
+        assert!(!job.pcm.is_empty(), "the audio has to come with it");
+    }
+
+    /// And a plain lane offers nothing, which is what keeps every user who has not asked for this
+    /// on exactly the pipeline they had: no audio retained, no queue, no second decode.
+    #[test]
+    fn a_plain_lane_keeps_no_audio_and_queues_nothing() {
+        let jobs: Arc<Mutex<VecDeque<RefineJob>>> = Arc::new(Mutex::new(VecDeque::new()));
+        let lane = Lane::Mic;
+        let mut stage = Recognise::new(
+            lane,
+            Box::new(Bilingual { language: "vi" }),
+            SessionConfig {
+                lane,
+                ..SessionConfig::default()
+            },
+        );
+
+        drive(&mut stage, lane);
+
+        assert!(jobs.lock().unwrap().is_empty());
+    }
+
+    /// The queue is bounded, and it is the *oldest* that goes. A refine model losing to the speaker
+    /// should be revising the line somebody is looking at, not the one three sentences back.
+    #[test]
+    fn a_backlog_drops_the_stalest_utterance() {
+        let jobs: Arc<Mutex<VecDeque<RefineJob>>> = Arc::new(Mutex::new(VecDeque::new()));
+        let lane = Lane::Mic;
+        let stage = Recognise::refining(
+            lane,
+            Box::new(Bilingual { language: "vi" }),
+            SessionConfig {
+                lane,
+                ..SessionConfig::default()
+            },
+            jobs.clone(),
+        );
+
+        for seq in 0..(MAX_PENDING_REFINEMENTS + 3) {
+            stage.offer(Some(RefineJob {
+                seq: seq as u64,
+                lane,
+                t0: 0.0,
+                t1: 1.0,
+                pcm: vec![0.1],
+                language: Some("vi".into()),
+                text: format!("câu {seq}"),
+            }));
+        }
+
+        let queued = jobs.lock().unwrap();
+        assert_eq!(queued.len(), MAX_PENDING_REFINEMENTS);
+        assert_eq!(
+            queued.front().map(|job| job.seq),
+            Some(3),
+            "the oldest went, not the newest"
         );
     }
 }

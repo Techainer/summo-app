@@ -1,7 +1,7 @@
 {
   "name": "@summo/web",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,7 +16,8 @@
     "format:check": "prettier --check .",
     "check": "tsc --noEmit && pnpm lint && prettier --check . && vitest run",
     "e2e:full-flow": "node e2e/full-flow.mjs",
-    "e2e:in-meeting": "node e2e/in-meeting.mjs"
+    "e2e:in-meeting": "node e2e/in-meeting.mjs",
+    "e2e:bilingual": "node e2e/bilingual.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",

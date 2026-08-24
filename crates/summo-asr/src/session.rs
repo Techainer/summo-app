@@ -95,6 +95,12 @@ pub struct PseudoSession<D: Decoder> {
     suppressed: u64,
     /// Audio of the most recent finished utterance, when `keep_final_pcm` is set.
     last_final_pcm: Option<Vec<f32>>,
+    /// What the decoder said it heard in that utterance, when it says.
+    ///
+    /// Beside the audio rather than on the segment: a language is a property of the decode, not of
+    /// the transcript, and putting it on `Segment` would send it over the wire and into the vault
+    /// for the sake of one routing decision inside this process.
+    last_final_language: Option<String>,
 }
 
 impl<D: Decoder> PseudoSession<D> {
@@ -109,6 +115,7 @@ impl<D: Decoder> PseudoSession<D> {
             decodes: 0,
             suppressed: 0,
             last_final_pcm: None,
+            last_final_language: None,
         }
     }
 
@@ -117,6 +124,15 @@ impl<D: Decoder> PseudoSession<D> {
     /// A hybrid setup uses this to hand the same audio to a slower model without re-buffering it.
     pub fn take_final_pcm(&mut self) -> Option<Vec<f32>> {
         self.last_final_pcm.take()
+    }
+
+    /// Take the language the decoder reported for that utterance, if it reported one.
+    ///
+    /// Taken rather than read, and taken in the same breath as the audio, so a decoder that
+    /// answers for one utterance and not the next cannot leave the previous answer behind to be
+    /// read as this one's.
+    pub fn take_final_language(&mut self) -> Option<String> {
+        self.last_final_language.take()
     }
 
     #[must_use]
@@ -203,6 +219,9 @@ impl<D: Decoder> PseudoSession<D> {
         self.decodes += 1;
         let transcript = self.decoder.decode(pcm)?;
         self.decoder.reset();
+        if self.cfg.keep_final_pcm {
+            self.last_final_language = transcript.language.clone();
+        }
 
         let verdict = self.filter.judge(&transcript);
         if !verdict.is_keep() {

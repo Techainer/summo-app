@@ -9,7 +9,7 @@
 //! would interleave into a single garbled utterance, and lane separation is the cheapest speaker
 //! attribution Summo has.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use summo_asr::{Decoder, SessionConfig};
@@ -66,6 +66,12 @@ struct Diarizer {
 pub struct SessionRunner {
     lanes: HashMap<Lane, LaneRunner>,
     diarizer: Option<Diarizer>,
+    /// Finished utterances waiting for the refine model, filled by every refining lane.
+    ///
+    /// One queue for the whole session rather than one per lane, because there is one refine
+    /// decoder: a decoder holds mutable inference state, so two lanes cannot run it at once, and a
+    /// queue per lane would only be two orderings of the same single-file work.
+    refine_queue: Arc<Mutex<VecDeque<summo_asr::RefineJob>>>,
 }
 
 impl SessionRunner {
@@ -98,6 +104,16 @@ impl SessionRunner {
         // Taken, not borrowed: whoever gets it owns it, and the slot is refilled afterwards. That
         // keeps every question about a killed recording holding a borrowed decoder from existing.
         let mut ready = warm.and_then(|warm| warm.take(&key));
+
+        // A second model, when one is named and it is not the one already decoding. `validate`
+        // refuses the identical pair, which would decode everything twice for nothing.
+        //
+        // Loaded before the lanes, so a refine model that is missing fails the session here rather
+        // than after the first utterance — and does not fail it at all when it is simply unset,
+        // which is what everybody who has not asked for this has.
+        let refine_queue: Arc<Mutex<VecDeque<summo_asr::RefineJob>>> =
+            Arc::new(Mutex::new(VecDeque::new()));
+        let refining = spec.refine_model.is_some();
 
         let mut lanes = HashMap::new();
         for &lane in &spec.lanes {
@@ -134,7 +150,11 @@ impl SessionRunner {
                     }
                 }))
                 .then(Detect::new(lane, vad))
-                .then(Recognise::new(lane, decoder, cfg));
+                .then(if refining {
+                    Recognise::refining(lane, decoder, cfg, refine_queue.clone())
+                } else {
+                    Recognise::new(lane, decoder, cfg)
+                });
 
             lanes.insert(lane, LaneRunner { chain, pending });
         }
@@ -159,7 +179,23 @@ impl SessionRunner {
             None => None,
         };
 
-        Ok(Self { lanes, diarizer })
+        Ok(Self {
+            lanes,
+            diarizer,
+            refine_queue,
+        })
+    }
+
+    /// Take the utterances waiting to be decoded again by the slower model.
+    ///
+    /// Drained by the caller rather than handled here, because running one is a second of blocking
+    /// work and this type is called from the frame loop. Empty for a session with no refine model,
+    /// which is the ordinary case.
+    pub fn take_refine_jobs(&self) -> Vec<summo_asr::RefineJob> {
+        let Ok(mut queue) = self.refine_queue.lock() else {
+            return Vec::new();
+        };
+        queue.drain(..).collect()
     }
 
     /// Feed audio for one lane, returning whatever it produced.

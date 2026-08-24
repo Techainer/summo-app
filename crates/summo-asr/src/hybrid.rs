@@ -35,6 +35,16 @@ pub struct RefineJob {
     pub t1: f64,
     /// The utterance audio, already trimmed by the gate.
     pub pcm: Vec<f32>,
+    /// What the fast model said this utterance was in, when it says.
+    ///
+    /// Carried so the caller can decide whether the refine model is the right one for *this*
+    /// sentence rather than for the meeting. That is the whole of bilingual support: a call held
+    /// half in Vietnamese and half in English wants an accurate Vietnamese model on the Vietnamese
+    /// utterances and nothing extra on the rest, and until this field existed the only choice
+    /// available was one model for all of it.
+    pub language: Option<String>,
+    /// The text the fast model produced, which is what a refinement has to beat.
+    pub text: String,
 }
 
 /// What one frame produced.
@@ -71,6 +81,13 @@ impl<D: Decoder> HybridSession<D> {
         }
     }
 
+    /// Utterances the fast model threw away as hallucinated, which a lane reports whichever
+    /// arrangement is behind it.
+    #[must_use]
+    pub fn suppressed_count(&self) -> u64 {
+        self.live.suppressed_count()
+    }
+
     /// Feed one frame and its speech probability.
     pub fn accept(&mut self, frame: &[f32], speech_prob: f32) -> Result<HybridOutput> {
         let events = self.live.accept(frame, speech_prob)?;
@@ -87,21 +104,24 @@ impl<D: Decoder> HybridSession<D> {
     fn attach_refine(&mut self, events: Vec<Event>) -> HybridOutput {
         // Only a final carries a refine job, and only one final can close per frame.
         let finished = events.iter().find_map(|e| match e {
-            Event::Final(s) => Some((s.seq, s.t0, s.t1)),
+            Event::Final(s) => Some((s.seq, s.t0, s.t1, s.text.clone())),
             _ => None,
         });
 
         // The audio is taken either way: leaving it behind after a suppressed final would hand it
-        // to the *next* utterance's job.
+        // to the *next* utterance's job. Same for the language, for the same reason.
         let pcm = self.live.take_final_pcm();
+        let language = self.live.take_final_language();
 
         let refine = match (finished, pcm) {
-            (Some((seq, t0, t1)), Some(pcm)) => Some(RefineJob {
+            (Some((seq, t0, t1, text)), Some(pcm)) => Some(RefineJob {
                 seq,
                 lane: self.lane,
                 t0,
                 t1,
                 pcm,
+                language,
+                text,
             }),
             _ => None,
         };

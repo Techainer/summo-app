@@ -27,5 +27,5 @@ pub mod sherpa;
 
 pub use decoder::{Decoder, Transcript};
 pub use hallucination::{HallucinationFilter, Verdict};
-pub use hybrid::HybridSession;
+pub use hybrid::{HybridOutput, HybridSession, RefineJob};
 pub use session::{PseudoSession, SessionConfig};

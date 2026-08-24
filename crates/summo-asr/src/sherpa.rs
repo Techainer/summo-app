@@ -359,6 +359,7 @@ impl Decoder for WhisperDecoder {
         let result = self.inner.transcribe(SAMPLE_RATE, pcm);
         Ok(Transcript {
             text: result.text.trim().to_string(),
+            language: spoken_language(&result.lang),
             ..Transcript::default()
         })
     }
@@ -640,6 +641,7 @@ impl Decoder for SenseVoiceDecoder {
         let result = self.inner.transcribe(SAMPLE_RATE, pcm);
         Ok(Transcript {
             text: strip_tags(&result.text),
+            language: spoken_language(&result.lang),
             // Non-autoregressive: there is no no-speech probability, and no hallucinated ending for
             // one to guard against.
             ..Transcript::default()
@@ -745,5 +747,46 @@ mod sensevoice_tests {
         let mut d = SenseVoiceDecoder::from_dir(dir, Some("zh"), 2).unwrap();
         let out = d.decode(&vec![0.0; SAMPLE_RATE as usize]).unwrap();
         assert!(out.is_empty(), "expected silence, got `{}`", out.text);
+    }
+}
+
+/// Normalise what sherpa reports as the detected language.
+///
+/// Whisper hands back its own token — `<|en|>` — and SenseVoice hands back a bare code or nothing
+/// at all. Neither shape is one a caller should have to know about, and the empty string is the
+/// runtime saying "I was told the language, I did not detect one", which is `None` rather than a
+/// language whose tag is empty.
+///
+/// Lower-cased, because everything downstream compares against a manifest's own spelling and `EN`
+/// from one runtime must not read as a language no model covers.
+fn spoken_language(reported: &str) -> Option<String> {
+    let trimmed = reported
+        .trim()
+        .trim_start_matches("<|")
+        .trim_end_matches("|>")
+        .trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_lowercase())
+}
+
+#[cfg(test)]
+mod language_tests {
+    use super::spoken_language;
+
+    /// Whisper answers in its own token vocabulary; nothing outside this file should have to know.
+    #[test]
+    fn a_whisper_token_becomes_a_plain_code() {
+        assert_eq!(spoken_language("<|en|>").as_deref(), Some("en"));
+        assert_eq!(spoken_language("vi").as_deref(), Some("vi"));
+        assert_eq!(spoken_language(" <|JA|> ").as_deref(), Some("ja"));
+    }
+
+    /// A model told which language to use reports nothing, and "nothing" is not a language.
+    /// Routing on an empty tag would send every utterance to whichever model claims `""`, which is
+    /// none of them — so every utterance would lose its refinement.
+    #[test]
+    fn silence_from_the_runtime_is_not_a_language() {
+        assert_eq!(spoken_language(""), None);
+        assert_eq!(spoken_language("   "), None);
+        assert_eq!(spoken_language("<||>"), None);
     }
 }
