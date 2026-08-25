@@ -126,6 +126,26 @@ impl Recognise {
         Self::from_session(lane, PseudoSession::new(decoder, config))
     }
 
+    /// Clean each finished utterance before it is decoded, when a model for it was chosen.
+    ///
+    /// A builder rather than a fourth argument on both constructors: a denoiser is `None` for
+    /// almost every session, and threading an always-`None` parameter through two constructors and
+    /// every test that calls them would put the uncommon case in everybody's way.
+    #[must_use]
+    pub fn with_denoiser(mut self, denoiser: Option<Box<dyn summo_asr::Denoiser>>) -> Self {
+        if denoiser.is_none() {
+            return self;
+        }
+        self.engine = match self.engine {
+            Engine::Plain(session) => Engine::Plain(session.with_denoiser(denoiser)),
+            Engine::Hybrid { session, jobs } => Engine::Hybrid {
+                session: session.with_denoiser(denoiser),
+                jobs,
+            },
+        };
+        self
+    }
+
     /// The same lane, keeping each finished utterance for a second, slower model.
     ///
     /// The jobs it fills are drained by the session runner and executed off the audio thread — a

@@ -179,6 +179,25 @@ export function ModelsScreen() {
     [catalogue, say],
   );
 
+  /// Put a role back to "nothing chosen".
+  ///
+  /// Only noise suppression uses this today, and it is the only role that needs it: every other one
+  /// falls back to something sensible when unset, so choosing a different model is how you change
+  /// your mind. An enhancer that is unset is *off*, so without a way back the first click is
+  /// permanent — the user would have to edit the settings file to record without it again.
+  const stop = useCallback(
+    async (role: Role) => {
+      try {
+        await catalogue.use(role, "");
+        setChosen((current) => ({ ...current, [role]: null }));
+        setError(null);
+      } catch (e) {
+        setError(say(e));
+      }
+    },
+    [catalogue, say],
+  );
+
   const pull = useCallback(
     async (id: string) => {
       try {
@@ -259,7 +278,19 @@ export function ModelsScreen() {
           question this screen could not answer: a card said "Đang dùng" because the settings named
           it, whether or not the bytes were ever downloaded, and the two models a recording cannot
           start without appeared nowhere until they were missing. */}
-      {plan && <Running plan={plan} onInstall={(id) => void pull(id)} installs={installs} />}
+      {plan && (
+        <Running
+          plan={plan}
+          onInstall={(id) => void pull(id)}
+          onSecond={(id) =>
+            void catalogue
+              .use("refine", id)
+              .then(load)
+              .catch((e) => setError(say(e)))
+          }
+          installs={installs}
+        />
+      )}
 
       {/* Search and a task filter, because the catalogue is now long enough to scroll past what you
           came for. Both narrow the same list the language banner narrows — one row of controls, not
@@ -334,8 +365,13 @@ export function ModelsScreen() {
                   job={installs.find((job) => job.model === model.id)}
                   onPull={() => void pull(model.id)}
                   onRemove={() => void remove(model.id)}
-                  onUse={() => void choose(model, "live")}
+                  onUse={() => void choose(model)}
                   onRefine={() => void choose(model, "refine")}
+                  onStop={() => {
+                    const role = roleFor(model.task);
+                    if (role) void stop(role);
+                  }}
+                  optional={model.task === "denoise"}
                   asRefine={chosen.refine === model.id && model.installed}
                   // Chosen *and* here. Naming a model in the settings does not make it usable, and
                   // a card reading "Đang dùng" over an Install button was the screen telling two
@@ -367,10 +403,12 @@ function Running({
   plan,
   installs,
   onInstall,
+  onSecond,
 }: {
   plan: Plan;
   installs: Install[];
   onInstall: (id: string) => void;
+  onSecond: (id: string) => void;
 }) {
   const t = useT();
 
@@ -383,6 +421,20 @@ function Running({
         ready: plan.speech.installed,
         ...(plan.speech.model ? { id: plan.speech.model } : {}),
       },
+      // Only when there is one. This role is genuinely optional — most meetings are in one language
+      // and a second decode of every utterance would cost without adding — so an always-present row
+      // reading "none" would teach people to ignore a row that matters when it is not empty.
+      ...(plan.second_pass?.model
+        ? [
+            {
+              key: "second",
+              label: t("models.role_second"),
+              value: plan.second_pass?.name ?? plan.second_pass?.model,
+              ready: plan.second_pass?.installed === true,
+              id: plan.second_pass?.model,
+            },
+          ]
+        : []),
       {
         key: "vad",
         label: t("models.role_vad"),
@@ -458,6 +510,33 @@ function Running({
           );
         })}
       </ul>
+
+      {/* The pairing nothing has ever suggested.
+          A meeting with two languages in it needs a model that hears the one the live model
+          cannot, and that is a coverage question — `Recommendation::pair` asks an accuracy one and
+          so answers "nothing worth adding" for precisely the meeting where the second model
+          matters most. Offered, never applied: the app does not swap models on somebody's behalf,
+          and this one costs a second decode of every utterance. */}
+      {plan.second_pass?.suggested && (
+        <div className="border-accent/30 bg-accent-soft text-meta mt-3 rounded-lg border px-3 py-2">
+          <p className="text-fg-dim">
+            <span className="text-fg font-medium">{plan.second_pass?.suggested.name}</span>{" "}
+            {plan.second_pass?.suggested.reason}
+          </p>
+          <div className="mt-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!plan.second_pass?.suggested.installed}
+              onClick={() => onSecond(plan.second_pass?.suggested?.id as string)}
+            >
+              {plan.second_pass?.suggested.installed
+                ? t("models.use_refine")
+                : t("models.role_missing")}
+            </Button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -579,9 +658,11 @@ function Card({
   onRemove,
   onUse,
   onRefine,
+  onStop,
   inUse,
   asRefine,
   picked,
+  optional,
 }: {
   model: CatalogueModel;
   job: Install | undefined;
@@ -589,11 +670,22 @@ function Card({
   onRemove: () => void;
   onUse: () => void;
   onRefine: () => void;
+  /** Put the role back to nothing chosen. Only shown for an `optional` model in use. */
+  onStop: () => void;
   inUse: boolean;
   /** Whether this is the model that re-decodes after the live pass. */
   asRefine: boolean;
   /** Named in the settings, whether or not the files are on this machine. */
   picked: boolean;
+  /**
+   * Whether "not chosen" is a working state for this role.
+   *
+   * True only for noise suppression. Recording needs *a* speech model and *a* voice detector, so
+   * those roles are never off and their cards only ever switch between models. An enhancer is off
+   * by default and has to be able to go back — a card whose only control turns something on is one
+   * where the first click is permanent.
+   */
+  optional: boolean;
 }) {
   const t = useT();
   // Two clicks, not a dialog. Re-downloading a gigabyte is a real cost, and a modal for it would
@@ -736,7 +828,11 @@ function Card({
               catalogue decorative: a user could install a Japanese model and record in
               Vietnamese with no indication of why. */}
             {inUse
-              ? null
+              ? optional && (
+                  <Button size="sm" variant="ghost" onClick={onStop}>
+                    {t("models.turn_off")}
+                  </Button>
+                )
               : roleFor(model.task) !== null && (
                   <Button size="sm" variant="secondary" onClick={onUse}>
                     {t("models.use")}
@@ -833,6 +929,11 @@ function Card({
             {model.installed && !inUse && roleFor(model.task) !== null && (
               <Button size="sm" variant="secondary" onClick={onUse}>
                 {t("models.use")}
+              </Button>
+            )}
+            {model.installed && inUse && optional && (
+              <Button size="sm" variant="ghost" onClick={onStop}>
+                {t("models.turn_off")}
               </Button>
             )}
           </div>

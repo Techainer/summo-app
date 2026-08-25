@@ -107,7 +107,22 @@ async function open(scheme, viewport) {
       .getByRole("button", { name: label, exact: true })
       .click();
     await page.waitForTimeout(400);
-    const body = await page.locator("main").innerText();
+    // Caught, rather than thrown thirty seconds later as `waiting for locator('main')`.
+    //
+    // A screen that throws while rendering leaves no `main` at all, so this timed out — and the
+    // `pageerror` that says *why*, which this suite has been collecting since it was written, was
+    // never printed, because the throw happened before anything reported the list. The real cause
+    // was one field: the interface read `plan.second_pass.model`, a daemon built without
+    // recognition does not send it, and the whole models screen went blank. Thirty seconds of
+    // silence for a `?.`.
+    const body = await page
+      .locator("main")
+      .innerText({ timeout: 10000 })
+      .catch(() => null);
+    if (body === null) {
+      problems.push(`screen ${label} never rendered — see the pageerror above, if there is one`);
+      continue;
+    }
     if (!marker.test(body)) problems.push(`screen ${label} rendered nothing recognisable`);
     console.log(`screen ${label}: ${body.slice(0, 60).replace(/\n/g, " ")}…`);
   }

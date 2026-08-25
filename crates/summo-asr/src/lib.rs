@@ -18,6 +18,7 @@
 //! streaming latency and settle into batch-model quality a moment later.
 
 pub mod decoder;
+pub mod denoise;
 pub mod hallucination;
 pub mod hybrid;
 pub mod session;
@@ -26,6 +27,7 @@ pub mod session;
 pub mod sherpa;
 
 pub use decoder::{Decoder, Transcript};
+pub use denoise::Denoiser;
 pub use hallucination::{HallucinationFilter, Verdict};
 pub use hybrid::{HybridOutput, HybridSession, RefineJob};
 pub use session::{PseudoSession, SessionConfig};

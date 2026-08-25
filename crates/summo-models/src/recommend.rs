@@ -184,6 +184,80 @@ pub fn covers_language(manifest: &Manifest, language: &str) -> bool {
     langs_cover(&manifest.langs, language)
 }
 
+/// A model worth running behind the live one, for the meeting that has two languages in it.
+///
+/// ## Why [`Recommendation::pair`] is not this
+///
+/// `pair` picks the second model by accuracy, ranked for one language, and that is the wrong
+/// question asked well. Rank for `vi` and Gipformer wins by a distance; the only candidate left is
+/// Whisper, which is far *worse* on Vietnamese, so `pair` correctly answers "nothing worth adding"
+/// — and it answers that for precisely the meeting where the second model matters most.
+///
+/// A Vietnamese standup with an English customer on the call does not need a second opinion on the
+/// Vietnamese. It needs the English sentences to be words at all. Gipformer declares `vi` and
+/// returns Vietnamese-shaped noise for everything else; the question is coverage, not accuracy, and
+/// accuracy on `vi` says nothing about it.
+///
+/// So the rule here is coverage, in whichever direction the live model leaves a gap:
+///
+/// * **Live model is multilingual** (`langs: ["*"]`) — it hears everything badly. Suggest the
+///   specialist for the language actually being spoken, which is the pairing `bilingual.mjs` runs:
+///   Whisper live, Gipformer correcting the half it is good at.
+/// * **Live model is a specialist** — it hears one language well and the rest not at all. Suggest a
+///   multilingual model, so a sentence outside its declaration comes back as language rather than
+///   as noise.
+/// * **Neither** — nothing to add, and saying so is the answer. A second decode of every utterance
+///   is not free, and recommending one that changes nothing is how a setting becomes decoration.
+///
+/// `language` is the spoken language when the user named one. Without it the first direction cannot
+/// be answered — "the specialist for which language?" — and the function declines rather than
+/// guessing.
+#[must_use]
+pub fn second_opinion(
+    candidates: &[Manifest],
+    hw: &HwProfile,
+    live: &Manifest,
+    language: Option<&str>,
+) -> Option<Scored> {
+    let claims_everything = |id: &str| {
+        candidates
+            .iter()
+            .find(|m| m.id.as_str() == id)
+            .is_some_and(|m| m.langs.iter().any(|l| l == "*"))
+    };
+
+    if live.langs.iter().any(|l| l == "*") {
+        // Ranking for the spoken language is exactly the right ordering here, and the filter is the
+        // only new part: the best *specialist*, not merely the best, because the best is usually the
+        // live model itself and a second multilingual model adds a second guess rather than a
+        // second opinion.
+        let code = language?;
+        let mut best = recommend(candidates, hw, code)
+            .ranked
+            .into_iter()
+            .find(|s| s.id != live.id.as_str() && !claims_everything(&s.id))?;
+        best.reason = format!(
+            "{} hears every language and none of them well. This one is for {code} and nothing else, so the {code} half of the meeting comes back accurate.",
+            live.name
+        );
+        return Some(best);
+    }
+
+    // The other direction. `recommend(_, _, "*")` ranks exactly the manifests that declare the
+    // star, because `langs_cover` matches a star against a star and against nothing else — so this
+    // is the multilingual shortlist without a second code path deciding what multilingual means.
+    let mut best = recommend(candidates, hw, "*")
+        .ranked
+        .into_iter()
+        .find(|s| s.id != live.id.as_str())?;
+    best.reason = format!(
+        "{} covers {} and returns nonsense for anything else. This one covers the rest, so a sentence in another language is still words.",
+        live.name,
+        live.langs.join(", ")
+    );
+    Some(best)
+}
+
 /// The same question asked of a bare list of codes.
 ///
 /// The comment above turned out to be a prediction rather than a warning: the refine router held
@@ -341,6 +415,76 @@ mod tests {
         hw.available_ram_mb = available_mb;
         hw.cores = 8;
         hw
+    }
+
+    /// The pairing `Recommendation::pair` cannot reach, and the reason this function exists.
+    ///
+    /// Rank for `vi` and Gipformer wins by a distance. The only other candidate is Whisper, which
+    /// is far worse on Vietnamese — so `pair`, which asks "is the second model more accurate",
+    /// correctly answers no and leaves the English half of the meeting as noise. Coverage is the
+    /// question, and it has the opposite answer.
+    #[test]
+    fn a_specialist_is_paired_with_something_that_hears_the_rest() {
+        let gipformer = manifest("gipformer-65m", &["vi"], 0.021, "wer_fleurs_vi", 0.024, 800);
+        let whisper = manifest("whisper-base", &["*"], 0.11, "wer_fleurs_vi", 0.655, 500);
+        let candidates = vec![gipformer.clone(), whisper];
+
+        let paired = second_opinion(&candidates, &hw(16_384), &gipformer, Some("vi"));
+        assert_eq!(
+            paired.as_ref().map(|s| s.id.as_str()),
+            Some("whisper-base"),
+            "a Vietnamese-only model was left to answer for English"
+        );
+
+        // And `pair` still says no, which is what makes this a separate question rather than a bug
+        // in that one.
+        let by_quality = recommend(&candidates, &hw(16_384), "vi");
+        assert_eq!(by_quality.pair().1, None);
+    }
+
+    /// The other direction, which is the pairing `bilingual.mjs` actually runs.
+    #[test]
+    fn a_multilingual_model_is_paired_with_the_specialist_for_the_language() {
+        let whisper = manifest("whisper-base", &["*"], 0.11, "wer_fleurs_vi", 0.655, 500);
+        let candidates = vec![
+            whisper.clone(),
+            manifest("gipformer-65m", &["vi"], 0.021, "wer_fleurs_vi", 0.024, 800),
+        ];
+
+        let paired = second_opinion(&candidates, &hw(16_384), &whisper, Some("vi"));
+        assert_eq!(paired.map(|s| s.id), Some("gipformer-65m".to_string()));
+    }
+
+    /// "Which specialist?" has no answer without a language, and guessing one would pin a meeting
+    /// to a language nobody chose.
+    #[test]
+    fn a_multilingual_model_with_no_language_named_is_left_alone() {
+        let whisper = manifest("whisper-base", &["*"], 0.11, "wer_fleurs_vi", 0.655, 500);
+        let candidates = vec![
+            whisper.clone(),
+            manifest("gipformer-65m", &["vi"], 0.021, "wer_fleurs_vi", 0.024, 800),
+        ];
+        assert!(second_opinion(&candidates, &hw(16_384), &whisper, None).is_none());
+    }
+
+    /// Nothing to add is an answer. A second decode of every utterance is not free, and suggesting
+    /// one that changes nothing is how a setting becomes decoration — which is the state four of
+    /// them in this app were found in.
+    #[test]
+    fn one_model_on_its_own_is_not_paired_with_itself() {
+        let gipformer = manifest("gipformer-65m", &["vi"], 0.021, "wer_fleurs_vi", 0.024, 800);
+        let candidates = vec![gipformer.clone()];
+        assert!(second_opinion(&candidates, &hw(16_384), &gipformer, Some("vi")).is_none());
+    }
+
+    /// A second specialist for the same one language is not a second opinion on the other one.
+    /// Two Vietnamese models leave English exactly as unheard as one did.
+    #[test]
+    fn two_specialists_for_one_language_are_not_a_pair() {
+        let a = manifest("gipformer-65m", &["vi"], 0.021, "wer_fleurs_vi", 0.024, 800);
+        let b = manifest("phowhisper", &["vi"], 0.05, "wer_fleurs_vi", 0.04, 900);
+        let candidates = vec![a.clone(), b];
+        assert!(second_opinion(&candidates, &hw(16_384), &a, Some("vi")).is_none());
     }
 
     /// The user's machine, as their daemon described it.

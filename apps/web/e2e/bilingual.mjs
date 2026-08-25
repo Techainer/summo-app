@@ -77,6 +77,43 @@ const pick = (role, model) =>
     body: JSON.stringify({ role, model }),
   });
 
+// ---- the app suggests the pairing, before anybody knows to ask for it ------
+//
+// Nothing has ever suggested a second model. `Recommendation::pair` exists, only the CLI calls it,
+// and it would not answer this: it ranks the second model by accuracy *on the chosen language*, so
+// for a Vietnamese meeting it compares Whisper against Gipformer on Vietnamese, finds Whisper far
+// worse, and recommends nothing — for exactly the meeting where the second model matters most. The
+// English sentences are the point, and accuracy on Vietnamese says nothing about them.
+//
+// This is the headline case: a Vietnamese company with an English customer on the call. Gipformer
+// declares `vi` and returns Vietnamese-shaped noise for everything else.
+{
+  await pick("live", "gipformer-65m");
+  const plan = await (await fetch(at("/settings/plan"))).json();
+  const suggested = plan.second_pass?.suggested;
+  if (suggested?.id !== "whisper-base" && suggested?.id !== "whisper-tiny") {
+    problems.push(
+      `a Vietnamese-only model was left to answer for English: ${JSON.stringify(suggested)}`,
+    );
+  } else {
+    console.log(`suggested second pass: ${suggested.id} — ${suggested.reason}`);
+  }
+
+  // And once one is chosen, the suggestion stops. Advice beside a decision somebody already made
+  // is an argument rather than advice.
+  await pick("refine", "whisper-base");
+  const settled = await (await fetch(at("/settings/plan"))).json();
+  if (settled.second_pass?.suggested) {
+    problems.push("the app kept recommending a second model after one was chosen");
+  }
+  if (settled.second_pass?.model !== "whisper-base") {
+    problems.push(
+      `the chosen second model is not on the plan: ${JSON.stringify(settled.second_pass)}`,
+    );
+  }
+  await pick("refine", "");
+}
+
 // Exactly what pressing the two buttons on the models screen writes. Nothing here reaches into the
 // session — the point is that the *settings file* is enough, which is the half that was missing.
 await pick("live", "whisper-tiny");

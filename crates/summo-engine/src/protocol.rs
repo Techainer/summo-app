@@ -125,6 +125,14 @@ pub struct SessionSpec {
     pub vad_model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speaker_model: Option<String>,
+    /// Speech enhancer run over each finished utterance before it is decoded.
+    ///
+    /// Unset for almost everybody and meant to stay that way. A denoiser is not free accuracy: on
+    /// one person in a quiet room it removes things that were not noise and the transcript gets
+    /// worse. Naming a model here is the user saying their room is the other kind. See
+    /// [`summo_asr::denoise`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub denoise_model: Option<String>,
     /// Translate finished lines into these languages as they land.
     ///
     /// This is the "watch a talk in another language" switch. There is no separate feature behind
@@ -194,6 +202,7 @@ impl SessionSpec {
             diarize: false,
             vad_model: None,
             speaker_model: None,
+            denoise_model: None,
             translate_into: Vec::new(),
             device_id: None,
         }

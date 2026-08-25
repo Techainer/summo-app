@@ -732,6 +732,7 @@ async fn catalogue(
         "refine": settings.models.refine,
         "vad": settings.models.vad,
         "speaker": settings.models.speaker,
+        "denoise": settings.models.denoise,
         "translator": settings
             .llm
             .translator
@@ -925,6 +926,7 @@ async fn set_models(
                 "refine" => settings.models.refine = None,
                 "vad" => settings.models.vad = None,
                 "speaker" => settings.models.speaker = None,
+                "denoise" => settings.models.denoise = None,
                 "translator" => settings.llm.translator = None,
                 other => return Err(Error::Config(format!("no such model role: `{other}`"))),
             }
@@ -941,6 +943,7 @@ async fn set_models(
             "live" | "refine" => summo_models::Task::Asr,
             "vad" => summo_models::Task::Vad,
             "speaker" => summo_models::Task::SpeakerEmbed,
+            "denoise" => summo_models::Task::Denoise,
             "translator" => summo_models::Task::Translate,
             other => return Err(Error::Config(format!("no such model role: `{other}`"))),
         };
@@ -964,6 +967,7 @@ async fn set_models(
             "refine" => settings.models.refine = Some(id.to_string()),
             "vad" => settings.models.vad = Some(id.to_string()),
             "speaker" => settings.models.speaker = Some(id.to_string()),
+            "denoise" => settings.models.denoise = Some(id.to_string()),
             "translator" => {
                 settings.llm.translator = Some(summo_core::settings::Translator {
                     provider: summo_core::settings::LOCAL.to_string(),
@@ -1144,6 +1148,16 @@ fn choose_models(
         spec.speaker_model = settings
             .models
             .speaker
+            .clone()
+            .filter(|m| !m.trim().is_empty());
+    }
+    // And the speech enhancer, which is the same story told before it happened: `Task::Denoise` was
+    // in the manifest enum from the start, and until now the only code that ever matched on it
+    // turned it into the words "noise suppression" for a label with nothing behind them.
+    if spec.denoise_model.is_none() {
+        spec.denoise_model = settings
+            .models
+            .denoise
             .clone()
             .filter(|m| !m.trim().is_empty());
     }
@@ -3029,6 +3043,42 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
             })
     });
 
+    // The second model, and what it would be for.
+    //
+    // Nothing in the app has ever suggested one. `Recommendation::pair` exists and only the CLI
+    // calls it, and it would not answer this anyway: it picks the second model by accuracy on the
+    // chosen language, so for a Vietnamese meeting it compares Whisper against Gipformer on
+    // Vietnamese, decides Whisper is worse, and recommends nothing — for exactly the meeting where
+    // the second model matters most. The English sentences are the point, and accuracy on
+    // Vietnamese says nothing about them. See `summo_models::second_opinion`.
+    let second = settings
+        .models
+        .refine
+        .clone()
+        .filter(|id| !id.trim().is_empty());
+    let second_manifest = second
+        .as_ref()
+        .and_then(|id| installed.iter().find(|m| m.id.as_str() == id.as_str()));
+    // Only when nothing is chosen. A suggestion beside a decision somebody already made is not
+    // advice, it is an argument.
+    let suggested = match (&second, manifest) {
+        (None, Some(live)) => summo_models::second_opinion(
+            &installed,
+            state.engine.hardware(),
+            live,
+            language.as_deref(),
+        )
+        .map(|s| {
+            serde_json::json!({
+                "id": s.id,
+                "name": s.name,
+                "reason": s.reason,
+                "installed": installed.iter().any(|m| m.id.as_str() == s.id),
+            })
+        }),
+        _ => None,
+    };
+
     // The two models nothing asks about until they are missing.
     //
     // Without a voice detector a recording produces no words at all; without a speaker embedder it
@@ -3040,6 +3090,13 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
     Ok(serde_json::json!({
         "language": language,
         "detector": { "installed": has(summo_models::Task::Vad), "id": "silero-vad-v5" },
+        // The second pass: what is chosen, and what would be worth choosing when nothing is.
+        "second_pass": {
+            "model": second,
+            "name": second_manifest.map(|m| m.name.clone()),
+            "installed": second_manifest.is_some(),
+            "suggested": suggested,
+        },
         "speakers": { "installed": has(summo_models::Task::SpeakerEmbed), "id": "campplus-sv" },
         // Speech recognition: Summo's own model, on this machine, always.
         "speech": {
@@ -3124,6 +3181,10 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
     Ok(serde_json::json!({
         "language": settings.models.language,
         "speech": { "model": null, "installed": false, "covers_language": false, "better": null },
+        // Present and empty rather than absent. A build without recognition still serves this
+        // screen, and an interface that reads a field the daemon does not send is a blank page
+        // rather than a missing row — which is what a `main` that never rendered turned out to be.
+        "second_pass": { "model": null, "name": null, "installed": false, "suggested": null },
         "detector": { "installed": false, "id": "silero-vad-v5" },
         "speakers": { "installed": false, "id": "campplus-sv" },
         "translation": {
@@ -5489,6 +5550,44 @@ mod resolve_tests {
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
         assert_eq!(resolved.live_model, "whisper-tiny");
         assert_eq!(resolved.refine_model.as_deref(), Some("gipformer-65m"));
+    }
+
+    /// The same wire, for the role that had none at all.
+    ///
+    /// `Task::Denoise` was in the manifest enum from the first commit and named nothing: no model
+    /// in the registry, no runtime, no stage, and the only code that matched on it turned it into
+    /// the words "noise suppression" for a label nobody could reach.
+    #[test]
+    fn a_speech_enhancer_in_the_settings_reaches_the_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("whisper-tiny".into());
+        settings.models.denoise = Some("gtcrn-16k".into());
+        settings.save(&path).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.denoise_model.as_deref(), Some("gtcrn-16k"));
+    }
+
+    /// And unset stays unset.
+    ///
+    /// Every other role falls back to the first installed model of its task, which is right when
+    /// the role is required. This one is not: a denoiser changes what the decoder hears and makes
+    /// clean speech slightly worse, so installing one to try it must not turn it on for every
+    /// meeting from then on. A model appearing in the store is not consent.
+    #[test]
+    fn an_enhancer_nobody_chose_stays_off() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("whisper-tiny".into());
+        settings.save(&path).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.denoise_model, None);
     }
 
     /// And it reaches a session that pinned its live model too, which the early return used to

@@ -75,7 +75,7 @@ export interface LanguageAccuracy {
 }
 
 /** Which job a model is being pointed at. */
-export type Role = "live" | "refine" | "vad" | "speaker" | "translator";
+export type Role = "live" | "refine" | "vad" | "speaker" | "denoise" | "translator";
 
 /**
  * The role a task fills by default, or `null` when choosing is not a thing a user does.
@@ -87,6 +87,11 @@ export type Role = "live" | "refine" | "vad" | "speaker" | "translator";
 export function roleFor(task: Task): Role | null {
   if (task === "asr") return "live";
   if (task === "translate") return "translator";
+  // Noise suppression is the one optional role, and the only one the daemon will not fall back
+  // into: unset means off, because installing a denoiser to try it must not turn it on for every
+  // meeting from then on. So its card needs a button, or the model is unreachable once installed —
+  // which is exactly the state `Task::Denoise` spent every release in.
+  if (task === "denoise") return "denoise";
   return null;
 }
 
