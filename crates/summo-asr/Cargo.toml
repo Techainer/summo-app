@@ -10,7 +10,11 @@ repository.workspace = true
 [features]
 default = []
 # Zipformer transducer decoding. Links a native library, so it is opt-in.
-sherpa = ["dep:sherpa-rs"]
+#
+# `sherpa-rs/sys` comes with it because the speech enhancer has no safe wrapper in 0.6 — the
+# recognisers, taggers and voices do, GTCRN does not — and `denoise.rs` calls the C entry points
+# through the generated bindings. Same native library either way; this only unhides them.
+sherpa = ["dep:sherpa-rs", "sherpa-rs/sys"]
 
 [dependencies]
 summo-core.workspace = true

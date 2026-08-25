@@ -431,6 +431,7 @@
     "remove_confirm": "削除しますか？",
     "on_disk": "ディスク使用 {size}",
     "use": "使う",
+    "turn_off": "オフにする",
     "in_use": "使用中",
     "upstream_who": "公開元",
     "details": "詳細",

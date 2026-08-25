@@ -81,10 +81,19 @@ async function cache(url, sha256) {
  * The token is sent to GitHub's own hosts and nowhere else. A manifest may point at any address it
  * likes — that is the whole point of a registry anyone can publish to — and a credential must not
  * follow it there.
+ *
+ * Only that one shape is rewritten, and it used to be every `github.com` address. A *release asset*
+ * — `github.com/owner/repo/releases/download/tag/file` — is served by github.com itself and does not
+ * exist on the content host at all, so pointing it there turned a working download into a 404 that
+ * reads exactly like a file somebody deleted. The first manifest to publish one spent a suite run
+ * being told its model was unreachable while the URL was fine in a browser.
  */
 function request(url) {
   const at = new URL(url);
-  const raw = at.hostname === "github.com" ? at.pathname.replace("/raw/", "/") : null;
+  const raw =
+    at.hostname === "github.com" && at.pathname.includes("/raw/")
+      ? at.pathname.replace("/raw/", "/")
+      : null;
   const asked = raw ? new URL(`https://raw.githubusercontent.com${raw}${at.search}`) : at;
 
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;

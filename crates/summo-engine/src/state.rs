@@ -20,6 +20,13 @@ pub enum SessionStatus {
         live_model: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         refine_model: Option<String>,
+        /// The speech enhancer cleaning each utterance, when one was chosen.
+        ///
+        /// Reported for the reason every other model here is: a setting that changes what the
+        /// decoder hears and cannot be seen from outside is how `models.refine`, `models.vad` and
+        /// `models.speaker` each spent a release doing nothing while their screens showed a tick.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        denoise_model: Option<String>,
         /// The language this session resolved to, or `None` for the model's own detection.
         ///
         /// Here because the interface has to be able to *say* what it is hearing, and its own copy
@@ -184,6 +191,7 @@ impl EngineState {
             elapsed_s: 0.0,
             live_model: spec.live_model.clone(),
             refine_model: spec.refine_model.clone(),
+            denoise_model: spec.denoise_model.clone(),
             language: spec.language.clone(),
             translate_into: spec.translate_into.clone(),
             segments: 0,
@@ -201,6 +209,7 @@ impl EngineState {
         if let SessionStatus::Recording {
             live_model,
             refine_model,
+            denoise_model,
             language,
             translate_into,
             ..
@@ -208,6 +217,7 @@ impl EngineState {
         {
             live_model.clone_from(&spec.live_model);
             refine_model.clone_from(&spec.refine_model);
+            denoise_model.clone_from(&spec.denoise_model);
             language.clone_from(&spec.language);
             translate_into.clone_from(&spec.translate_into);
         }

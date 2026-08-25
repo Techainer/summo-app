@@ -17,7 +17,8 @@
     "check": "tsc --noEmit && pnpm lint && prettier --check . && vitest run",
     "e2e:full-flow": "node e2e/full-flow.mjs",
     "e2e:in-meeting": "node e2e/in-meeting.mjs",
-    "e2e:bilingual": "node e2e/bilingual.mjs"
+    "e2e:bilingual": "node e2e/bilingual.mjs",
+    "e2e:denoise": "node e2e/denoise.mjs"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",

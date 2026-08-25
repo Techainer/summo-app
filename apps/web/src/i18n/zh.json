@@ -431,6 +431,7 @@
     "remove_confirm": "删除？",
     "on_disk": "占用磁盘 {size}",
     "use": "使用",
+    "turn_off": "关闭",
     "in_use": "使用中",
     "upstream_who": "发布方",
     "details": "详情",

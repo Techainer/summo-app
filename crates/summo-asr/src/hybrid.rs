@@ -81,6 +81,16 @@ impl<D: Decoder> HybridSession<D> {
         }
     }
 
+    /// Clean each finished utterance before either model sees it.
+    ///
+    /// Once, on the live session, which is where the audio a refine job carries comes from — so
+    /// both models hear the same seconds. See [`PseudoSession::with_denoiser`].
+    #[must_use]
+    pub fn with_denoiser(mut self, denoiser: Option<Box<dyn crate::Denoiser>>) -> Self {
+        self.live = self.live.with_denoiser(denoiser);
+        self
+    }
+
     /// Where the meeting has got to, and how to take one over. See [`PseudoSession::position`].
     #[must_use]
     pub fn position(&self) -> (u64, usize) {

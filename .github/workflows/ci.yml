@@ -783,6 +783,19 @@ jobs:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
           GITHUB_TOKEN: ${{ github.token }}
 
+      # Noise suppression, from a card on a screen to the audio a decoder hears. Out here with the
+      # other three for the same reason: it needs a real recording, with a real enhancer in front of
+      # a real decoder.
+      #
+      # `Task::Denoise` was in the manifest enum from the first commit and named nothing — no model,
+      # no runtime, no stage. Four settings in this app have already been found in that state, and
+      # every one was found by a user, because "written to the settings file" and "reaches a
+      # recording" look identical from outside. This suite is what that looks like from outside.
+      - run: pnpm -C apps/web e2e:denoise
+        env:
+          SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+          GITHUB_TOKEN: ${{ github.token }}
+
       # The pictures, when something went wrong.
       #
       # These suites fail with a sentence — "the drop target was never highlighted", "contrast 3.1
