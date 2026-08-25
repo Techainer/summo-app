@@ -180,6 +180,7 @@ impl Server {
             .route("/catalogue", get(catalogue))
             .route("/models/{id}", axum::routing::delete(remove_model))
             .route("/models/{id}/page", get(model_page))
+            .route("/models/{id}/check", post(check_model))
             .route("/settings/models", post(set_models))
             .route("/settings/plan", get(plan))
             .route("/agent/run", post(run_errand))
@@ -721,6 +722,16 @@ async fn catalogue(
                 "fits": m.profile.min_ram_mb == 0
                     || m.profile.min_ram_mb <= hardware.total_ram_mb,
                 "min_ram_mb": m.profile.min_ram_mb,
+                // Whether this *binary* can run it, which `fits` above does not ask and nothing
+                // else did either. A runtime is a compile-time feature: the release ships
+                // `mt-onnx` and not `mt-gguf`, so the two MiLMMT models have been offered by every
+                // build that could never load them — 0.8 GB and 2.4 GB, digest-checked, installed,
+                // and refused at the first translation.
+                //
+                // `onboarding.rs` learned exactly this for recognition and fixed it with one
+                // `cfg!` for one feature. See `crate::runtimes` for the general answer.
+                "runnable": crate::runtimes::runnable(&m.runtime),
+                "why_not": crate::runtimes::why_not(&m.runtime),
                 // What the model actually costs and what it is worth, which the manifests have
                 // carried since they were written and nothing has ever shown.
                 //
@@ -755,6 +766,7 @@ async fn catalogue(
         "vad": settings.models.vad,
         "speaker": settings.models.speaker,
         "denoise": settings.models.denoise,
+        "tts": settings.models.tts,
         "translator": settings
             .llm
             .translator
@@ -949,6 +961,7 @@ async fn set_models(
                 "vad" => settings.models.vad = None,
                 "speaker" => settings.models.speaker = None,
                 "denoise" => settings.models.denoise = None,
+                "tts" => settings.models.tts = None,
                 "translator" => settings.llm.translator = None,
                 other => return Err(Error::Config(format!("no such model role: `{other}`"))),
             }
@@ -966,6 +979,7 @@ async fn set_models(
             "vad" => summo_models::Task::Vad,
             "speaker" => summo_models::Task::SpeakerEmbed,
             "denoise" => summo_models::Task::Denoise,
+            "tts" => summo_models::Task::Tts,
             "translator" => summo_models::Task::Translate,
             other => return Err(Error::Config(format!("no such model role: `{other}`"))),
         };
@@ -990,6 +1004,7 @@ async fn set_models(
             "vad" => settings.models.vad = Some(id.to_string()),
             "speaker" => settings.models.speaker = Some(id.to_string()),
             "denoise" => settings.models.denoise = Some(id.to_string()),
+            "tts" => settings.models.tts = Some(id.to_string()),
             "translator" => {
                 settings.llm.translator = Some(summo_core::settings::Translator {
                     provider: summo_core::settings::LOCAL.to_string(),
@@ -1006,7 +1021,7 @@ async fn set_models(
 
 #[derive(Deserialize)]
 struct ModelsBody {
-    /// `live`, `refine`, `vad`, `speaker` or `translator`.
+    /// `live`, `refine`, `vad`, `speaker`, `denoise`, `tts` or `translator`.
     role: String,
     model: String,
 }
@@ -1294,6 +1309,51 @@ async fn model_page(
     })))
 }
 
+/// Load one installed model and run it once, to say whether it actually works.
+///
+/// The screen could say "installed" and mean only that a sha256 matched. Everything between those
+/// bytes and a working model — a `params` key naming a file that is not there, a variant resolving
+/// to a build that was never fetched, an archive unpacked into a shape the runtime cannot open, a
+/// runtime this binary does not contain — was invisible until a recording started, and then
+/// surfaced as a message about a hashed path in a shard directory.
+///
+/// Blocking, on the blocking pool: this loads hundreds of megabytes into an ONNX session and runs
+/// an inference, which is seconds of unbroken CPU. On the async runtime it would stall every other
+/// request this daemon is serving, including the interface polling for the answer.
+///
+/// Never fails: a model that cannot run is the answer, not an error. `ok: false` with a reason is
+/// what the card has to render either way.
+async fn check_model(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    let store = state.engine.store();
+    // The same count a recording would decode with, so a slow row here means a slow recording
+    // rather than an artefact of how the check was run.
+    let threads = state.engine.hardware().recommended_threads();
+    let result = tokio::task::spawn_blocking(move || {
+        let model_id = summo_core::ModelId::parse(&id).map_err(summo_core::Error::Config)?;
+        let manifest = store.installed(&model_id)?;
+        Ok::<_, summo_core::Error>(crate::verify::check(&store, &manifest, threads))
+    })
+    .await;
+
+    as_response(match result {
+        Ok(check) => check,
+        // The blocking task itself died — a panic inside a native runtime, which is the one failure
+        // mode a check cannot report as a row because there is no row to return to.
+        Err(e) => Err(summo_core::Error::Other(format!(
+            "the check did not finish: {e}"
+        ))),
+    })
+}
+
 /// Delete an installed model, reclaiming whatever nothing else references.
 ///
 /// A model manager without this is half a manager: these are 73 MB to 2.5 GB each, and installing
@@ -1353,6 +1413,18 @@ fn in_use(settings: &summo_core::settings::Settings, id: &str) -> Option<&'stati
     }
     if named(&settings.models.speaker) {
         return Some("speaker");
+    }
+    // Added a release after the role was, and missed here — which is the one role where the gap
+    // bites hardest. Every other role falls back to something when the model it names is gone;
+    // `resolve_denoise_model` deliberately does not, because unset means off and a fallback would
+    // turn a denoiser on for meetings it hurts. So a removed-but-chosen enhancer is the one case
+    // that fails the *next recording outright*, with a message about a model the user deleted on
+    // purpose and reasonably assumed was finished with.
+    if named(&settings.models.denoise) {
+        return Some("noise suppression");
+    }
+    if named(&settings.models.tts) {
+        return Some("voice");
     }
     if settings
         .llm
@@ -3120,6 +3192,23 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
             "suggested": suggested,
         },
         "speakers": { "installed": has(summo_models::Task::SpeakerEmbed), "id": "campplus-sv" },
+        // Noise suppression: off unless chosen, and invisible until now.
+        //
+        // This table answers "what will the next recording actually use", and it left out the one
+        // role that silently changes what the decoder hears. A user who turned an enhancer on saw
+        // no trace of it here, and a user whose transcript got *worse* after installing one — which
+        // is what a denoiser does to clean speech from a good microphone — had nothing on this
+        // screen connecting the two.
+        //
+        // `model` is null when nothing is chosen, which is the normal state and reads as "off".
+        "denoise": {
+            "model": settings.models.denoise.clone().filter(|id| !id.trim().is_empty()),
+            "installed": settings
+                .models
+                .denoise
+                .as_deref()
+                .is_some_and(|id| installed.iter().any(|m| m.id.as_str() == id)),
+        },
         // Speech recognition: Summo's own model, on this machine, always.
         "speech": {
             "model": chosen,
@@ -3209,6 +3298,8 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
         "second_pass": { "model": null, "name": null, "installed": false, "suggested": null },
         "detector": { "installed": false, "id": "silero-vad-v5" },
         "speakers": { "installed": false, "id": "campplus-sv" },
+        // Present and empty, for the same reason `second_pass` above is.
+        "denoise": { "model": null, "installed": false },
         "translation": {
             "local": settings.llm.translator.as_ref().is_some_and(summo_core::settings::Translator::is_local),
             "provider": settings.llm.translator.as_ref().map(|t| t.provider.clone()),
@@ -3508,6 +3599,13 @@ async fn start_install(
         Ok(manifest) => manifest,
         Err(e) => return as_response(Err::<serde_json::Value, _>(e)),
     };
+
+    // Before a single byte. The catalogue marks these already, so a user clicking through the app
+    // never gets here — but the screen is not the only caller, a cached page is a stale screen, and
+    // the cost of being wrong is a multi-gigabyte download over a connection that charges for it.
+    if let Some(why) = crate::runtimes::why_not(&manifest.runtime) {
+        return as_response(Err::<serde_json::Value, _>(summo_core::Error::Config(why)));
+    }
 
     let installs = state.engine.installs().clone();
     let job = installs.claim(&id, &manifest.name);
@@ -5611,6 +5709,44 @@ mod resolve_tests {
 
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
         assert_eq!(resolved.denoise_model.as_deref(), Some("gtcrn-16k"));
+    }
+
+    /// Removing a model something points at is refused — for every role, which was five of six.
+    ///
+    /// `in_use` exists so that deleting a model cannot become "a recording that fails to start with
+    /// a missing-file error some time later, with nothing connecting the two". Noise suppression
+    /// was added a release after the function was written and never added to it, and it is the role
+    /// where the omission bites hardest: every other role falls back when the model it names is
+    /// gone, and `resolve_denoise_model` deliberately does not — because unset means off, and a
+    /// fallback would turn an enhancer on for the meetings it hurts. So the chosen-and-deleted
+    /// enhancer is the one case that fails the next recording outright.
+    ///
+    /// A voice, added this release, is here for the same reason and from the start.
+    #[test]
+    fn every_role_that_names_a_model_stops_it_being_deleted() {
+        /// One role: the words `in_use` answers with, and how that role names a model.
+        type Case = (&'static str, fn(&mut summo_core::Settings, String));
+
+        let cases: [Case; 6] = [
+            ("speech", |s, m| s.models.live = Some(m)),
+            ("refinement", |s, m| s.models.refine = Some(m)),
+            ("voice activity", |s, m| s.models.vad = Some(m)),
+            ("speaker", |s, m| s.models.speaker = Some(m)),
+            ("noise suppression", |s, m| s.models.denoise = Some(m)),
+            ("voice", |s, m| s.models.tts = Some(m)),
+        ];
+
+        for (role, set) in cases {
+            let mut settings = summo_core::Settings::default();
+            set(&mut settings, "m".into());
+            assert_eq!(
+                in_use(&settings, "m"),
+                Some(role),
+                "a model held by `{role}` was reported as free to delete"
+            );
+            // And a model nothing names is free to go, or the check would refuse everything.
+            assert_eq!(in_use(&settings, "somethingelse"), None);
+        }
     }
 
     /// And unset stays unset.

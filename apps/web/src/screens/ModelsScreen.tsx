@@ -1,4 +1,4 @@
-import { CloudOff, HardDriveDownload, Package, Search, Trash2 } from "lucide-react";
+import { CloudOff, HardDriveDownload, Package, Search, Stethoscope, Trash2 } from "lucide-react";
 import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -11,12 +11,14 @@ import { cn } from "../lib/cn";
 import {
   CatalogueClient,
   byTask,
+  canRun,
   installedBytes,
   matches,
   roleFor,
   size,
   tags,
   type CatalogueModel,
+  type Check,
   type LanguageAccuracy,
   type Role,
   type Task,
@@ -113,6 +115,16 @@ export function ModelsScreen() {
   const [task, setTask] = useState<Task | null>(null);
   /** What a recording would actually use right now, asked of the daemon rather than inferred. */
   const [plan, setPlan] = useState<Plan | null>(null);
+  /**
+   * The last check per model, and which one is running.
+   *
+   * Not persisted and not fetched with the list. A check loads hundreds of megabytes and runs an
+   * inference — doing that for every installed model every time this screen opens would turn a
+   * catalogue into a benchmark suite. It is a question somebody asks about one model, usually
+   * because something is wrong.
+   */
+  const [checks, setChecks] = useState<Record<string, Check>>({});
+  const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -169,11 +181,36 @@ export function ModelsScreen() {
       const role = want ?? roleFor(model.task);
       if (!role) return;
       try {
-        await catalogue.use(role, model.id);
-        setChosen((current) => ({ ...current, [role]: model.id }));
+        // The daemon's whole answer, not a patch of the one field we set. Choosing a model as the
+        // live one also *clears* it from the second-pass slot — a session cannot decode twice with
+        // the same model, so `/settings/models` does it rather than leaving a session that refuses
+        // to start. Patching one key left the card claiming both roles at once.
+        setChosen(await catalogue.use(role, model.id));
         setError(null);
       } catch (e) {
         setError(say(e));
+      }
+    },
+    [catalogue, say],
+  );
+
+  /**
+   * Load one model and run it once.
+   *
+   * A model that fails is a *result*, not an error: it comes back as `ok: false` with a reason and
+   * is rendered on the card. Only an unreachable daemon lands in the error line above.
+   */
+  const examine = useCallback(
+    async (id: string) => {
+      setBusy(id);
+      try {
+        const result = await catalogue.check(id);
+        setChecks((current) => ({ ...current, [id]: result }));
+        setError(null);
+      } catch (e) {
+        setError(say(e));
+      } finally {
+        setBusy(null);
       }
     },
     [catalogue, say],
@@ -188,8 +225,7 @@ export function ModelsScreen() {
   const stop = useCallback(
     async (role: Role) => {
       try {
-        await catalogue.use(role, "");
-        setChosen((current) => ({ ...current, [role]: null }));
+        setChosen(await catalogue.use(role, ""));
         setError(null);
       } catch (e) {
         setError(say(e));
@@ -371,6 +407,9 @@ export function ModelsScreen() {
                     const role = roleFor(model.task);
                     if (role) void stop(role);
                   }}
+                  onCheck={() => void examine(model.id)}
+                  check={checks[model.id] ?? null}
+                  checking={busy === model.id}
                   optional={model.task === "denoise"}
                   asRefine={chosen.refine === model.id && model.installed}
                   // Chosen *and* here. Naming a model in the settings does not make it usable, and
@@ -449,6 +488,21 @@ function Running({
         ready: plan.speakers.installed,
         id: plan.speakers.id,
       },
+      // Only when one is chosen, like the second pass above and for the same reason: off is the
+      // normal state, and a permanent row reading "none" teaches people to skip a row that matters
+      // when it is not empty. Unlike the second pass, this one changes what the decoder *hears* —
+      // so when it is on it has to be visible, and until now it never was.
+      ...(plan.denoise?.model
+        ? [
+            {
+              key: "denoise",
+              label: t("models.role_denoise"),
+              value: plan.denoise.model,
+              ready: plan.denoise.installed,
+              id: plan.denoise.model,
+            },
+          ]
+        : []),
       {
         key: "translate",
         label: t("models.role_translate"),
@@ -679,6 +733,9 @@ function Card({
   onUse,
   onRefine,
   onStop,
+  onCheck,
+  check,
+  checking,
   inUse,
   asRefine,
   picked,
@@ -690,6 +747,11 @@ function Card({
   onRemove: () => void;
   onUse: () => void;
   onRefine: () => void;
+  /** Load it and run it once. */
+  onCheck: () => void;
+  /** The last result for this model, or null if it has not been checked this session. */
+  check: Check | null;
+  checking: boolean;
   /** Put the role back to nothing chosen. Only shown for an `optional` model in use. */
   onStop: () => void;
   inUse: boolean;
@@ -872,6 +934,13 @@ function Card({
                   {t("models.use_refine")}
                 </Button>
               ))}
+            {/* Does it actually work. The one question the screen could not answer: "installed"
+              meant a sha256 matched, which is a claim about a download rather than about a model.
+              Loads it and runs one inference, the way a recording does. */}
+            <Button size="sm" variant="ghost" busy={checking} onClick={onCheck}>
+              <Stethoscope aria-hidden="true" className="me-1 size-3.5" />
+              {t("models.check")}
+            </Button>
             {/* No second "Đã cài" here: the state chip lives on the title line now, where the eye
               lands first. Two of them meant the same word twice on one card. */}
             <Button
@@ -894,7 +963,11 @@ function Card({
             busy={running}
             // A model the machine cannot hold is not offered. The download would finish and the
             // load would fail, which is the most expensive possible way to find out.
-            disabled={!model.fits}
+            //
+            // And the same for one this *build* has no runtime for, which is not a property of the
+            // machine and had nothing stopping it at all: the two GGUF translators are 0.8 GB and
+            // 2.4 GB, and every release ships without llama.cpp.
+            disabled={!model.fits || !canRun(model)}
             onClick={onPull}
           >
             <HardDriveDownload aria-hidden="true" className="me-1 size-3.5" />
@@ -902,6 +975,27 @@ function Card({
           </Button>
         )}
       </div>
+
+      {/* Why the install button is dead, next to the dead button.
+          A disabled control with no explanation is worse than an enabled one that fails: the
+          failure at least says something. */}
+      {!model.installed && !canRun(model) && model.why_not && (
+        <p className="text-blocked text-micro mt-2 break-words">{model.why_not}</p>
+      )}
+
+      {/* What a check found, until the next one. Installed is not working: a sha256 proves the
+          bytes arrived, and everything between those bytes and a model that loads — a `params` key
+          naming a file that is not there, an archive unpacked into the wrong shape — was invisible
+          until a recording started. */}
+      {check && (
+        <p
+          data-testid={`check-${model.id}`}
+          className={cn("text-micro mt-2 break-words", check.ok ? "text-done" : "text-blocked")}
+        >
+          {check.ok ? t("models.check_ok", { ms: String(check.millis) }) : t("models.check_failed")}{" "}
+          <span className="text-fg-faint">{check.detail}</span>
+        </p>
+      )}
 
       {/* The rest of what a model card owes a reader: the full per-language accuracy table,
           checksums, and the publisher's own README. All of it has existed in `summo_models::page`

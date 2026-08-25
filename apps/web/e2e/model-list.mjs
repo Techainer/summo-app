@@ -17,8 +17,9 @@
  * intercepting the request rather than by breaking the machine: a test that needs a blocked ISP to
  * reproduce is a test nobody runs.
  *
- * **It runs against a daemon with no speech recognition in it, too.** CI builds
- * `--features bundled` and nothing else, so `/onboarding` reports `recognition: false`, the screen
+ * **It runs against a daemon with no speech recognition in it, too.** A `--features bundled` build
+ * — which CI used for every browser suite until the daemon started refusing to install a model it
+ * has no runtime for — reports `recognition: false`, so the screen
  * offers no models at all, and the first version of this suite tested nothing there — it failed on
  * a picker that build never renders. The reply is patched to say the build can transcribe, which is
  * a claim about the binary rather than about this screen, and every state below is then reachable

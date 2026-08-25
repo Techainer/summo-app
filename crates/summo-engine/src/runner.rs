@@ -559,35 +559,43 @@ pub(crate) fn load_decoder(
 
     let installed = store.resolve(&manifest)?;
 
-    if manifest.runtime.contains("whisper") {
-        let paths = summo_asr::sherpa::WhisperPaths {
-            encoder: param_path(&installed, "encoder")?.display().to_string(),
-            decoder: param_path(&installed, "decoder")?.display().to_string(),
-            tokens: param_path(&installed, "tokens")?.display().to_string(),
-        };
-        Ok(Box::new(summo_asr::sherpa::WhisperDecoder::load(
-            &paths, language, threads, id,
-        )?))
-    } else if manifest.runtime.contains("sense-voice") {
-        let paths = summo_asr::sherpa::SenseVoicePaths {
-            model: param_path(&installed, "model")?.display().to_string(),
-            tokens: param_path(&installed, "tokens")?.display().to_string(),
-        };
-        Ok(Box::new(summo_asr::sherpa::SenseVoiceDecoder::load(
-            &paths, language, threads, id,
-        )?))
-    } else if manifest.runtime.contains("transducer") {
-        let paths = summo_asr::sherpa::TransducerPaths {
-            encoder: param_path(&installed, "encoder")?.display().to_string(),
-            decoder: param_path(&installed, "decoder")?.display().to_string(),
-            joiner: param_path(&installed, "joiner")?.display().to_string(),
-            tokens: param_path(&installed, "tokens")?.display().to_string(),
-        };
-        Ok(Box::new(summo_asr::sherpa::ZipformerDecoder::load(
-            &paths, threads, id,
-        )?))
-    } else {
-        Err(Error::UnsupportedRuntime(manifest.runtime.clone()))
+    // One table, shared with the catalogue that offered this model in the first place. See
+    // `crate::runtimes` for why the two questions must be answered from the same place.
+    match crate::runtimes::kind_of(&manifest.runtime) {
+        Some(crate::runtimes::Kind::Whisper) => {
+            let paths = summo_asr::sherpa::WhisperPaths {
+                encoder: param_path(&installed, "encoder")?.display().to_string(),
+                decoder: param_path(&installed, "decoder")?.display().to_string(),
+                tokens: param_path(&installed, "tokens")?.display().to_string(),
+            };
+            Ok(Box::new(summo_asr::sherpa::WhisperDecoder::load(
+                &paths, language, threads, id,
+            )?))
+        }
+        Some(crate::runtimes::Kind::SenseVoice) => {
+            let paths = summo_asr::sherpa::SenseVoicePaths {
+                model: param_path(&installed, "model")?.display().to_string(),
+                tokens: param_path(&installed, "tokens")?.display().to_string(),
+            };
+            Ok(Box::new(summo_asr::sherpa::SenseVoiceDecoder::load(
+                &paths, language, threads, id,
+            )?))
+        }
+        Some(crate::runtimes::Kind::Transducer) => {
+            let paths = summo_asr::sherpa::TransducerPaths {
+                encoder: param_path(&installed, "encoder")?.display().to_string(),
+                decoder: param_path(&installed, "decoder")?.display().to_string(),
+                joiner: param_path(&installed, "joiner")?.display().to_string(),
+                tokens: param_path(&installed, "tokens")?.display().to_string(),
+            };
+            Ok(Box::new(summo_asr::sherpa::ZipformerDecoder::load(
+                &paths, threads, id,
+            )?))
+        }
+        // A speech model whose runtime this build cannot drive, or does not know. The task check
+        // above already ruled out "you pointed this at a translator", so what is left is a genuine
+        // runtime gap and it is worth saying which.
+        _ => Err(Error::UnsupportedRuntime(manifest.runtime.clone())),
     }
 }
 

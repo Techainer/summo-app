@@ -27,8 +27,9 @@ use summo_tts::{
 pub struct Options {
     pub meeting: String,
     pub lang: String,
-    /// A registry id, or a directory. See [`resolve_voice`].
-    pub voice: String,
+    /// A registry id, or a directory. `None` takes the chosen voice, then the only installed one.
+    /// See [`resolve_voice`].
+    pub voice: Option<String>,
     pub out: PathBuf,
     /// Gain for the original recording under the dub. 0.0 removes it.
     pub under: f32,
@@ -41,7 +42,13 @@ pub struct Options {
 /// separator, so the two cannot be confused — and trying the store first means `--voice
 /// vits-vi-vais1000` works on a machine where a directory of that name happens to exist in the
 /// working directory, which is the reading somebody typing an id intends.
-fn resolve_voice(paths: &Paths, wanted: &str) -> Result<PathBuf> {
+fn resolve_voice(paths: &Paths, wanted: Option<&str>) -> Result<PathBuf> {
+    let wanted = match wanted.map(str::trim).filter(|w| !w.is_empty()) {
+        Some(wanted) => wanted.to_string(),
+        None => chosen_voice(paths)?,
+    };
+    let wanted = wanted.as_str();
+
     if let Ok(id) = summo_core::ModelId::parse(wanted) {
         let store = summo_models::ModelStore::new(paths.clone());
         if let Ok(manifest) = store.installed(&id) {
@@ -65,16 +72,54 @@ fn resolve_voice(paths: &Paths, wanted: &str) -> Result<PathBuf> {
     if path.is_dir() {
         return Ok(path);
     }
+    // One space after the full stop. The literal was wrapped by hand and the indentation went into
+    // the string, so every user who mistyped `--voice` got ten spaces in the middle of the sentence.
     bail!(
-        "no voice `{wanted}`: not an installed model, and not a directory.          Install one with `summo pull vits-vi-vais1000`."
+        "no voice `{wanted}`: not an installed model, and not a directory. Install one with \
+         `summo pull vits-vi-vais1000`."
     )
+}
+
+/// The voice to use when none was named on the command line.
+///
+/// `models.tts` first — the app writes it, and a choice made on a screen has to be the choice a
+/// command honours or the screen is decoration. Then the only installed voice, because on a machine
+/// with one there is nothing to choose and asking is ceremony.
+///
+/// Deliberately *not* "the first installed voice" when there are several: which one reads a meeting
+/// aloud is not a decision to make silently on somebody's behalf, and with two installed the answer
+/// is to say so and name them.
+fn chosen_voice(paths: &Paths) -> Result<String> {
+    let settings = summo_core::Settings::load(&paths.settings()).unwrap_or_default();
+    if let Some(id) = settings.models.tts.filter(|id| !id.trim().is_empty()) {
+        return Ok(id);
+    }
+
+    let voices: Vec<_> = summo_models::ModelStore::new(paths.clone())
+        .list()
+        .into_iter()
+        .filter(|m| m.task == summo_models::Task::Tts)
+        .map(|m| m.id.to_string())
+        .collect();
+
+    match voices.as_slice() {
+        [] => bail!(
+            "no voice installed. Install one with `summo pull vits-vi-vais1000`, or pass --voice \
+             with a directory."
+        ),
+        [only] => Ok(only.clone()),
+        several => bail!(
+            "several voices are installed ({}). Choose one on the models screen, or pass --voice.",
+            several.join(", ")
+        ),
+    }
 }
 
 pub fn run(paths: &Paths, opts: &Options) -> Result<()> {
     // The voice first, before the meeting and the translation are read. A mistyped `--voice` used
     // to be reported after all of that, which on a long meeting is a wait for an answer that was
     // available immediately.
-    let voice = resolve_voice(paths, &opts.voice)?;
+    let voice = resolve_voice(paths, opts.voice.as_deref())?;
 
     let id = summo_core::MeetingId::from(opts.meeting.clone());
 

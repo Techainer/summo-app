@@ -589,7 +589,11 @@ fn load_local(
             })
     };
 
-    if manifest.runtime.contains("onnx") {
+    // The same table the catalogue used to decide whether to offer this model at all — see
+    // `crate::runtimes`. `contains("onnx")` lived here and `contains("whisper")` lived in
+    // `runner.rs`, and neither knew what the other matched.
+    let kind = crate::runtimes::kind_of(&manifest.runtime);
+    if kind == Some(crate::runtimes::Kind::Seq2Seq) {
         #[cfg(feature = "mt-onnx")]
         {
             let paths = summo_mt::Seq2SeqPaths {
@@ -606,7 +610,7 @@ fn load_local(
         }
         #[cfg(not(feature = "mt-onnx"))]
         Err(no_runtime(&manifest.runtime, "mt-onnx"))
-    } else if manifest.runtime.contains("gguf") {
+    } else if kind == Some(crate::runtimes::Kind::Gguf) {
         #[cfg(feature = "mt-gguf")]
         {
             Ok(LocalModel::Gguf(Box::new(
@@ -632,6 +636,26 @@ fn no_runtime(what: &str, feature: &str) -> Error {
         "this build has no runtime for {what}; rebuild with the `{feature}` feature, or choose a \
          translation model this build can run"
     ))
+}
+
+/// Load an installed translator and translate one line with it.
+///
+/// For [`crate::verify`], which cannot reach `load_local` or [`LocalModel::translate`] from outside
+/// this module and should not: the point of a check is that it takes the same path a translation
+/// takes, and a second copy of the loading rules would be checking itself rather than the product.
+///
+/// Returns what the model said. A translator that loads and then produces nothing for a plain
+/// sentence has a broken vocabulary or a missing sentencepiece file, which is exactly the state a
+/// digest check cannot see.
+#[cfg(feature = "mt-any")]
+pub fn check_local(
+    store: &summo_models::ModelStore,
+    id: &str,
+    line: &str,
+    into: &str,
+    threads: Option<usize>,
+) -> Result<Option<String>> {
+    load_local(store, id, threads)?.translate(line, None, into)
 }
 
 /// A directory somebody exported themselves.

@@ -38,6 +38,11 @@ models = [
     "summo-asr/sherpa",
     "summo-diar/sherpa",
 ]
+# Speech synthesis. Only `summo verify` uses it here — the daemon does not speak — but a voice is
+# the one model that arrives as a 397-file archive, so "did it unpack into something loadable" is
+# the question it most needs asked, and asking it needs the runtime. `summo-cli`'s `dub` turns this
+# on, which is why the shipped binary can check a voice it can also use.
+tts = ["dep:summo-tts", "summo-tts/sherpa"]
 
 [lib]
 name = "summo_engine"
@@ -57,6 +62,7 @@ summo-vault.workspace = true
 summo-mcp.workspace = true
 summo-vad = { workspace = true, optional = true }
 summo-asr = { workspace = true, optional = true }
+summo-tts = { workspace = true, optional = true }
 summo-diar.workspace = true
 summo-agent.workspace = true
 summo-media.workspace = true

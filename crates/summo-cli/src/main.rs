@@ -43,6 +43,17 @@ enum Command {
     },
     /// List installed models.
     List,
+    /// Load every installed model and run it once, to find out whether it works.
+    ///
+    /// Installing verifies a sha256, which proves the bytes arrived and nothing more. This loads
+    /// each model the way a recording does and runs one inference — the only check that catches a
+    /// manifest naming a file that is not there, an archive that unpacked wrong, or a model whose
+    /// runtime this build does not contain.
+    #[cfg(feature = "engine")]
+    Verify {
+        /// One model, instead of all of them.
+        id: Option<String>,
+    },
     /// Remove a model, reclaiming any blobs nothing else references.
     Rm { id: String },
     /// Delete blobs no installed model references.
@@ -131,8 +142,11 @@ enum Command {
         /// no card — the user was expected to find a tarball, unpack it somewhere, and remember
         /// where. A path still works: somebody with a voice they trained is not required to publish
         /// it to use it.
+        ///
+        /// Omit it to use the voice chosen on the models screen, or the only one installed. The
+        /// screen could choose a voice a release before anything read the choice.
         #[arg(long)]
-        voice: String,
+        voice: Option<String>,
         #[arg(long, default_value = "dub.wav")]
         out: std::path::PathBuf,
         /// Gain for the original underneath. 0 removes it.
@@ -320,6 +334,8 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Pull { id, registry } => pull(&paths, &id, registry.as_deref()).await,
         Command::List => list(&paths),
+        #[cfg(feature = "engine")]
+        Command::Verify { id } => verify(&paths, id.as_deref()),
         Command::Rm { id } => remove(&paths, &id),
         Command::Gc => gc(&paths),
         Command::Import {
@@ -523,13 +539,16 @@ fn list(paths: &Paths) -> Result<()> {
         println!("no models installed. try `summo pull silero-vad-v5`");
         return Ok(());
     }
+    // 24 wide, because `task_name` returns the words a person reads — "speech recognition",
+    // "voice activity detection" — and the column was 8. Every row past the first shoved the three
+    // columns after it right by a different amount, so the one thing a table is for did not happen.
     println!(
-        "{:<24} {:<8} {:<7} {:>10}  LICENCE",
+        "{:<24} {:<24} {:<7} {:>10}  LICENCE",
         "ID", "TASK", "MODE", "SIZE"
     );
     for m in &models {
         println!(
-            "{:<24} {:<8} {:<7} {:>10}  {}",
+            "{:<24} {:<24} {:<7} {:>10}  {}",
             m.id.as_str(),
             summo_models::page::task_name(m.task),
             format!("{:?}", m.mode).to_lowercase(),
@@ -538,6 +557,64 @@ fn list(paths: &Paths) -> Result<()> {
         );
     }
     println!("\n{} on disk", human_bytes(store.disk_usage()));
+    Ok(())
+}
+
+/// Load each installed model and run it once.
+///
+/// Exits non-zero when anything failed, so this is usable as the last line of an install script.
+/// The rows are printed as they finish rather than collected: loading a 900 MB ONNX session takes
+/// seconds, and a command that prints nothing for a minute reads as one that has hung.
+#[cfg(feature = "engine")]
+fn verify(paths: &Paths, only: Option<&str>) -> Result<()> {
+    let store = ModelStore::new(paths.clone());
+    let installed = store.list();
+
+    let wanted: Vec<_> = match only {
+        None => installed,
+        Some(id) => {
+            let found: Vec<_> = installed
+                .into_iter()
+                .filter(|m| m.id.as_str() == id)
+                .collect();
+            if found.is_empty() {
+                anyhow::bail!("`{id}` is not installed. `summo list` shows what is.");
+            }
+            found
+        }
+    };
+
+    if wanted.is_empty() {
+        println!("no models installed. try `summo setup`");
+        return Ok(());
+    }
+
+    // Every core but two, floored at one: the same shape the daemon uses for a decode, so the
+    // timings printed here are the ones a recording would see rather than a single-threaded
+    // worst case.
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |n| n.get().saturating_sub(2).max(1))
+        .min(8);
+
+    let mut failed = 0;
+    for manifest in &wanted {
+        let check = summo_engine::verify::check(&store, manifest, threads);
+        if !check.ok {
+            failed += 1;
+        }
+        println!(
+            "{} {:<24} {:>7}  {}",
+            if check.ok { "ok  " } else { "FAIL" },
+            check.id,
+            format!("{} ms", check.millis),
+            check.detail
+        );
+    }
+
+    if failed > 0 {
+        anyhow::bail!("{failed} of {} model(s) could not be used", wanted.len());
+    }
+    println!("\n{} model(s) loaded and ran", wanted.len());
     Ok(())
 }
 

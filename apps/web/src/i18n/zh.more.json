@@ -330,6 +330,7 @@
     "better": "本机已装有更适合该语言的模型：{name}（准确率 {accuracy}%）。",
     "detector": "语音检测",
     "speakers": "说话人区分",
+    "denoise": "降噪",
     "ready": "已安装",
     "missing": "未安装"
   }

@@ -11,21 +11,29 @@ repository.workspace = true
 default = ["mcp"]
 # Real transcription: Silero VAD plus a Zipformer transducer. Both link native code, so the
 # default build stays a pure registry client.
-transcribe = ["dep:summo-asr", "dep:summo-vad", "dep:hound", "summo-asr/sherpa", "summo-vad/silero", "dep:summo-engine", "dep:summo-pipeline", "summo-engine/models"]
+transcribe = ["dep:summo-asr", "dep:summo-vad", "dep:hound", "summo-asr/sherpa", "summo-vad/silero", "dep:summo-engine", "dep:summo-pipeline", "summo-engine/models", "engine"]
 # `summo serve`: the daemon and the interface in this binary, the way `ollama serve` is one
 # executable. `bundled` additionally bakes the built interface in.
-serve = ["dep:summo-engine"]
+serve = ["dep:summo-engine", "engine"]
+# Marker enabled by every feature that pulls in `summo-engine`, so code needing the engine has one
+# `cfg` instead of an `any(...)` that a new feature can silently fall out of. `summo verify` is the
+# reason it exists: it is not part of any one runtime, it needs all of them.
+engine = ["dep:summo-engine"]
 # Translation inside this binary, with no model server to install or keep running.
 #
 # `mt-onnx` is the one the release ships: it builds with no C++ toolchain. `local-mt` adds the
 # llama.cpp runtime for GGUF models on top. See `summo-engine`'s features for why they are split.
-mt-onnx = ["dep:summo-engine", "summo-engine/mt-onnx"]
-local-mt = ["dep:summo-engine", "summo-engine/local-mt"]
+mt-onnx = ["dep:summo-engine", "summo-engine/mt-onnx", "engine"]
+local-mt = ["dep:summo-engine", "summo-engine/local-mt", "engine"]
 # `summo mcp`: the vault as tools for an MCP client. Tiny and pure Rust, so it is on by default —
 # the one-binary story only holds if the binary actually has everything in it.
 mcp = ["dep:summo-mcp"]
 # `summo dub`: speak a translation over the recording it came from.
-dub = ["dep:summo-tts", "summo-tts/sherpa", "dep:summo-engine", "dep:hound"]
+#
+# `summo-engine/tts` rides along so the binary that can dub can also *check* a voice — a voice is
+# 397 files unpacked from an archive, and "did that produce something loadable" is a question the
+# release build has to be able to answer about itself.
+dub = ["dep:summo-tts", "summo-tts/sherpa", "dep:summo-engine", "summo-engine/tts", "dep:hound", "engine"]
 bundled = ["serve", "summo-engine/bundled"]
 # Real recognition inside `summo serve`.
 models = ["serve", "summo-engine/models"]

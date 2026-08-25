@@ -87,6 +87,20 @@ export function Plan() {
           action={data.speakers.installed ? undefined : { id: data.speakers.id }}
         />
 
+        {/* Only when one is chosen. Off is the normal state and a permanent "none" row would teach
+            people to skip it — but when it is on it changes what the decoder hears, which is the one
+            thing on this table nothing anywhere said out loud. */}
+        {data.denoise?.model && (
+          <Row
+            icon={AudioLines}
+            label={t("plan.denoise")}
+            value={data.denoise.model}
+            note={data.denoise.installed ? t("plan.on_device") : t("plan.missing")}
+            bad={!data.denoise.installed}
+            action={data.denoise.installed ? undefined : { id: data.denoise.model }}
+          />
+        )}
+
         <Row
           icon={Languages}
           label={t("plan.translation")}

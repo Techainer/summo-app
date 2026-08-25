@@ -330,6 +330,7 @@
     "better": "Đã cài sẵn model tốt hơn cho ngôn ngữ này: {name} ({accuracy}% chính xác).",
     "detector": "Dò giọng nói",
     "speakers": "Tách người nói",
+    "denoise": "Khử ồn",
     "ready": "đã cài",
     "missing": "chưa cài"
   }

@@ -34,6 +34,17 @@ export interface CatalogueModel {
   fits: boolean;
   min_ram_mb: number;
   /**
+   * Whether this *build* contains a runtime that can load it.
+   *
+   * A property of the binary, not of the machine — the release ships the ONNX translation runtime
+   * and not llama.cpp, so the two GGUF translators in the registry were offered by every build that
+   * could never run them, at 0.8 GB and 2.4 GB a click. Absent from an older daemon, so it is
+   * optional and read as `true` when missing: an unknown answer must not hide a model that works.
+   */
+  runnable?: boolean;
+  /** Why not, in a sentence to show. `null` when it can run. */
+  why_not?: string | null;
+  /**
    * What the model costs and what it is worth, measured.
    *
    * The manifests have carried all of this since they were written and the catalogue dropped every
@@ -75,7 +86,7 @@ export interface LanguageAccuracy {
 }
 
 /** Which job a model is being pointed at. */
-export type Role = "live" | "refine" | "vad" | "speaker" | "denoise" | "translator";
+export type Role = "live" | "refine" | "vad" | "speaker" | "denoise" | "tts" | "translator";
 
 /**
  * The role a task fills by default, or `null` when choosing is not a thing a user does.
@@ -92,7 +103,44 @@ export function roleFor(task: Task): Role | null {
   // meeting from then on. So its card needs a button, or the model is unreachable once installed —
   // which is exactly the state `Task::Denoise` spent every release in.
   if (task === "denoise") return "denoise";
+  // A voice, for the same reason. It shipped installable and unchoosable: `summo dub` took a
+  // hand-typed id, so the one model in the catalogue with a "Use" button worth pressing did not
+  // have one, and publishing it had moved the problem rather than solved it.
+  if (task === "tts") return "tts";
   return null;
+}
+
+/**
+ * Whether a model can be installed here at all.
+ *
+ * Older daemons do not send `runnable`; missing means yes. Being wrong in that direction hides
+ * nothing — the install then fails with the daemon's own reason, which is what happened before this
+ * field existed.
+ */
+export function canRun(model: CatalogueModel): boolean {
+  return model.runnable !== false;
+}
+
+/**
+ * What each role points at after a change, as the daemon left it.
+ *
+ * The reply was being discarded and the screen patched with only the role just set, which is wrong
+ * in the one case the daemon does more than it was asked: choosing a model as the live one *clears*
+ * it from the second-pass slot, because a session cannot decode twice with the same model. The card
+ * went on showing it in both.
+ */
+export type Chosen = Record<string, string | null>;
+
+/** One model, loaded and run. Matches `summo_engine::verify::Check`. */
+export interface Check {
+  id: string;
+  task: Task;
+  /** Whether it loaded and ran. Not whether it is any good. */
+  ok: boolean;
+  /** What it produced, or why it could not. */
+  detail: string;
+  /** Load plus one inference, milliseconds. Dominated by the cold load. */
+  millis: number;
 }
 
 export interface Catalogue {
@@ -121,12 +169,27 @@ export class CatalogueClient {
    * The role is named rather than inferred: `asr` fills two of them — the live model and the
    * slower one that re-decodes after it — and which is wanted is the user's decision.
    */
-  async use(role: Role, model: string): Promise<void> {
-    await readJson(
+  async use(role: Role, model: string): Promise<Chosen> {
+    const settings = await readJson<{ models?: Record<string, string | null> }>(
       await fetch(url(this.handshake, "/settings/models"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ role, model }),
+      }),
+    );
+    return settings.models ?? {};
+  }
+
+  /**
+   * Load one installed model and run it once.
+   *
+   * Never rejects on a model that fails — a failure is the answer, and it comes back as
+   * `ok: false` with a reason. It rejects only when the daemon could not be asked.
+   */
+  async check(id: string): Promise<Check> {
+    return readJson<Check>(
+      await fetch(url(this.handshake, `/models/${encodeURIComponent(id)}/check`), {
+        method: "POST",
       }),
     );
   }
