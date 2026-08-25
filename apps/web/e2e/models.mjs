@@ -187,7 +187,35 @@ try {
   // model changed nothing about what recording reached for.
   if (!missing.has("sense-voice-small")) {
     const sense = page.locator("article", { hasText: "sense-voice-small" });
+
+    // What the card promises, before the button is pressed.
+    //
+    // SenseVoice publishes an int8 export and a full-precision one. The card said 240 MB — the int8
+    // figure — and the daemon downloaded **both**, 1.18 GB, because the install route passed
+    // `variant: None`, whose documented meaning is "fetch whatever the manifest declares".
+    // `variant::choose` had existed the whole time with tests, called by `summo pull` and by
+    // nothing else, so installing from the command line fetched one build and installing from the
+    // app fetched all of them. A user in Vietnam watched it die two thirds through a file they
+    // were never told about.
+    //
+    // Asserted against the install job's own `total`, which is the number of bytes the daemon set
+    // out to fetch — not the card, which would only be checking the interface against itself.
+    const promised = await sense.innerText();
     await sense.getByRole("button", { name: "Cài", exact: true }).click();
+
+    let total = 0;
+    for (let i = 0; i < 120 && total === 0; i++) {
+      await page.waitForTimeout(250);
+      const jobs = await (await fetch(`${engine.url}/installs?token=${engine.token}`)).json();
+      total = jobs.find((job) => job.model === "sense-voice-small")?.total ?? 0;
+    }
+    const mb = Math.round(total / 1e6);
+    console.log(
+      `sense-voice: card said ${/(\d+)\s*MB/.exec(promised)?.[1] ?? "?"} MB, daemon fetches ${mb} MB`,
+    );
+    if (mb > 400) {
+      fail(`the app is downloading every build: ${mb} MB for a model that ships a 240 MB int8`);
+    }
     await sense.getByText("Đã cài").waitFor({ timeout: 120000 });
     await sense.getByRole("button", { name: "Dùng", exact: true }).click();
     await sense.getByText("Đang dùng").waitFor({ timeout: 10000 });

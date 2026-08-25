@@ -47,7 +47,7 @@ const CACHE = "/tmp/summo-e2e-model-cache";
  * Named by checksum rather than by file name, so two manifests that disagree about what
  * `model.onnx` contains cannot share an entry.
  */
-async function cache(url, sha256) {
+async function cache(urls, sha256) {
   mkdirSync(CACHE, { recursive: true });
   const at = join(CACHE, sha256);
   if (existsSync(at)) return at;
@@ -56,12 +56,31 @@ async function cache(url, sha256) {
   // blob found under any home is by definition the bytes this manifest asks for — and it is checked
   // below regardless of where it came from.
   const local = fromLocalStores(sha256);
-  const bytes = local ?? Buffer.from(await download(url));
+
+  // Every address the manifest offers, in order, exactly as `download.rs` does.
+  //
+  // This used to take the first URL and stop, so the `mirror` list every manifest carries was
+  // written by publishers, honoured by the daemon, and never once exercised by a suite. Then
+  // `g-group-ai-lab/gipformer-65M-rnnt` disappeared from huggingface and the whole browser chain
+  // died on a 404 — for the default Vietnamese model, whose bytes were sitting on our own release
+  // the entire time, which is the situation the mirror list exists for. The product survived it;
+  // only the test of the product did not.
+  let bytes = local;
+  let failure = null;
+  for (const url of urls) {
+    if (bytes) break;
+    try {
+      bytes = Buffer.from(await download(url));
+    } catch (e) {
+      failure = e;
+    }
+  }
+  if (!bytes) throw failure ?? new Error(`mirror: no address given for ${sha256}`);
 
   const got = createHash("sha256").update(bytes).digest("hex");
   if (got !== sha256) {
     throw new Error(
-      `mirror: ${local ? "a local blob" : url} does not match its published checksum`,
+      `mirror: ${local ? "a local blob" : urls[0]} does not match its published checksum`,
     );
   }
 
@@ -196,7 +215,9 @@ export async function mirror(ids, { name = "mirror" } = {}) {
 
     try {
       for (const entry of manifest.files ?? []) {
-        entry.url = pathToFileURL(await cache(entry.url, entry.sha256)).href;
+        entry.url = pathToFileURL(
+          await cache([entry.url, ...(entry.mirror ?? [])], entry.sha256),
+        ).href;
       }
       writeFileSync(at, JSON.stringify(manifest, null, 2));
     } catch (e) {

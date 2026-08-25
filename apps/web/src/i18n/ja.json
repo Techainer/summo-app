@@ -463,6 +463,7 @@
     "left_hour": "残り約 {value} 時間",
     "too_slow": "遅い",
     "vs_realtime": "実時間比",
+    "unmeasured": "未計測",
     "while_running": "実行中",
     "measured_accuracy": "実測精度",
     "on_this_machine": "この種のマシンでの実測",

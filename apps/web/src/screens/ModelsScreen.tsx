@@ -576,6 +576,21 @@ function Measured({ model }: { model: CatalogueModel }) {
       value: `${Math.round(mine.accuracy * 100)}%`,
       label: languageName(mine.lang, locale),
     });
+  } else if (model.task === "asr") {
+    // Said, not omitted.
+    //
+    // The note above this function already draws the distinction — a zero reads as "this model is
+    // bad", which is a different claim from "nobody has tested it" — and then the code showed
+    // *nothing*, which reads as neither. Eight of the eleven models in the registry have no
+    // measurements at all, so a card with no accuracy cell looked exactly like a card whose model
+    // is good, minus a number nobody notices is missing. Somebody chose `zipformer-en`, got a
+    // transcript they described as stupid, and there was nothing on the screen that could have
+    // warned them.
+    //
+    // Only for speech models, because a word error rate is what a person picks one on. A voice
+    // detector and a translation model have no equivalent number and an empty cell there would be
+    // a question with no answer rather than an answer of "none".
+    cells.push({ value: "—", label: t("models.unmeasured"), dim: true });
   }
   if (speed && speed.times > 0) {
     cells.push({
@@ -592,9 +607,15 @@ function Measured({ model }: { model: CatalogueModel }) {
 
   return (
     <dl className="border-line mt-3 grid grid-cols-3 gap-2 border-t pt-2.5">
+      {/* One label per cell, not two.
+          Each of these used to carry an `sr-only` `<dt>` *and* a visible `<p>` with the same words
+          in it, so a screen reader read "so với thời gian thực, 16×, so với thời gian thực" — every
+          label twice, on every card, on a screen that is a grid of them. The visible text was
+          always the term; it is the `<dt>` now, and `flex-col-reverse` keeps the number on top
+          where the eye expects it without duplicating anything to get there. */}
       {cells.map((cell) => (
-        <div key={cell.label}>
-          <dt className="sr-only">{cell.label}</dt>
+        <div key={cell.label} className="flex flex-col-reverse">
+          <dt className="text-fg-faint text-micro mt-1 truncate leading-none">{cell.label}</dt>
           <dd
             className={cn(
               "nums text-sm leading-none font-semibold tabular-nums",
@@ -603,7 +624,6 @@ function Measured({ model }: { model: CatalogueModel }) {
           >
             {cell.value}
           </dd>
-          <p className="text-fg-faint text-micro mt-1 truncate leading-none">{cell.label}</p>
         </div>
       ))}
     </dl>

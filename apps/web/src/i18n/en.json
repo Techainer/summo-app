@@ -463,6 +463,7 @@
     "left_hour": "about {value} hours left",
     "too_slow": "slower",
     "vs_realtime": "vs real time",
+    "unmeasured": "not measured",
     "while_running": "while running",
     "measured_accuracy": "Measured accuracy",
     "on_this_machine": "On a machine like this one",

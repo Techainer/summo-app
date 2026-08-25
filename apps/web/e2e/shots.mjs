@@ -37,7 +37,14 @@ mkdirSync(OUT, { recursive: true });
 const SCREENS = [
   ["record", "/"],
   ["library", "/library"],
-  ["meeting", null], // reached by clicking, since the id is generated
+  // The one screen with a transcript on it, and the one screen this suite has never looked at.
+  //
+  // It was `null` with a note saying it is "reached by clicking, since the id is generated" — and
+  // the loop below does `if (route === null) continue`, so it was never reached at all. The id is
+  // not generated either: `seedVault` writes `01E2E0` every run. So the sideways-scroll check ran
+  // over eleven screens of short text and skipped the one where a recogniser's output lands, which
+  // is exactly where an unbreakable line comes from.
+  ["meeting", "/pages/01E2E0"],
   ["notes", "/notes"],
   ["tasks", "/tasks"],
   ["agents", "/agents"],

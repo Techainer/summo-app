@@ -463,6 +463,7 @@
     "left_hour": "约剩 {value} 小时",
     "too_slow": "较慢",
     "vs_realtime": "相对实时",
+    "unmeasured": "未测量",
     "while_running": "运行时",
     "measured_accuracy": "实测准确率",
     "on_this_machine": "在同类机器上",

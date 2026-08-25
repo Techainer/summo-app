@@ -49,6 +49,11 @@ const ONBOARDED = "onboarded";
  * - Indented checkboxes under the agent task, which is how it records its own steps.
  * - A `<!-- summo:draft -->` heading, since an unapproved summary is what the draft panel is for.
  * - A note with no `id` and no `date`, which is what Obsidian leaves behind.
+ * - Two lines nothing can break: a URL somebody pasted and a Chinese sentence with no spaces in
+ *   it. A transcript is not prose a person typed — it is whatever a recogniser emitted, and
+ *   SenseVoice emits Chinese and Japanese unspaced — so "one very long token" is the normal case
+ *   rather than an edge one. Without them every suite renders short lines, and the sideways-scroll
+ *   check `shots.mjs` has run since it was written never had anything to catch.
  * - Transcript lines attributed to `S2` and `S3`, matching the voice logs, because that is what a
  *   recording looks like before anybody has said who was talking — and it is the state the naming
  *   affordance in the transcript exists for.
@@ -109,6 +114,8 @@ Chốt ngân sách quý bốn.
 **[00:13:10] Ngọc** — Em nghĩ nên chốt spec trước <!-- seq:1 end:795.0 -->
 **[00:14:02] S2** — Vậy chốt hôm nay nhé <!-- seq:2 end:848.0 -->
 **[00:15:30] S3** — Em gửi bản nháp chiều nay <!-- seq:3 end:935.0 -->
+**[00:16:10] Ngọc** — Link đây https://intranet.example.com/bao-cao/2026/quy-3/ngan-sach-ky-thuat-va-van-hanh-ban-day-du-khong-rut-gon.pdf?token=aGVsbG8td29ybGQtdGhpcy1pcy1hLXZlcnktbG9uZy1vcGFxdWUtdG9rZW4 <!-- seq:4 end:970.0 -->
+**[00:16:40] S2** — 我们需要在下周之前完成预算审查并把结论同步给所有相关团队否则发布日期会被推迟 <!-- seq:5 end:1000.0 -->
 `,
   );
 

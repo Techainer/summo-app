@@ -122,7 +122,7 @@ export function TranscriptChips({ segments, at, onSeek, reading = false, naming 
   }
 
   return (
-    <div ref={scroller} className="h-full overflow-y-auto px-1">
+    <div ref={scroller} className="h-full overflow-x-hidden overflow-y-auto px-1">
       <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
         {virtualizer.getVirtualItems().map((row) => {
           const line = rows[row.index];
@@ -218,7 +218,10 @@ function Chip({
   const said = (
     <span
       className={cn(
-        "mt-0.5 block",
+        // `break-words` for the same reason the live transcript has it: this text is whatever a
+        // recogniser emitted, not prose somebody typed. A URL read aloud, or a SenseVoice
+        // transcript of Chinese with no spaces in it, is one token as far as line breaking goes.
+        "mt-0.5 block break-words",
         reading ? "text-body leading-[1.75] font-[var(--font-reading)]" : "text-sm leading-relaxed",
         // A partial is still being revised; showing it as settled text makes the app look like
         // it changes its mind.
@@ -230,7 +233,7 @@ function Chip({
         <span
           lang={segment.translation.lang}
           className={cn(
-            "text-fg-dim mt-1 block",
+            "text-fg-dim mt-1 block break-words",
             // Italic is how this says "the machine wrote this line". CJK, Thai, Arabic and
             // Hebrew have no italic form, so a browser shears the glyphs instead — harder to
             // read, and it looks like a rendering fault.

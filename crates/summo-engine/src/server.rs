@@ -692,7 +692,29 @@ async fn catalogue(
                 "redistributable": m.redistributable,
                 "gated": m.gated,
                 "description": m.description,
-                "size_bytes": m.size_bytes,
+                // What *this machine* will download, not what the manifest declares.
+                //
+                // `size_bytes` is one number for a model that may ship several builds, and it was
+                // being shown beside an install button that fetched a different set of files. For
+                // SenseVoice that read 240 MB over a download of 1.18 GB — the int8 figure over
+                // both builds — and the description in the manifest said 234 MB, so the same card
+                // carried three answers and none of them was the one that mattered.
+                //
+                // Computed the same way the installer computes it, from the same `choose`, so the
+                // number on the card and the bytes on the wire cannot drift apart again.
+                //
+                // Falls back to the declared number when the sum is zero, which is a manifest whose
+                // files are all for another platform. Zero would render as "0 MB" beside an install
+                // button, and a wrong number is better read than a number that says the model is
+                // empty.
+                "size_bytes": match m
+                    .clone()
+                    .with_variant(summo_models::variant::choose(m, hardware).variant)
+                    .total_bytes()
+                {
+                    0 => m.size_bytes,
+                    real => real,
+                },
                 "installed": installed.contains_key(&id),
                 // Whether this machine can run it at all, so a phone is not offered a model that
                 // will be refused at load with an out-of-memory error.
@@ -3500,6 +3522,26 @@ async fn start_install(
     let home = state.engine.paths().root().to_path_buf();
     let key = id.to_string();
 
+    // Which build of this model belongs on this machine.
+    //
+    // `install` — the call that used to be here — passes `None`, whose documented meaning is "fetch
+    // whatever the manifest declares": *every* build. SenseVoice publishes an int8 export and an
+    // fp32 one, so the card offered 240 MB and the app downloaded 1.18 GB of it, over a single
+    // huggingface URL, and a user in Vietnam watched it fail two thirds of the way through a file
+    // they were never told about. Whisper-tiny was 104 MB advertised and 256 MB fetched.
+    //
+    // `variant::choose` has existed the whole time, with tests, exported, and called by `summo
+    // pull` and nothing else — so installing from the command line fetched one build and installing
+    // from the app, which is what everybody uses, fetched all of them. Fifth setting in this
+    // codebase found written, tested and disconnected.
+    let choice = summo_models::variant::choose(&manifest, state.engine.hardware());
+    for rejected in &choice.rejected {
+        tracing::debug!(model = %id, variant = %rejected.variant, why = %rejected.why, "build skipped");
+    }
+    tracing::info!(model = %id, variant = ?choice.variant, reason = %choice.reason, "installing");
+    let manifest = manifest.with_variant(choice.variant.clone());
+    let variant = choice.variant;
+
     tokio::spawn(async move {
         let outcome = async {
             let downloader = summo_models::Downloader::new(downloads)?
@@ -3512,7 +3554,7 @@ async fn start_install(
             let progress = installs.clone();
             let progress_key = key.clone();
             store
-                .install(&manifest, &downloader, move |p| {
+                .install_variant(&manifest, &downloader, variant, move |p| {
                     progress.set(
                         &progress_key,
                         crate::install::State::Downloading {
