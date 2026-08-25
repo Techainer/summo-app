@@ -330,6 +330,7 @@ pub fn task_name(task: Task) -> &'static str {
         Task::Denoise => "noise suppression",
         Task::DiarizeSeg => "speaker segmentation",
         Task::Embed => "text embedding",
+        Task::Tts => "speech synthesis",
         Task::Translate => "translation",
     }
 }
@@ -390,6 +391,7 @@ mod tests {
                 mirror: vec![],
                 platform: None,
                 variant: None,
+                archive: None,
             }],
             variants: Vec::new(),
             installed_variant: None,

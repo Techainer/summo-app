@@ -422,6 +422,7 @@
     "upstream": "来自 {who}",
     "task_asr": "语音识别",
     "task_translate": "翻译",
+    "task_tts": "语音合成",
     "task_vad": "语音活动检测",
     "task_speaker_embed": "说话人归属",
     "task_diarize_seg": "说话人分离",

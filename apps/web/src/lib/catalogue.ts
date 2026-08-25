@@ -13,7 +13,7 @@ import { url } from "./library";
 
 /** What a model is for. Matches `summo_models::Task`. */
 export type Task =
-  "asr" | "vad" | "denoise" | "diarize-seg" | "speaker-embed" | "embed" | "translate";
+  "asr" | "vad" | "denoise" | "diarize-seg" | "speaker-embed" | "embed" | "translate" | "tts";
 
 export interface CatalogueModel {
   id: string;
@@ -152,6 +152,9 @@ export class CatalogueClient {
 const TASK_ORDER: Task[] = [
   "asr",
   "translate",
+  // A voice sits with the things that do something *with* a recording rather than to it: `summo
+  // dub` reads a translated meeting back over its own audio.
+  "tts",
   "vad",
   "speaker-embed",
   "diarize-seg",

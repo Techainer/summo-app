@@ -27,14 +27,55 @@ use summo_tts::{
 pub struct Options {
     pub meeting: String,
     pub lang: String,
-    pub voice: PathBuf,
+    /// A registry id, or a directory. See [`resolve_voice`].
+    pub voice: String,
     pub out: PathBuf,
     /// Gain for the original recording under the dub. 0.0 removes it.
     pub under: f32,
     pub threads: usize,
 }
 
+/// Where the voice's files are: an installed registry model, or a directory somebody unpacked.
+///
+/// The id first, and a path only when the id is not one. A registry id cannot contain a path
+/// separator, so the two cannot be confused — and trying the store first means `--voice
+/// vits-vi-vais1000` works on a machine where a directory of that name happens to exist in the
+/// working directory, which is the reading somebody typing an id intends.
+fn resolve_voice(paths: &Paths, wanted: &str) -> Result<PathBuf> {
+    if let Ok(id) = summo_core::ModelId::parse(wanted) {
+        let store = summo_models::ModelStore::new(paths.clone());
+        if let Ok(manifest) = store.installed(&id) {
+            if manifest.task != summo_models::Task::Tts {
+                bail!(
+                    "`{wanted}` is a {} model, not a voice",
+                    summo_models::page::task_name(manifest.task)
+                );
+            }
+            let installed = store.resolve(&manifest)?;
+            // `dir` points inside the archive the voice ships as: a piper voice is an `.onnx` plus
+            // several hundred phoneme tables, and `Vits::load` is given the folder holding them.
+            return installed
+                .param_dir("dir")
+                .or_else(|| installed.files.values().next().cloned())
+                .with_context(|| format!("`{wanted}` is installed but has no voice directory"));
+        }
+    }
+
+    let path = PathBuf::from(wanted);
+    if path.is_dir() {
+        return Ok(path);
+    }
+    bail!(
+        "no voice `{wanted}`: not an installed model, and not a directory.          Install one with `summo pull vits-vi-vais1000`."
+    )
+}
+
 pub fn run(paths: &Paths, opts: &Options) -> Result<()> {
+    // The voice first, before the meeting and the translation are read. A mistyped `--voice` used
+    // to be reported after all of that, which on a long meeting is a wait for an answer that was
+    // available immediately.
+    let voice = resolve_voice(paths, &opts.voice)?;
+
     let id = summo_core::MeetingId::from(opts.meeting.clone());
 
     let path = summo_engine::summarize::find_meeting_file(&paths.vault(), &id)
@@ -65,8 +106,8 @@ pub fn run(paths: &Paths, opts: &Options) -> Result<()> {
         bail!("nothing translated to dub");
     }
 
-    let mut tts = summo_tts::vits::Vits::load(&opts.voice, opts.threads)?;
-    println!("voice  {}", opts.voice.display());
+    let mut tts = summo_tts::vits::Vits::load(&voice, opts.threads)?;
+    println!("voice  {}", voice.display());
     println!(
         "lines  {} of {} translated",
         lines.len(),

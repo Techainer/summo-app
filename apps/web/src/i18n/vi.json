@@ -422,6 +422,7 @@
     "upstream": "Của {who}",
     "task_asr": "Nhận dạng giọng nói",
     "task_translate": "Dịch",
+    "task_tts": "Giọng đọc",
     "task_vad": "Phát hiện tiếng nói",
     "task_speaker_embed": "Nhận diện người nói",
     "task_diarize_seg": "Tách người nói",

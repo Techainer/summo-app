@@ -530,6 +530,7 @@ fn task_words(task: summo_models::Task) -> &'static str {
         summo_models::Task::DiarizeSeg => "speaker segmentation",
         summo_models::Task::SpeakerEmbed => "speaker embedding",
         summo_models::Task::Embed => "text embedding",
+        summo_models::Task::Tts => "speech synthesis",
         summo_models::Task::Translate => "translation",
     }
 }

@@ -402,6 +402,7 @@ mod tests {
                 mirror: vec![],
                 platform: None,
                 variant: None,
+                archive: None,
             }],
             variants: Vec::new(),
             installed_variant: None,
