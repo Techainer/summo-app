@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Input, Progress, Select } from "../ui";
 import { CONTROL, FIELD, HINT, LABEL } from "./fields";
 import { useT } from "../../i18n/context";
-import { CatalogueClient, size, type CatalogueModel } from "../../lib/catalogue";
+import { CatalogueClient, canRun, size, type CatalogueModel } from "../../lib/catalogue";
 import { cn } from "../../lib/cn";
 import { useEngine } from "../../lib/engine-context";
 import { useErrorText } from "../../lib/errors";
@@ -209,6 +209,14 @@ function LocalModel({ model, missing }: { model: string | null; missing?: string
 
   const installed = entry?.installed === true;
   const running = job !== null && !isFinished(job);
+
+  // A model this build has no runtime for. The second install button in the app, and the one most
+  // likely to hit this: the release ships the ONNX translation runtime and not llama.cpp, so the
+  // two GGUF translators in the registry could be named here, downloaded at 0.8 GB and 2.4 GB, and
+  // then refused at the first translated line.
+  if (!installed && entry && !canRun(entry)) {
+    return <p className={cn(HINT, "text-blocked")}>{entry.why_not}</p>;
+  }
 
   if (installed) {
     return (

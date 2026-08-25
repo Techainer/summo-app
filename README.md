@@ -165,7 +165,18 @@ manifests, each carrying a licence, a sha256 per file and the numbers measured f
 ```bash
 summo recommend --lang vi     # what would run here, and why
 summo pull gipformer-65m      # 2.4 % WER on Fleurs VI, ~70 MB, MIT
+summo verify                  # load every installed model and run it once
 ```
+
+`summo verify` is not a benchmark. Installing a model checks a sha256, which proves the bytes
+arrived and nothing more — it says nothing about a manifest naming a file that is not there, an
+archive that unpacked into a shape the runtime cannot open, or a build with no runtime for that
+model at all. It loads each one the way a recording does, runs one inference, and exits non-zero if
+anything failed. The models screen has the same check per card.
+
+A runtime is a compile-time feature, so which models a binary can run is a property of that binary:
+the release ships the ONNX translation runtime and not llama.cpp, and the catalogue says so on the
+card rather than at the first translation.
 
 The catalogue lives in [Techainer/summo-registry](https://github.com/Techainer/summo-registry) (MIT,
 static JSON, forkable and mirrorable). A model resolves through `SUMMO_REGISTRY` → our CDN → the

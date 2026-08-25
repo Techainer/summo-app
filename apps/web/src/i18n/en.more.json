@@ -330,6 +330,7 @@
     "better": "A better model for this language is already installed: {name} ({accuracy}% accurate).",
     "detector": "Voice detection",
     "speakers": "Speaker attribution",
+    "denoise": "Noise suppression",
     "ready": "installed",
     "missing": "not installed"
   }

@@ -62,6 +62,15 @@ export interface Plan {
   /** The voice fingerprint, which is what lets a transcript name who spoke. */
   speakers: { installed: boolean; id: string };
   /**
+   * The speech enhancer, when one is chosen. `model: null` is the default and means off.
+   *
+   * This panel answers "what will the next recording use", and it left out the only role that
+   * silently changes what the decoder hears — so a transcript that got worse after installing an
+   * enhancer had nothing on this screen connecting the two. Optional for the same reason
+   * `second_pass` is: an older daemon does not send it.
+   */
+  denoise?: { model: string | null; installed: boolean };
+  /**
    * The translator, and whether it is actually here.
    *
    * `installed` is only meaningful when `local` is true — an endpoint has nothing to install — and

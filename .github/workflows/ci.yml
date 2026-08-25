@@ -697,7 +697,26 @@ jobs:
       # fails to *parse* the file without one. `bundled` is the shape that ships, so leaving it out
       # of the lint means the arm every user runs is the one arm nobody checks.
       - run: cargo clippy -p summo-engine --features bundled --all-targets -- -D warnings
-      - run: cargo build --bin summo-engine --features bundled
+      # The runtimes too, not only the interface.
+      #
+      # These suites are "the only tests that see what a user sees", and they were driving a binary
+      # with no model runtime in it at all — which stopped being merely unfaithful the moment the
+      # daemon started refusing to install a model it has no runtime for. That refusal is the point:
+      # the release ships without llama.cpp, so the two GGUF translators were 0.8 GB and 2.4 GB
+      # nothing could ever load. A build that can run nothing would refuse everything, and the
+      # catalogue suite would be testing a state no user is in.
+      #
+      # Same feature set as the full-flow job below, so the two share the compiled artefacts rather
+      # than each paying for sherpa-onnx separately. `tts` is what `dub` turns on in the shipped
+      # binary; here it is what lets a voice be checked.
+      - run: cargo build --bin summo-engine --features bundled,models,mt-onnx,tts
+      - name: The speech libraries, beside the binary
+        run: |
+          if [ ! -e target/debug/libsherpa-onnx-c-api.so ]; then
+            cargo clean -p sherpa-rs-sys
+            cargo build --bin summo-engine --features bundled,models,mt-onnx,tts
+          fi
+          ls -l target/debug/libsherpa*
       - run: pnpm -C apps/web e2e
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
@@ -720,8 +739,8 @@ jobs:
 
       # The whole product, once, with recognition actually compiled in.
       #
-      # Every suite above runs against `--features bundled`, which has no speech model support at
-      # all — so for months the one test that drives audio → text → file was the one test nobody
+      # Every suite above once ran against `--features bundled`, which has no speech model support
+      # at all — so for months the one test that drives audio → text → file was the one test nobody
       # ran. It took a WAV path and a token on the command line; now it boots its own daemon,
       # installs a model from the local mirror and records a committed fixture, which is what makes
       # it runnable here.
@@ -732,7 +751,7 @@ jobs:
       # `bundled,mcp,models,dub,mt-onnx`, and CI was building without it. So the binary under test
       # could not run the in-app translator at all, and every suite that touched translation was
       # exercising a build the users do not have. Translation shipped broken twice behind that gap.
-      - run: cargo build --bin summo-engine --features bundled,models,mt-onnx
+      - run: cargo build --bin summo-engine --features bundled,models,mt-onnx,tts
       # sherpa-onnx ships as a shared library, and it is the crate's *build script* that puts it
       # beside the binary — so a cache hit, which skips the build script, produces a binary linked
       # with an `$ORIGIN` rpath and nothing at `$ORIGIN` to find. The daemon then dies with
@@ -746,7 +765,7 @@ jobs:
           ls -l target/debug/libsherpa* 2>/dev/null || echo "not beside the binary"
           if [ ! -e target/debug/libsherpa-onnx-c-api.so ]; then
             cargo clean -p sherpa-rs-sys
-            cargo build --bin summo-engine --features bundled,models,mt-onnx
+            cargo build --bin summo-engine --features bundled,models,mt-onnx,tts
             ls -l target/debug/libsherpa*
           fi
       - run: pnpm -C apps/web e2e:full-flow

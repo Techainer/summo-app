@@ -29,7 +29,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  */
 export const REGISTRY = process.env.SUMMO_REGISTRY_DIR ?? join(HERE, "../../../../summo-registry");
 
-/** The daemon, built with the interface inside it. `--features bundled` is what puts it there. */
+/**
+ * The daemon, built with the interface inside it and the model runtimes linked.
+ *
+ * `bundled` is what puts the interface there; `models,mt-onnx,tts` is what makes the binary the one
+ * users have. Without them the daemon has no runtime for anything in the registry, and since it now
+ * refuses to install a model it could never load, a suite about the catalogue would be testing a
+ * state nobody is in.
+ */
 const BINARY = join(HERE, "../../../target/debug/summo-engine");
 
 /**
@@ -304,7 +311,7 @@ export async function boot({
         child.kill();
         throw new Error(
           `the daemon did not come up in 20s. Is it built?\n` +
-            `  cargo build --bin summo-engine --features bundled\n` +
+            `  cargo build --bin summo-engine --features bundled,models,mt-onnx,tts\n` +
             log.join(""),
         );
       }
@@ -326,7 +333,7 @@ export async function boot({
   if (!document.includes('<div id="root">')) {
     refuse(
       "the daemon is serving no interface. Rebuild it with the feature that bundles one:\n" +
-        "  cargo build --bin summo-engine --features bundled",
+        "  cargo build --bin summo-engine --features bundled,models,mt-onnx,tts",
     );
   }
 
@@ -347,7 +354,7 @@ export async function boot({
       `the daemon is serving an older interface than the one in dist/.\n` +
         `  serving ${entry(document)}\n  built   ${built}\n` +
         "Rebuild the binary after building the web app — the interface is compiled into it:\n" +
-        "  pnpm -C apps/web build && cargo build --bin summo-engine --features bundled",
+        "  pnpm -C apps/web build && cargo build --bin summo-engine --features bundled,models,mt-onnx,tts",
     );
   }
 

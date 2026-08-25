@@ -246,6 +246,72 @@ try {
     }
   }
 
+  // ---- does it actually work -------------------------------------------
+  //
+  // "Đã cài" means a sha256 matched, which is a claim about a download rather than about a model.
+  // Everything between those bytes and something that loads — a `params` key naming a file that is
+  // not there, a variant resolving to a build that was never fetched, an archive unpacked into a
+  // shape the runtime cannot open — was invisible until a recording started, and then surfaced as
+  // a message about a hashed path in a shard directory.
+  //
+  // Driven on the card rather than against the route, because the route working and the card
+  // showing nothing is the failure this is here to catch.
+  if (!missing.has("sense-voice-small")) {
+    const sense = page.locator("article", { hasText: "sense-voice-small" });
+    await sense.getByRole("button", { name: "Kiểm tra", exact: true }).click();
+    // Generous: this loads a 900 MB ONNX session and runs an inference, on a machine that may be
+    // running ten other browsers. What is being measured is the answer, not the clock.
+    const verdict = sense.getByTestId("check-sense-voice-small");
+    await verdict.waitFor({ timeout: 180000 });
+    const said = await verdict.innerText();
+    // The model is real, installed and this build has the runtime, so the only correct answer is a
+    // pass. A failure here is a genuine product failure and must not be tolerated as "some result
+    // appeared".
+    if (!said.includes("Chạy được")) {
+      fail(`checking an installed model that works reported: ${said}`);
+    }
+    // And it says what happened rather than only that something did. A check whose whole output is
+    // a tick is one nobody can act on when it turns red.
+    if (said.trim().length < 20) fail(`the check result says nothing: ${said}`);
+  }
+
+  // A model this build has no runtime for is refused *before* the download, not after it.
+  //
+  // The release ships the ONNX translation runtime and not llama.cpp, so both GGUF translators in
+  // the registry — 0.8 GB and 2.4 GB — were offered by every build that could never load them. The
+  // download worked, the digest matched, and the failure arrived at the first translation as a
+  // sentence about a compile-time flag.
+  //
+  // Asked of the route, because the point is that no client can spend those bytes: the card is one
+  // caller, a stale page is another, and the cost of being wrong is measured in gigabytes.
+  {
+    const attempt = await page.evaluate(
+      async ({ port, token }) => {
+        const response = await fetch(`http://127.0.0.1:${port}/installs?token=${token}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id: "milmmt-46-1b" }),
+        });
+        return { ok: response.ok, body: await response.text() };
+      },
+      { port: engine.port, token: engine.token },
+    );
+    // Unless this build happens to have llama.cpp in it, in which case installing is correct and
+    // there is nothing here to check. `mt-gguf` is not in any shipped feature set.
+    const catalogue = await (await fetch(`${engine.url}/catalogue?token=${engine.token}`)).json();
+    const gguf = catalogue.models?.find((m) => m.id === "milmmt-46-1b");
+    if (gguf && gguf.runnable === false) {
+      if (attempt.ok) {
+        fail("a model this build has no runtime for started downloading anyway");
+      } else if (!attempt.body.includes("runtime")) {
+        fail(`the refusal does not say why: ${attempt.body}`);
+      }
+      if (!gguf.why_not) fail("the catalogue marks a model unrunnable without saying why");
+    } else if (!gguf) {
+      fail("milmmt-46-1b is missing from the catalogue");
+    }
+  }
+
   // The daemon refuses to remove a model the settings point at, because the alternative is a
   // recording that fails to start much later with nothing connecting the two.
   // Passed in rather than read from the URL: the app strips `port` and `token` during its

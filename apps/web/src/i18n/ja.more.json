@@ -330,6 +330,7 @@
     "better": "この言語により適したモデルが既に入っています: {name}（正確度 {accuracy}%）。",
     "detector": "音声検出",
     "speakers": "話者の判別",
+    "denoise": "ノイズ抑制",
     "ready": "インストール済み",
     "missing": "未インストール"
   }

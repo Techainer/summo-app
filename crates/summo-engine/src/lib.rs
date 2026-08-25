@@ -42,12 +42,14 @@ pub mod offline;
 pub mod refine;
 #[cfg(feature = "models")]
 pub mod runner;
+pub mod runtimes;
 pub mod server;
 #[cfg(feature = "models")]
 pub mod stages;
 pub mod state;
 pub mod summarize;
 pub mod translate;
+pub mod verify;
 pub mod voicebook;
 #[cfg(feature = "models")]
 pub mod warm;

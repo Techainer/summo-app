@@ -92,6 +92,13 @@ pub struct Models {
     /// turning this on for everybody would improve the noisy meetings and quietly damage the quiet
     /// ones.
     pub denoise: Option<String>,
+    /// Voice for `summo dub`.
+    ///
+    /// A voice became installable one release before it became choosable, so for that release the
+    /// only way to use one was to type its id on a command line — which is the state publishing it
+    /// was supposed to end. `None` means "the one installed voice", which is the answer on every
+    /// machine with exactly one; it only becomes a real choice when there are two.
+    pub tts: Option<String>,
     /// ISO code, or `None` to let the model detect.
     pub language: Option<String>,
     /// Threads for inference. `None` follows the hardware probe.
