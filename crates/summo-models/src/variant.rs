@@ -173,45 +173,6 @@ pub fn choose(manifest: &Manifest, hw: &HwProfile) -> Choice {
         usable.push(variant);
     }
 
-    // The build the manifest's own `params` point at wins, before any preference of ours.
-    //
-    // `params` is not decoration: it is the only mapping from what a runtime asks for to a file on
-    // disk, and `InstalledModel::param_path` looks up the *unqualified* key. SenseVoice publishes
-    // `{"model": "model.int8.onnx", "model@fp32": "model.onnx"}` — and nothing anywhere resolves
-    // the `@fp32` form. So picking fp32 there downloads 938 MB instead of 240 and then hands the
-    // runtime a path to `model.int8.onnx`, which was never fetched: a bigger download that cannot
-    // load. Ranking by precision is a preference; this is a fact about what will work.
-    //
-    // Only when the manifest has answered. A publisher who names one build in `params` has said
-    // which build this model *is*; one who does not leaves the choice open, and the ranking below
-    // is how it gets made.
-    let declared = manifest
-        .params
-        .iter()
-        // `model@fp32` is the qualified alternate, and quoting it here would make every variant
-        // "declared" and the rule vacuous.
-        .filter(|(key, _)| !key.contains('@'))
-        .filter_map(|(_, value)| value.as_str())
-        .filter_map(|name| manifest.files.iter().find(|f| f.name == name))
-        .find_map(|f| f.variant.clone());
-
-    if let Some(declared) = declared
-        && let Some(found) = usable
-            .iter()
-            .position(|v| v.name.as_deref() == Some(declared.as_str()))
-    {
-        let best = usable.remove(found);
-        return Choice {
-            reason: format!(
-                "{} — the build this manifest's params name",
-                describe(best, hw)
-            ),
-            variant: best.name.clone(),
-            alternatives: usable.iter().filter_map(|v| v.name.clone()).collect(),
-            rejected,
-        };
-    }
-
     usable.sort_by(|a, b| {
         rank(b, hw)
             .partial_cmp(&rank(a, hw))
@@ -453,67 +414,6 @@ mod tests {
     }
 
     /// An int8 export on a machine with headroom loses accuracy nobody asked to trade.
-    /// The bug this rule exists for, in the shape SenseVoice publishes it.
-    ///
-    /// `params` names the int8 file and offers `model@fp32` as an alternate that *nothing resolves*
-    /// — `InstalledModel::param_path` looks up the unqualified key and nothing anywhere splits on
-    /// `@`. So preferring fp32 on a roomy machine downloads 938 MB instead of 240 and then hands
-    /// the runtime a path to a file that was never fetched. A bigger download that cannot load.
-    #[test]
-    fn the_build_the_params_name_wins_over_a_bigger_one_that_would_not_load() {
-        let mut m = manifest(
-            vec![
-                v("int8", None, Some(Precision::Int8)),
-                v("fp32", None, Some(Precision::Fp32)),
-            ],
-            vec![
-                file("model.int8.onnx", Some("int8"), None),
-                file("model.onnx", Some("fp32"), None),
-                file("tokens.txt", None, None),
-            ],
-            100,
-        );
-        m.params = [
-            ("model".to_string(), serde_json::json!("model.int8.onnx")),
-            ("tokens".to_string(), serde_json::json!("tokens.txt")),
-            ("model@fp32".to_string(), serde_json::json!("model.onnx")),
-        ]
-        .into_iter()
-        .collect();
-
-        let choice = choose(&m, &hw(vec![Accel::Cpu], 64_000));
-        assert_eq!(
-            choice.variant.as_deref(),
-            Some("int8"),
-            "took a build whose files `params` does not point at: {}",
-            choice.reason
-        );
-        // And the other one is still offered rather than hidden.
-        assert!(choice.alternatives.iter().any(|a| a == "fp32"));
-    }
-
-    /// A manifest that names no build leaves the choice open, and the ranking still makes it. This
-    /// is the case the rule above must not swallow.
-    #[test]
-    fn precision_still_decides_when_the_params_name_no_build() {
-        let mut m = manifest(
-            vec![
-                v("int8", None, Some(Precision::Int8)),
-                v("fp32", None, Some(Precision::Fp32)),
-            ],
-            vec![file("tokens.txt", None, None)],
-            100,
-        );
-        m.params = [("tokens".to_string(), serde_json::json!("tokens.txt"))]
-            .into_iter()
-            .collect();
-
-        assert_eq!(
-            choose(&m, &hw(vec![Accel::Cpu], 64_000)).variant.as_deref(),
-            Some("fp32")
-        );
-    }
-
     #[test]
     fn full_precision_wins_when_there_is_memory_for_it() {
         let m = manifest(

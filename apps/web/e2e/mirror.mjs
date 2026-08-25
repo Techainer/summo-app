@@ -208,6 +208,11 @@ export async function mirror(ids, { name = "mirror" } = {}) {
   const unreachable = [];
 
   for (const file of readdirSync(join(root, "models"))) {
+    // Manifests only. `models/` also holds `<id>.md` — each publisher's own README, which the
+    // registry's page generator has looked for since the pages existed — and this parsed every
+    // entry as JSON, so the first README added to the registry took every browser suite down with
+    // `Unexpected token '#'`.
+    if (!file.endsWith(".json")) continue;
     const at = join(root, "models", file);
     const manifest = JSON.parse(readFileSync(at, "utf8"));
     if (!wanted.has(manifest.id)) continue;
