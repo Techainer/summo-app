@@ -26,8 +26,28 @@ pub struct InstalledModel {
 
 impl InstalledModel {
     /// Resolve a `params` key that names a file, e.g. `params.encoder` → the encoder blob.
+    /// A runtime's configuration key, resolved to the file the *installed build* uses.
+    ///
+    /// The qualified form first. A manifest that ships two builds writes
+    /// `{"encoder": "tiny-encoder.int8.onnx", "encoder@fp32": "tiny-encoder.onnx"}`, and that
+    /// convention was in the registry from the beginning and implemented nowhere: this looked up
+    /// the bare key and nothing anywhere split on `@`. So an fp32 install downloaded the fp32 files
+    /// and then handed the runtime a path to an int8 file that was never fetched.
+    ///
+    /// Which made `variant::rank`'s fp32 preference dead code — and that preference is not a taste,
+    /// it is a measurement. `docs/benchmarks.md`: whisper-tiny int8 scores 81.3 % on FLEURS vi
+    /// against fp32's 67.6 %, at identical speed. Everything int8 buys there is disk. The registry
+    /// ships both so a machine with 2 GB free still gets a transcript, and the ranking is supposed
+    /// to take fp32 wherever there is room. It never could.
     pub fn param_path(&self, key: &str) -> Option<&PathBuf> {
-        let name = self.manifest.params.get(key)?.as_str()?;
+        let qualified = self
+            .manifest
+            .installed_variant
+            .as_ref()
+            .and_then(|variant| self.manifest.params.get(&format!("{key}@{variant}")));
+        let name = qualified
+            .or_else(|| self.manifest.params.get(key))?
+            .as_str()?;
         self.files.get(name)
     }
 
@@ -330,6 +350,84 @@ mod tests {
             fixture.store.is_installed(stored),
             "the other build's absence is not a gap"
         );
+    }
+
+    /// The other build, and the half of this that was never implemented.
+    ///
+    /// A manifest that ships two writes `{"model": "model.int8.onnx", "model@fp32":
+    /// "model.fp32.onnx"}`. That convention has been in the registry since the first manifest with
+    /// variants, and `param_path` looked up the bare key — so installing fp32 fetched the fp32 blob
+    /// and then handed the runtime a path to an int8 file that was never downloaded.
+    ///
+    /// Which made `variant::rank`'s fp32 preference unreachable, and that preference is a
+    /// measurement rather than a taste: `docs/benchmarks.md` has whisper-tiny int8 at 81.3 % on
+    /// FLEURS vi against fp32's 67.6 %, at identical speed.
+    #[tokio::test]
+    async fn a_params_key_resolves_to_the_build_that_was_installed() {
+        use crate::variant::{Precision, Variant};
+
+        let fixture = fixture();
+        let mut manifest = fixture.manifest(
+            "two-builds",
+            vec![
+                fixture.file("tokens.txt", b"shared"),
+                fixture.file("model.int8.onnx", b"small"),
+                fixture.file("model.fp32.onnx", b"large"),
+            ],
+        );
+        manifest.files[1].variant = Some("int8".into());
+        manifest.files[2].variant = Some("fp32".into());
+        manifest.variants = vec![
+            Variant {
+                name: Some("int8".into()),
+                accel: None,
+                precision: Some(Precision::Int8),
+            },
+            Variant {
+                name: Some("fp32".into()),
+                accel: None,
+                precision: Some(Precision::Fp32),
+            },
+        ];
+        manifest.params = [
+            ("model".to_string(), serde_json::json!("model.int8.onnx")),
+            (
+                "model@fp32".to_string(),
+                serde_json::json!("model.fp32.onnx"),
+            ),
+            ("tokens".to_string(), serde_json::json!("tokens.txt")),
+        ]
+        .into_iter()
+        .collect();
+
+        let fp32 = fixture
+            .store
+            .install_variant(
+                &manifest,
+                &fixture.downloader(),
+                Some("fp32".into()),
+                |_| {},
+            )
+            .await
+            .unwrap();
+
+        let model = fp32
+            .param_path("model")
+            .expect("the fp32 build resolved to a file that was never fetched");
+        assert!(
+            model.is_file(),
+            "params pointed at a blob that is not on disk: {}",
+            model.display()
+        );
+        assert_eq!(
+            std::fs::read(model).unwrap(),
+            b"large",
+            "resolved to the int8 blob while fp32 was installed"
+        );
+
+        // An unqualified key with no `@variant` entry still resolves — most manifests have one
+        // build and no suffixes at all, and this must not have made them a special case.
+        assert!(fp32.param_path("tokens").is_some_and(|p| p.is_file()));
     }
 
     /// Re-deciding on every call would report an installed model as missing the moment the machine

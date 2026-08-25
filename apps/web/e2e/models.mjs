@@ -210,11 +210,24 @@ try {
       total = jobs.find((job) => job.model === "sense-voice-small")?.total ?? 0;
     }
     const mb = Math.round(total / 1e6);
-    console.log(
-      `sense-voice: card said ${/(\d+)\s*MB/.exec(promised)?.[1] ?? "?"} MB, daemon fetches ${mb} MB`,
-    );
-    if (mb > 400) {
-      fail(`the app is downloading every build: ${mb} MB for a model that ships a 240 MB int8`);
+    const onCard = Number(/(\d[\d.,]*)\s*MB/.exec(promised)?.[1]?.replace(/,/g, "") ?? 0);
+    console.log(`sense-voice: card said ${onCard} MB, daemon fetches ${mb} MB`);
+
+    // Two guarantees, and neither is a preference about precision.
+    //
+    // *One* build. SenseVoice's two exports total 1177 MB and the app fetched both, because the
+    // install route passed `variant: None`. Which build wins is `variant::rank`'s business and it
+    // is a measured decision rather than a taste — `docs/benchmarks.md` has whisper-tiny int8 at
+    // 81.3 % against fp32's 67.6 % at identical speed — so pinning a number here would freeze a
+    // policy this file is the wrong place to hold.
+    if (mb >= 1100) {
+      fail(`the app is downloading every build: ${mb} MB of a model whose builds total 1177 MB`);
+    }
+    // And the card says the same thing. It quoted the manifest's single `size_bytes` while the
+    // installer fetched a different set of files, so one card carried 240 MB, 234 MB in its own
+    // description, and 1.18 GB on the wire.
+    if (Math.abs(onCard - mb) > 5) {
+      fail(`the card promises ${onCard} MB and the daemon fetches ${mb} MB`);
     }
     await sense.getByText("Đã cài").waitFor({ timeout: 120000 });
     await sense.getByRole("button", { name: "Dùng", exact: true }).click();
