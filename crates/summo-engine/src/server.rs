@@ -3181,6 +3181,10 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
     Ok(serde_json::json!({
         "language": settings.models.language,
         "speech": { "model": null, "installed": false, "covers_language": false, "better": null },
+        // Present and empty rather than absent. A build without recognition still serves this
+        // screen, and an interface that reads a field the daemon does not send is a blank page
+        // rather than a missing row — which is what a `main` that never rendered turned out to be.
+        "second_pass": { "model": null, "name": null, "installed": false, "suggested": null },
         "detector": { "installed": false, "id": "silero-vad-v5" },
         "speakers": { "installed": false, "id": "campplus-sv" },
         "translation": {

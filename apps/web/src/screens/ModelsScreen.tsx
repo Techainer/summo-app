@@ -424,14 +424,14 @@ function Running({
       // Only when there is one. This role is genuinely optional — most meetings are in one language
       // and a second decode of every utterance would cost without adding — so an always-present row
       // reading "none" would teach people to ignore a row that matters when it is not empty.
-      ...(plan.second_pass.model
+      ...(plan.second_pass?.model
         ? [
             {
               key: "second",
               label: t("models.role_second"),
-              value: plan.second_pass.name ?? plan.second_pass.model,
-              ready: plan.second_pass.installed,
-              id: plan.second_pass.model,
+              value: plan.second_pass?.name ?? plan.second_pass?.model,
+              ready: plan.second_pass?.installed === true,
+              id: plan.second_pass?.model,
             },
           ]
         : []),
@@ -517,20 +517,20 @@ function Running({
           so answers "nothing worth adding" for precisely the meeting where the second model
           matters most. Offered, never applied: the app does not swap models on somebody's behalf,
           and this one costs a second decode of every utterance. */}
-      {plan.second_pass.suggested && (
+      {plan.second_pass?.suggested && (
         <div className="border-accent/30 bg-accent-soft text-meta mt-3 rounded-lg border px-3 py-2">
           <p className="text-fg-dim">
-            <span className="text-fg font-medium">{plan.second_pass.suggested.name}</span>{" "}
-            {plan.second_pass.suggested.reason}
+            <span className="text-fg font-medium">{plan.second_pass?.suggested.name}</span>{" "}
+            {plan.second_pass?.suggested.reason}
           </p>
           <div className="mt-2">
             <Button
               size="sm"
               variant="secondary"
-              disabled={!plan.second_pass.suggested.installed}
-              onClick={() => onSecond(plan.second_pass.suggested?.id as string)}
+              disabled={!plan.second_pass?.suggested.installed}
+              onClick={() => onSecond(plan.second_pass?.suggested?.id as string)}
             >
-              {plan.second_pass.suggested.installed
+              {plan.second_pass?.suggested.installed
                 ? t("models.use_refine")
                 : t("models.role_missing")}
             </Button>
