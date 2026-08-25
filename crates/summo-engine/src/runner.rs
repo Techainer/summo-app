@@ -100,6 +100,11 @@ impl SessionRunner {
         let vad_model = resolve_vad(store, spec.vad_model.as_deref())?;
         let threads = hw.recommended_threads();
 
+        // Before the lanes, like the refine model and for the same reason: a named enhancer that
+        // cannot be found should fail the recording here, with a message about the thing that was
+        // asked for, rather than after the first sentence.
+        let denoise_model = resolve_denoise_model(store, spec.denoise_model.as_deref())?;
+
         let key = crate::warm::Key::new(&spec.live_model, spec.language.clone(), threads);
         // Taken, not borrowed: whoever gets it owns it, and the slot is refilled afterwards. That
         // keeps every question about a killed recording holding a borrowed decoder from existing.
@@ -129,6 +134,24 @@ impl SessionRunner {
                 ..SessionConfig::default()
             };
 
+            // One per lane. The enhancer carries inference state across the frames of a call the
+            // same way a decoder does, so two lanes sharing one would clean the microphone with
+            // state left over from the room — and cost a mutex on the finalize path to do it.
+            let denoiser: Option<Box<dyn summo_asr::Denoiser>> = match &denoise_model {
+                None => None,
+                // One thread, and not `threads`. Measured on the real export: 1 thread runs a three
+                // second utterance at real-time factor 0.102, 2 at 0.115, 4 at 0.114, 8 at 0.120 —
+                // every extra thread makes it *slower*. GTCRN is small and causal, so there is
+                // little to parallelise and the synchronisation costs more than it saves. Handing
+                // it the machine's recommended thread count would take cores off the decoder to run
+                // the enhancer worse.
+                Some(path) => Some(Box::new(summo_asr::denoise::Gtcrn::load(
+                    &path.display().to_string(),
+                    1,
+                    spec.denoise_model.as_deref().unwrap_or("denoiser"),
+                )?)),
+            };
+
             // Only the system lane is clustered, so only it pays for keeping the audio.
             let pending: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
             let keep = spec.diarize && lane == Lane::System;
@@ -150,11 +173,14 @@ impl SessionRunner {
                     }
                 }))
                 .then(Detect::new(lane, vad))
-                .then(if refining {
-                    Recognise::refining(lane, decoder, cfg, refine_queue.clone())
-                } else {
-                    Recognise::new(lane, decoder, cfg)
-                });
+                .then(
+                    if refining {
+                        Recognise::refining(lane, decoder, cfg, refine_queue.clone())
+                    } else {
+                        Recognise::new(lane, decoder, cfg)
+                    }
+                    .with_denoiser(denoiser),
+                );
 
             lanes.insert(lane, LaneRunner { chain, pending });
         }
@@ -417,6 +443,46 @@ fn choose_from(
         .filter(|id| !id.is_empty())
         .and_then(|id| of_task.clone().find(|m| m.id.as_str() == id));
     named.or_else(|| of_task.next()).cloned()
+}
+
+/// Find the speech enhancer the user asked for — and only the one they asked for.
+///
+/// Deliberately not [`pick`]. Every other role falls back to the first installed model of its task,
+/// which is right when the role is required: a recording needs *a* voice detector, and the user who
+/// installed one and never opened the models screen meant for it to be used.
+///
+/// Denoising is the opposite. It is optional, it changes what the decoder hears, and on clean
+/// speech it makes the transcript worse. Falling back would mean that installing a denoiser to try
+/// it turns it on for every meeting from then on, including the ones it hurts — a model appearing in
+/// the store is not consent. Unset means off, and off is the default.
+///
+/// Returns `Ok(None)` when nothing is named, and an error only when something is named and cannot be
+/// used, because that is a request that failed rather than a request nobody made.
+fn resolve_denoise_model(
+    store: &ModelStore,
+    named: Option<&str>,
+) -> Result<Option<std::path::PathBuf>> {
+    let Some(named) = named.map(str::trim).filter(|id| !id.is_empty()) else {
+        return Ok(None);
+    };
+
+    let manifest = store
+        .list()
+        .into_iter()
+        .find(|m| m.task == summo_models::Task::Denoise && m.id.as_str() == named)
+        .ok_or_else(|| {
+            Error::ModelNotFound(format!("`{named}` is not an installed speech enhancer"))
+        })?;
+
+    let installed = store.resolve(&manifest)?;
+    installed
+        .param_path("model")
+        .or_else(|| installed.files.values().next())
+        .cloned()
+        .map(Some)
+        .ok_or_else(|| {
+            Error::ModelNotFound(format!("the installed `{named}` has no model file"))
+        })
 }
 
 /// Find an installed speaker-embedding model.

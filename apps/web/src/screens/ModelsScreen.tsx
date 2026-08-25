@@ -179,6 +179,25 @@ export function ModelsScreen() {
     [catalogue, say],
   );
 
+  /// Put a role back to "nothing chosen".
+  ///
+  /// Only noise suppression uses this today, and it is the only role that needs it: every other one
+  /// falls back to something sensible when unset, so choosing a different model is how you change
+  /// your mind. An enhancer that is unset is *off*, so without a way back the first click is
+  /// permanent — the user would have to edit the settings file to record without it again.
+  const stop = useCallback(
+    async (role: Role) => {
+      try {
+        await catalogue.use(role, "");
+        setChosen((current) => ({ ...current, [role]: null }));
+        setError(null);
+      } catch (e) {
+        setError(say(e));
+      }
+    },
+    [catalogue, say],
+  );
+
   const pull = useCallback(
     async (id: string) => {
       try {
@@ -334,8 +353,13 @@ export function ModelsScreen() {
                   job={installs.find((job) => job.model === model.id)}
                   onPull={() => void pull(model.id)}
                   onRemove={() => void remove(model.id)}
-                  onUse={() => void choose(model, "live")}
+                  onUse={() => void choose(model)}
                   onRefine={() => void choose(model, "refine")}
+                  onStop={() => {
+                    const role = roleFor(model.task);
+                    if (role) void stop(role);
+                  }}
+                  optional={model.task === "denoise"}
                   asRefine={chosen.refine === model.id && model.installed}
                   // Chosen *and* here. Naming a model in the settings does not make it usable, and
                   // a card reading "Đang dùng" over an Install button was the screen telling two
@@ -579,9 +603,11 @@ function Card({
   onRemove,
   onUse,
   onRefine,
+  onStop,
   inUse,
   asRefine,
   picked,
+  optional,
 }: {
   model: CatalogueModel;
   job: Install | undefined;
@@ -589,11 +615,22 @@ function Card({
   onRemove: () => void;
   onUse: () => void;
   onRefine: () => void;
+  /** Put the role back to nothing chosen. Only shown for an `optional` model in use. */
+  onStop: () => void;
   inUse: boolean;
   /** Whether this is the model that re-decodes after the live pass. */
   asRefine: boolean;
   /** Named in the settings, whether or not the files are on this machine. */
   picked: boolean;
+  /**
+   * Whether "not chosen" is a working state for this role.
+   *
+   * True only for noise suppression. Recording needs *a* speech model and *a* voice detector, so
+   * those roles are never off and their cards only ever switch between models. An enhancer is off
+   * by default and has to be able to go back — a card whose only control turns something on is one
+   * where the first click is permanent.
+   */
+  optional: boolean;
 }) {
   const t = useT();
   // Two clicks, not a dialog. Re-downloading a gigabyte is a real cost, and a modal for it would
@@ -736,7 +773,11 @@ function Card({
               catalogue decorative: a user could install a Japanese model and record in
               Vietnamese with no indication of why. */}
             {inUse
-              ? null
+              ? optional && (
+                  <Button size="sm" variant="ghost" onClick={onStop}>
+                    {t("models.turn_off")}
+                  </Button>
+                )
               : roleFor(model.task) !== null && (
                   <Button size="sm" variant="secondary" onClick={onUse}>
                     {t("models.use")}
@@ -833,6 +874,11 @@ function Card({
             {model.installed && !inUse && roleFor(model.task) !== null && (
               <Button size="sm" variant="secondary" onClick={onUse}>
                 {t("models.use")}
+              </Button>
+            )}
+            {model.installed && inUse && optional && (
+              <Button size="sm" variant="ghost" onClick={onStop}>
+                {t("models.turn_off")}
               </Button>
             )}
           </div>

@@ -732,6 +732,7 @@ async fn catalogue(
         "refine": settings.models.refine,
         "vad": settings.models.vad,
         "speaker": settings.models.speaker,
+        "denoise": settings.models.denoise,
         "translator": settings
             .llm
             .translator
@@ -925,6 +926,7 @@ async fn set_models(
                 "refine" => settings.models.refine = None,
                 "vad" => settings.models.vad = None,
                 "speaker" => settings.models.speaker = None,
+                "denoise" => settings.models.denoise = None,
                 "translator" => settings.llm.translator = None,
                 other => return Err(Error::Config(format!("no such model role: `{other}`"))),
             }
@@ -941,6 +943,7 @@ async fn set_models(
             "live" | "refine" => summo_models::Task::Asr,
             "vad" => summo_models::Task::Vad,
             "speaker" => summo_models::Task::SpeakerEmbed,
+            "denoise" => summo_models::Task::Denoise,
             "translator" => summo_models::Task::Translate,
             other => return Err(Error::Config(format!("no such model role: `{other}`"))),
         };
@@ -964,6 +967,7 @@ async fn set_models(
             "refine" => settings.models.refine = Some(id.to_string()),
             "vad" => settings.models.vad = Some(id.to_string()),
             "speaker" => settings.models.speaker = Some(id.to_string()),
+            "denoise" => settings.models.denoise = Some(id.to_string()),
             "translator" => {
                 settings.llm.translator = Some(summo_core::settings::Translator {
                     provider: summo_core::settings::LOCAL.to_string(),
@@ -1144,6 +1148,16 @@ fn choose_models(
         spec.speaker_model = settings
             .models
             .speaker
+            .clone()
+            .filter(|m| !m.trim().is_empty());
+    }
+    // And the speech enhancer, which is the same story told before it happened: `Task::Denoise` was
+    // in the manifest enum from the start, and until now the only code that ever matched on it
+    // turned it into the words "noise suppression" for a label with nothing behind them.
+    if spec.denoise_model.is_none() {
+        spec.denoise_model = settings
+            .models
+            .denoise
             .clone()
             .filter(|m| !m.trim().is_empty());
     }
@@ -5489,6 +5503,44 @@ mod resolve_tests {
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
         assert_eq!(resolved.live_model, "whisper-tiny");
         assert_eq!(resolved.refine_model.as_deref(), Some("gipformer-65m"));
+    }
+
+    /// The same wire, for the role that had none at all.
+    ///
+    /// `Task::Denoise` was in the manifest enum from the first commit and named nothing: no model
+    /// in the registry, no runtime, no stage, and the only code that matched on it turned it into
+    /// the words "noise suppression" for a label nobody could reach.
+    #[test]
+    fn a_speech_enhancer_in_the_settings_reaches_the_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("whisper-tiny".into());
+        settings.models.denoise = Some("gtcrn-16k".into());
+        settings.save(&path).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.denoise_model.as_deref(), Some("gtcrn-16k"));
+    }
+
+    /// And unset stays unset.
+    ///
+    /// Every other role falls back to the first installed model of its task, which is right when
+    /// the role is required. This one is not: a denoiser changes what the decoder hears and makes
+    /// clean speech slightly worse, so installing one to try it must not turn it on for every
+    /// meeting from then on. A model appearing in the store is not consent.
+    #[test]
+    fn an_enhancer_nobody_chose_stays_off() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let path = engine.paths().settings();
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("whisper-tiny".into());
+        settings.save(&path).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.denoise_model, None);
     }
 
     /// And it reaches a session that pinned its live model too, which the early return used to

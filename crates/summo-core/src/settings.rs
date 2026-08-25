@@ -86,6 +86,12 @@ pub struct Models {
     pub refine: Option<String>,
     pub vad: Option<String>,
     pub speaker: Option<String>,
+    /// Speech enhancer, run over each finished utterance before it is decoded.
+    ///
+    /// `None` is the default and the right answer for most rooms — see `summo_asr::denoise` on why
+    /// turning this on for everybody would improve the noisy meetings and quietly damage the quiet
+    /// ones.
+    pub denoise: Option<String>,
     /// ISO code, or `None` to let the model detect.
     pub language: Option<String>,
     /// Threads for inference. `None` follows the hardware probe.

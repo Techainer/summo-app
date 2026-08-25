@@ -29,6 +29,7 @@ use summo_vad::gate::{GateConfig, SpeechEvent, VadGate};
 
 use crate::{
     decoder::Decoder,
+    denoise::Denoiser,
     hallucination::{HallucinationFilter, Verdict},
 };
 
@@ -101,6 +102,14 @@ pub struct PseudoSession<D: Decoder> {
     /// the transcript, and putting it on `Segment` would send it over the wire and into the vault
     /// for the sake of one routing decision inside this process.
     last_final_language: Option<String>,
+    /// Speech enhancement, when a model for it is installed and chosen.
+    ///
+    /// `None` for almost everybody, and that is the intended default — see [`crate::denoise`] on
+    /// why a denoiser is not free accuracy. Boxed rather than a second type parameter because the
+    /// answer to "is there one" is a runtime setting, and threading `PseudoSession<D, N>` through
+    /// `stages.rs` and `HybridSession` to encode a `bool` in the type system would be a large
+    /// change to say a small thing.
+    denoiser: Option<Box<dyn Denoiser>>,
 }
 
 impl<D: Decoder> PseudoSession<D> {
@@ -116,7 +125,21 @@ impl<D: Decoder> PseudoSession<D> {
             suppressed: 0,
             last_final_pcm: None,
             last_final_language: None,
+            denoiser: None,
         }
+    }
+
+    /// Clean each finished utterance with this model before decoding it.
+    #[must_use]
+    pub fn with_denoiser(mut self, denoiser: Option<Box<dyn Denoiser>>) -> Self {
+        self.denoiser = denoiser;
+        self
+    }
+
+    /// The speech enhancer in use, for `/status` and the performance HUD.
+    #[must_use]
+    pub fn denoiser_name(&self) -> Option<&str> {
+        self.denoiser.as_ref().map(|d| d.name())
     }
 
     /// Take the audio of the most recent finished utterance, if it was retained.
@@ -224,6 +247,33 @@ impl<D: Decoder> PseudoSession<D> {
     /// Decode a closed utterance and emit it, unless it looks invented.
     fn finalize(&mut self, seq: u64, t0: f64, t1: f64, pcm: &[f32]) -> Result<Vec<Event>> {
         self.last_partial_len = 0;
+
+        // Cleaned once, here, and then it *is* the utterance: the decoder sees it, the retained
+        // audio is it, and a second model refining this line later refines the same seconds the
+        // first one heard. Denoising per consumer would run the model twice and — worse — let the
+        // two models disagree about what was said because they were listening to different audio.
+        //
+        // A failed clean-up is not a lost utterance. Noise costs words; a runtime that could not
+        // load or could not run costs nothing if the original is decoded instead, so this warns and
+        // carries on rather than propagating. The one thing it must not do is stay quiet: a
+        // denoiser that silently never ran is the shape of bug this whole file exists to correct.
+        let cleaned = match self.denoiser.as_mut() {
+            None => None,
+            Some(denoiser) => match denoiser.denoise(pcm) {
+                Ok(cleaned) => Some(cleaned),
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        seq,
+                        model = denoiser.name(),
+                        "decoding the original audio; the speech enhancer failed"
+                    );
+                    None
+                }
+            },
+        };
+        let pcm: &[f32] = cleaned.as_deref().unwrap_or(pcm);
+
         if self.cfg.keep_final_pcm {
             self.last_final_pcm = Some(pcm.to_vec());
         }
@@ -514,6 +564,110 @@ mod tests {
         assert!(
             seqs.iter().all(|&s| s == seqs[0]),
             "one utterance must keep one seq: {seqs:?}"
+        );
+    }
+
+    /// A denoiser that counts, and marks what it touched so the decoder can prove it got the clean
+    /// audio rather than the original.
+    struct Counting {
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        fail: bool,
+    }
+
+    impl Denoiser for Counting {
+        fn denoise(&mut self, pcm: &[f32]) -> Result<Vec<f32>> {
+            self.calls
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if self.fail {
+                return Err(summo_core::Error::Other("no".into()));
+            }
+            Ok(pcm.iter().map(|s| s * 0.5).collect())
+        }
+        fn name(&self) -> &str {
+            "counting"
+        }
+    }
+
+    fn counting(fail: bool) -> (Box<dyn Denoiser>, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        (
+            Box::new(Counting {
+                calls: calls.clone(),
+                fail,
+            }),
+            calls,
+        )
+    }
+
+    /// The placement decision, asserted rather than described.
+    ///
+    /// Once per finished utterance and never on a partial. A partial re-decodes a growing window
+    /// every few hundred milliseconds, so a denoiser on that path would clean the same seconds a
+    /// dozen times over for text that the final is about to replace — this run makes several
+    /// partials, and exactly one of them is a final.
+    #[test]
+    fn the_enhancer_runs_once_per_utterance_and_never_on_a_partial() {
+        let (denoiser, calls) = counting(false);
+        let mut s = PseudoSession::new(
+            GrowingDecoder::new("một hai ba"),
+            SessionConfig {
+                partial_step_ms: 100,
+                ..SessionConfig::default()
+            },
+        )
+        .with_denoiser(Some(denoiser));
+
+        let events = run(&mut s, &[(true, 200), (false, 60)]);
+
+        assert!(!partials(&events).is_empty(), "the run made no partials");
+        assert_eq!(finals(&events).len(), 1);
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::Relaxed),
+            1,
+            "one utterance, one clean-up"
+        );
+    }
+
+    /// The retained audio is the cleaned audio, so a second model refining this line later hears
+    /// the same seconds the first one did. Two models listening to different audio would disagree
+    /// about what was said for a reason no reader could see.
+    #[test]
+    fn the_audio_kept_for_a_second_model_is_the_cleaned_audio() {
+        let (denoiser, _) = counting(false);
+        let mut s = PseudoSession::new(
+            FixedDecoder::new("xin chào"),
+            SessionConfig {
+                keep_final_pcm: true,
+                ..SessionConfig::default()
+            },
+        )
+        .with_denoiser(Some(denoiser));
+
+        run(&mut s, &[(true, 200), (false, 60)]);
+        let kept = s.take_final_pcm().expect("the utterance should be retained");
+
+        // `Counting` halves every sample; the gate feeds 0.5, so anything above 0.3 is the original.
+        assert!(
+            kept.iter().all(|s| s.abs() <= 0.3),
+            "the original audio was kept, not the cleaned audio"
+        );
+    }
+
+    /// Noise costs words. A runtime that could not run costs nothing, as long as the original is
+    /// decoded instead — so a failing enhancer must not take the utterance down with it.
+    #[test]
+    fn an_enhancer_that_fails_does_not_cost_the_utterance() {
+        let (denoiser, calls) = counting(true);
+        let mut s = PseudoSession::new(FixedDecoder::new("xin chào"), SessionConfig::default())
+            .with_denoiser(Some(denoiser));
+
+        let events = run(&mut s, &[(true, 200), (false, 60)]);
+
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(
+            finals(&events).len(),
+            1,
+            "the line was lost because the clean-up failed"
         );
     }
 
