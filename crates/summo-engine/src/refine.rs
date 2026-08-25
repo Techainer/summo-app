@@ -31,9 +31,12 @@
 //! channel as an [`Event::Revise`] on a later frame — the same arrangement live translation uses,
 //! for the same reason.
 
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicUsize, Ordering},
+use std::{
+    collections::BTreeSet,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use summo_asr::{Decoder, HallucinationFilter, HybridSession, RefineJob};
@@ -57,6 +60,14 @@ pub struct Refiner {
     tx: tokio::sync::mpsc::UnboundedSender<Event>,
     rx: tokio::sync::mpsc::UnboundedReceiver<Event>,
     running: Arc<AtomicUsize>,
+    /// Languages already reported as outside this model's claim.
+    ///
+    /// So the notice below is said once rather than once per sentence. The per-utterance skip stays
+    /// at `debug` for the reason given at its call site — a stream of them during a fast
+    /// conversation is not news — but *that the pairing does nothing at all* is, and it was the one
+    /// thing nobody could see: a refine model that never runs looks exactly like one that runs and
+    /// agrees. `/status` names it either way.
+    told: Mutex<BTreeSet<String>>,
 }
 
 impl Refiner {
@@ -74,6 +85,7 @@ impl Refiner {
             tx,
             rx,
             running: Arc::new(AtomicUsize::new(0)),
+            told: Mutex::new(BTreeSet::new()),
         }
     }
 
@@ -81,7 +93,16 @@ impl Refiner {
     ///
     /// See the module note: an unclaimed language is skipped, an unreported one is not. A manifest
     /// with no languages at all is treated as a claim on everything, because that is a gap in the
-    /// registry entry rather than a statement that the model is good for nothing.
+    /// registry entry rather than a statement that the model is good for nothing — and here the gap
+    /// is usually not even in the file: [`Refiner::new`]'s callers read the langs through
+    /// `store.installed(…)` and fall back to an empty list when that read fails, so "empty" means
+    /// "nobody told us", which is not grounds for refusing to run.
+    ///
+    /// The comparison itself is [`summo_models::langs_cover`], not a copy of it. This method used
+    /// to spell it `self.claims.contains(&language)`, which reads every list as literal codes and
+    /// so answered "no" to every utterance for the two models that publish `langs: ["*"]` — the
+    /// Whispers, which are precisely the models worth pairing as a second opinion over a
+    /// specialised live one.
     #[must_use]
     pub fn wants(&self, language: Option<&str>) -> bool {
         let Some(language) = language else {
@@ -90,8 +111,7 @@ impl Refiner {
         if self.claims.is_empty() {
             return true;
         }
-        let language = language.to_lowercase();
-        self.claims.contains(&language)
+        summo_models::langs_cover(&self.claims, language)
     }
 
     /// Start whichever of these jobs are worth starting.
@@ -103,6 +123,20 @@ impl Refiner {
                     language = ?job.language,
                     "refine skipped; the second model does not claim this language"
                 );
+                // And once, loudly, per language. A pairing that will never run is a decision the
+                // user made and got no reply to; this is the line a support question is answered
+                // from, and the one `bilingual.mjs` asserts is *absent* for a multilingual model.
+                if let Some(language) = job.language.as_deref()
+                    && self
+                        .told
+                        .lock()
+                        .is_ok_and(|mut seen| seen.insert(language.to_string()))
+                {
+                    tracing::info!(
+                        language = %language,
+                        "the second model claims no such language; those lines keep the first model's text"
+                    );
+                }
                 continue;
             }
             if self.running.load(Ordering::Relaxed) >= MAX_IN_FLIGHT {
@@ -221,5 +255,36 @@ mod tests {
     fn a_model_that_claims_nothing_is_treated_as_claiming_everything() {
         assert!(refiner(&[]).wants(Some("en")));
         assert!(refiner(&[]).wants(Some("vi")));
+    }
+
+    /// The multilingual spelling, which is the one this file got wrong.
+    ///
+    /// `whisper-base` and `whisper-tiny` both publish `langs: ["*"]`, and pairing one of them as
+    /// the second opinion over a specialised live model is the most ordinary way to use this
+    /// feature. A star matches no language code, so `contains` said no to every utterance and the
+    /// refine pass ran on nothing at all — reported only at `debug`, so the setting looked applied,
+    /// `/status` named the model, and the transcript was never revised.
+    #[test]
+    fn a_multilingual_model_claims_every_language() {
+        let whisper = refiner(&["*"]);
+        assert!(whisper.wants(Some("en")));
+        assert!(whisper.wants(Some("vi")));
+        assert!(whisper.wants(Some("ja")));
+        assert!(whisper.wants(None));
+    }
+
+    /// A star beside real codes is still a star. Nothing publishes this today, and reading the list
+    /// as "only the codes spelled out" would be a quieter version of the same bug.
+    #[test]
+    fn a_star_anywhere_in_the_list_covers_everything() {
+        assert!(refiner(&["vi", "*"]).wants(Some("de")));
+    }
+
+    /// A region tag is a spelling of the language, not a different one. `en-US` from a runtime must
+    /// not miss a manifest that says `en`.
+    #[test]
+    fn a_region_tag_matches_the_language_it_is_a_region_of() {
+        assert!(refiner(&["en"]).wants(Some("en-US")));
+        assert!(!refiner(&["en"]).wants(Some("de-DE")));
     }
 }

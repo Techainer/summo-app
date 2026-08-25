@@ -34,7 +34,9 @@ const problems = [];
 
 // Whisper hears ninety-nine languages badly and reports which one it heard; Gipformer hears
 // Vietnamese and nothing else, accurately. That asymmetry is the entire reason for the feature.
-const MODELS = ["whisper-tiny", "gipformer-65m", "silero-vad-v5"];
+// `whisper-base` is here for its `langs` rather than its accuracy: it is one of the two manifests
+// that publish `["*"]`, and the routing read a star as a language nobody speaks. See the last block.
+const MODELS = ["whisper-tiny", "whisper-base", "gipformer-65m", "silero-vad-v5"];
 const local = await mirror(MODELS, { name: "bilingual" });
 if (local.unreachable.length > 0) {
   for (const { id, why } of local.unreachable) console.error(`${id}: ${why}`);
@@ -186,6 +188,52 @@ await firstLine.waitFor({ timeout: 120000 }).catch((error) => {
     problems.push("the meeting ended while the second model was working");
   }
   await page.screenshot({ path: "/tmp/shots/bilingual.png" });
+}
+
+// ---- a multilingual second model is not "a model for no language" ----------
+//
+// The routing compared the live model's reported language against the refine model's `langs` with
+// `contains`, which reads every entry as a literal code. `whisper-tiny` and `whisper-base` publish
+// `langs: ["*"]` — a star equals nothing — so pairing either as the second opinion refined *no
+// utterance at all*, and said so only at `debug`. The setting applied, `/status` named the model,
+// and the transcript was never revised.
+//
+// Everything above this line passed the whole time, because the refine model it uses is
+// `gipformer-65m`, whose manifest spells `["vi"]` out. One suite, one model family, one blind spot.
+//
+// Asserted on the absence of the skip notice rather than the presence of a revision: a second model
+// that runs and *agrees* produces no `Event::Revise` (`HybridSession::refine` returns `None` on
+// identical text), so requiring a revision here would be a coin flip. "Was this pairing asked to do
+// anything" is the question, and the skip notice is the only honest answer to it.
+{
+  await page.getByLabel("Mô hình phụ").selectOption("whisper-base");
+
+  let swapped = false;
+  for (let i = 0; i < 240 && !swapped; i++) {
+    await page.waitForTimeout(500);
+    swapped = (await status()).refine_model === "whisper-base";
+  }
+
+  if (!swapped) {
+    console.log("--- daemon log ---\n" + engine.log().slice(-3000));
+    problems.push("the multilingual second model never reached the running session");
+  } else {
+    // From here, not from the start of the run: `gipformer-65m` legitimately declines English, and
+    // this fixture is Vietnamese, but a suite that reads the whole log would blame the wrong model
+    // the day somebody adds an English fixture above.
+    const mark = engine.log().length;
+    await page.waitForTimeout(20000);
+    const since = engine.log().slice(mark);
+    if (since.includes("claims no such language")) {
+      problems.push('a `langs: ["*"]` model was refused every line — the star read as a language');
+    } else {
+      console.log("multilingual second model accepted the spoken language");
+    }
+    const still = await status();
+    if (still.state !== "recording") {
+      problems.push("the meeting ended when the multilingual second model was chosen");
+    }
+  }
 }
 
 await page
