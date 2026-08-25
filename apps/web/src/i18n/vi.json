@@ -447,6 +447,7 @@
     "running_title": "Đang chạy trên máy này",
     "role_asr": "Nhận dạng giọng nói",
     "role_vad": "Dò giọng nói",
+    "role_second": "Lượt hai",
     "role_speaker": "Nhận diện người nói",
     "role_translate": "Dịch",
     "role_missing": "Chưa có",

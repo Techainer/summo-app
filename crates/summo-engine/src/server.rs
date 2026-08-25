@@ -3043,6 +3043,42 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
             })
     });
 
+    // The second model, and what it would be for.
+    //
+    // Nothing in the app has ever suggested one. `Recommendation::pair` exists and only the CLI
+    // calls it, and it would not answer this anyway: it picks the second model by accuracy on the
+    // chosen language, so for a Vietnamese meeting it compares Whisper against Gipformer on
+    // Vietnamese, decides Whisper is worse, and recommends nothing — for exactly the meeting where
+    // the second model matters most. The English sentences are the point, and accuracy on
+    // Vietnamese says nothing about them. See `summo_models::second_opinion`.
+    let second = settings
+        .models
+        .refine
+        .clone()
+        .filter(|id| !id.trim().is_empty());
+    let second_manifest = second
+        .as_ref()
+        .and_then(|id| installed.iter().find(|m| m.id.as_str() == id.as_str()));
+    // Only when nothing is chosen. A suggestion beside a decision somebody already made is not
+    // advice, it is an argument.
+    let suggested = match (&second, manifest) {
+        (None, Some(live)) => summo_models::second_opinion(
+            &installed,
+            state.engine.hardware(),
+            live,
+            language.as_deref(),
+        )
+        .map(|s| {
+            serde_json::json!({
+                "id": s.id,
+                "name": s.name,
+                "reason": s.reason,
+                "installed": installed.iter().any(|m| m.id.as_str() == s.id),
+            })
+        }),
+        _ => None,
+    };
+
     // The two models nothing asks about until they are missing.
     //
     // Without a voice detector a recording produces no words at all; without a speaker embedder it
@@ -3054,6 +3090,13 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
     Ok(serde_json::json!({
         "language": language,
         "detector": { "installed": has(summo_models::Task::Vad), "id": "silero-vad-v5" },
+        // The second pass: what is chosen, and what would be worth choosing when nothing is.
+        "second_pass": {
+            "model": second,
+            "name": second_manifest.map(|m| m.name.clone()),
+            "installed": second_manifest.is_some(),
+            "suggested": suggested,
+        },
         "speakers": { "installed": has(summo_models::Task::SpeakerEmbed), "id": "campplus-sv" },
         // Speech recognition: Summo's own model, on this machine, always.
         "speech": {

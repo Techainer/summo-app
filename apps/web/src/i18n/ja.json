@@ -447,6 +447,7 @@
     "running_title": "この端末で動くもの",
     "role_asr": "音声認識",
     "role_vad": "音声区間検出",
+    "role_second": "再デコード",
     "role_speaker": "話者識別",
     "role_translate": "翻訳",
     "role_missing": "未インストール",

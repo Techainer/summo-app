@@ -37,6 +37,20 @@ export interface Plan {
     /** A better model *already installed*, when there is one. */
     better: Better | null;
   };
+  /**
+   * The second model, and what one would be for.
+   *
+   * `suggested` is only ever present when nothing is chosen — advice beside a decision somebody
+   * already made is an argument, not advice. It answers a question the app has never asked: a
+   * meeting with two languages in it needs a model that hears the one the live model cannot, and
+   * that is a coverage question rather than an accuracy one. See `summo_models::second_opinion`.
+   */
+  second_pass: {
+    model: string | null;
+    name: string | null;
+    installed: boolean;
+    suggested: { id: string; name: string; reason: string; installed: boolean } | null;
+  };
   /** The voice detector. Without it a recording produces no words at all. */
   detector: { installed: boolean; id: string };
   /** The voice fingerprint, which is what lets a transcript name who spoke. */

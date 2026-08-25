@@ -278,7 +278,19 @@ export function ModelsScreen() {
           question this screen could not answer: a card said "Đang dùng" because the settings named
           it, whether or not the bytes were ever downloaded, and the two models a recording cannot
           start without appeared nowhere until they were missing. */}
-      {plan && <Running plan={plan} onInstall={(id) => void pull(id)} installs={installs} />}
+      {plan && (
+        <Running
+          plan={plan}
+          onInstall={(id) => void pull(id)}
+          onSecond={(id) =>
+            void catalogue
+              .use("refine", id)
+              .then(load)
+              .catch((e) => setError(say(e)))
+          }
+          installs={installs}
+        />
+      )}
 
       {/* Search and a task filter, because the catalogue is now long enough to scroll past what you
           came for. Both narrow the same list the language banner narrows — one row of controls, not
@@ -391,10 +403,12 @@ function Running({
   plan,
   installs,
   onInstall,
+  onSecond,
 }: {
   plan: Plan;
   installs: Install[];
   onInstall: (id: string) => void;
+  onSecond: (id: string) => void;
 }) {
   const t = useT();
 
@@ -407,6 +421,20 @@ function Running({
         ready: plan.speech.installed,
         ...(plan.speech.model ? { id: plan.speech.model } : {}),
       },
+      // Only when there is one. This role is genuinely optional — most meetings are in one language
+      // and a second decode of every utterance would cost without adding — so an always-present row
+      // reading "none" would teach people to ignore a row that matters when it is not empty.
+      ...(plan.second_pass.model
+        ? [
+            {
+              key: "second",
+              label: t("models.role_second"),
+              value: plan.second_pass.name ?? plan.second_pass.model,
+              ready: plan.second_pass.installed,
+              id: plan.second_pass.model,
+            },
+          ]
+        : []),
       {
         key: "vad",
         label: t("models.role_vad"),
@@ -482,6 +510,33 @@ function Running({
           );
         })}
       </ul>
+
+      {/* The pairing nothing has ever suggested.
+          A meeting with two languages in it needs a model that hears the one the live model
+          cannot, and that is a coverage question — `Recommendation::pair` asks an accuracy one and
+          so answers "nothing worth adding" for precisely the meeting where the second model
+          matters most. Offered, never applied: the app does not swap models on somebody's behalf,
+          and this one costs a second decode of every utterance. */}
+      {plan.second_pass.suggested && (
+        <div className="border-accent/30 bg-accent-soft text-meta mt-3 rounded-lg border px-3 py-2">
+          <p className="text-fg-dim">
+            <span className="text-fg font-medium">{plan.second_pass.suggested.name}</span>{" "}
+            {plan.second_pass.suggested.reason}
+          </p>
+          <div className="mt-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!plan.second_pass.suggested.installed}
+              onClick={() => onSecond(plan.second_pass.suggested?.id as string)}
+            >
+              {plan.second_pass.suggested.installed
+                ? t("models.use_refine")
+                : t("models.role_missing")}
+            </Button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

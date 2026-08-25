@@ -447,6 +447,7 @@
     "running_title": "Running on this machine",
     "role_asr": "Speech recognition",
     "role_vad": "Voice detection",
+    "role_second": "Second pass",
     "role_speaker": "Speaker attribution",
     "role_translate": "Translation",
     "role_missing": "Missing",

@@ -26,6 +26,8 @@ pub use download::{DownloadProgress, Downloader};
 pub use hw::{Accel, CpuFeatures, HwProfile};
 pub use languages::{Language, available};
 pub use manifest::{FileEntry, Manifest, Mode, Profile, Task};
-pub use recommend::{Recommendation, Scored, covers_language, langs_cover, recommend};
+pub use recommend::{
+    Recommendation, Scored, covers_language, langs_cover, recommend, second_opinion,
+};
 pub use registry::{Registry, RegistrySource};
 pub use store::ModelStore;
