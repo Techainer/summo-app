@@ -225,7 +225,7 @@ await firstLine.waitFor({ timeout: 120000 }).catch((error) => {
     await page.waitForTimeout(20000);
     const since = engine.log().slice(mark);
     if (since.includes("claims no such language")) {
-      problems.push("a `langs: [\"*\"]` model was refused every line — the star read as a language");
+      problems.push('a `langs: ["*"]` model was refused every line — the star read as a language');
     } else {
       console.log("multilingual second model accepted the spoken language");
     }
