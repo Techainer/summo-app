@@ -97,7 +97,7 @@ export function Transcript({
       <div
         ref={parentRef}
         onScroll={onScroll}
-        className="h-full overflow-y-auto px-4 py-3.5"
+        className="h-full overflow-x-hidden overflow-y-auto px-4 py-3.5"
         data-testid="transcript"
       >
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
@@ -164,7 +164,11 @@ export function Transcript({
                 <div
                   className={cn(
                     // The rail: every row hangs off the same line, indented past the time column.
-                    "border-line relative ms-[52px] border-s ps-4",
+                    // `min-w-0` for the same reason: this sits inside flex and grid ancestors, and
+                    // both give a child `min-width: auto`, which means "never narrower than your
+                    // content". Wrapping the text is only half the fix if the box around it still
+                    // refuses to be narrow.
+                    "border-line relative ms-[52px] min-w-0 border-s ps-4",
                     overlapping && "border-accent/40 border-s-2",
                   )}
                   data-overlapping={overlapping || undefined}
@@ -199,7 +203,14 @@ export function Transcript({
                     // counted lines, because an overwrite keeps the count.
                     data-seq={segment.seq}
                     className={cn(
-                      "mt-0.5 mb-0 leading-relaxed",
+                      // `break-words`, because a transcript is not prose somebody typed. A URL read
+                      // aloud, a model that emits Chinese or Japanese with no spaces in it, a
+                      // recogniser that runs a long utterance together — any of them is one token
+                      // as far as line breaking is concerned, and a token that cannot break makes
+                      // its container as wide as itself. The panel then pushed the whole page
+                      // sideways. `shots.mjs` has checked for exactly that since it was written and
+                      // never saw it, because no suite has ever rendered a long line.
+                      "mt-0.5 mb-0 leading-relaxed break-words",
                       // Partial text is dimmed rather than hidden, so the eye can follow it
                       // without trusting it yet.
                       segment.source === "partial" ? "text-fg-dim" : "text-fg",
@@ -229,7 +240,7 @@ export function Transcript({
                       data-testid="transcript-translation"
                       lang={segment.translation.lang}
                       className={cn(
-                        "text-fg-dim mt-0.5 mb-0 leading-relaxed opacity-[0.72]",
+                        "text-fg-dim mt-0.5 mb-0 leading-relaxed break-words opacity-[0.72]",
                         italicise(segment.translation.lang) && "italic",
                       )}
                     >

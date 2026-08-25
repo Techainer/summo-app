@@ -68,8 +68,12 @@ export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
           screen exists to answer, and it was being answered by a pill in the window header. */}
       <LiveBar />
 
+      {/* `min-w-0` on both columns. A grid child is `min-width: auto` by default — "never narrower
+          than your content" — so one long transcript line made this column as wide as the line and
+          the page scrolled sideways under it. The `min-h-0` beside it is the same rule in the other
+          axis, and it was already here. */}
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
-        <section className="flex min-h-0 flex-col gap-2.5">
+        <section className="flex min-h-0 min-w-0 flex-col gap-2.5">
           <SectionTitle>{t("meeting.your_notes")}</SectionTitle>
           <div className="border-line bg-bg-raised rounded-card min-h-0 flex-1 overflow-y-auto border shadow-[var(--shadow-card)]">
             {plain ? (
@@ -94,9 +98,9 @@ export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
           </div>
         </section>
 
-        <section className="flex min-h-0 flex-col gap-2.5">
+        <section className="flex min-h-0 min-w-0 flex-col gap-2.5">
           <SectionTitle>{t("meeting.transcript")}</SectionTitle>
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 min-w-0 flex-1">
             {transcript.segments.length === 0 ? (
               <Listening />
             ) : (
