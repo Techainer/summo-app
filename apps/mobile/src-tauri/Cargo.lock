@@ -1134,6 +1134,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bzip2"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3a53fac24f34a81bc9954b5d6cfce0c21e18ec6959f44f56e8e90e4bb7c346c"
+dependencies = [
+ "libbz2-rs-sys",
+]
+
+[[package]]
 name = "bzip2-sys"
 version = "0.1.13+1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3341,6 +3350,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libbz2-rs-sys"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34b357333733e8260735ba5894eb928c02ecc69c78715f01a8019e7fa7f2db4c"
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5354,7 +5369,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "591c9432b20f41d47f622a73c2888b188c321e313d820824df7d9fa51dbada43"
 dependencies = [
  "bindgen",
- "bzip2",
+ "bzip2 0.4.4",
  "cmake",
  "dirs 5.0.1",
  "flate2",
@@ -5585,7 +5600,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "summo-agent"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "aion-agent",
  "aion-config",
@@ -5606,7 +5621,7 @@ dependencies = [
 
 [[package]]
 name = "summo-asr"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "serde",
  "sherpa-rs",
@@ -5617,7 +5632,7 @@ dependencies = [
 
 [[package]]
 name = "summo-audio"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "audiopus",
  "cpal",
@@ -5633,7 +5648,7 @@ dependencies = [
 
 [[package]]
 name = "summo-calendar"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "serde",
  "summo-core",
@@ -5643,7 +5658,7 @@ dependencies = [
 
 [[package]]
 name = "summo-core"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "directories",
  "serde",
@@ -5656,7 +5671,7 @@ dependencies = [
 
 [[package]]
 name = "summo-diar"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5667,7 +5682,7 @@ dependencies = [
 
 [[package]]
 name = "summo-engine"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -5702,7 +5717,7 @@ dependencies = [
 
 [[package]]
 name = "summo-llm"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "futures",
  "reqwest 0.12.28",
@@ -5715,7 +5730,7 @@ dependencies = [
 
 [[package]]
 name = "summo-mcp"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -5729,7 +5744,7 @@ dependencies = [
 
 [[package]]
 name = "summo-media"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "hound",
  "rubato",
@@ -5742,7 +5757,7 @@ dependencies = [
 
 [[package]]
 name = "summo-mobile"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5756,8 +5771,10 @@ dependencies = [
 
 [[package]]
 name = "summo-models"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
+ "bzip2 0.6.1",
+ "flate2",
  "futures",
  "hex",
  "num_cpus",
@@ -5768,6 +5785,7 @@ dependencies = [
  "sha2 0.10.9",
  "summo-core",
  "sysinfo",
+ "tar",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
@@ -5775,7 +5793,7 @@ dependencies = [
 
 [[package]]
 name = "summo-pipeline"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "serde",
  "summo-core",
@@ -5784,7 +5802,7 @@ dependencies = [
 
 [[package]]
 name = "summo-vad"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "ndarray",
  "ort",
@@ -5795,7 +5813,7 @@ dependencies = [
 
 [[package]]
 name = "summo-vault"
-version = "0.10.2"
+version = "0.11.0"
 dependencies = [
  "blake3",
  "serde",
