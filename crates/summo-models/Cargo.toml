@@ -8,6 +8,12 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+# Unpacking a model that ships as one file containing many — see `archive.rs`. All three are
+# already in the lockfile as transitive dependencies of the build tooling, so this adds no new
+# supply chain, only a direct edge to what is already there.
+tar.workspace = true
+bzip2.workspace = true
+flate2.workspace = true
 summo-core.workspace = true
 
 serde.workspace = true

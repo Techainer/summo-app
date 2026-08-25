@@ -289,6 +289,7 @@ mod tests {
                 mirror: vec![],
                 platform: None,
                 variant: None,
+                archive: None,
             }],
             variants: Vec::new(),
             installed_variant: None,
@@ -406,6 +407,7 @@ mod tests {
                 mirror: vec![],
                 platform: None,
                 variant: None,
+                archive: None,
             },
             FileEntry {
                 name: "int8.onnx".into(),
@@ -415,6 +417,7 @@ mod tests {
                 mirror: vec![],
                 platform: None,
                 variant: Some("int8".into()),
+                archive: None,
             },
             FileEntry {
                 name: "fp32.onnx".into(),
@@ -424,6 +427,7 @@ mod tests {
                 mirror: vec![],
                 platform: None,
                 variant: Some("fp32".into()),
+                archive: None,
             },
         ];
 

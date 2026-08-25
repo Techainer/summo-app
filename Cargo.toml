@@ -117,6 +117,11 @@ symphonia = { version = "0.5", features = ["all"] }
 
 # --- ml runtime ---
 sherpa-rs = "0.6"
+# Archives, for models that ship as a directory rather than as loose files: a piper voice is an
+# `.onnx` plus several hundred phoneme tables the runtime opens by directory path.
+tar = "0.4"
+bzip2 = "0.6"
+flate2 = "1"
 # llama.cpp in-process, for the translation model. Same shape of dependency as sherpa-rs: a C++
 # library built at compile time, behind a feature, so the plain registry client does not pay for it.
 llama-cpp-2 = "0.1.154"

@@ -9,6 +9,7 @@
 //! resolve(id) → manifest → download blobs (resumable, sha256-verified) → install → load
 //! ```
 
+pub mod archive;
 pub mod credentials;
 pub mod download;
 pub mod hw;

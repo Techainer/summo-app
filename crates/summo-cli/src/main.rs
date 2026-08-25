@@ -124,9 +124,15 @@ enum Command {
         /// Language to speak, as it was translated.
         #[arg(long)]
         lang: String,
-        /// Directory holding the voice's model files.
+        /// A registry id such as `vits-vi-vais1000`, or a directory holding a voice's files.
+        ///
+        /// An id, now that a voice can be one. This took a path and only a path, which made the
+        /// voice the single model in this product with no download, no digest check, no resume and
+        /// no card — the user was expected to find a tarball, unpack it somewhere, and remember
+        /// where. A path still works: somebody with a voice they trained is not required to publish
+        /// it to use it.
         #[arg(long)]
-        voice: std::path::PathBuf,
+        voice: String,
         #[arg(long, default_value = "dub.wav")]
         out: std::path::PathBuf,
         /// Gain for the original underneath. 0 removes it.

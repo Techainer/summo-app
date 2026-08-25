@@ -311,6 +311,7 @@ mod tests {
             mirror: vec![],
             platform: platform.map(str::to_string),
             variant: variant.map(str::to_string),
+            archive: None,
         }
     }
 

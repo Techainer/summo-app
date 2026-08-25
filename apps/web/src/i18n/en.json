@@ -422,6 +422,7 @@
     "upstream": "By {who}",
     "task_asr": "Speech recognition",
     "task_translate": "Translation",
+    "task_tts": "Speech synthesis",
     "task_vad": "Voice activity",
     "task_speaker_embed": "Speaker attribution",
     "task_diarize_seg": "Speaker segmentation",

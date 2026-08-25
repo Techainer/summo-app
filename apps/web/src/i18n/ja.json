@@ -422,6 +422,7 @@
     "upstream": "提供: {who}",
     "task_asr": "音声認識",
     "task_translate": "翻訳",
+    "task_tts": "音声合成",
     "task_vad": "音声区間検出",
     "task_speaker_embed": "話者の識別",
     "task_diarize_seg": "話者分離",

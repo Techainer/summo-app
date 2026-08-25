@@ -51,6 +51,33 @@ impl InstalledModel {
         self.files.get(name)
     }
 
+    /// A `params` key whose value points *inside* an archive, as `"<entry>/<subpath>"`.
+    ///
+    /// One case needs this and it is the reason archives exist here at all: an archive resolves to
+    /// the directory it unpacked into, and a published piper voice has a single root folder inside
+    /// that — `Vits::load` is given the folder with the `.onnx` and `espeak-ng-data/` in it, not
+    /// the wrapper around it. A manifest has to be able to name it.
+    ///
+    /// Its own method rather than a second meaning for [`Self::param_path`], which returns a
+    /// borrowed path and would have to allocate to answer this. Callers that want a file keep the
+    /// cheap one.
+    #[must_use]
+    pub fn param_dir(&self, key: &str) -> Option<PathBuf> {
+        let value = self.manifest.params.get(key)?.as_str()?;
+        let Some((entry, inside)) = value.split_once('/') else {
+            return self.files.get(value).cloned();
+        };
+        // The same rule `archive::unpack` enforces on the archive's own members, for the same
+        // reason: this value arrived in a manifest fetched over the network.
+        if inside
+            .split('/')
+            .any(|part| part == ".." || part == "." || part.is_empty())
+        {
+            return None;
+        }
+        Some(self.files.get(entry)?.join(inside))
+    }
+
     pub fn path(&self, file_name: &str) -> Option<&PathBuf> {
         self.files.get(file_name)
     }
@@ -97,6 +124,14 @@ impl ModelStore {
                     manifest.id, f.name
                 )));
             }
+            // An archive resolves to the directory it unpacked into, because that is what a
+            // runtime is given: `Vits::load` takes a directory and reads `espeak-ng-data/` out of
+            // it. Unpacking here rather than at install time means a blob that survived an upgrade
+            // is usable without re-downloading it, and `unpack` is a no-op once it has run.
+            let path = match f.archive {
+                None => path,
+                Some(kind) => crate::archive::unpack(&path, kind)?,
+            };
             files.insert(f.name.clone(), path);
         }
         Ok(InstalledModel {
@@ -503,6 +538,7 @@ mod tests {
                 mirror: Vec::new(),
                 platform: None,
                 variant: None,
+                archive: None,
             }
         }
 

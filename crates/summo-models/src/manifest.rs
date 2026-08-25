@@ -30,6 +30,14 @@ pub enum Task {
     SpeakerEmbed,
     /// Text embedding for retrieval.
     Embed,
+    /// Speech synthesis: a voice, for reading a translated meeting back aloud.
+    ///
+    /// Here rather than left out because `summo dub` has existed and worked for releases, and the
+    /// one thing it could not do was find a voice: it took `--voice /some/path` typed by hand, so
+    /// the voice was the single model in this product with no download, no digest check, no resume
+    /// and no card. A voice is also the first entry that is not a file but a directory — see
+    /// [`FileEntry::archive`].
+    Tts,
     /// Machine translation, run in-process from a GGUF.
     ///
     /// The first model here that is not speech. It is in the registry for the same reason the
@@ -122,6 +130,19 @@ pub struct FileEntry {
     /// means the file is portable and always fetched.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platform: Option<String>,
+
+    /// How to unpack this entry, when it is an archive rather than a single file.
+    ///
+    /// `None` for almost everything: a `.onnx` and a `tokens.txt` are files, and the store is
+    /// content-addressed by their digests. A **voice** is not — a piper voice is a directory with
+    /// an `.onnx`, a `tokens.txt` and several hundred phoneme tables under `espeak-ng-data/`, and
+    /// the runtime opens it by directory path. Listing those individually is not a manifest.
+    ///
+    /// The digest is still the digest of the archive's own bytes, which is what was published and
+    /// what can be checked on arrival. See [`crate::archive`], and read its note on member paths
+    /// before adding a second archive format.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archive: Option<crate::archive::Archive>,
 
     /// Which build of the model this file belongs to, e.g. `int8` or `coreml`.
     ///

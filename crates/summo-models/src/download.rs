@@ -366,6 +366,7 @@ mod tests {
             mirror: Vec::new(),
             platform: None,
             variant: None,
+            archive: None,
         }
     }
 
