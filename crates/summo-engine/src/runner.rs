@@ -614,6 +614,15 @@ pub(crate) fn load_decoder(
                 decoder: param_path(&installed, "decoder")?.display().to_string(),
                 joiner: param_path(&installed, "joiner")?.display().to_string(),
                 tokens: param_path(&installed, "tokens")?.display().to_string(),
+                // Not a file, so not through `param_path`. A NeMo export is the same four files as
+                // an icefall one and a different graph, and only the publisher knows which.
+                model_type: installed
+                    .manifest
+                    .params
+                    .get("model_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
             };
             Ok(Box::new(summo_asr::sherpa::ZipformerDecoder::load(
                 &paths, threads, id,
