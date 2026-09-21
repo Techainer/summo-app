@@ -489,8 +489,15 @@ fn parse_body(body: &str) -> Parsed {
 
 fn render_segment(segment: &Segment) -> String {
     let speaker = segment.speaker.as_ref().map_or("?", SpeakerId::as_str);
+    // `lang` only when it is known. Written last, so every file produced before this existed parses
+    // unchanged and every file produced after it is still readable by an older build — the comment
+    // is a bag of `key:value`, and an unrecognised key is skipped rather than fatal.
+    let language = match segment.language.as_deref().map(str::trim) {
+        Some(code) if !code.is_empty() => format!(" lang:{code}"),
+        _ => String::new(),
+    };
     format!(
-        "**[{}] {}** — {} <!-- seq:{} end:{:.2} -->",
+        "**[{}] {}** — {} <!-- seq:{} end:{:.2}{language} -->",
         format_timestamp(segment.t0),
         speaker,
         segment.text.trim(),
@@ -525,28 +532,39 @@ fn parse_segment(line: &str, fallback_seq: u64) -> Option<Segment> {
 
     let mut segment = Segment::new(meta.0.unwrap_or(fallback_seq), lane, text.trim(), t0, t1);
     segment.speaker = Some(speaker);
+    segment.language = meta.2;
     segment.source = summo_core::segment::SegmentSource::Final;
     Some(segment)
 }
 
-/// `seq` and `end` out of a trailing `<!-- … -->`, if it has one.
-fn segment_meta(text: &str) -> (Option<u64>, Option<f64>) {
+/// `seq`, `end` and `lang` out of a trailing `<!-- … -->`, if it has one.
+fn segment_meta(text: &str) -> (Option<u64>, Option<f64>, Option<String>) {
     let Some(start) = text.find("<!--") else {
-        return (None, None);
+        return (None, None, None);
     };
     let comment = &text[start + 4..];
     let comment = comment.split("-->").next().unwrap_or(comment);
 
     let mut seq = None;
     let mut end = None;
+    let mut language = None;
     for field in comment.split_whitespace() {
         match field.split_once(':') {
             Some(("seq", value)) => seq = value.parse().ok(),
             Some(("end", value)) => end = value.parse().ok(),
+            // Bare codes only. A hand-edited file is a file somebody typed into, and a "language"
+            // of `vi-VN-x-something` routed on as if it were a code would send a line to a
+            // translator that does not know what it is.
+            Some(("lang", value)) => {
+                let value = value.trim();
+                if !value.is_empty() && value.len() <= 16 {
+                    language = Some(value.to_ascii_lowercase());
+                }
+            }
             _ => {}
         }
     }
-    (seq, end)
+    (seq, end, language)
 }
 
 /// Seconds to `HH:MM:SS`.
@@ -863,5 +881,46 @@ mod tests {
         let doc = MeetingDoc::parse(&sample().to_markdown().unwrap()).unwrap();
         assert_eq!(doc.transcript[0].lane, Lane::Mic);
         assert_eq!(doc.transcript[1].lane, Lane::System);
+    }
+    /// The language a line was spoken in survives a write and a read.
+    ///
+    /// The recogniser has always known this and nothing wrote it down, so it was gone by the time a
+    /// line reached the file — which is what made a bilingual meeting untranslatable in both
+    /// directions: "each line into the other language" has nothing to decide on without it.
+    #[test]
+    fn the_language_of_a_line_survives_a_round_trip() {
+        let mut doc = MeetingDoc::new(
+            Frontmatter::new(summo_core::MeetingId::from("01J".to_string()), "2026-08-10"),
+            "Họp",
+        );
+        let mut vi =
+            summo_core::segment::Segment::new(1, Lane::System, "Chốt ngân sách.", 0.0, 2.0);
+        vi.language = Some("vi".into());
+        let mut en =
+            summo_core::segment::Segment::new(2, Lane::System, "Send the breakdown.", 2.0, 4.0);
+        en.language = Some("en".into());
+        let plain = summo_core::segment::Segment::new(3, Lane::System, "Ừ.", 4.0, 5.0);
+        doc.transcript = vec![vi, en, plain];
+
+        let markdown = doc.to_markdown().unwrap();
+        assert!(markdown.contains("lang:vi"), "{markdown}");
+        assert!(markdown.contains("lang:en"), "{markdown}");
+        // Absent, not empty. A `lang:` with nothing after it would parse back as a language code of
+        // zero characters and route on as one.
+        assert!(!markdown.contains("lang: "), "{markdown}");
+
+        let back = MeetingDoc::parse(&markdown).unwrap();
+        assert_eq!(back.transcript[0].language.as_deref(), Some("vi"));
+        assert_eq!(back.transcript[1].language.as_deref(), Some("en"));
+        assert_eq!(back.transcript[2].language, None);
+    }
+
+    /// A file written before this existed still reads, and reads as "nobody knows".
+    #[test]
+    fn a_transcript_with_no_language_on_it_parses_as_unknown_rather_than_failing() {
+        let markdown = "---\nid: 01J\ndate: 2026-08-10\n---\n\n# Họp\n\n## Transcript\n**[00:00:10] ?** — xin chào <!-- seq:1 end:2.00 -->\n";
+        let doc = MeetingDoc::parse(markdown).unwrap();
+        assert_eq!(doc.transcript.len(), 1);
+        assert_eq!(doc.transcript[0].language, None);
     }
 }

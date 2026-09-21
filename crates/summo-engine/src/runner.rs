@@ -105,6 +105,23 @@ impl SessionRunner {
         // asked for, rather than after the first sentence.
         let denoise_model = resolve_denoise_model(store, spec.denoise_model.as_deref())?;
 
+        // The language this model can only be hearing, if it is a specialist.
+        //
+        // Gipformer publishes `langs: ["vi"]` and reports nothing per utterance, because there is
+        // nothing to choose between — so every line it decodes reached the file with no record of
+        // what language it was in, and a bilingual meeting had no way to decide which direction to
+        // translate each line. The registry already knew; nothing asked it.
+        //
+        // Only when there is exactly one, and never for `*`: a multilingual model answers for
+        // itself, per utterance, and that answer is better than anything declared up front.
+        let sole_language = summo_core::ModelId::parse(&spec.live_model)
+            .ok()
+            .and_then(|id| store.installed(&id).ok())
+            .and_then(|m| match m.langs.as_slice() {
+                [only] if only != "*" => Some(only.clone()),
+                _ => None,
+            });
+
         let key = crate::warm::Key::new(&spec.live_model, spec.language.clone(), threads);
         // Taken, not borrowed: whoever gets it owns it, and the slot is refilled afterwards. That
         // keeps every question about a killed recording holding a borrowed decoder from existing.
@@ -179,7 +196,8 @@ impl SessionRunner {
                     } else {
                         Recognise::new(lane, decoder, cfg)
                     }
-                    .with_denoiser(denoiser),
+                    .with_denoiser(denoiser)
+                    .hearing(sole_language.clone()),
                 );
 
             lanes.insert(lane, LaneRunner { chain, pending });

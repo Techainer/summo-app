@@ -91,6 +91,18 @@ impl<D: Decoder> HybridSession<D> {
         self
     }
 
+    /// The language the live decoder hears, when it hears exactly one.
+    ///
+    /// On the live session only. The refine model is the *other* one — the whole point of a hybrid
+    /// is that it hears what the live model cannot — and stamping its output with the live model's
+    /// language would put `lang:vi` on the English line the second pass just rescued, which is the
+    /// one line a bilingual meeting most needs labelled correctly.
+    #[must_use]
+    pub fn hearing(mut self, language: Option<String>) -> Self {
+        self.live = self.live.hearing(language);
+        self
+    }
+
     /// Where the meeting has got to, and how to take one over. See [`PseudoSession::position`].
     #[must_use]
     pub fn position(&self) -> (u64, usize) {
@@ -174,6 +186,11 @@ impl<D: Decoder> HybridSession<D> {
         segment.source = SegmentSource::Revised;
         segment.conf = transcript.confidence;
         segment.words = transcript.words;
+        // What the *second* model heard, falling back to what the first one reported for this
+        // utterance. This is the line a bilingual meeting most needs labelled: the live specialist
+        // could not hear it, the second pass could, and the direction to translate it in follows
+        // from which language it turned out to be.
+        segment.language = transcript.language.clone().or_else(|| job.language.clone());
         Ok(Some(Event::Revise(segment)))
     }
 

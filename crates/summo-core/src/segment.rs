@@ -121,6 +121,19 @@ pub struct Segment {
     pub conf: Option<f32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub words: Vec<Word>,
+    /// Which language was spoken, as a bare ISO code, when it is known.
+    ///
+    /// The recogniser has always answered this — `summo_asr::Transcript::language`, which the
+    /// refinement router already reads — and nothing wrote it down, so it was gone by the time the
+    /// line reached the file. That is what made a bilingual meeting untranslatable in both
+    /// directions: with no record of which language a line is in, "translate each line into the
+    /// other one" has nothing to decide on.
+    ///
+    /// `None` means nobody knows, which is not the same as "no language": a single-language model
+    /// does not report one, and a line it decoded is filled in from what that model declares it
+    /// hears. See `summo_engine::stages`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 impl Segment {
@@ -133,6 +146,7 @@ impl Segment {
             t0,
             t1,
             source: SegmentSource::Partial,
+            language: None,
             speaker: lane.default_speaker(),
             conf: None,
             words: Vec::new(),
