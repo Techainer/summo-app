@@ -362,3 +362,45 @@ async fn an_unknown_agent_is_refused_without_a_request() {
     );
     assert!(seen.lock().unwrap().is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// A run that translated nothing is a failure, not a quiet success.
+// ---------------------------------------------------------------------------
+
+/// The shape of the silent failure, asserted on the type that decides it.
+///
+/// A reply the alignment rejects is a `None` per line rather than an error — right per line, wrong
+/// for the run. Every line rejected is not a partial result; it is a translator that is not
+/// working, and it reached the screen as HTTP 200 with `translated: 0` and nothing to say.
+#[test]
+fn a_translation_that_produced_nothing_reports_failure() {
+    use summo_engine::translate::Outcome;
+
+    let nothing_usable = Outcome {
+        lang: "en".into(),
+        translated: 0,
+        missing: 6,
+        requests: 6,
+    };
+    assert!(nothing_usable.failed());
+
+    // Partial is not failure: five of six lines is a result a user can read.
+    let partial = Outcome {
+        lang: "en".into(),
+        translated: 5,
+        missing: 1,
+        requests: 6,
+    };
+    assert!(!partial.failed());
+
+    // And a meeting already translated does no work and asks nothing. Counting lines rather than
+    // requests would make this the loudest failure in the product.
+    let already_done = Outcome {
+        lang: "en".into(),
+        translated: 0,
+        missing: 0,
+        requests: 0,
+    };
+    assert!(!already_done.failed());
+    assert!(already_done.complete());
+}

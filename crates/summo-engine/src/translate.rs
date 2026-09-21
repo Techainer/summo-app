@@ -393,6 +393,21 @@ impl Outcome {
     pub fn complete(&self) -> bool {
         self.missing == 0
     }
+
+    /// Whether this run asked a model and got nothing back it could use.
+    ///
+    /// The shape of a silent failure, and the one reported from real use as "không dịch được cũng
+    /// không báo gì cả". A reply the alignment rejects — the wrong language, the prompt echoed
+    /// back, an empty string — is a `None` per line rather than an error, which is right per line
+    /// and wrong for the run: every line rejected is not a partial result, it is a translator that
+    /// is not working, and it came back as HTTP 200 with `translated: 0`.
+    ///
+    /// Requests, not lines: a meeting already fully translated does no work and asks nothing, and
+    /// that is success. Only a run that spent requests and has nothing to show is a failure.
+    #[must_use]
+    pub fn failed(&self) -> bool {
+        self.requests > 0 && self.translated == 0
+    }
 }
 
 /// Translate every utterance in a meeting into `lang`, writing a translation file beside it.

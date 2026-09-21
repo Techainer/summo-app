@@ -1377,13 +1377,35 @@ async fn remove_model(
         let model_id = summo_core::ModelId::parse(&id).map_err(Error::Config)?;
         let paths = state.engine.paths();
 
-        if let Some(role) = in_use(
-            &summo_core::settings::Settings::load(&paths.settings())?,
-            &id,
-        ) {
-            return Err(Error::Config(format!(
-                "`{id}` is in use as the {role} model; choose another one first"
-            )));
+        // In use, and usable. The guard exists so that deleting a model cannot become a recording
+        // that fails much later with nothing connecting the two — which is a reason to protect a
+        // model that *works*.
+        //
+        // A model this build has no runtime for is the opposite case, and the guard trapped it: the
+        // desktop app shipped without the translation runtime, so SMALL100 installed, the settings
+        // pointed at it, translation produced nothing, and the card offered a Remove button that
+        // answered "in use as the translation model; choose another one first" — with no other
+        // translation model to choose, 611 MB on disk, and no way out of the app. Reported from
+        // real use as, fairly, "rất ngu".
+        //
+        // Nothing is lost by allowing it: the role already cannot be served, so removal cannot
+        // break anything that was working.
+        let settings = summo_core::settings::Settings::load(&paths.settings())?;
+        if let Some(role) = in_use(&settings, &id) {
+            let runnable = state
+                .engine
+                .store()
+                .installed(&model_id)
+                .is_ok_and(|m| crate::runtimes::runnable(&m.runtime));
+            if runnable {
+                return Err(Error::Config(format!(
+                    "`{id}` is in use as the {role} model; choose another one first"
+                )));
+            }
+            // Un-point the role on the way out, or the settings are left naming a model that is
+            // no longer on disk — which is the failure this guard was written to prevent, arrived
+            // at from the other side.
+            release_role(&paths.settings(), &id)?;
         }
 
         // Before the blobs go: a warm decoder holding a removed model is a crash waiting for the
@@ -1394,6 +1416,35 @@ async fn remove_model(
         let freed = state.engine.store().remove(&model_id)?;
         Ok(serde_json::json!({ "removed": id, "freed_bytes": freed }))
     })())
+}
+
+/// Stop every role naming `id`, and save.
+///
+/// The companion to [`in_use`]. Removing a model the settings point at is allowed only when this
+/// build cannot run it, and leaving the id behind would trade one broken state for another: a role
+/// naming a model that is not on disk is exactly the failure the removal guard exists to prevent.
+fn release_role(path: &std::path::Path, id: &str) -> summo_core::Result<()> {
+    let mut settings = summo_core::settings::Settings::load(path)?;
+    let clear = |value: &mut Option<String>| {
+        if value.as_deref() == Some(id) {
+            *value = None;
+        }
+    };
+    clear(&mut settings.models.live);
+    clear(&mut settings.models.refine);
+    clear(&mut settings.models.vad);
+    clear(&mut settings.models.speaker);
+    clear(&mut settings.models.denoise);
+    clear(&mut settings.models.tts);
+    if settings
+        .llm
+        .translator
+        .as_ref()
+        .is_some_and(|mt| mt.is_local() && mt.model.as_deref() == Some(id))
+    {
+        settings.llm.translator = None;
+    }
+    settings.save(path)
 }
 
 /// Which setting names this model, if any.
@@ -2657,6 +2708,20 @@ async fn translate_meeting(
         body.force,
     )
     .await
+    .and_then(|outcome| {
+        // Asked, and got nothing usable. Returning this as a success with `translated: 0` is how
+        // translation came to fail in silence: the screen had a 200 to render and no reason to say
+        // anything, so a translator that answers with the wrong language, or echoes the prompt, or
+        // is not there at all, looked exactly like a meeting that needed no work.
+        if outcome.failed() {
+            return Err(Error::Other(format!(
+                "nothing could be translated into {}: the model answered {} time(s) and none of \
+                 it was usable. Check the translation model on the models screen.",
+                outcome.lang, outcome.requests
+            )));
+        }
+        Ok(outcome)
+    })
     .map(|outcome| {
         serde_json::json!({
             "lang": outcome.lang,
@@ -5747,6 +5812,44 @@ mod resolve_tests {
             // And a model nothing names is free to go, or the check would refuse everything.
             assert_eq!(in_use(&settings, "somethingelse"), None);
         }
+    }
+
+    /// A model this build cannot run does not get to hold a role hostage.
+    ///
+    /// The trap, from real use: the desktop app shipped without the translation runtime, so
+    /// SMALL100 installed, the settings pointed at it, translation produced nothing, and the card
+    /// offered a Remove button that answered "in use as the translation model; choose another one
+    /// first" — with no other translation model to choose and 611 MB on disk. Installed, useless,
+    /// in use, and unremovable from inside the app.
+    ///
+    /// Tested on `release_role` rather than through the route, because that is the half that has to
+    /// be right: allowing the removal and leaving the settings naming a model that is gone would
+    /// trade this trap for the missing-file failure the guard exists to prevent.
+    #[test]
+    fn releasing_a_role_unpoints_every_setting_that_named_the_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("settings.json");
+
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("small100".into());
+        settings.models.denoise = Some("small100".into());
+        settings.models.tts = Some("keep-me".into());
+        settings.llm.translator = Some(summo_core::settings::Translator {
+            provider: summo_core::settings::LOCAL.to_string(),
+            model: Some("small100".into()),
+        });
+        settings.save(&path).unwrap();
+
+        release_role(&path, "small100").unwrap();
+
+        let after = summo_core::Settings::load(&path).unwrap();
+        assert_eq!(after.models.live, None);
+        assert_eq!(after.models.denoise, None);
+        assert_eq!(after.llm.translator, None);
+        // And only the model named. A release that cleared the whole section would take out the
+        // voice detector along with the translator nobody can run.
+        assert_eq!(after.models.tts.as_deref(), Some("keep-me"));
+        assert_eq!(in_use(&after, "small100"), None);
     }
 
     /// And unset stays unset.

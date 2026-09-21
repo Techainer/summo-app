@@ -50,4 +50,8 @@ summo-core = { path = "../../../crates/summo-core" }
 # Feature flags are additive across these sections, so the base dependency above stays as it is and
 # this adds to it on the targets that can carry it.
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-summo-engine = { path = "../../../crates/summo-engine", features = ["models"] }
+# `mt-onnx` alongside `models`, for the same reason the desktop sidecar needs it: without it this
+# app can install a translation model, point the settings at it, and then translate nothing. The
+# runtime is pure Rust over the same ONNX Runtime recognition already links here, so it costs a
+# feature flag rather than a toolchain.
+summo-engine = { path = "../../../crates/summo-engine", features = ["models", "mt-onnx"] }
