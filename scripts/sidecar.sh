@@ -35,7 +35,14 @@ fi
 # bundle rather than from the daemon, so this is not what puts a screen in front of the user — it is
 # what lets `summo serve` from the same binary open one in a browser, and what the browser suites
 # run against.
-FEATURES="bundled,mcp,models,dub"
+#
+# `mt-onnx` is what lets the app translate at all. `scripts/bundle.sh` carries a note explaining
+# exactly why it is there — "without it the packaged app answers 'this build cannot run a
+# translation model in-process' … an offline-first product that could not translate offline" — and
+# that fix was applied to the CLI bundle and never to this script, which is the daemon inside the
+# desktop app. So every desktop release since has shipped a translator that cannot run: the model
+# installs, the card says it is in use, and translation produces nothing.
+FEATURES="bundled,mcp,models,dub,mt-onnx"
 
 # Opus is linked *into* the daemon, not borrowed from the machine that built it — the same line
 # `scripts/bundle.sh` has carried for a year, and the same reason. `audiopus_sys` links the system

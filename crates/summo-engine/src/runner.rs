@@ -105,6 +105,23 @@ impl SessionRunner {
         // asked for, rather than after the first sentence.
         let denoise_model = resolve_denoise_model(store, spec.denoise_model.as_deref())?;
 
+        // The language this model can only be hearing, if it is a specialist.
+        //
+        // Gipformer publishes `langs: ["vi"]` and reports nothing per utterance, because there is
+        // nothing to choose between — so every line it decodes reached the file with no record of
+        // what language it was in, and a bilingual meeting had no way to decide which direction to
+        // translate each line. The registry already knew; nothing asked it.
+        //
+        // Only when there is exactly one, and never for `*`: a multilingual model answers for
+        // itself, per utterance, and that answer is better than anything declared up front.
+        let sole_language = summo_core::ModelId::parse(&spec.live_model)
+            .ok()
+            .and_then(|id| store.installed(&id).ok())
+            .and_then(|m| match m.langs.as_slice() {
+                [only] if only != "*" => Some(only.clone()),
+                _ => None,
+            });
+
         let key = crate::warm::Key::new(&spec.live_model, spec.language.clone(), threads);
         // Taken, not borrowed: whoever gets it owns it, and the slot is refilled afterwards. That
         // keeps every question about a killed recording holding a borrowed decoder from existing.
@@ -179,7 +196,8 @@ impl SessionRunner {
                     } else {
                         Recognise::new(lane, decoder, cfg)
                     }
-                    .with_denoiser(denoiser),
+                    .with_denoiser(denoiser)
+                    .hearing(sole_language.clone()),
                 );
 
             lanes.insert(lane, LaneRunner { chain, pending });
@@ -512,6 +530,15 @@ fn param_path(
     installed
         .param_path(key)
         .cloned()
+        // Then inside an archive. sherpa-onnx publishes almost its entire model zoo as `tar.bz2`
+        // — encoder, decoder, joiner and tokens in one directory — and `param_path` resolves a
+        // flat file name only, so every one of those models was undownloadable here no matter what
+        // its manifest said. The store has been able to unpack an archive since voices needed it;
+        // this is the half that could then find anything inside one.
+        //
+        // Second, not first: a model that ships loose files is the common case, and `param_dir`
+        // has to split a path to do its work.
+        .or_else(|| installed.param_dir(key))
         .ok_or_else(|| Error::InvalidManifest {
             id: installed.manifest.id.to_string(),
             reason: format!("no `params.{key}` naming an installed file"),
@@ -660,6 +687,64 @@ mod tests {
 
         let err = param_path(&installed, "encoder").unwrap_err().to_string();
         assert!(err.contains("params.encoder"), "got: {err}");
+    }
+
+    /// A speech model whose files live inside an archive resolves.
+    ///
+    /// sherpa-onnx publishes nearly its whole model zoo as one `tar.bz2` holding encoder, decoder,
+    /// joiner and tokens — including the light English models worth recommending beside a
+    /// Vietnamese specialist. `param_path` looked up a flat file name and nothing else, so every
+    /// one of those was uninstallable here whatever its manifest said, while the store has been
+    /// able to unpack an archive since voices needed it.
+    #[test]
+    fn a_speech_model_packed_in_an_archive_resolves_its_files() {
+        use summo_models::store::InstalledModel;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let unpacked = tmp.path().join("blob.d");
+        std::fs::create_dir_all(unpacked.join("parakeet")).unwrap();
+        std::fs::write(unpacked.join("parakeet/encoder.int8.onnx"), b"x").unwrap();
+
+        let mut manifest = summo_models::Manifest {
+            schema: 1,
+            id: ModelId::parse("packed").unwrap(),
+            name: "Packed".into(),
+            task: summo_models::Task::Asr,
+            mode: summo_models::Mode::Batch,
+            runtime: "sherpa-onnx/transducer-offline".into(),
+            langs: vec!["en".into()],
+            domains: vec![],
+            license: "CC-BY-4.0".into(),
+            attribution: None,
+            redistributable: true,
+            gated: false,
+            installed_variant: None,
+            size_bytes: 0,
+            profile: summo_models::Profile::default(),
+            files: vec![],
+            variants: Vec::new(),
+            params: Default::default(),
+            description: None,
+        };
+        manifest.params.insert(
+            "encoder".into(),
+            serde_json::json!("model.tar.bz2/parakeet/encoder.int8.onnx"),
+        );
+
+        let installed = InstalledModel {
+            manifest,
+            files: std::iter::once(("model.tar.bz2".to_string(), unpacked)).collect(),
+        };
+
+        let resolved = param_path(&installed, "encoder").expect("a path inside the archive");
+        assert!(
+            resolved.ends_with("parakeet/encoder.int8.onnx"),
+            "{resolved:?}"
+        );
+        assert!(
+            resolved.is_file(),
+            "resolved to something that is not there"
+        );
     }
 
     #[test]

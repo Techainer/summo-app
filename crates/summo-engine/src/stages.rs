@@ -146,6 +146,25 @@ impl Recognise {
         self
     }
 
+    /// Tell the session which language its decoder hears, when it hears exactly one.
+    ///
+    /// A builder for the same reason `with_denoiser` is: it is `None` for every multilingual model,
+    /// and a model that reports its own language per utterance overrides this anyway.
+    #[must_use]
+    pub fn hearing(mut self, language: Option<String>) -> Self {
+        if language.is_none() {
+            return self;
+        }
+        self.engine = match self.engine {
+            Engine::Plain(session) => Engine::Plain(session.hearing(language)),
+            Engine::Hybrid { session, jobs } => Engine::Hybrid {
+                session: session.hearing(language),
+                jobs,
+            },
+        };
+        self
+    }
+
     /// The same lane, keeping each finished utterance for a second, slower model.
     ///
     /// The jobs it fills are drained by the session runner and executed off the audio thread — a

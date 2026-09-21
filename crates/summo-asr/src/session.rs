@@ -110,6 +110,17 @@ pub struct PseudoSession<D: Decoder> {
     /// `stages.rs` and `HybridSession` to encode a `bool` in the type system would be a large
     /// change to say a small thing.
     denoiser: Option<Box<dyn Denoiser>>,
+    /// The language this decoder hears, when it hears exactly one.
+    ///
+    /// A specialist reports no language per utterance — there is only one, so there is nothing to
+    /// report — while a multilingual runtime answers each time. Both have to reach the segment,
+    /// because "translate each line into the other language" cannot decide anything without knowing
+    /// which language a line is in, and the ordinary bilingual setup is exactly a specialist live
+    /// with a broad model behind it.
+    ///
+    /// Set from the manifest's `langs` when it names one, so this is a fact the registry already
+    /// carries rather than a guess about the audio.
+    language: Option<String>,
 }
 
 impl<D: Decoder> PseudoSession<D> {
@@ -126,11 +137,19 @@ impl<D: Decoder> PseudoSession<D> {
             last_final_pcm: None,
             last_final_language: None,
             denoiser: None,
+            language: None,
         }
     }
 
     /// Clean each finished utterance with this model before decoding it.
     #[must_use]
+    pub fn hearing(mut self, language: Option<String>) -> Self {
+        self.language = language
+            .map(|l| l.trim().to_ascii_lowercase())
+            .filter(|l| !l.is_empty());
+        self
+    }
+
     pub fn with_denoiser(mut self, denoiser: Option<Box<dyn Denoiser>>) -> Self {
         self.denoiser = denoiser;
         self
@@ -241,6 +260,10 @@ impl<D: Decoder> PseudoSession<D> {
         let mut segment = Segment::new(seq, self.cfg.lane, transcript.text, t0, t1);
         segment.source = SegmentSource::Partial;
         segment.conf = transcript.confidence;
+        segment.language = transcript
+            .language
+            .clone()
+            .or_else(|| self.language.clone());
         Ok(vec![Event::Partial(segment)])
     }
 
@@ -302,6 +325,13 @@ impl<D: Decoder> PseudoSession<D> {
         segment.source = SegmentSource::Final;
         segment.conf = transcript.confidence;
         segment.words = transcript.words;
+        // What the model said it heard, else what it can only have heard. A multilingual runtime
+        // answers per utterance; a specialist answers nothing and is the one case where the
+        // manifest already knows.
+        segment.language = transcript
+            .language
+            .clone()
+            .or_else(|| self.language.clone());
         Ok(vec![Event::Final(segment)])
     }
 

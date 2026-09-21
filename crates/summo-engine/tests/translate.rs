@@ -284,3 +284,121 @@ fn local_is_not_treated_as_an_endpoint() {
 fn the_default_translator_runs_in_this_process() {
     assert!(TranslatorSettings::default().is_local());
 }
+
+// ---------------------------------------------------------------------------
+// Both directions, which is the shape a meeting actually has.
+// ---------------------------------------------------------------------------
+
+/// A line already in the target language is not translated into it.
+///
+/// Translation was one-directional — everything into one chosen language — which is the wrong shape
+/// for the meeting this product is for. A Vietnamese standup with an English-speaking customer in
+/// it needs each line rendered into the *other* language, not the Vietnamese half restated in
+/// Vietnamese, and the English half left as the only thing anybody can read twice.
+///
+/// Asserted on the requests, because that is where the waste and the wrongness both are: a line
+/// sent to a translator at all is a line the model will answer for, and the answer lands in the
+/// file.
+#[tokio::test]
+async fn a_line_already_in_the_target_language_is_not_sent_to_the_translator() {
+    let (addr, seen) = stub::stub("Settle the API spec.").await;
+    let dir = tempfile::tempdir().unwrap();
+    let paths = summo_core::paths::Paths::at(dir.path());
+
+    let mut doc = doc_with(&[
+        "Chốt spec API.",
+        "Can you send the breakdown?",
+        "Xong thứ Sáu.",
+    ]);
+    doc.transcript[0].language = Some("vi".into());
+    doc.transcript[1].language = Some("en".into());
+    doc.transcript[2].language = Some("vi".into());
+
+    let translator = Translator::mt(provider(addr), Some("vi".into())).unwrap();
+    let outcome = translate(
+        &paths,
+        &translator,
+        &MeetingId::new(),
+        &doc,
+        "en",
+        &Glossary::default(),
+        false,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        outcome.translated, 2,
+        "the two Vietnamese lines are the ones that need English"
+    );
+    let seen = seen.lock().unwrap();
+    assert_eq!(
+        seen.len(),
+        2,
+        "the English line was sent to be made English"
+    );
+    assert!(
+        !seen.iter().any(|body| body.contains("breakdown")),
+        "the English line was translated into English"
+    );
+}
+
+/// Region is a spelling of a language, not a different one.
+#[tokio::test]
+async fn a_regional_tag_counts_as_its_language() {
+    let (addr, seen) = stub::stub("Settle it.").await;
+    let dir = tempfile::tempdir().unwrap();
+    let paths = summo_core::paths::Paths::at(dir.path());
+
+    let mut doc = doc_with(&["Can you send the breakdown?"]);
+    doc.transcript[0].language = Some("en-US".into());
+
+    let translator = Translator::mt(provider(addr), None).unwrap();
+    translate(
+        &paths,
+        &translator,
+        &MeetingId::new(),
+        &doc,
+        "en",
+        &Glossary::default(),
+        false,
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        seen.lock().unwrap().is_empty(),
+        "`en-US` was translated into `en`"
+    );
+}
+
+/// A line nobody labelled is translated, rather than silently skipped.
+///
+/// `None` means nobody recorded the language — every meeting written before segments carried one,
+/// and any model that reports nothing. Skipping those would turn translation off for the whole back
+/// catalogue. A redundant translation costs a request; a skipped one is a missing subtitle.
+#[tokio::test]
+async fn a_line_with_no_recorded_language_is_still_translated() {
+    let (addr, seen) = stub::stub("Settle the API spec.").await;
+    let dir = tempfile::tempdir().unwrap();
+    let paths = summo_core::paths::Paths::at(dir.path());
+
+    // `doc_with` leaves `language` as `None`, which is every meeting recorded until now.
+    let doc = doc_with(&["Chốt spec API.", "Xong thứ Sáu."]);
+
+    let translator = Translator::mt(provider(addr), Some("vi".into())).unwrap();
+    let outcome = translate(
+        &paths,
+        &translator,
+        &MeetingId::new(),
+        &doc,
+        "en",
+        &Glossary::default(),
+        false,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(outcome.translated, 2);
+    assert_eq!(seen.lock().unwrap().len(), 2);
+}

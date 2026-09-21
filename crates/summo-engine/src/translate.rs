@@ -393,6 +393,42 @@ impl Outcome {
     pub fn complete(&self) -> bool {
         self.missing == 0
     }
+
+    /// Whether this run asked a model and got nothing back it could use.
+    ///
+    /// The shape of a silent failure, and the one reported from real use as "không dịch được cũng
+    /// không báo gì cả". A reply the alignment rejects — the wrong language, the prompt echoed
+    /// back, an empty string — is a `None` per line rather than an error, which is right per line
+    /// and wrong for the run: every line rejected is not a partial result, it is a translator that
+    /// is not working, and it came back as HTTP 200 with `translated: 0`.
+    ///
+    /// Requests, not lines: a meeting already fully translated does no work and asks nothing, and
+    /// that is success. Only a run that spent requests and has nothing to show is a failure.
+    #[must_use]
+    pub fn failed(&self) -> bool {
+        self.requests > 0 && self.translated == 0
+    }
+}
+
+/// Whether a line is already in the language it would be translated into.
+///
+/// Compared on the base tag, so a line the recogniser reported as `en-US` counts as English against
+/// a target of `en`. Region is a spelling of a language, not a different one — the same rule
+/// `summo_engine::refine` applies when deciding whether a second model claims what was just heard.
+fn same_language(spoken: Option<&str>, target: &str) -> bool {
+    let base = |code: &str| {
+        code.trim()
+            .split(['-', '_'])
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase()
+    };
+    match spoken {
+        Some(spoken) if !spoken.trim().is_empty() => {
+            !base(spoken).is_empty() && base(spoken) == base(target)
+        }
+        _ => false,
+    }
 }
 
 /// Translate every utterance in a meeting into `lang`, writing a translation file beside it.
@@ -425,11 +461,30 @@ pub async fn translate(
     out.model = Some(translator.model().to_string());
 
     // Only the utterances that still need doing, in transcript order.
+    //
+    // A line already *in* the target language is not one of them, and that single rule is what
+    // makes a meeting translate both ways. Translation was one-directional — everything into one
+    // chosen language — which is the wrong shape for the meeting this product is for: a Vietnamese
+    // standup with an English-speaking customer in it needs each line rendered into the *other*
+    // language, not the Vietnamese half restated in Vietnamese.
+    //
+    // Nothing else has to change for that. The vault already keeps one translation file per
+    // language and `Translation::get` falls back to the original text for any line it has no entry
+    // for — so asking for `en` and `vi` on the same meeting now fills the English file with the
+    // Vietnamese lines, the Vietnamese file with the English ones, and leaves each line's own
+    // language showing its own words.
+    //
+    // `language: None` is translated, deliberately. It means nobody recorded what language the line
+    // was in — every meeting written before segments carried one, and any model that reports
+    // nothing — and skipping those would turn translation off for the entire back catalogue. A
+    // redundant translation is a wasted request; a skipped one is a missing subtitle.
+    let target = summo_vault::translation::sanitize_lang(lang);
     let todo: Vec<_> = doc
         .transcript
         .iter()
         .filter(|s| !s.text.trim().is_empty())
         .filter(|s| force || out.get(s.seq).is_none())
+        .filter(|s| !same_language(s.language.as_deref(), &target))
         .collect();
 
     let mut translated = 0usize;
