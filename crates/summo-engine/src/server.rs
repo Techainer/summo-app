@@ -1392,12 +1392,17 @@ async fn remove_model(
         // break anything that was working.
         let settings = summo_core::settings::Settings::load(&paths.settings())?;
         if let Some(role) = in_use(&settings, &id) {
-            let runnable = state
+            // Installed *and* unrunnable. Both halves matter, and the first version of this had
+            // only the second: a model that is not installed at all also fails "can this build run
+            // it", so a role pointing at something never downloaded stopped being refused and
+            // became `model not found` from the store instead — a worse message for the same
+            // situation, and one the catalogue suite caught.
+            let stuck = state
                 .engine
                 .store()
                 .installed(&model_id)
-                .is_ok_and(|m| crate::runtimes::runnable(&m.runtime));
-            if runnable {
+                .is_ok_and(|m| !crate::runtimes::runnable(&m.runtime));
+            if !stuck {
                 return Err(Error::Config(format!(
                     "`{id}` is in use as the {role} model; choose another one first"
                 )));
