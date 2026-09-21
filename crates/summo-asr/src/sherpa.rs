@@ -24,6 +24,18 @@ pub struct TransducerPaths {
     pub decoder: String,
     pub joiner: String,
     pub tokens: String,
+    /// Which flavour of transducer, in sherpa-onnx's own vocabulary.
+    ///
+    /// Empty means its default, `transducer`, which is an icefall Zipformer. NVIDIA's NeMo exports
+    /// are the same four files and a different graph: sherpa reads `vocab_size` out of the decoder
+    /// metadata for one and not the other, so loading a Parakeet as a plain transducer stops with
+    /// `'vocab_size' does not exist in the metadata` — a message about an ONNX field, for a model
+    /// whose only problem is that nobody said what kind it was.
+    ///
+    /// Declared by the manifest rather than sniffed, for the reason the rest of `params` is: the
+    /// registry knows what it published, and guessing from a file name is how a model that renames
+    /// its export stops working.
+    pub model_type: String,
 }
 
 impl TransducerPaths {
@@ -66,6 +78,9 @@ impl TransducerPaths {
             decoder: decoder.ok_or_else(|| missing("decoder"))?,
             joiner: joiner.ok_or_else(|| missing("joiner"))?,
             tokens: tokens.ok_or_else(|| missing("tokens.txt"))?,
+            // A directory a user pointed at by hand carries no manifest to declare a flavour, so
+            // this is sherpa's default. `summo transcribe --model-dir` is the only caller.
+            model_type: String::new(),
         })
     }
 }
@@ -102,6 +117,12 @@ impl ZipformerDecoder {
             sample_rate: i32::try_from(SAMPLE_RATE).unwrap_or(16_000),
             feature_dim: 80,
             decoding_method: "greedy_search".into(),
+            // Only when the manifest named one; sherpa's own default is the icefall flavour.
+            model_type: if paths.model_type.trim().is_empty() {
+                TransducerConfig::default().model_type
+            } else {
+                paths.model_type.trim().to_string()
+            },
             ..TransducerConfig::default()
         };
 
@@ -163,6 +184,7 @@ mod tests {
             decoder: "/nonexistent/decoder.onnx".into(),
             joiner: "/nonexistent/joiner.onnx".into(),
             tokens: "/nonexistent/tokens.txt".into(),
+            model_type: String::new(),
         };
         let Err(err) = ZipformerDecoder::load(&paths, 1, "test") else {
             panic!("loading nonexistent files should fail")

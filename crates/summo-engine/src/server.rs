@@ -2276,18 +2276,48 @@ fn spawn_import(_state: &AppState, _body: ImportBody) -> summo_core::Result<crat
 /// opened settings — and fails with advice rather than a silent no-op when nothing is installed.
 #[cfg(feature = "models")]
 fn default_import_model(state: &AppState) -> summo_core::Result<String> {
-    state
-        .engine
-        .store()
-        .list()
-        .into_iter()
-        .find(|m| m.task == summo_models::Task::Asr)
-        .map(|m| m.id.to_string())
-        .ok_or_else(|| {
-            summo_core::Error::Other(
-                "chưa cài mô hình nhận dạng nào; chạy `summo setup` trước".into(),
-            )
-        })
+    let settings = summo_core::Settings::load(&state.engine.paths().settings()).unwrap_or_default();
+    choose_import_model(&settings, &state.engine.store().list())
+}
+
+/// The model an import should decode with, given what is chosen and what is installed.
+///
+/// Separated from the server for the same reason `choose_from` is: the rule is five lines and the
+/// part worth pinning down, and a test that has to stand up an `AppState` to check which of two
+/// models wins is a test nobody writes.
+///
+/// It took the first installed speech model, alphabetically, and the choice on the models screen
+/// reached it not at all. Invisible with one model installed, and wrong the moment there are two —
+/// with a Vietnamese specialist and an English model side by side, which is the pairing a bilingual
+/// meeting wants, every English recording imported was decoded by the Vietnamese one. That does not
+/// fail. It produces confident nonsense, which is how it went unnoticed.
+#[cfg(feature = "models")]
+fn choose_import_model(
+    settings: &summo_core::Settings,
+    installed: &[summo_models::Manifest],
+) -> summo_core::Result<String> {
+    let speech = || {
+        installed
+            .iter()
+            .filter(|m| m.task == summo_models::Task::Asr)
+    };
+
+    // A pin naming something no longer installed falls back rather than failing: a choice made
+    // about a model the user removed months ago should not turn importing into an error.
+    if let Some(chosen) = settings
+        .models
+        .live
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        && speech().any(|m| m.id.as_str() == chosen)
+    {
+        return Ok(chosen.to_string());
+    }
+
+    speech().next().map(|m| m.id.to_string()).ok_or_else(|| {
+        summo_core::Error::Other("chưa cài mô hình nhận dạng nào; chạy `summo setup` trước".into())
+    })
 }
 
 /// Every import this daemon has run, newest first.
@@ -5855,6 +5885,65 @@ mod resolve_tests {
         // voice detector along with the translator nobody can run.
         assert_eq!(after.models.tts.as_deref(), Some("keep-me"));
         assert_eq!(in_use(&after, "small100"), None);
+    }
+
+    /// Importing uses the model the user chose, not the first one the store lists.
+    ///
+    /// Alphabetical order decided this, and the models screen reached it not at all — invisible
+    /// with one model installed, wrong the moment there are two. With a Vietnamese specialist and
+    /// an English model side by side, which is the pairing a bilingual meeting wants, every English
+    /// recording imported was decoded by the Vietnamese one. That does not fail; it produces
+    /// confident nonsense, which is how it went unnoticed.
+    #[test]
+    fn importing_honours_the_chosen_speech_model() {
+        fn model(id: &str, task: summo_models::Task) -> summo_models::Manifest {
+            serde_json::from_value(serde_json::json!({
+                "schema": 1, "id": id, "name": id, "task": task, "mode": "live",
+                "runtime": "test", "langs": ["vi"], "license": "MIT", "size_bytes": 1,
+                "files": [], "params": {},
+            }))
+            .unwrap()
+        }
+
+        // Nothing installed: the error names the way out rather than a model.
+        let err = choose_import_model(&summo_core::Settings::default(), &[])
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("summo setup"), "{err}");
+
+        let installed = [
+            model("aaa-first", summo_models::Task::Asr),
+            model("zzz-chosen", summo_models::Task::Asr),
+        ];
+
+        // Nothing chosen falls back to whatever is listed first, which is the old behaviour.
+        let none = summo_core::Settings::default();
+        assert_eq!(choose_import_model(&none, &installed).unwrap(), "aaa-first");
+
+        let mut chosen = summo_core::Settings::default();
+        chosen.models.live = Some("zzz-chosen".into());
+        assert_eq!(
+            choose_import_model(&chosen, &installed).unwrap(),
+            "zzz-chosen"
+        );
+
+        // A pin left over from a model that was removed falls back rather than refusing.
+        let mut stale = summo_core::Settings::default();
+        stale.models.live = Some("removed-months-ago".into());
+        assert_eq!(
+            choose_import_model(&stale, &installed).unwrap(),
+            "aaa-first"
+        );
+
+        // And a pin naming something installed but not a speech model is not honoured: `models.live`
+        // is validated on the way in, but a hand-edited settings file is not.
+        let voice = [
+            model("aaa-first", summo_models::Task::Asr),
+            model("a-voice", summo_models::Task::Tts),
+        ];
+        let mut wrong = summo_core::Settings::default();
+        wrong.models.live = Some("a-voice".into());
+        assert_eq!(choose_import_model(&wrong, &voice).unwrap(), "aaa-first");
     }
 
     /// And unset stays unset.
