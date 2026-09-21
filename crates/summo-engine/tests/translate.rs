@@ -9,10 +9,9 @@
 //!
 //! So these tests assert on the bytes: how many requests, and what was in them.
 
-use std::{
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-};
+mod stub;
+
+use std::net::SocketAddr;
 
 use summo_core::{
     MeetingId,
@@ -22,77 +21,6 @@ use summo_core::{
 use summo_engine::translate::{Style, Translator, translate};
 use summo_llm::{Provider, prompt::Glossary};
 use summo_vault::{MeetingDoc, meeting::Frontmatter};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpListener,
-};
-
-/// Every request body the stub saw, in arrival order.
-type Seen = Arc<Mutex<Vec<String>>>;
-
-/// A model that answers each request with `reply`, recording what it was asked.
-///
-/// Deliberately not a mock of `LlmClient`: the thing under test is the HTTP conversation, and a
-/// mock at the client boundary would have passed while the wire format was wrong.
-async fn stub(reply: &'static str) -> (SocketAddr, Seen) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    let seen: Seen = Arc::new(Mutex::new(Vec::new()));
-    let recorded = seen.clone();
-
-    tokio::spawn(async move {
-        loop {
-            let Ok((mut socket, _)) = listener.accept().await else {
-                return;
-            };
-            let recorded = recorded.clone();
-            tokio::spawn(async move {
-                let mut request = Vec::new();
-                let mut buf = [0_u8; 8192];
-                // Read until the body is complete: `Content-Length` is the only framing here, and
-                // stopping at the first read would truncate a batch prompt.
-                let want = loop {
-                    let Ok(n) = socket.read(&mut buf).await else {
-                        return;
-                    };
-                    if n == 0 {
-                        return;
-                    }
-                    request.extend_from_slice(&buf[..n]);
-                    let text = String::from_utf8_lossy(&request);
-                    if let Some((head, body)) = text.split_once("\r\n\r\n") {
-                        let len: usize = head
-                            .lines()
-                            .find_map(|l| {
-                                l.strip_prefix("content-length: ")
-                                    .or(l.strip_prefix("Content-Length: "))
-                            })
-                            .and_then(|v| v.trim().parse().ok())
-                            .unwrap_or(0);
-                        if body.len() >= len {
-                            break body.to_string();
-                        }
-                    }
-                };
-                recorded.lock().unwrap().push(want);
-
-                let body = format!(
-                    r#"{{"choices":[{{"message":{{"role":"assistant","content":{}}}}}]}}"#,
-                    serde_json::to_string(reply).unwrap()
-                );
-                let response = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                    body.len()
-                );
-                let _ = socket.write_all(response.as_bytes()).await;
-                let _ = socket.flush().await;
-            });
-        }
-    });
-
-    (addr, seen)
-}
-
 fn provider(addr: SocketAddr) -> Provider {
     Provider::custom("stub", &format!("http://{addr}"), "test-model")
 }
@@ -112,7 +40,7 @@ fn doc_with(texts: &[&str]) -> MeetingDoc {
 /// trained to continue — no system turn, no numbering, no instructions.
 #[tokio::test]
 async fn a_translation_model_is_asked_one_line_at_a_time_in_its_own_template() {
-    let (addr, seen) = stub("Settle the API spec.").await;
+    let (addr, seen) = stub::stub("Settle the API spec.").await;
     let dir = tempfile::tempdir().unwrap();
     let paths = summo_core::paths::Paths::at(dir.path());
     let doc = doc_with(&["Chốt spec API.", "Gửi cho khách.", "Xong thứ Sáu."]);
@@ -156,7 +84,7 @@ async fn a_translation_model_is_asked_one_line_at_a_time_in_its_own_template() {
 /// follow the instruction and one request for twenty-five lines is far cheaper than twenty-five.
 #[tokio::test]
 async fn a_general_model_still_gets_one_numbered_batch() {
-    let (addr, seen) = stub("1. one\n2. two\n3. three").await;
+    let (addr, seen) = stub::stub("1. one\n2. two\n3. three").await;
     let dir = tempfile::tempdir().unwrap();
     let paths = summo_core::paths::Paths::at(dir.path());
     let doc = doc_with(&["một", "hai", "ba"]);
@@ -187,7 +115,7 @@ async fn a_general_model_still_gets_one_numbered_batch() {
 /// one onto the wrong utterance.
 #[tokio::test]
 async fn a_line_the_model_did_not_answer_keeps_its_original_text() {
-    let (addr, _seen) = stub("   ").await;
+    let (addr, _seen) = stub::stub("   ").await;
     let dir = tempfile::tempdir().unwrap();
     let paths = summo_core::paths::Paths::at(dir.path());
     let id = MeetingId::new();
@@ -219,7 +147,8 @@ async fn a_line_the_model_did_not_answer_keeps_its_original_text() {
 /// model that keeps talking past the sentence must not get its continuation written there.
 #[tokio::test]
 async fn a_model_that_kept_talking_contributes_only_its_first_line() {
-    let (addr, _seen) = stub("Settle the spec.\nVietnamese: Chốt spec.\nEnglish: Settle it.").await;
+    let (addr, _seen) =
+        stub::stub("Settle the spec.\nVietnamese: Chốt spec.\nEnglish: Settle it.").await;
     let dir = tempfile::tempdir().unwrap();
     let paths = summo_core::paths::Paths::at(dir.path());
     let id = MeetingId::new();
@@ -246,7 +175,7 @@ async fn a_model_that_kept_talking_contributes_only_its_first_line() {
 #[tokio::test]
 async fn a_reply_in_another_language_is_dropped_rather_than_written() {
     // The exact string MiLMMT-46-1B returned when asked for Japanese.
-    let (addr, _seen) = stub("โอเคค่ะ ฉันจะเลื่อนกำหนดไปเป็นวันศุกร์สัปดาห์หน้า").await;
+    let (addr, _seen) = stub::stub("โอเคค่ะ ฉันจะเลื่อนกำหนดไปเป็นวันศุกร์สัปดาห์หน้า").await;
     let dir = tempfile::tempdir().unwrap();
     let paths = summo_core::paths::Paths::at(dir.path());
     let id = MeetingId::new();
