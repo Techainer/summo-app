@@ -63,7 +63,9 @@ FLEURS' float WAVs. Two runs per row, median reported. Xeon Gold 6226R, sherpa-o
 
 | Model | Dataset | Threads | WER | CER | RTF |
 |---|---|---:|---:|---:|---:|
-| gipformer-65M (int8) | fleurs_vi | 4 | **8.5 %** | 6.7 % | 0.023 |
+| gipformer-1.5-68M (int8) | fleurs_vi | 4 | **8.3 %** | **6.2 %** | 0.020 |
+| gipformer-1.5-68M (int8) | fleurs_vi | 8 | **8.3 %** | **6.2 %** | 0.017 |
+| gipformer-65M (int8) | fleurs_vi | 4 | 8.5 % | 6.7 % | 0.023 |
 | gipformer-65M (int8) | fleurs_vi | 8 | 8.6 % | 6.8 % | 0.019 |
 | whisper-tiny (fp32) | fleurs_vi | 4 | 67.6 % | 45.1 % | 0.137 |
 | whisper-tiny (int8) | fleurs_vi | 4 | 81.3 % | 60.0 % | 0.138 |
@@ -119,6 +121,21 @@ tar xzf fleurs/data/vi_vn/audio/test.tar.gz -C fleurs
 for f in $(ls fleurs/test | sort | head -100); do sox "fleurs/test/$f" -r 16000 -c 1 -b 16 -e signed-integer "fleurs/wav/$f"; done
 # transcripts.json: column 2 of test.tsv is the filename, column 3 the reference.
 ```
+
+### Gipformer 1.5 against the 65M it replaces
+
+Better on every axis measured, and the interesting part is the last column: it is *faster* at both
+thread counts despite being the larger model. The accuracy gain is mostly in CER — 6.2 % against
+6.8 % — which is the shape of a model that has stopped mangling syllables rather than one that has
+learned new words.
+
+The 65M rows above were re-run on this machine before the new ones were added, and reproduced the
+figures already recorded here to within noise. That is why these two rows are comparable to the rest
+of the table: same hundred clips, same harness, same build.
+
+The publisher reports 15.44 % against 15.53 % on their own tele-medium set. That is a different
+benchmark on different audio and the two numbers are not comparable; both are quoted where they
+belong rather than averaged into one claim.
 
 ## Quantisation: does int8 pay on a CPU?
 
