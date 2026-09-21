@@ -283,6 +283,15 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: android-actions/setup-android@v3
+        # No `packages`, which otherwise defaults to `tools` — a package Google removed from the
+        # SDK repository. `sdkmanager` then exits 1 with "Failed to find package 'tools'" and the
+        # job dies twenty-three seconds in, before a line of Rust is compiled. It broke the v0.12.1
+        # release having never been touched; nothing here changed, the remote repository did.
+        #
+        # Nothing is lost by skipping it: the NDK this build needs is installed by name on the very
+        # next step, which is the only Android component anything here uses.
+        with:
+          packages: ""
       - name: The NDK
         run: |
           sdkmanager --install "ndk;27.2.12479018" > /dev/null
