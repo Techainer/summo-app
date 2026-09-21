@@ -25,7 +25,9 @@ import { mirror } from "./mirror.mjs";
 // real registry that is a 73 MB transfer over whatever the network is that day — it timed out on a
 // CI runner and on a developer machine within the same hour, both times reporting "the download
 // never finished", which says nothing about the screen this suite exists to check.
-const local = await mirror(["gipformer-65m"], { name: "language" });
+// Both Gipformers: the ranker picks the better-measured one, and which that is belongs to the
+// registry rather than to this file.
+const local = await mirror(["gipformer-65m", "gipformer-1.5-68m"], { name: "language" });
 if (local.unreachable.length > 0) {
   for (const { id, why } of local.unreachable) console.error(`${id}: ${why}`);
   process.exit(1);
@@ -72,8 +74,17 @@ page.on("websocket", (socket) => {
   if (!vi?.model) problems.push("no model offered for Vietnamese");
   // The distinction the whole screen exists for: a language somebody measured outranks one that is
   // merely covered by a multilingual model.
-  if (vi && vi.model !== "gipformer-65m") {
-    problems.push(`Vietnamese should resolve to the measured model, got ${vi.model}`);
+  //
+  // Asserted as "a measured Vietnamese specialist", not as one id. It was pinned to
+  // `gipformer-65m` and went red the day a better Gipformer was measured and the ranker correctly
+  // preferred it — a test failing because the product got the right answer. The registry is a
+  // separate repository that moves on its own, and a suite that names a model in it is a suite that
+  // breaks on somebody else's merge.
+  if (vi && !/^gipformer/.test(vi.model ?? "")) {
+    problems.push(`Vietnamese should resolve to a measured specialist, got ${vi.model}`);
+  }
+  if (vi && !(vi.accuracy > 0)) {
+    problems.push(`Vietnamese resolved to a model with no measurement: ${vi.accuracy}`);
   }
   const unmeasured = body.languages.find((language) => language.code === "af");
   if (unmeasured && unmeasured.accuracy !== 0) {

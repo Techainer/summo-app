@@ -48,7 +48,13 @@ SOURCES=(
 # What ships. The recogniser the setup screen recommends on almost every machine, and the voice
 # detector without which nothing is ever committed to a transcript — the pair is the smallest thing
 # that makes recording work at all.
-MODELS=("gipformer-65m" "silero-vad-v5")
+#
+# It has to stay the model the ranker actually picks, or the app arrives with one model preinstalled
+# while its own setup screen recommends a different one. Gipformer 1.5 measures better than the 65M
+# on every axis on the same hundred FLEURS vi clips — 8.3 % WER and 6.2 % CER against 8.6 % and
+# 6.8 %, at a slightly lower real-time factor despite being the larger model — so the ranking moved
+# and this line has to move with it. See docs/benchmarks.md.
+MODELS=("gipformer-1.5-68m" "silero-vad-v5")
 
 mkdir -p "${OUT}/manifests" "${OUT}/blobs/sha256"
 
