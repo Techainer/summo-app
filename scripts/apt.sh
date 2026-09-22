@@ -62,7 +62,28 @@ CONF
   exit 0
 }
 
-install() { sudo timeout 900 apt-get install -y "$@"; }
+# `Acquire::Retries` is set to zero above and stays there, but not for this.
+#
+# Zero is right for the *index*: twenty files against a mirror that hangs, where every retry is
+# twenty more timeouts and the index the image shipped with is already good enough. It is wrong for
+# the package itself, which is one file of a hundred kilobytes — and a release died twice on
+# exactly that, twenty minutes apart, with `ports.ubuntu.com` refusing the connection for
+# `libasound2-dev` on arm64 while every other job in the run succeeded. One archive host having a
+# bad few minutes should not cost a platform its build.
+#
+# Bounded by the same impatience as everything else here: three attempts, five seconds of
+# connection timeout each, ten seconds between them. Worst case is under a minute, against a
+# rebuild-and-rerun that costs twenty.
+install() {
+  for attempt in 1 2 3; do
+    if sudo timeout 900 apt-get -o Acquire::Retries=2 install -y "$@"; then
+      return 0
+    fi
+    [[ $attempt -lt 3 ]] || return 1
+    echo "apt: attempt $attempt did not fetch everything; waiting to try again" >&2
+    sleep 10
+  done
+}
 
 # The index the image came with. Usually enough, and it costs nothing to find out.
 if install "$@"; then
@@ -72,4 +93,39 @@ fi
 
 echo "apt: that needed a fresher index" >&2
 sudo timeout 120 apt-get update || echo "apt: update did not finish; trying the install anyway" >&2
+install "$@" && exit 0
+
+# Last resort: a second archive host, added rather than substituted.
+#
+# The objection recorded above — that rewriting the sources throws away the cached index, which is
+# the one thing on this machine that reliably works — is about doing it *first*. By here the index
+# has already been refreshed and the install has already failed nine times against the host it
+# names, so there is no fast path left to protect.
+#
+# This is what took v0.15.0's arm64 bundle down: `ports.ubuntu.com` refused every connection for a
+# hundred-kilobyte `libasound2-dev` across three reruns over half an hour, while all eight other
+# jobs in the release succeeded. Retrying a host that is out does not help; asking a different one
+# does. The file is removed again either way, so nothing about this machine's apt outlives the
+# install.
+FALLBACK=/etc/apt/sources.list.d/99-summo-fallback.sources
+cleanup() { sudo rm -f "$FALLBACK"; }
+trap cleanup EXIT
+
+# Ports for everything that is not x86; the main archive for everything that is. The runner tells
+# us which it is, and naming the wrong one costs a pointless `apt-get update`.
+case "$(dpkg --print-architecture)" in
+  amd64 | i386) URI=http://azure.archive.ubuntu.com/ubuntu ;;
+  *) URI=http://azure.ports.ubuntu.com/ubuntu-ports ;;
+esac
+
+echo "apt: the archive is not answering; adding $URI" >&2
+sudo tee "$FALLBACK" > /dev/null <<CONF
+Types: deb
+URIs: $URI
+Suites: $(. /etc/os-release && echo "$VERSION_CODENAME") $(. /etc/os-release && echo "$VERSION_CODENAME")-updates
+Components: main universe
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+CONF
+
+sudo timeout 180 apt-get update || echo "apt: the fallback index did not finish either" >&2
 install "$@"
