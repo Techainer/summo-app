@@ -5621,14 +5621,6 @@ fn handle_audio_with_models(
                 .count();
             engine.advance(0.0, finals as u64);
 
-            for event in &events {
-                active.recorder.apply(event);
-            }
-            // Flushes on its own interval, so a crash costs seconds rather than the meeting.
-            if let Err(e) = active.recorder.maybe_save() {
-                tracing::error!(error = %e, "autosave failed");
-            }
-
             // Live translation rides the same connection. It never blocks: `offer` queues the
             // finals, may spawn a request, and returns whatever earlier requests have already sent
             // back — so a slow model delays subtitles, never audio.
@@ -5642,6 +5634,24 @@ fn handle_audio_with_models(
             if let Some(refiner) = active.refiner.as_mut() {
                 refiner.dispatch(active.runner.take_refine_jobs());
                 events.extend(refiner.collect());
+            }
+
+            // Everything the client is about to be shown, and not a line less.
+            //
+            // This loop used to run *before* the two blocks above, over the runner's events alone —
+            // so the two things produced after it never reached the document at all. A refine model
+            // corrected the transcript on screen and the file on disk kept the first model's text,
+            // which is the entire feature doing nothing to the only copy that outlives the tab; and
+            // a subtitle existed on the socket and nowhere else.
+            //
+            // Both were invisible for the same reason: every test that could have caught them read
+            // the screen, and the screen was right.
+            for event in &events {
+                active.recorder.apply(event);
+            }
+            // Flushes on its own interval, so a crash costs seconds rather than the meeting.
+            if let Err(e) = active.recorder.maybe_save() {
+                tracing::error!(error = %e, "autosave failed");
             }
             events
         }
