@@ -27,7 +27,16 @@ import { mirror } from "./mirror.mjs";
 // never finished", which says nothing about the screen this suite exists to check.
 // Both Gipformers: the ranker picks the better-measured one, and which that is belongs to the
 // registry rather than to this file.
-const local = await mirror(["gipformer-65m", "gipformer-1.5-68m"], { name: "language" });
+// And both candidates for English, which is the point of the block below.
+//
+// `whisper-tiny` is here so the choice is a real one. English had no measured specialist at all, so
+// it resolved to a Whisper — accurate, and unable to produce a word until the sentence ended,
+// because Whisper refuses to decode a half-spoken utterance. A mirror holding only the transducer
+// would make that assertion true by having nothing else to pick.
+const local = await mirror(
+  ["gipformer-65m", "gipformer-1.5-68m", "zipformer-gigaspeech-en", "whisper-tiny"],
+  { name: "language" },
+);
 if (local.unreachable.length > 0) {
   for (const { id, why } of local.unreachable) console.error(`${id}: ${why}`);
   process.exit(1);
@@ -86,6 +95,21 @@ page.on("websocket", (socket) => {
   if (vi && !(vi.accuracy > 0)) {
     problems.push(`Vietnamese resolved to a model with no measurement: ${vi.accuracy}`);
   }
+  // English, for the same reason and with the opposite history. Every English model in the registry
+  // was either unmeasured or measured and bad, so the language resolved to a Whisper — accurate,
+  // and unable to produce a word until the sentence ended. A measured non-Whisper is the property
+  // that changed; which model it is belongs to the registry.
+  const en = body.languages.find((language) => language.code === "en");
+  if (!en?.model) problems.push("no model offered for English");
+  if (en && !(en.accuracy > 0)) {
+    problems.push(`English resolved to a model with no measurement: ${JSON.stringify(en)}`);
+  }
+  if (en && /^whisper/.test(en.model ?? "")) {
+    problems.push(
+      `English fell back to a Whisper, which cannot decode a half-spoken sentence: ${en.model}`,
+    );
+  }
+
   const unmeasured = body.languages.find((language) => language.code === "af");
   if (unmeasured && unmeasured.accuracy !== 0) {
     problems.push(`Afrikaans reports an accuracy nobody measured: ${unmeasured.accuracy}`);
