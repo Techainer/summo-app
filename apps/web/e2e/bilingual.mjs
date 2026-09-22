@@ -29,6 +29,7 @@
  * - two subtitle languages on a *monolingual* line render **both**, one under the other,
  * - the same model in both roles does not refuse the recording.
  */
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,6 +41,12 @@ import { mirror } from "./mirror.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const wav = join(HERE, "fixtures/bilingual.wav");
 const problems = [];
+/** The exact text of a line the second model rewrote, so the vault can be held to it later.
+ *
+ * Named apart from the local `refined` inside the block that finds it — that one is a boolean, and
+ * a `let` of the same name shadowed this one, so the assertion at the bottom read `null` and said
+ * nothing at all. A silent assertion is worse than a missing one. */
+let refinedLine = null;
 
 // Whisper hears ninety-nine languages badly and reports which one it heard; Gipformer hears
 // Vietnamese and nothing else, accurately. That asymmetry is the entire reason for the feature.
@@ -261,7 +268,8 @@ const base = (code) => (code ?? "").toLowerCase().split(/[-_]/)[0];
         .first()
         .innerText()
         .catch(() => "");
-      console.log(`refined and on screen: ${JSON.stringify(line.slice(0, 60))}`);
+      refinedLine = line.trim();
+      console.log(`refined and on screen: ${JSON.stringify(refinedLine.slice(0, 60))}`);
     }
   }
 
@@ -485,7 +493,55 @@ await page
   .getByRole("button", { name: /Dừng ghi/ })
   .first()
   .click();
-await page.waitForTimeout(2000);
+await page.waitForTimeout(3000);
+
+// What the screen showed also has to be what is on disk.
+//
+// Everything above this reads the browser, and the browser was right about both of the things this
+// block checks while the vault was wrong about both:
+//
+// - the refine pass produced `Event::Revise`, the transcript on screen changed, and the event loop
+//   applied the *runner's* events to the document before the refiner had produced anything — so the
+//   saved meeting kept the first model's text and the entire second-model feature changed nothing
+//   that outlives the tab;
+// - a subtitle was an event on a socket and a node in a React tree. Press stop and it was gone,
+//   with no way to get it back except paying for the whole meeting again.
+//
+// Read from the vault rather than from an endpoint, because the promise is a folder of files.
+{
+  const meetings = join(engine.home, "vault", "meetings");
+  const files = readdirSync(meetings).filter((name) => name.endsWith(".md"));
+  const body = files.map((name) => readFileSync(join(meetings, name), "utf8")).join("\n");
+
+  if (!/lang:\s*vi/i.test(body) || !/lang:\s*en/i.test(body)) {
+    problems.push("the saved meeting does not record which language each line was spoken in");
+  }
+
+  // The second model's text, matched against what the screen showed rather than against a marker:
+  // the saved format records `seq`, `end` and `lang` and deliberately does not record which model
+  // won, so the only honest question is whether the words in the file are the words on screen.
+  //
+  // A prefix, because a revision can land again between the screenshot and the stop.
+  if (refinedLine) {
+    const head = refinedLine.slice(0, 40);
+    if (!body.includes(head)) {
+      console.log(body.slice(0, 1500));
+      problems.push(
+        `the second model revised the transcript on screen and not in the vault: ${JSON.stringify(head)}`,
+      );
+    } else {
+      console.log("the refined text reached the file, not just the screen");
+    }
+  }
+
+  const translations = join(engine.home, "vault", "translations");
+  const subtitles = existsSync(translations) ? readdirSync(translations) : [];
+  if (subtitles.length === 0) {
+    problems.push("a meeting was subtitled in three languages and the vault has no record of any");
+  } else {
+    console.log(`subtitles kept: ${subtitles.join(", ")}`);
+  }
+}
 
 await browser.close();
 await engine.stop();

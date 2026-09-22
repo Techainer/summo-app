@@ -8,9 +8,10 @@
 //! That sounds wasteful, and it is — deliberately. A model at real-time factor 0.02 uses 2 % of the
 //! time budget for a single decode; spending 30× that is still under 60 %, and it converts a model
 //! that could only speak after you stopped talking into one that types along with you. The guard
-//! rail is the RTF budget, not the multiplier: [`SessionConfig::for_rtf`] derives the cadence from
-//! the model's measured speed so a heavier model simply refreshes less often instead of falling
-//! behind.
+//! rail is the CPU budget, not the multiplier: the cadence is derived from the decoder's *measured*
+//! speed and from how long the open utterance already is, so a heavier model — or a longer sentence
+//! — refreshes less often instead of falling behind. See [`SessionConfig::partial_cpu_budget`],
+//! which is where a long sentence used to take the whole thing past real time.
 //!
 //! Two properties matter more than they look:
 //!
@@ -37,9 +38,34 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub struct SessionConfig {
     pub gate: GateConfig,
-    /// Minimum audio added between partial re-decodes. Smaller means more responsive text and more
+    /// Least audio added between partial re-decodes. Smaller means more responsive text and more
     /// CPU; the useful range is roughly 100–400 ms.
+    ///
+    /// A floor, not the cadence. See [`SessionConfig::partial_cpu_budget`].
     pub partial_step_ms: u32,
+    /// Share of one core the partial re-decodes are allowed while somebody is speaking.
+    ///
+    /// The cadence is derived from this and from the decoder's *measured* speed, because the cost
+    /// of a partial is not constant: each one re-decodes the whole open utterance, so it grows
+    /// with the sentence while a fixed cadence asks for them just as often. Measured on this
+    /// machine, same audio, same model, the only difference being where the speaker paused:
+    ///
+    /// | Utterances | Decodes | Real-time factor |
+    /// | --- | --- | --- |
+    /// | eight short ones, 28.8 s | 129 | 0.27 |
+    /// | one of 22 s, 27.4 s | 172 | **1.32** |
+    ///
+    /// A model whose own real-time factor is 0.017, made seventy-eight times slower than itself by
+    /// nobody pausing — and past 1.0 it cannot keep up live at all, which is a transcript that
+    /// stops arriving in the middle of a long sentence. Exactly when somebody is saying the thing
+    /// worth transcribing.
+    ///
+    /// So: `step = rtf × open_seconds ÷ budget`. Cost per second of speech stays flat, a long
+    /// sentence refreshes less often instead of falling behind, and a slow model or a busy machine
+    /// degrades the same way rather than stalling.
+    ///
+    /// 0.35 of a core, which leaves room for the detector, the final decode, and a second model.
+    pub partial_cpu_budget: f32,
     pub lane: Lane,
     /// Emit partials at all. Turned off for a refine lane, whose only job is to replace finals.
     pub emit_partials: bool,
@@ -55,6 +81,7 @@ impl Default for SessionConfig {
         Self {
             gate: GateConfig::default(),
             partial_step_ms: 150,
+            partial_cpu_budget: 0.35,
             lane: Lane::Mic,
             emit_partials: true,
             keep_final_pcm: false,
@@ -62,25 +89,22 @@ impl Default for SessionConfig {
     }
 }
 
-impl SessionConfig {
-    /// Pick a partial cadence that keeps a model of the given real-time factor inside a CPU budget.
-    ///
-    /// Re-decoding the open utterance every `step` seconds costs roughly `rtf × utterance_length ÷
-    /// step` of a core while someone is speaking. Solving for a target budget gives the cadence, so
-    /// a fast model refreshes often and a slow one degrades to fewer refreshes rather than to a
-    /// growing backlog.
-    #[must_use]
-    pub fn for_rtf(rtf: f32, budget: f32) -> Self {
-        let budget = budget.clamp(0.05, 0.9);
-        // Assume a typical utterance of a few seconds when sizing the step.
-        const TYPICAL_UTTERANCE_S: f32 = 3.0;
-        let step_s = (rtf * TYPICAL_UTTERANCE_S / budget).clamp(0.1, 2.0);
-        Self {
-            partial_step_ms: (step_s * 1000.0) as u32,
-            ..Self::default()
-        }
-    }
-}
+/// Longest a speaker goes without the text catching up.
+///
+/// The cadence grows with the sentence, and something has to stop it growing without end. Two
+/// seconds is the point where "typing along with you" becomes "answering later": past it the
+/// screen reads as stuck even though the words are still coming.
+///
+/// Reached only by a very long sentence or a very slow model, and reaching it is the honest
+/// outcome — the alternative is a decoder that is further behind every second.
+const MAX_PARTIAL_STEP_MS: u32 = 2_000;
+
+/// How much a new measurement moves the running estimate.
+///
+/// Slow, because the thing being estimated barely changes: it is one model on one machine. What
+/// does change is the noise — another process taking cores, a thermal step — and a fast filter
+/// would swing the cadence around on it.
+const RTF_SMOOTHING: f32 = 0.2;
 
 /// Drives one decoder over one audio lane.
 pub struct PseudoSession<D: Decoder> {
@@ -90,6 +114,16 @@ pub struct PseudoSession<D: Decoder> {
     filter: HallucinationFilter,
     /// Samples in the open utterance at the last partial decode.
     last_partial_len: usize,
+    /// How fast this decoder is on this machine, as seconds of work per second of audio.
+    ///
+    /// Measured rather than declared. The registry publishes a real-time factor, but it was taken
+    /// on somebody else's machine with the whole box to itself, and the number that decides how
+    /// often it is safe to re-decode has to be the one this laptop is getting right now — with
+    /// four other models resident, on whatever cores are left.
+    ///
+    /// `None` until the first decode returns, which is why [`SessionConfig::partial_step_ms`] is
+    /// still the floor and still the answer for the first partial of a session.
+    decode_rtf: Option<f32>,
     /// Decode calls made, for the performance HUD.
     decodes: u64,
     /// Utterances suppressed by the hallucination filter, for diagnostics.
@@ -132,6 +166,7 @@ impl<D: Decoder> PseudoSession<D> {
             cfg,
             filter: HallucinationFilter::default(),
             last_partial_len: 0,
+            decode_rtf: None,
             decodes: 0,
             suppressed: 0,
             last_final_pcm: None,
@@ -235,6 +270,40 @@ impl<D: Decoder> PseudoSession<D> {
         self.finalize(seq, t0, t1, &pcm)
     }
 
+    /// How much new audio to wait for, given how long the open utterance already is.
+    ///
+    /// The whole of the fix described on [`SessionConfig::partial_cpu_budget`]. A partial decodes
+    /// everything said so far, so its cost is `rtf × open_seconds`; asking for one every `step`
+    /// seconds therefore costs `rtf × open_seconds ÷ step` of a core, continuously, for as long as
+    /// the speaker keeps going. Holding that at the budget gives the step directly.
+    ///
+    /// Before the first decode has been timed there is no `rtf` to use, so the floor stands — which
+    /// is right anyway: the first partial of an utterance is the one worth being fastest about, and
+    /// it decodes a fraction of a second of audio.
+    fn partial_step_ms(&self, open_secs: f64) -> u32 {
+        let Some(rtf) = self.decode_rtf else {
+            return self.cfg.partial_step_ms;
+        };
+        let budget = self.cfg.partial_cpu_budget.clamp(0.05, 0.9);
+        let step_ms = (rtf * open_secs as f32 / budget * 1000.0) as u32;
+        step_ms.clamp(self.cfg.partial_step_ms, MAX_PARTIAL_STEP_MS)
+    }
+
+    /// Fold one timed decode into the running estimate of how fast this decoder is here.
+    fn observe(&mut self, took: std::time::Duration, audio_secs: f64) {
+        if audio_secs <= 0.0 {
+            return;
+        }
+        let measured = took.as_secs_f32() / audio_secs as f32;
+        self.decode_rtf = Some(match self.decode_rtf {
+            // The first measurement is taken whole. Starting from a guess and filtering towards the
+            // truth would spend the first seconds of every recording at the wrong cadence, and the
+            // first seconds are the ones somebody is watching to see whether this thing works.
+            None => measured,
+            Some(current) => current + (measured - current) * RTF_SMOOTHING,
+        });
+    }
+
     /// Re-decode the open utterance if enough new audio has arrived.
     fn maybe_partial(&mut self, seq: u64, t0: f64, t1: f64) -> Result<Vec<Event>> {
         if !self.cfg.emit_partials || !self.decoder.supports_partials() {
@@ -242,7 +311,7 @@ impl<D: Decoder> PseudoSession<D> {
         }
 
         let open = self.gate.open_pcm();
-        let step = ms_to_samples(self.cfg.partial_step_ms);
+        let step = ms_to_samples(self.partial_step_ms(samples_to_secs(open.len())));
         if open.len() < self.last_partial_len + step {
             return Ok(Vec::new());
         }
@@ -252,7 +321,9 @@ impl<D: Decoder> PseudoSession<D> {
         // At a few seconds of 16 kHz mono this is tens of kilobytes — noise next to the decode.
         let window = open.to_vec();
         self.decodes += 1;
+        let began = std::time::Instant::now();
         let transcript = self.decoder.decode(&window)?;
+        self.observe(began.elapsed(), samples_to_secs(window.len()));
 
         if transcript.is_empty() {
             return Ok(Vec::new());
@@ -709,18 +780,73 @@ mod tests {
         );
     }
 
+    /// A session that has not timed a decode yet still answers, and answers fast.
+    ///
+    /// The first partial of a recording is the one somebody is watching to decide whether this
+    /// thing works, and it decodes a fraction of a second of audio. Waiting for an estimate before
+    /// producing it would spend that moment being careful about nothing.
     #[test]
-    fn cadence_from_rtf_slows_down_for_heavier_models() {
-        let light = SessionConfig::for_rtf(0.02, 0.5);
-        let heavy = SessionConfig::for_rtf(0.30, 0.5);
+    fn the_first_partial_does_not_wait_for_a_measurement() {
+        let s = PseudoSession::new(FixedDecoder::new("một"), SessionConfig::default());
+        assert_eq!(s.partial_step_ms(0.5), 150);
+        assert_eq!(s.partial_step_ms(30.0), 150);
+    }
+
+    /// The bug, as a unit.
+    ///
+    /// A partial decodes the whole open utterance, so the cost of one grows with the sentence while
+    /// a fixed cadence keeps asking at the same rate. Measured: the same audio and the same model
+    /// went from a real-time factor of 0.27 to **1.32** — past real time, unable to keep up — for
+    /// no reason except that the speaker did not pause for twenty-two seconds.
+    #[test]
+    fn a_longer_sentence_is_refreshed_less_often() {
+        let mut s = PseudoSession::new(FixedDecoder::new("một"), SessionConfig::default());
+        // One second of audio that took twenty milliseconds: rtf 0.02, a typical transducer.
+        s.observe(std::time::Duration::from_millis(20), 1.0);
+
+        let short = s.partial_step_ms(2.0);
+        let long = s.partial_step_ms(20.0);
         assert!(
-            heavy.partial_step_ms > light.partial_step_ms,
-            "a slower model must refresh less often: {} vs {}",
-            heavy.partial_step_ms,
-            light.partial_step_ms
+            long > short,
+            "a long sentence must refresh less often: {long} vs {short}"
         );
-        assert!((100..=2000).contains(&light.partial_step_ms));
-        assert!((100..=2000).contains(&heavy.partial_step_ms));
+
+        // And the cost is what is actually being held still: `rtf × open ÷ step` of a core, at
+        // every length, is the budget and not a multiple of it.
+        for open in [2.0_f64, 5.0, 10.0, 20.0] {
+            let step = f64::from(s.partial_step_ms(open)) / 1000.0;
+            let share = 0.02 * open / step;
+            assert!(
+                share <= 0.36,
+                "at {open}s the partials would take {share:.2} of a core"
+            );
+        }
+    }
+
+    /// Two seconds is where "typing along with you" ends, so the cadence stops growing there even
+    /// though holding the budget would say otherwise. A screen that has not moved for five seconds
+    /// reads as broken whatever the arithmetic says.
+    #[test]
+    fn the_cadence_stops_growing_before_the_screen_looks_stuck() {
+        let mut s = PseudoSession::new(FixedDecoder::new("một"), SessionConfig::default());
+        s.observe(std::time::Duration::from_millis(600), 1.0); // a very slow model
+        assert_eq!(s.partial_step_ms(60.0), MAX_PARTIAL_STEP_MS);
+    }
+
+    /// And the estimate is of this machine, now. The first decode is taken whole so the cadence is
+    /// right immediately; later ones move it slowly, because what changes between them is noise.
+    #[test]
+    fn the_first_measurement_is_taken_whole_and_the_rest_are_filtered() {
+        let mut s = PseudoSession::new(FixedDecoder::new("một"), SessionConfig::default());
+        s.observe(std::time::Duration::from_millis(100), 1.0);
+        assert!((s.decode_rtf.unwrap() - 0.1).abs() < 1e-6);
+
+        s.observe(std::time::Duration::from_millis(200), 1.0);
+        let moved = s.decode_rtf.unwrap();
+        assert!(
+            moved > 0.1 && moved < 0.2,
+            "one sample should not take over the estimate: {moved}"
+        );
     }
 
     #[test]

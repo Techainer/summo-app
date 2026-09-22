@@ -16,13 +16,14 @@
 //! older complete one.
 
 use std::{
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
 use summo_core::{Error, Event, MeetingId, Result, SpeakerId, paths::Paths, segment::Segment};
 use summo_vault::write_atomically;
-use summo_vault::{MeetingDoc, meeting::Frontmatter, slug::meeting_stem};
+use summo_vault::{MeetingDoc, meeting::Frontmatter, slug::meeting_stem, translation::Translation};
 
 /// How often the document is flushed while recording.
 pub const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(10);
@@ -36,6 +37,22 @@ pub struct Recorder {
     /// rewrite the same bytes every ten seconds.
     dirty: bool,
     saves: u64,
+    /// Where translation files go, which is not beside the meeting.
+    paths: Paths,
+    /// Subtitles produced while the meeting was happening, one document per language.
+    ///
+    /// Live translation had nowhere to be kept. A subtitle existed as an `Event::Translation` on
+    /// the socket and in the browser's memory, and that was all: watch a talk with subtitles on,
+    /// stop recording, and the only record of it is the original text. Translating the meeting
+    /// again afterwards costs the whole meeting a second time to produce what was already computed
+    /// — and only works if the same translator is still installed.
+    ///
+    /// The same files the offline pass writes, so a meeting subtitled live and one translated after
+    /// the fact are the same meeting on disk, and running the offline pass over it skips the lines
+    /// that already have one.
+    translations: BTreeMap<String, Translation>,
+    /// Languages whose file has changed since the last write.
+    translated: BTreeSet<String>,
 }
 
 impl Recorder {
@@ -66,6 +83,9 @@ impl Recorder {
             last_save: Instant::now(),
             dirty: true,
             saves: 0,
+            paths: paths.clone(),
+            translations: BTreeMap::new(),
+            translated: BTreeSet::new(),
         };
 
         // Written now, empty, rather than at the first autosave ten seconds later.
@@ -124,8 +144,42 @@ impl Recorder {
             Event::SpeakerRename { from, to } if self.rename_speaker(from, to) => {
                 self.dirty = true;
             }
+            // A subtitle is part of the meeting, not part of the screen it appeared on.
+            Event::Translation { seq, lang, text } => self.translate(*seq, lang, text),
             _ => {}
         }
+    }
+
+    /// File one live subtitle into the translation document for its language.
+    ///
+    /// Keyed to the line by `seq` and timed by the line's own `t0`, so the file that comes out is
+    /// the one the offline pass would have written — same format, same ordering, and a later
+    /// offline run skips these lines instead of paying for them again.
+    ///
+    /// A subtitle for a line that has not arrived is dropped rather than held. It cannot happen on
+    /// this path — a translation is a reply to a final the recorder has already applied — and
+    /// inventing a `t0` for it would put the line in the wrong place in a file that is sorted by
+    /// time.
+    fn translate(&mut self, seq: u64, lang: &str, text: &str) {
+        let lang = summo_vault::translation::sanitize_lang(lang);
+        if lang.is_empty() || text.trim().is_empty() {
+            return;
+        }
+        let Some(t0) = self
+            .doc
+            .transcript
+            .iter()
+            .find(|segment| segment.seq == seq)
+            .map(|segment| segment.t0)
+        else {
+            return;
+        };
+
+        self.translations
+            .entry(lang.clone())
+            .or_insert_with(|| Translation::new(&lang))
+            .set(seq, t0, text);
+        self.translated.insert(lang);
     }
 
     fn upsert(&mut self, incoming: &Segment) {
@@ -174,7 +228,9 @@ impl Recorder {
     ///
     /// Called from the event loop, so it must be cheap when there is nothing to do.
     pub fn maybe_save(&mut self) -> Result<bool> {
-        if !self.dirty || self.last_save.elapsed() < AUTOSAVE_INTERVAL {
+        if (!self.dirty && self.translated.is_empty())
+            || self.last_save.elapsed() < AUTOSAVE_INTERVAL
+        {
             return Ok(false);
         }
         self.save()?;
@@ -185,10 +241,29 @@ impl Recorder {
     pub fn save(&mut self) -> Result<()> {
         let markdown = self.doc.to_markdown()?;
         write_atomically(&self.path, markdown.as_bytes())?;
+        self.save_translations();
         self.last_save = Instant::now();
         self.dirty = false;
         self.saves += 1;
         Ok(())
+    }
+
+    /// Write out the subtitle files that changed, and keep recording whatever happens.
+    ///
+    /// Reported and swallowed rather than propagated. A failure here costs the subtitles of one
+    /// meeting; propagating it would abort the save of the transcript itself, which is the thing
+    /// somebody is actually recording — losing the meeting to protect a translation of it is the
+    /// wrong trade in every direction.
+    fn save_translations(&mut self) {
+        let id = self.doc.frontmatter.id.clone();
+        for lang in std::mem::take(&mut self.translated) {
+            let Some(translation) = self.translations.get(&lang) else {
+                continue;
+            };
+            if let Err(e) = summo_vault::translation::save(&self.paths, &id, translation) {
+                tracing::error!(error = %e, %lang, "could not write the live subtitles");
+            }
+        }
     }
 
     /// Finish: stamp the duration and write one last time.
@@ -335,6 +410,91 @@ mod tests {
 
         let times: Vec<f64> = rec.document().transcript.iter().map(|s| s.t0).collect();
         assert_eq!(times, vec![2.0, 10.0]);
+    }
+
+    /// Watch a talk with subtitles on, press stop, and the subtitles are gone.
+    ///
+    /// That was the whole of it: a live translation existed as an event on the socket and in the
+    /// browser's memory. Producing it again afterwards means paying for the entire meeting a second
+    /// time, to compute what had already been computed, and only works if the same translator is
+    /// still installed.
+    #[test]
+    fn subtitles_made_during_the_meeting_are_part_of_the_meeting() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        let mut rec = recorder(tmp.path());
+
+        rec.apply(&Event::Final(segment(
+            0,
+            "xin chào",
+            1.0,
+            SegmentSource::Final,
+        )));
+        rec.apply(&Event::Translation {
+            seq: 0,
+            lang: "en".into(),
+            text: "hello".into(),
+        });
+        rec.save().unwrap();
+
+        let saved =
+            summo_vault::translation::load(&paths, &MeetingId::from("m1".to_string()), "en")
+                .unwrap()
+                .expect("the subtitle should be on disk");
+        assert_eq!(saved.get(0), Some("hello"));
+    }
+
+    /// One file per language, which is what the offline pass writes and what the export reads.
+    #[test]
+    fn two_readers_get_two_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        let id = MeetingId::from("m1".to_string());
+        let mut rec = recorder(tmp.path());
+
+        rec.apply(&Event::Final(segment(
+            0,
+            "xin chào",
+            1.0,
+            SegmentSource::Final,
+        )));
+        for (lang, text) in [("en", "hello"), ("ja", "こんにちは")] {
+            rec.apply(&Event::Translation {
+                seq: 0,
+                lang: lang.into(),
+                text: text.into(),
+            });
+        }
+        rec.save().unwrap();
+
+        let mut langs = summo_vault::translation::languages(&paths, &id);
+        langs.sort();
+        assert_eq!(langs, vec!["en".to_string(), "ja".to_string()]);
+    }
+
+    /// A subtitle for a line nobody has is dropped rather than given an invented time.
+    ///
+    /// It cannot arrive on this path — a translation is a reply to a final that has already been
+    /// applied — and a line with a made-up `t0` would sort into the wrong place in a file that is
+    /// ordered by time, which is worse than a missing subtitle.
+    #[test]
+    fn a_subtitle_for_a_line_that_does_not_exist_is_dropped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        let mut rec = recorder(tmp.path());
+
+        rec.apply(&Event::Translation {
+            seq: 99,
+            lang: "en".into(),
+            text: "hello".into(),
+        });
+        rec.save().unwrap();
+
+        assert!(
+            summo_vault::translation::load(&paths, &MeetingId::from("m1".to_string()), "en")
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
