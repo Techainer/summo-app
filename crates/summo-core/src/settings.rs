@@ -82,7 +82,14 @@ pub struct Recording {
 pub struct Models {
     /// Model driving live text.
     pub live: Option<String>,
-    /// Slower model that re-decodes finished utterances.
+    /// Second model that re-decodes finished utterances.
+    ///
+    /// Three states, not two. `None` is "nobody has decided", and a specialist live model then
+    /// gets a multilingual second one chosen for it — a Vietnamese-only recogniser hears an English
+    /// sentence as Vietnamese-shaped noise, and the pairing that fixes it should not be something
+    /// you have to know to go and switch on. `Some("")` is somebody having decided **against** it,
+    /// which has to survive: an automatic default that comes back after being turned off is not a
+    /// default, it is a setting that does not work.
     pub refine: Option<String>,
     pub vad: Option<String>,
     pub speaker: Option<String>,

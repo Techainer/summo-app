@@ -452,6 +452,7 @@
     "role_asr": "音声認識",
     "role_vad": "音声区間検出",
     "role_second": "再デコード",
+    "second_automatic": "自動で組み合わせました",
     "role_speaker": "話者識別",
     "role_translate": "翻訳",
     "role_denoise": "ノイズ抑制",

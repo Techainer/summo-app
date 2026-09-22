@@ -440,7 +440,15 @@ function Running({
 }) {
   const t = useT();
 
-  const rows: { key: string; label: string; value: string | null; ready: boolean; id?: string }[] =
+  const rows: {
+    key: string;
+    label: string;
+    value: string | null;
+    ready: boolean;
+    id?: string;
+    /** Said beside the value when the row is something Summo decided rather than the reader. */
+    note?: string;
+  }[] =
     [
       {
         key: "asr",
@@ -460,6 +468,9 @@ function Running({
               value: plan.second_pass?.name ?? plan.second_pass?.model,
               ready: plan.second_pass?.installed === true,
               id: plan.second_pass?.model,
+              // Said, because it was not asked for. Silence here reads as a choice the user made
+              // and forgot, and the one question they will have is why a second model is loaded.
+              note: plan.second_pass?.automatic ? t("models.second_automatic") : undefined,
             },
           ]
         : []),
@@ -535,6 +546,7 @@ function Running({
               <span className="text-micro text-fg-faint w-28 shrink-0">{row.label}</span>
               <span className="text-meta min-w-0 flex-1 truncate">
                 {row.value ?? t("models.role_none")}
+                {row.note && <span className="text-fg-faint text-micro ms-2">{row.note}</span>}
               </span>
               {!row.ready && row.id && (
                 <Button

@@ -121,28 +121,39 @@ const pick = (role, model) =>
 {
   await pick("live", "gipformer-1.5-68m");
   const plan = await (await fetch(at("/settings/plan"))).json();
-  const suggested = plan.second_pass?.suggested;
-  if (suggested?.id !== "whisper-base" && suggested?.id !== "whisper-tiny") {
+  const paired = plan.second_pass;
+  if (paired?.model !== "whisper-base" && paired?.model !== "whisper-tiny") {
     problems.push(
-      `a Vietnamese-only model was left to answer for English: ${JSON.stringify(suggested)}`,
+      `a Vietnamese-only model was left to answer for English: ${JSON.stringify(paired)}`,
+    );
+  } else if (paired.automatic !== true) {
+    problems.push(
+      `the pairing was made without anybody choosing it and the screen does not say so: ${JSON.stringify(paired)}`,
     );
   } else {
-    console.log(`suggested second pass: ${suggested.id} — ${suggested.reason}`);
+    console.log(`paired automatically with ${paired.model}`);
   }
 
-  // And once one is chosen, the suggestion stops. Advice beside a decision somebody already made
-  // is an argument rather than advice.
+  // And a choice made by hand is reported as one. `automatic` going false is the difference
+  // between "Summo decided this" and "you decided this", and only the first is worth undoing.
   await pick("refine", "whisper-base");
   const settled = await (await fetch(at("/settings/plan"))).json();
-  if (settled.second_pass?.suggested) {
-    problems.push("the app kept recommending a second model after one was chosen");
-  }
   if (settled.second_pass?.model !== "whisper-base") {
     problems.push(
       `the chosen second model is not on the plan: ${JSON.stringify(settled.second_pass)}`,
     );
   }
+  if (settled.second_pass?.automatic !== false) {
+    problems.push(`a model the user chose is reported as automatic: ${JSON.stringify(settled.second_pass)}`);
+  }
+
+  // And turning it off stays off. An automatic default that comes back after being cleared is a
+  // setting that does not work, and this is the only place that can tell the two apart.
   await pick("refine", "");
+  const off = await (await fetch(at("/settings/plan"))).json();
+  if (off.second_pass?.model) {
+    problems.push(`the second model came back after being turned off: ${JSON.stringify(off.second_pass)}`);
+  }
 }
 
 // Exactly what pressing the two buttons on the models screen writes. Nothing here reaches into the

@@ -221,6 +221,22 @@ impl VadGate {
         self.state == State::Speaking
     }
 
+    /// Samples of quiet at the end of the open utterance, reset by every speech frame.
+    ///
+    /// The gate already counts this to decide when to close; exposed because a pause far too short
+    /// to end a sentence is still the one thing a long utterance offers: a moment that is between
+    /// words rather than inside one. [`summo_asr`] freezes the part of a sentence it has already
+    /// decoded at such a moment, so the cost of keeping up with a speaker stops growing with how
+    /// long they have been speaking.
+    #[must_use]
+    pub fn quiet_samples(&self) -> usize {
+        if self.state == State::Speaking {
+            self.trailing_silence
+        } else {
+            0
+        }
+    }
+
     /// Session-relative time of the most recent sample consumed.
     #[must_use]
     pub fn now(&self) -> f64 {

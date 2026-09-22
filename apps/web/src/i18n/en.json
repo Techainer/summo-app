@@ -452,6 +452,7 @@
     "role_asr": "Speech recognition",
     "role_vad": "Voice detection",
     "role_second": "Second pass",
+    "second_automatic": "paired for you",
     "role_speaker": "Speaker attribution",
     "role_translate": "Translation",
     "role_denoise": "Noise suppression",
