@@ -86,7 +86,8 @@ enum Command {
         /// Directory with `transcripts.json` and the WAVs it names.
         #[arg(long)]
         dataset: std::path::PathBuf,
-        /// Model directory, repeatable to compare models. Prefix with `whisper:` to load it with
+        /// Model directory, repeatable to compare models. Prefix with `whisper:`, `sensevoice:`
+        /// or `nemo:` to load it with that runtime instead of
         /// the Whisper runtime instead of the transducer one.
         #[arg(long = "model", required = true)]
         models: Vec<String>,
@@ -294,6 +295,9 @@ fn run_asr(
         let (runtime, dir) = match spec.split_once(':') {
             Some(("whisper", path)) => ("whisper", std::path::Path::new(path)),
             Some(("sensevoice", path)) => ("sensevoice", std::path::Path::new(path)),
+            // NVIDIA NeMo exports are the same four files as an icefall transducer over a different
+            // graph, and a directory carries no manifest to say so.
+            Some(("nemo", path)) => ("nemo", std::path::Path::new(path)),
             _ => ("transducer", std::path::Path::new(spec.as_str())),
         };
         let name = dir.file_name().map_or_else(
@@ -308,6 +312,11 @@ fn run_asr(
             )?),
             "sensevoice" => Box::new(summo_asr::sherpa::SenseVoiceDecoder::from_dir(
                 dir, language, threads,
+            )?),
+            "nemo" => Box::new(summo_asr::sherpa::ZipformerDecoder::from_dir_as(
+                dir,
+                threads,
+                "nemo_transducer",
             )?),
             _ => Box::new(summo_asr::sherpa::ZipformerDecoder::from_dir(dir, threads)?),
         };

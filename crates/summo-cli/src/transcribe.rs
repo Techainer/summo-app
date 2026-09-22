@@ -70,6 +70,13 @@ pub struct Options {
     pub model_dir: std::path::PathBuf,
     pub vad_model: std::path::PathBuf,
     pub engine: Engine,
+    /// sherpa's name for the transducer flavour, for an export that is not icefall's.
+    ///
+    /// A directory carries no manifest, so nothing in it can say that these four files are a NeMo
+    /// graph rather than an icefall one — and sherpa tells them apart by looking for `vocab_size`
+    /// in the decoder metadata, which only one of them has. Without a way to say it here, a model
+    /// the registry can install is a model this command cannot open.
+    pub model_type: String,
     /// ISO language code for Whisper; `None` asks it to detect.
     pub language: Option<String>,
     pub threads: usize,
@@ -91,7 +98,11 @@ pub fn run(opts: &Options) -> Result<()> {
     // Boxed once: both paths take the trait object, so the comparison runs the same detector.
     let mut vad: Box<dyn Vad> = Box::new(SileroVad::load(&opts.vad_model, 1)?);
     let decoder: Box<dyn Decoder> = match opts.engine {
-        Engine::Transducer => Box::new(ZipformerDecoder::from_dir(&opts.model_dir, opts.threads)?),
+        Engine::Transducer => Box::new(ZipformerDecoder::from_dir_as(
+            &opts.model_dir,
+            opts.threads,
+            &opts.model_type,
+        )?),
         Engine::Whisper => Box::new(WhisperDecoder::from_dir(
             &opts.model_dir,
             opts.language.as_deref(),

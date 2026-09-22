@@ -137,12 +137,29 @@ impl ZipformerDecoder {
 
     /// Load from a directory containing the four model files.
     pub fn from_dir(dir: impl AsRef<Path>, num_threads: usize) -> Result<Self> {
+        Self::from_dir_as(dir, num_threads, "")
+    }
+
+    /// The same, for a directory whose export is not an icefall one.
+    ///
+    /// A directory carries no manifest, so nothing there can declare the flavour — and a NeMo
+    /// export is the same four files as an icefall one over a different graph. Without being told,
+    /// sherpa looks for `vocab_size` in the decoder metadata and stops. `summo transcribe` and the
+    /// benchmark both point at directories, so both need a way to say it, or a model can be
+    /// published and then not be measurable by the harness that decides whether to recommend it.
+    pub fn from_dir_as(
+        dir: impl AsRef<Path>,
+        num_threads: usize,
+        model_type: &str,
+    ) -> Result<Self> {
         let dir = dir.as_ref();
         let name = dir.file_name().map_or_else(
             || "zipformer".to_string(),
             |n| n.to_string_lossy().into_owned(),
         );
-        Self::load(&TransducerPaths::from_dir(dir)?, num_threads, name)
+        let mut paths = TransducerPaths::from_dir(dir)?;
+        paths.model_type = model_type.to_string();
+        Self::load(&paths, num_threads, name)
     }
 }
 
