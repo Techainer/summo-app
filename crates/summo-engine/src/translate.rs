@@ -415,7 +415,12 @@ impl Outcome {
 /// Compared on the base tag, so a line the recogniser reported as `en-US` counts as English against
 /// a target of `en`. Region is a spelling of a language, not a different one — the same rule
 /// `summo_engine::refine` applies when deciding whether a second model claims what was just heard.
-fn same_language(spoken: Option<&str>, target: &str) -> bool {
+///
+/// Shared with [`crate::live`] rather than restated there. Two-way translation arrived on the
+/// offline path and this function was private to it, so a live meeting went on sending every line
+/// to every target — including the one it was already in. Two copies of the rule is how the
+/// interface came to promise, correctly, a behaviour only half the product had.
+pub(crate) fn same_language(spoken: Option<&str>, target: &str) -> bool {
     let base = |code: &str| {
         code.trim()
             .split(['-', '_'])

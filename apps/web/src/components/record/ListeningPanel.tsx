@@ -255,7 +255,7 @@ export function ListeningPanel({
           that one. Reported exactly that way, twice.
           
           Only while the wait is real: the moment any line has a subtitle, this has nothing to say. */}
-      {into.length > 0 && !transcript.segments.some((segment) => segment.translation) && (
+      {into.length > 0 && !transcript.segments.some((segment) => segment.translations?.length) && (
         <p className="text-fg-dim text-micro mt-2">{t("record.translate_pending")}</p>
       )}
 

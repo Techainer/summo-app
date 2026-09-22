@@ -112,9 +112,19 @@ export function TranslateTargets({
         </label>
       )}
 
-      {value.length > 1 && (
+      {/* Two is a pair and reads as one; three or more is "everything except itself", which is a
+          different sentence. All four locales spelled the two-language case — `thứ tiếng còn lại`,
+          `whichever of these it is not`, `自分ではない方`, `那一个` — and every one of them is
+          wrong the moment a third language is added, in the exact place that exists to explain what
+          the control does. The arrow goes with it: `A ↔ B ↔ C` claims a chain nobody asked for. */}
+      {value.length === 2 && (
         <span className="text-fg-faint text-micro basis-full">
           {t("record.translate_both_ways", { languages: value.map(nameOf).join(" ↔ ") })}
+        </span>
+      )}
+      {value.length > 2 && (
+        <span className="text-fg-faint text-micro basis-full">
+          {t("record.translate_many_ways", { languages: value.map(nameOf).join(", ") })}
         </span>
       )}
 

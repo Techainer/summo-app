@@ -363,6 +363,7 @@ pub fn verdict_name(v: &Verdict) -> &'static str {
         Verdict::Repetition => "repetition",
         Verdict::NoSpeech => "no_speech",
         Verdict::Empty => "empty",
+        Verdict::Annotation => "annotation",
     }
 }
 

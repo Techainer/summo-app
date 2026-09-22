@@ -229,24 +229,40 @@ export function Transcript({
                     )}
                   </p>
                   {/* Under the original, never instead of it: the original is what was actually
-                      said, and anyone checking a subtitle against the speaker needs both. */}
-                  {segment.translation && (
+                      said, and anyone checking a subtitle against the speaker needs both.
+
+                      One per language asked for, in the order they were asked for. Holding a
+                      single translation meant the second reader's subtitle replaced the first
+                      reader's. */}
+                  {segment.translations?.map((translation) => (
                     <p
+                      key={translation.lang}
                       // A promise to the tests, for the same reason as `transcript-line` above: the
                       // suite that proves live translation works was matching
                       // `[data-testid="transcript-line"] p[lang]`, and this is a *sibling* of that
                       // element rather than a child — so it found nothing and reported translation
                       // as broken while it was working perfectly on screen.
                       data-testid="transcript-translation"
-                      lang={segment.translation.lang}
+                      lang={translation.lang}
                       className={cn(
                         "text-fg-dim mt-0.5 mb-0 leading-relaxed break-words opacity-[0.72]",
-                        italicise(segment.translation.lang) && "italic",
+                        italicise(translation.lang) && "italic",
                       )}
                     >
-                      {segment.translation.text}
+                      {/* Which language this one is, and only when there is more than one of them.
+                          With a single subtitle the control above already says; with two stacked
+                          under a line, nothing did, and two languages a reader does not both speak
+                          are two lines they cannot tell apart. Hidden from assistive technology
+                          because `lang` above is the same fact stated properly — announcing "EN"
+                          before every English sentence is noise. */}
+                      {(segment.translations?.length ?? 0) > 1 && (
+                        <span aria-hidden="true" className="text-fg-faint me-1.5 uppercase">
+                          {translation.lang}
+                        </span>
+                      )}
+                      {translation.text}
                     </p>
-                  )}
+                  ))}
                 </div>
               </div>
             );

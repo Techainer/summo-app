@@ -28,8 +28,8 @@ export interface Line {
   speaker?: string | null;
   /** Present only while recording; a partial is still being revised. */
   source?: string;
-  /** A live translation of this line, shown underneath the original. */
-  translation?: { lang: string; text: string };
+  /** Live translations of this line, one per language, shown underneath the original. */
+  translations?: { lang: string; text: string }[];
 }
 
 /**
@@ -229,20 +229,27 @@ function Chip({
       )}
     >
       {segment.text}
-      {segment.translation && (
+      {segment.translations?.map((translation) => (
         <span
-          lang={segment.translation.lang}
+          key={translation.lang}
+          lang={translation.lang}
           className={cn(
             "text-fg-dim mt-1 block break-words",
             // Italic is how this says "the machine wrote this line". CJK, Thai, Arabic and
             // Hebrew have no italic form, so a browser shears the glyphs instead — harder to
             // read, and it looks like a rendering fault.
-            italicise(segment.translation.lang) && "italic",
+            italicise(translation.lang) && "italic",
           )}
         >
-          {segment.translation.text}
+          {/* Named only when there is more than one, for the reason given in `Transcript.tsx`. */}
+          {(segment.translations?.length ?? 0) > 1 && (
+            <span aria-hidden="true" className="text-fg-faint me-1.5 uppercase">
+              {translation.lang}
+            </span>
+          )}
+          {translation.text}
         </span>
-      )}
+      ))}
     </span>
   );
 

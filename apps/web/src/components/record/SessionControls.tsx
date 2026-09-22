@@ -141,9 +141,15 @@ export function SessionControls({
               used to be indistinguishable from a translator that was quietly failing. */}
           {/* Every target, not the first one. A meeting subtitled into two languages that said it
               was subtitled into one is the same silence this line was added to end, one language
-              further along. */}
+              further along.
+
+              And with two or more it says *between*, not *into*. The daemon stopped translating a
+              line into the language it was already in, the control below says so, and this line
+              went on reading `đang dịch sang Tiếng Việt, Tiếng Anh` over a meeting where no
+              Vietnamese line was being translated into Vietnamese — the same screen contradicting
+              itself two rows apart. */}
           {into.length > 0
-            ? ` · ${t("record.translating_into", {
+            ? ` · ${t(into.length > 1 ? "record.translating_between" : "record.translating_into", {
                 language: into.map((code) => languageName(code, locale)).join(", "),
               })}`
             : ""}
