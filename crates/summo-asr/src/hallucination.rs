@@ -180,6 +180,10 @@ fn normalize(text: &str) -> String {
 /// no `no_speech_prob` to qualify it: a person cannot say a bracket, and `(tiếng cười)` in the
 /// middle of a sentence is a real sentence with a marker in it. Deleting that sentence would be
 /// far worse than keeping the marker.
+///
+/// The full-width pairs are not decoration. Whisper writes a Japanese or Chinese annotation the way
+/// a Japanese or Chinese subtitler does — `（音楽）`, `【拍手】` — and an ASCII-only list would fix
+/// this in the two languages it happened to be noticed in and leave it in the other ninety-seven.
 fn is_annotation(text: &str) -> bool {
     let text = text.trim();
     let mut chars = text.chars();
@@ -189,7 +193,13 @@ fn is_annotation(text: &str) -> bool {
     let closer = match first {
         Some('[') => ']',
         Some('(') => ')',
+        Some('［') => '］',
+        Some('（') => '）',
+        Some('【') => '】',
+        Some('〔') => '〕',
+        Some('《') => '》',
         Some('♪') => '♪',
+        Some('♫') => '♫',
         _ => return false,
     };
     if last != Some(closer) || text.chars().count() < 3 {
@@ -281,7 +291,19 @@ mod tests {
     #[test]
     fn a_subtitle_annotation_is_not_something_anybody_said() {
         let filter = HallucinationFilter::default();
-        for text in ["[Music]", "[ Music ]", "(Applause)", "[音楽]", "♪ lalala ♪"] {
+        for text in [
+            "[Music]",
+            "[ Music ]",
+            "(Applause)",
+            "[音楽]",
+            "♪ lalala ♪",
+            // The same thing written by a subtitler who is not writing in English. Summo
+            // transcribes ninety-nine languages; a rule that only knows ASCII brackets fixes this
+            // in the two it was noticed in.
+            "（音楽）",
+            "【拍手】",
+            "［音楽］",
+        ] {
             assert_eq!(
                 filter.judge(&with_no_speech(text, 0.05)),
                 Verdict::Annotation,
@@ -302,6 +324,8 @@ mod tests {
             "(tiếng cười) thì em nghĩ là được",
             "chúng ta bắt đầu nhé [tiếng gõ cửa]",
             "[a] xin chào [b]",
+            "（笑）そうですね",
+            "そうですね（笑）",
         ] {
             assert_eq!(
                 filter.judge(&with_no_speech(text, 0.05)),

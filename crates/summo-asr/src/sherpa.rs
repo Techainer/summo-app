@@ -262,6 +262,21 @@ mod tests {
         }
     }
 
+    /// Summo transcribes ninety-nine languages, and most writing systems have no case at all.
+    ///
+    /// A script with no upper and lower form has no lowercase letter in it, so the guard above is
+    /// satisfied by every line of Japanese, Korean, Thai and Arabic that has a space in it. It
+    /// stays a no-op because lower-casing a caseless character returns it unchanged — but that is
+    /// a property worth a test rather than a property worth assuming, since the rule exists for
+    /// one Latin-script model family and is applied to whatever the decoder returns.
+    #[test]
+    fn a_writing_system_with_no_case_is_untouched() {
+        for text in ["これは テスト です", "안녕 하세요", "مرحبا بك", "สวัสดี ครับ"]
+        {
+            assert_eq!(sentence_case(text), text);
+        }
+    }
+
     #[test]
     fn missing_files_fail_before_the_native_library_is_called() {
         let paths = TransducerPaths {
