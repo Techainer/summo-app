@@ -10,6 +10,7 @@ import { useI18n, useT } from "../i18n/context";
 import { cn } from "../lib/cn";
 import {
   CatalogueClient,
+  accuracyFor,
   byTask,
   canRun,
   installedBytes,
@@ -19,7 +20,6 @@ import {
   tags,
   type CatalogueModel,
   type Check,
-  type LanguageAccuracy,
   type Role,
   type Task,
 } from "../lib/catalogue";
@@ -33,17 +33,6 @@ import {
 function speedLabel(rtf: number): { times: number; keepsUp: boolean } {
   const keepsUp = rtf > 0 && rtf < 1;
   return { times: rtf > 0 ? Math.round(1 / rtf) : 0, keepsUp };
-}
-
-/**
- * Accuracy for the reader's own language, when it was measured.
- *
- * The one number a person actually wants from this list, and picking it here rather than showing
- * the whole list on a card is what keeps the card a card. The full list is on the detail sheet.
- */
-function accuracyFor(model: CatalogueModel, locale: string): LanguageAccuracy | undefined {
-  const mine = locale.toLowerCase().split("-")[0];
-  return model.accuracy?.find((each) => each.lang.toLowerCase() === mine);
 }
 
 import { useEngine } from "../lib/engine-context";

@@ -143,6 +143,33 @@ export interface Check {
   millis: number;
 }
 
+/**
+ * Accuracy for the reader's own language, when it was measured.
+ *
+ * The one number a person actually wants from this list, and picking it here rather than showing
+ * the whole list on a card is what keeps the card a card. The full list is on the detail sheet.
+ */
+export function accuracyFor(model: CatalogueModel, locale: string): LanguageAccuracy | undefined {
+  const mine = locale.toLowerCase().split("-")[0];
+  const ours = model.accuracy?.find((each) => each.lang.toLowerCase() === mine);
+  if (ours) return ours;
+
+  // Nothing for the reader's language. Whether that means "not measured" depends on whether this
+  // model is *for* their language at all.
+  //
+  // A model that covers it and has no figure for it is genuinely unmeasured for this reader, and
+  // showing its score in some other language would answer a question they did not ask.
+  //
+  // A model that does not cover it is being read for a different language entirely — an English
+  // specialist on a Vietnamese interface — and its measurement is the most useful thing on the
+  // card. Hiding it is how `zipformer-en` came to be measured at 59.7 % WER and still render as
+  // "chưa đo": the number existed, in English, on a screen in Vietnamese.
+  const covers = model.langs.some(
+    (each) => each === "*" || each.toLowerCase().split("-")[0] === mine,
+  );
+  return covers ? undefined : model.accuracy?.[0];
+}
+
 export interface Catalogue {
   models: CatalogueModel[];
   /** Which model each role currently points at, keyed by [`Role`]. */
@@ -243,10 +270,22 @@ export function byTask(models: CatalogueModel[]): { task: Task; models: Catalogu
     .sort(([a], [b]) => rank(a) - rank(b))
     .map(([task, group]) => ({
       task,
-      // Installed first, then largest last: the ones you have are the ones you came to look at, and
-      // within the rest a reader is comparing sizes.
+      // Installed first, then the better model, then the smaller one.
+      //
+      // Size alone put the worst model in the catalogue at the top of the speech section:
+      // `zipformer-en` is 70 MB and measures 40 % accurate, so a reader scanning left to right met
+      // it before anything that works. Size is the right tiebreak between models somebody might
+      // actually choose between; it is the wrong *first* question.
+      //
+      // Unmeasured sorts after measured rather than first or last. Ahead of nothing would bury a
+      // model nobody has got to yet; ahead of everything would let an unknown outrank a known-good
+      // one, which is the mistake the accuracy cell already exists to prevent.
       models: [...group].sort((x, y) => {
         if (x.installed !== y.installed) return x.installed ? -1 : 1;
+        const best = (m: CatalogueModel) => m.accuracy?.[0]?.accuracy;
+        const [a, b] = [best(x), best(y)];
+        if (a !== undefined && b !== undefined && a !== b) return b - a;
+        if ((a === undefined) !== (b === undefined)) return a === undefined ? 1 : -1;
         return x.size_bytes - y.size_bytes;
       }),
     }));
