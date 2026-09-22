@@ -22,6 +22,15 @@ import { Select } from "../ui";
  * A second language is a second step, taken from the `+` beside it, and only then do chips appear —
  * for the extras, never for the one the dropdown is already showing. Nothing about the common case
  * changed; the uncommon one is additive.
+ *
+ * ## Two languages is not "into two languages"
+ *
+ * The control reads as one-directional — *translate into X* — and that stopped being what happens.
+ * A line already in the language it would be translated into is no longer translated into it, so
+ * asking for Vietnamese and English on a meeting with both in it renders each line into the *other*
+ * one. That is what somebody choosing two languages for a bilingual standup means, and it is worth
+ * a sentence: a user who picks `vi` for a meeting they are conducting in Vietnamese and sees
+ * nothing happen has been told nothing about why.
  */
 export function TranslateTargets({
   value,
@@ -48,6 +57,9 @@ export function TranslateTargets({
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
+      {/* What two or more languages now means, said once and only when it applies. Below the
+          control rather than inside it: the dropdown's job is to hold the answer, and a note that
+          grew or shrank inside it would move the thing being clicked. */}
       <Select
         size={size}
         aria-label={label}
@@ -98,6 +110,12 @@ export function TranslateTargets({
             </Select>
           </span>
         </label>
+      )}
+
+      {value.length > 1 && (
+        <span className="text-fg-faint text-micro basis-full">
+          {t("record.translate_both_ways", { languages: value.map(nameOf).join(" ↔ ") })}
+        </span>
       )}
 
       {extras.map((code) => (

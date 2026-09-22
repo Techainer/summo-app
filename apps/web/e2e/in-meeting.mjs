@@ -386,6 +386,20 @@ async function settled(what, check) {
       console.log(`subtitles: ${before} → ${after} with two targets`);
     }
 
+    // And the control says what two targets now means. A line already in the language it would be
+    // translated into is no longer translated into it, so two targets is each line into the other
+    // one — and a control still reading "translate into X and Y" describes behaviour the daemon
+    // stopped having. A user who picks their own spoken language and sees nothing happen has been
+    // told nothing about why.
+    const note = page.getByText(/thứ tiếng còn lại/);
+    if ((await note.count()) === 0) {
+      problems.push("two targets are set and nothing says translation runs both ways");
+    } else if (!/↔/.test(await note.first().innerText())) {
+      problems.push(`the both-ways note does not name the pair: ${await note.first().innerText()}`);
+    } else {
+      console.log(`both ways: ${(await note.first().innerText()).trim()}`);
+    }
+
     // Dropping one leaves the other. The chip is the control, and its label says which it drops.
     await page
       .getByRole("button", { name: /Ngừng dịch sang/ })

@@ -81,6 +81,7 @@
     "translate_pending": "翻译从下一句开始 —— 已经完成的句子保持原样。",
     "translate_same": "你正在翻译成 {language}，也就是正在说的语言 —— 字幕会是同一句话。",
     "translate_off": "关闭",
+    "translate_both_ways": "每一句都会翻译成这些语言中它本身不是的那一个 — {languages}。",
     "translate_needs_model": "尚未安装任何翻译模型。",
     "translate_add": "再加一种语言",
     "translate_drop": "不再翻译成 {language}",
