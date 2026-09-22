@@ -62,7 +62,28 @@ CONF
   exit 0
 }
 
-install() { sudo timeout 900 apt-get install -y "$@"; }
+# `Acquire::Retries` is set to zero above and stays there, but not for this.
+#
+# Zero is right for the *index*: twenty files against a mirror that hangs, where every retry is
+# twenty more timeouts and the index the image shipped with is already good enough. It is wrong for
+# the package itself, which is one file of a hundred kilobytes — and a release died twice on
+# exactly that, twenty minutes apart, with `ports.ubuntu.com` refusing the connection for
+# `libasound2-dev` on arm64 while every other job in the run succeeded. One archive host having a
+# bad few minutes should not cost a platform its build.
+#
+# Bounded by the same impatience as everything else here: three attempts, five seconds of
+# connection timeout each, ten seconds between them. Worst case is under a minute, against a
+# rebuild-and-rerun that costs twenty.
+install() {
+  for attempt in 1 2 3; do
+    if sudo timeout 900 apt-get -o Acquire::Retries=2 install -y "$@"; then
+      return 0
+    fi
+    [[ $attempt -lt 3 ]] || return 1
+    echo "apt: attempt $attempt did not fetch everything; waiting to try again" >&2
+    sleep 10
+  done
+}
 
 # The index the image came with. Usually enough, and it costs nothing to find out.
 if install "$@"; then
