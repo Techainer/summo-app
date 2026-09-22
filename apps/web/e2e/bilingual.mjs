@@ -187,22 +187,31 @@ await page
   .click();
 
 const firstLine = page.locator('[data-testid="transcript-line"]').first();
-await firstLine.waitFor({ timeout: 120000 }).catch((error) => {
+await firstLine.waitFor({ timeout: 120000 }).catch(async (error) => {
+  // What the daemon thinks is happening, not just what it has printed. A session that never
+  // started and a session recording silence look identical in the log — it says nothing either
+  // way — and they are opposite bugs: one is the record button, the other is the audio reaching
+  // it. Twice this failed here and the log could not tell them apart.
+  console.log("--- /status ---\n" + JSON.stringify(await status().catch((e) => String(e))));
   console.log("--- daemon log ---\n" + engine.log().slice(-4000));
   throw error;
 });
 
-/** Every line on screen with the languages of the subtitles under it. */
+/** Every line on screen: what it was heard as, and the languages of the subtitles under it. */
 const lines = () =>
   page.$$eval('[data-testid="transcript-line"]', (nodes) =>
     nodes.map((node) => ({
       seq: node.getAttribute("data-seq"),
+      spoken: node.getAttribute("lang"),
       text: (node.textContent ?? "").trim(),
       subtitles: [
         ...(node.parentElement?.querySelectorAll('[data-testid="transcript-translation"]') ?? []),
       ].map((sub) => sub.getAttribute("lang")),
     })),
   );
+
+/** Base tag, so `en-US` from a runtime compares against `en` from a manifest. */
+const base = (code) => (code ?? "").toLowerCase().split(/[-_]/)[0];
 
 // ---- the daemon is running both, and says so -------------------------------
 {
@@ -294,9 +303,9 @@ const lines = () =>
 // paid a request for the privilege — while the note under the control said, correctly, that each
 // line is rendered into the other one.
 //
-// Counted per line rather than in total, because the total is the same either way. One subtitle per
-// line is the assertion: with both languages chosen, a line belongs to exactly one of the two
-// passes.
+// Checked per line against the language that line was heard in, because the total is the same
+// either way and the count of subtitles is not the rule — a line in a third language legitimately
+// gets both.
 {
   await page.getByLabel("Dịch trực tiếp").selectOption("vi");
   const refused = await page
@@ -358,14 +367,42 @@ const lines = () =>
       console.log(`subtitles arrived in both directions: ${[...langs].join(" ↔ ")}`);
     }
 
-    // The bug itself: a line with a subtitle in the language it was spoken in.
-    const doubled = seen.filter((line) => line.subtitles.length > 1);
-    if (doubled.length > 0) {
+    // The bug itself: a line carrying a subtitle in the language it was spoken in.
+    //
+    // Asserted against the line's own `lang` rather than against how many subtitles it has. The
+    // count is not the rule, and this suite learned that the hard way on CI: Whisper heard noise on
+    // that runner as Chinese, so `和等进` was correctly given *both* a Vietnamese and an English
+    // subtitle — it is in neither — and a check that read "more than one subtitle" called the
+    // correct answer a bug.
+    //
+    // Lines the recogniser did not label are skipped rather than trusted: with no language there is
+    // nothing to compare, and the daemon translates them into everything on purpose.
+    const wrong = seen.filter(
+      (line) => line.spoken && line.subtitles.some((sub) => base(sub) === base(line.spoken)),
+    );
+    if (wrong.length > 0) {
       problems.push(
-        `two-way translation put ${doubled.length} lines into both languages, which means one ` +
-          `of the two is the language the line was already in: ` +
-          JSON.stringify(doubled.slice(0, 2)),
+        `${wrong.length} line(s) were translated into the language they were already in: ` +
+          JSON.stringify(wrong.slice(0, 2)),
       );
+    }
+
+    // And the rule did something: at least one line was owed a subtitle it did not get, which is
+    // what "each into the other one" means and what a daemon translating everything into everything
+    // would never produce.
+    const held = seen.filter(
+      (line) =>
+        ["vi", "en"].includes(base(line.spoken)) &&
+        line.subtitles.length === 1 &&
+        base(line.subtitles[0]) !== base(line.spoken),
+    );
+    if (held.length === 0) {
+      problems.push(
+        "no line was rendered into the other language only — either nothing was recognised as " +
+          `Vietnamese or English, or both passes ran on everything: ${JSON.stringify(seen.slice(0, 3))}`,
+      );
+    } else {
+      console.log(`${held.length} line(s) rendered into the other language and no further`);
     }
     await page.screenshot({ path: "/tmp/shots/bilingual-two-way.png" });
   }

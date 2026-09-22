@@ -196,6 +196,11 @@ export function Transcript({
                     // A `data-testid` is a promise to the tests; a utility class is not.
                     data-testid="transcript-line"
                     data-source={segment.source}
+                    // The language this line was heard in, which the daemon has reported since it
+                    // could and nothing here read. Proper HTML before it is a test hook: a browser
+                    // hyphenates and a screen reader pronounces by this attribute, and on a meeting
+                    // with two languages in it every line claimed to be in the interface's.
+                    lang={segment.language}
                     // The utterance's number in this meeting, so a test can assert the transcript
                     // is still one meeting in order. A mid-meeting model or language change used to
                     // rebuild the pipeline with the numbering reset, so new lines took the numbers
