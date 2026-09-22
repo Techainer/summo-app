@@ -148,13 +148,44 @@ set above — first 100 by filename, digits left in.
 
 | Model | Threads | WER | CER | RTF | Empty |
 |---|---:|---:|---:|---:|---:|
-| whisper-base (int8) | 8 | **10.2 %** | **5.0 %** | 0.134 | 0 |
+| zipformer-gigaspeech-en (int8) | 8 | **10.1 %** | 6.5 % | **0.018** | 0 |
+| zipformer-gigaspeech-en (int8) | 4 | **10.1 %** | 6.5 % | 0.021 | 0 |
+| whisper-base (int8) | 8 | 10.2 % | **5.0 %** | 0.134 | 0 |
 | whisper-tiny (fp32) | 8 | 13.8 % | 6.4 % | 0.074 | 0 |
 | parakeet-tdt-110m (int8) | 8 | 51.8 % | 50.5 % | 0.020 | **44** |
 | zipformer-en (int8) | 8 | 59.7 % | 53.5 % | 0.020 | **22** |
 
-Whisper tiny is 13.8 % here, not 4.5 %. The recommendation did not change — tiny still ranks first
-on speed — but it is now standing on a number from this table.
+Whisper tiny is 13.8 % here, not 4.5 %.
+
+### An English transducer that does work
+
+`zipformer-gigaspeech-en` is level with Whisper base per word — 10.1 % against 10.2 % — at **six
+times the speed**, with nothing empty. It is slightly behind per character, 6.5 % against 5.0 %,
+which is a real difference and not a formatting one: the harness lower-cases and strips punctuation
+before scoring, so neither side is being charged for what a transducer does not emit.
+
+The speed is not the reason it matters. It is a **transducer**, so it decodes a half-spoken
+utterance and produces text while somebody is still talking; Whisper declines to, because given
+half a sentence it invents an ending for it. Until this model, every English recording showed
+nothing at all until the speaker stopped.
+
+The difference from the other English transducer here is the training data, not the architecture.
+`zipformer-en` is a LibriSpeech model — read audiobooks — and scores 59.7 % on these clips.
+GigaSpeech is ten thousand hours of podcasts, videos and audiobooks, and generalises.
+
+**whisper-tiny int8 is not whisper-tiny.** Re-running the baseline to check this table is still
+comparable gave 27.7 % instead of 13.8 %, which was not drift: `TransducerPaths::from_dir` and the
+Whisper loader both prefer a quantized export when both are present, and the mirror holds both. The
+recorded row is fp32, the registry installs fp32, and the fp32 re-run reproduces 13.8 % / 6.4 %
+exactly. The int8 build of tiny is degraded the same way it is on Vietnamese (81.3 % against
+67.6 %, above).
+
+**The published bytes are not the measured bytes unless you check.** sherpa-onnx ships this model
+as a `tar.bz2` on GitHub and as loose files on Hugging Face, and the two encoders differ — 57 bytes,
+different sha256. The manifest points at Hugging Face, so the numbers above were re-taken against
+the Hugging Face files; publishing a measurement of the archive beside a URL for the other copy
+would be a figure about a file nobody installs. Both score 10.1 % / 6.5 %, which is the answer that
+makes it safe to say so.
 
 ### The two transducers do not work
 
