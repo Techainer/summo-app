@@ -957,7 +957,10 @@ async fn set_models(
         if id.is_empty() {
             match body.role.as_str() {
                 "live" => settings.models.live = None,
-                "refine" => settings.models.refine = None,
+                // Empty, not absent: absent means nobody has decided and a specialist live model
+                // is paired automatically. Somebody clearing this row has decided, and a default
+                // that comes back afterwards is not a default.
+                "refine" => settings.models.refine = Some(String::new()),
                 "vad" => settings.models.vad = None,
                 "speaker" => settings.models.speaker = None,
                 "denoise" => settings.models.denoise = None,
@@ -1147,7 +1150,53 @@ fn resolve_models(
     if resolved.refine_model.as_deref() == Some(resolved.live_model.as_str()) {
         resolved.refine_model = None;
     }
+
+    // Nobody has decided, and the live model cannot hear half the meeting.
+    //
+    // Here and not in `choose_models`, because this depends on which model ended up doing the
+    // listening and that is settled above — a pairing chosen against an unresolved live model is a
+    // pairing chosen against nothing.
+    let undecided = summo_core::Settings::load(&engine.paths().settings())
+        .unwrap_or_default()
+        .models
+        .refine
+        .is_none();
+    if resolved.refine_model.is_none() && undecided {
+        resolved.refine_model = automatic_second(engine, &resolved.live_model);
+    }
     resolved
+}
+
+/// The second model to run underneath a live one nobody paired.
+///
+/// Only under a **specialist**. Gipformer declares `vi` and returns Vietnamese-shaped noise for an
+/// English sentence; Whisper hears ninety-nine languages badly and is therefore exactly the right
+/// thing to have underneath it. That pairing has existed since `refine_model` was wired and you had
+/// to know it existed, find the models screen, and switch it on — for a failure whose symptom is
+/// confident nonsense rather than an error.
+///
+/// Not under a multilingual one. A user who chose Whisper chose breadth, and giving them a second
+/// resident model and a second decode per utterance is a decision they did not make. The models
+/// screen still *suggests* a specialist there, which is the right weight for advice about accuracy.
+///
+/// Nothing is chosen when nothing is installed, and `recommend` already refuses a model this
+/// machine cannot afford — so a laptop that cannot hold two is not handed two.
+#[cfg(feature = "models")]
+fn automatic_second(engine: &EngineState, live: &str) -> Option<String> {
+    let installed = engine.store().list();
+    let live = summo_core::ModelId::parse(live)
+        .ok()
+        .and_then(|id| installed.iter().find(|m| m.id == id).cloned())?;
+    if live.langs.iter().any(|l| l == "*") {
+        return None;
+    }
+    let second = summo_models::second_opinion(&installed, engine.hardware(), &live, None)?;
+    // Installed, not merely rankable: this runs at the start of a recording and a model that is not
+    // on disk would fail the session for a pairing nobody asked for.
+    installed
+        .iter()
+        .any(|m| m.id.as_str() == second.id)
+        .then_some(second.id)
 }
 
 /// The live model, and the refine model when the settings name one.
@@ -1170,6 +1219,8 @@ fn choose_models(
     // Read before the early return below, because the live model being pinned says nothing about
     // whether a refine model was also chosen.
     if spec.refine_model.is_none() {
+        // An empty string here is somebody having turned the second model *off*, which is not the
+        // same as never having chosen one — see `Models::refine` and `resolve_models`.
         spec.refine_model = settings
             .models
             .refine
@@ -3245,11 +3296,22 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
     // Vietnamese, decides Whisper is worse, and recommends nothing — for exactly the meeting where
     // the second model matters most. The English sentences are the point, and accuracy on
     // Vietnamese says nothing about them. See `summo_models::second_opinion`.
-    let second = settings
-        .models
-        .refine
-        .clone()
-        .filter(|id| !id.trim().is_empty());
+    // What will actually be used, which is not the same as what the file says.
+    //
+    // A specialist live model with nothing chosen is paired automatically — see `automatic_second`
+    // — and a table that answers "what will the next recording use" has to say so. Reporting the
+    // settings file here would leave the screen advising a pairing that is already running.
+    let (second, automatic) = match settings.models.refine.as_deref() {
+        Some(id) if !id.trim().is_empty() => (Some(id.to_string()), false),
+        Some(_) => (None, false),
+        None => (
+            chosen
+                .as_deref()
+                .and_then(|live| automatic_second(&state.engine, live)),
+            true,
+        ),
+    };
+    let automatic = automatic && second.is_some();
     let second_manifest = second
         .as_ref()
         .and_then(|id| installed.iter().find(|m| m.id.as_str() == id.as_str()));
@@ -3289,6 +3351,10 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
             "model": second,
             "name": second_manifest.map(|m| m.name.clone()),
             "installed": second_manifest.is_some(),
+            // Chosen for the user rather than by them, so the screen can say which it is. A row
+            // that reads the same either way turns "Summo decided this" into "you decided this",
+            // and the first is the one somebody may want to undo.
+            "automatic": automatic,
             "suggested": suggested,
         },
         "speakers": { "installed": has(summo_models::Task::SpeakerEmbed), "id": "campplus-sv" },
@@ -3395,7 +3461,7 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
         // Present and empty rather than absent. A build without recognition still serves this
         // screen, and an interface that reads a field the daemon does not send is a blank page
         // rather than a missing row — which is what a `main` that never rendered turned out to be.
-        "second_pass": { "model": null, "name": null, "installed": false, "suggested": null },
+        "second_pass": { "model": null, "name": null, "installed": false, "automatic": false, "suggested": null },
         "detector": { "installed": false, "id": "silero-vad-v5" },
         "speakers": { "installed": false, "id": "campplus-sv" },
         // Present and empty, for the same reason `second_pass` above is.
@@ -5803,6 +5869,41 @@ mod resolve_tests {
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
         assert_eq!(resolved.live_model, "whisper-tiny");
         assert_eq!(resolved.refine_model.as_deref(), Some("gipformer-65m"));
+    }
+
+    /// Turning the second model off has to stay off.
+    ///
+    /// The automatic pairing below reads "nobody has decided", and an empty string is somebody
+    /// having decided against it. Reading the two as the same would put the model back at the start
+    /// of the next recording, which is a setting that does not work.
+    #[test]
+    fn a_second_model_switched_off_is_not_switched_back_on() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("gipformer-65m".into());
+        settings.models.refine = Some(String::new());
+        settings.save(&engine.paths().settings()).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.refine_model, None);
+    }
+
+    /// A multilingual live model is left alone.
+    ///
+    /// Somebody who chose Whisper chose breadth. Handing them a second resident model and a second
+    /// decode per utterance is a decision they did not make, and the models screen still offers the
+    /// advice — which is the right weight for a claim about accuracy.
+    #[test]
+    fn a_multilingual_live_model_is_not_paired_for_you() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("whisper-tiny".into());
+        settings.save(&engine.paths().settings()).unwrap();
+
+        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        assert_eq!(resolved.refine_model, None);
     }
 
     /// The same wire, for the role that had none at all.

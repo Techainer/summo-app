@@ -55,6 +55,15 @@ export interface Plan {
     model: string | null;
     name: string | null;
     installed: boolean;
+    /**
+     * Chosen for the user rather than by them.
+     *
+     * A specialist recogniser hears one language and returns confident nonsense for every other,
+     * so one is paired with a multilingual model unless somebody has said otherwise. A row that
+     * reads the same either way would turn "Summo decided this" into "you decided this", and only
+     * the first is something a reader might want to undo.
+     */
+    automatic?: boolean;
     suggested: { id: string; name: string; reason: string; installed: boolean } | null;
   };
   /** The voice detector. Without it a recording produces no words at all. */

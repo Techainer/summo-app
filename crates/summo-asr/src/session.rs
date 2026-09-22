@@ -99,6 +99,36 @@ impl Default for SessionConfig {
 /// outcome — the alternative is a decoder that is further behind every second.
 const MAX_PARTIAL_STEP_MS: u32 = 2_000;
 
+/// Tail a partial will re-decode before it freezes what it already has.
+///
+/// The cadence fix held the *cost per second of speech* still, which stopped a long sentence
+/// taking the machine past real time — but each individual decode still grew, so the text got
+/// coarser the longer somebody talked and a single decode of a thirty-second sentence still blocked
+/// the audio thread for half of it.
+///
+/// The cost has no reason to grow at all. A partial re-decodes the whole open utterance, and almost
+/// all of that utterance is not going to change: the words spoken ten seconds ago are settled. So
+/// once the undecided tail passes this, the text so far is frozen and every later partial decodes
+/// only what has been said since. Six seconds of tail is a fixed price, whether the sentence is ten
+/// seconds long or ten minutes.
+///
+/// The frozen text is a *partial*, and partials are cosmetic — the final decodes the whole
+/// utterance in one piece, as it always did, and replaces all of it.
+const COMMIT_AFTER_MS: u32 = 6_000;
+
+/// And the point past which it freezes whether or not there is a good place to.
+///
+/// Freezing between words needs a pause, and somebody reading aloud can go a long time without one.
+/// Past this the seam is cut mid-word, which costs a word in text that is about to be replaced
+/// anyway — cheaper than a decode that is still growing at twelve seconds.
+const COMMIT_LATEST_MS: u32 = 12_000;
+
+/// Quiet that makes a moment "between words" rather than inside one.
+///
+/// Far below [`GateConfig::min_silence_s`], which is the quiet that ends a sentence. This is the
+/// gap between two words, and cutting there is what keeps a frozen prefix from ending mid-syllable.
+const DIP_MS: u32 = 160;
+
 /// How much a new measurement moves the running estimate.
 ///
 /// Slow, because the thing being estimated barely changes: it is one model on one machine. What
@@ -114,6 +144,13 @@ pub struct PseudoSession<D: Decoder> {
     filter: HallucinationFilter,
     /// Samples in the open utterance at the last partial decode.
     last_partial_len: usize,
+    /// Text of the part of the open utterance that is no longer being re-decoded.
+    ///
+    /// See [`COMMIT_AFTER_MS`]. Empty for every utterance short enough that nothing was frozen,
+    /// which is nearly all of them.
+    committed_text: String,
+    /// How much of the open utterance `committed_text` accounts for.
+    committed_len: usize,
     /// How fast this decoder is on this machine, as seconds of work per second of audio.
     ///
     /// Measured rather than declared. The registry publishes a real-time factor, but it was taken
@@ -166,6 +203,8 @@ impl<D: Decoder> PseudoSession<D> {
             cfg,
             filter: HallucinationFilter::default(),
             last_partial_len: 0,
+            committed_text: String::new(),
+            committed_len: 0,
             decode_rtf: None,
             decodes: 0,
             suppressed: 0,
@@ -249,7 +288,7 @@ impl<D: Decoder> PseudoSession<D> {
         match event {
             SpeechEvent::Start { .. } => {
                 self.decoder.reset();
-                self.last_partial_len = 0;
+                self.forget_the_open_utterance();
                 Ok(Vec::new())
             }
             SpeechEvent::Continue { seq, t0, t1 } => self.maybe_partial(seq, t0, t1),
@@ -304,31 +343,72 @@ impl<D: Decoder> PseudoSession<D> {
         });
     }
 
-    /// Re-decode the open utterance if enough new audio has arrived.
+    /// Forget everything known about the utterance that just ended.
+    ///
+    /// One place, because the two halves of it are easy to separate by accident and the symptom of
+    /// separating them is a sentence that begins with the end of the previous one.
+    fn forget_the_open_utterance(&mut self) {
+        self.last_partial_len = 0;
+        self.committed_text.clear();
+        self.committed_len = 0;
+    }
+
+    /// Re-decode the *undecided tail* of the open utterance if enough new audio has arrived.
+    ///
+    /// Only the tail. See [`COMMIT_AFTER_MS`]: what was said ten seconds ago is not going to change,
+    /// so re-deciding it on every refresh is work with a known answer — and it is the work that made
+    /// a long sentence cost more with every second of it.
     fn maybe_partial(&mut self, seq: u64, t0: f64, t1: f64) -> Result<Vec<Event>> {
         if !self.cfg.emit_partials || !self.decoder.supports_partials() {
             return Ok(Vec::new());
         }
 
-        let open = self.gate.open_pcm();
-        let step = ms_to_samples(self.partial_step_ms(samples_to_secs(open.len())));
-        if open.len() < self.last_partial_len + step {
+        let open_len = self.gate.open_pcm().len();
+        // Clamped rather than trusted: the gate owns this buffer and an utterance boundary this
+        // function did not see would leave a commit point past the end of a shorter one.
+        let committed = self.committed_len.min(open_len);
+        let tail_len = open_len - committed;
+
+        // Sized on the tail, because the tail is what the decode will cost.
+        let step = ms_to_samples(self.partial_step_ms(samples_to_secs(tail_len)));
+        if open_len < self.last_partial_len + step {
             return Ok(Vec::new());
         }
-        self.last_partial_len = open.len();
+        self.last_partial_len = open_len;
 
         // The borrow checker cannot see that `decode` does not touch the gate, so copy the window.
         // At a few seconds of 16 kHz mono this is tens of kilobytes — noise next to the decode.
-        let window = open.to_vec();
+        let window = self.gate.open_pcm()[committed..].to_vec();
+        let quiet = self.gate.quiet_samples();
         self.decodes += 1;
         let began = std::time::Instant::now();
         let transcript = self.decoder.decode(&window)?;
         self.observe(began.elapsed(), samples_to_secs(window.len()));
 
-        if transcript.is_empty() {
+        let text = match (self.committed_text.as_str(), transcript.text.trim()) {
+            ("", tail) => tail.to_string(),
+            (head, "") => head.to_string(),
+            (head, tail) => format!("{head} {tail}"),
+        };
+
+        // Freeze, once the tail is long enough to be worth not decoding again — at a gap between
+        // words if there is one, and regardless once the tail is long enough that waiting for one
+        // costs more than cutting badly.
+        let dip = quiet >= ms_to_samples(DIP_MS);
+        if tail_len >= ms_to_samples(COMMIT_LATEST_MS)
+            || (dip && tail_len >= ms_to_samples(COMMIT_AFTER_MS))
+        {
+            self.committed_text = text.clone();
+            self.committed_len = open_len;
+            // The decoder has state per call for some runtimes; the next tail is a new utterance as
+            // far as it is concerned.
+            self.decoder.reset();
+        }
+
+        if text.is_empty() {
             return Ok(Vec::new());
         }
-        let mut segment = Segment::new(seq, self.cfg.lane, transcript.text, t0, t1);
+        let mut segment = Segment::new(seq, self.cfg.lane, text, t0, t1);
         segment.source = SegmentSource::Partial;
         segment.conf = transcript.confidence;
         segment.language = transcript
@@ -340,7 +420,10 @@ impl<D: Decoder> PseudoSession<D> {
 
     /// Decode a closed utterance and emit it, unless it looks invented.
     fn finalize(&mut self, seq: u64, t0: f64, t1: f64, pcm: &[f32]) -> Result<Vec<Event>> {
-        self.last_partial_len = 0;
+        // Including anything frozen mid-sentence. The final decodes the whole utterance in one
+        // piece — it always did — so a seam the partials had to cut does not survive into the
+        // transcript, and the next utterance does not inherit the end of this one.
+        self.forget_the_open_utterance();
 
         // Cleaned once, here, and then it *is* the utterance: the decoder sees it, the retained
         // audio is it, and a second model refining this line later refines the same seconds the
@@ -465,6 +548,26 @@ mod tests {
             }
         }
         events
+    }
+
+    /// A decoder that remembers how much audio it was handed.
+    ///
+    /// The only thing the commit window is about, and nothing else can see it: the events carry
+    /// text, and text says nothing about how much work produced it.
+    struct WindowSpy {
+        seen: std::sync::Arc<std::sync::Mutex<Vec<usize>>>,
+        finals: usize,
+    }
+
+    impl Decoder for WindowSpy {
+        fn decode(&mut self, pcm: &[f32]) -> Result<Transcript> {
+            self.seen.lock().unwrap().push(pcm.len());
+            self.finals += 1;
+            Ok(Transcript::new(format!("câu {}", self.finals)))
+        }
+        fn name(&self) -> &str {
+            "window-spy"
+        }
     }
 
     fn partials(events: &[Event]) -> Vec<&str> {
@@ -819,6 +922,68 @@ mod tests {
             assert!(
                 share <= 0.36,
                 "at {open}s the partials would take {share:.2} of a core"
+            );
+        }
+    }
+
+    /// The architecture, rather than the mitigation.
+    ///
+    /// Refreshing less often held the cost per second of speech still; it did not stop each
+    /// individual decode from growing. This asserts the thing that does: on a sentence far longer
+    /// than the commit window, the audio handed to the decoder stops growing — so a ten-minute
+    /// monologue costs the same per refresh as a ten-second one.
+    #[test]
+    fn a_partial_never_decodes_more_than_the_commit_window() {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut s = PseudoSession::new(
+            WindowSpy {
+                seen: seen.clone(),
+                finals: 0,
+            },
+            SessionConfig::default(),
+        );
+
+        // Twenty-five seconds of unbroken speech, and no silence after it: the utterance stays
+        // open, so every decode recorded here is a partial. The *final* decodes the whole thing in
+        // one piece and always did — it happens once, and it is not what grows with every refresh.
+        run(&mut s, &[(true, 2_500)]);
+
+        let windows: Vec<usize> = seen.lock().unwrap().clone();
+        let biggest = windows.iter().copied().max().unwrap_or(0);
+        let ceiling = ms_to_samples(COMMIT_LATEST_MS) + ms_to_samples(2_000);
+        assert!(
+            biggest <= ceiling,
+            "a partial decoded {biggest} samples; the window is meant to stop at {ceiling}"
+        );
+    }
+
+    /// And what was frozen is still in front of the reader.
+    ///
+    /// Freezing a prefix is only acceptable because the text keeps growing: if the committed half
+    /// were dropped, a long sentence would appear to restart every few seconds, which is a worse
+    /// screen than the slow one this replaces.
+    #[test]
+    fn a_frozen_prefix_stays_in_the_partial_text() {
+        let mut s = PseudoSession::new(
+            FixedDecoder::new("một câu"),
+            SessionConfig {
+                partial_step_ms: 1_000,
+                ..SessionConfig::default()
+            },
+        );
+        let events = run(&mut s, &[(true, 2_500), (false, 60)]);
+        let texts = partials(&events);
+        let longest = texts.iter().map(|t| t.len()).max().unwrap_or(0);
+        assert!(
+            longest > "một câu".len(),
+            "the partial never grew past one decode's worth: {texts:?}"
+        );
+        for pair in texts.windows(2) {
+            assert!(
+                pair[1].len() >= pair[0].len(),
+                "the text went backwards: {:?} then {:?}",
+                pair[0],
+                pair[1]
             );
         }
     }

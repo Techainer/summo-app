@@ -452,6 +452,7 @@
     "role_asr": "语音识别",
     "role_vad": "语音活动检测",
     "role_second": "二次转写",
+    "second_automatic": "已为你自动搭配",
     "role_speaker": "说话人识别",
     "role_translate": "翻译",
     "role_denoise": "降噪",
