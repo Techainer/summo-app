@@ -137,6 +137,47 @@ The publisher reports 15.44 % against 15.53 % on their own tele-medium set. That
 benchmark on different audio and the two numbers are not comparable; both are quoted where they
 belong rather than averaged into one claim.
 
+## English: the model we were recommending was measured by somebody else
+
+`whisper-tiny` ranked first for English on `wer_whisper_testset_en: 0.045` — 4.5 %, published by
+OpenAI on OpenAI's own test set. Nothing else in this file was measured that way, so the one number
+deciding the English recommendation was the one number that could not be compared to any other.
+
+**Dataset:** FLEURS `en_us` test, **100 clips, 953.9 s**, built by the same recipe as the Vietnamese
+set above — first 100 by filename, digits left in.
+
+| Model | Threads | WER | CER | RTF | Empty |
+|---|---:|---:|---:|---:|---:|
+| whisper-base (int8) | 8 | **10.2 %** | **5.0 %** | 0.134 | 0 |
+| whisper-tiny (fp32) | 8 | 13.8 % | 6.4 % | 0.074 | 0 |
+| parakeet-tdt-110m (int8) | 8 | 51.8 % | 50.5 % | 0.020 | **44** |
+| zipformer-en (int8) | 8 | 59.7 % | 53.5 % | 0.020 | **22** |
+
+Whisper tiny is 13.8 % here, not 4.5 %. The recommendation did not change — tiny still ranks first
+on speed — but it is now standing on a number from this table.
+
+### The two transducers do not work
+
+The last column is the story. A model that mishears has a WER far above its CER; these two have them
+almost equal, which is the shape of output that is *absent* rather than wrong. Twenty-two and
+forty-four of the hundred clips produced no text at all.
+
+The ones that do produce text are not better. For *"Many people don't think about them as dinosaurs
+because they have feathers and can fly"*, zipformer-en answers `I DO THINK OF OTHER MISSINISTERS
+BECAUSE THEY HAVE FEATHERS AND CAN FLY`; for a whole sentence about pyramids, it answers `VERY`.
+
+This is not a small accuracy gap to be traded against speed. `zipformer-en` has been in the registry
+with no measurement against it, at 67 MB and Apache-2.0, looking like a reasonable English choice.
+Its measured row is published for that reason rather than removed.
+
+Parakeet is a different case and is **left unmeasured on purpose**. NVIDIA publish it as a strong
+English model and 44 empty outputs is not a model mishearing, it is a model not running — a feature
+dimension, a decoding method, or something else in how sherpa is being handed it. Recording 51.8 %
+as its accuracy would publish a fact about our integration as if it were a fact about the model.
+
+Both need finding before English has a specialist worth recommending. Until then the honest answer
+for English is a Whisper.
+
 ## Quantisation: does int8 pay on a CPU?
 
 The question behind every model we ship: Summo runs on a laptop CPU, and int8 halves the download

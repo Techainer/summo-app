@@ -257,6 +257,13 @@ enum Command {
         /// Which runtime loads the model directory.
         #[arg(long, value_enum, default_value_t = transcribe::Engine::Transducer)]
         engine: transcribe::Engine,
+        /// sherpa's transducer flavour, e.g. `nemo_transducer` for an NVIDIA export.
+        ///
+        /// Empty is icefall's, which is sherpa's own default. A directory carries no manifest, so
+        /// nothing in it can declare this and sherpa tells the two apart by a metadata field only
+        /// one of them has.
+        #[arg(long, default_value = "")]
+        model_type: String,
         /// ISO language code for Whisper, e.g. `en` or `vi`. Omit to let it detect.
         #[arg(long)]
         lang: Option<String>,
@@ -435,6 +442,7 @@ async fn main() -> Result<()> {
             model_dir,
             vad,
             engine,
+            model_type,
             lang,
             threads,
             partial_step_ms,
@@ -445,6 +453,7 @@ async fn main() -> Result<()> {
             model_dir,
             vad_model: vad,
             engine,
+            model_type,
             language: lang,
             threads,
             partial_step_ms,
