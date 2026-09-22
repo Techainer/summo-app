@@ -144,7 +144,9 @@ const pick = (role, model) =>
     );
   }
   if (settled.second_pass?.automatic !== false) {
-    problems.push(`a model the user chose is reported as automatic: ${JSON.stringify(settled.second_pass)}`);
+    problems.push(
+      `a model the user chose is reported as automatic: ${JSON.stringify(settled.second_pass)}`,
+    );
   }
 
   // And turning it off stays off. An automatic default that comes back after being cleared is a
@@ -152,7 +154,9 @@ const pick = (role, model) =>
   await pick("refine", "");
   const off = await (await fetch(at("/settings/plan"))).json();
   if (off.second_pass?.model) {
-    problems.push(`the second model came back after being turned off: ${JSON.stringify(off.second_pass)}`);
+    problems.push(
+      `the second model came back after being turned off: ${JSON.stringify(off.second_pass)}`,
+    );
   }
 }
 

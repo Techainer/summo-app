@@ -448,77 +448,76 @@ function Running({
     id?: string;
     /** Said beside the value when the row is something Summo decided rather than the reader. */
     note?: string;
-  }[] =
-    [
-      {
-        key: "asr",
-        label: t("models.role_asr"),
-        value: plan.speech.name ?? plan.speech.model,
-        ready: plan.speech.installed,
-        ...(plan.speech.model ? { id: plan.speech.model } : {}),
-      },
-      // Only when there is one. This role is genuinely optional — most meetings are in one language
-      // and a second decode of every utterance would cost without adding — so an always-present row
-      // reading "none" would teach people to ignore a row that matters when it is not empty.
-      ...(plan.second_pass?.model
-        ? [
-            {
-              key: "second",
-              label: t("models.role_second"),
-              value: plan.second_pass?.name ?? plan.second_pass?.model,
-              ready: plan.second_pass?.installed === true,
-              id: plan.second_pass?.model,
-              // Said, because it was not asked for. Silence here reads as a choice the user made
-              // and forgot, and the one question they will have is why a second model is loaded.
-              note: plan.second_pass?.automatic ? t("models.second_automatic") : undefined,
-            },
-          ]
-        : []),
-      {
-        key: "vad",
-        label: t("models.role_vad"),
-        value: plan.detector.id,
-        ready: plan.detector.installed,
-        id: plan.detector.id,
-      },
-      {
-        key: "speaker",
-        label: t("models.role_speaker"),
-        value: plan.speakers.id,
-        ready: plan.speakers.installed,
-        id: plan.speakers.id,
-      },
-      // Only when one is chosen, like the second pass above and for the same reason: off is the
-      // normal state, and a permanent row reading "none" teaches people to skip a row that matters
-      // when it is not empty. Unlike the second pass, this one changes what the decoder *hears* —
-      // so when it is on it has to be visible, and until now it never was.
-      ...(plan.denoise?.model
-        ? [
-            {
-              key: "denoise",
-              label: t("models.role_denoise"),
-              value: plan.denoise.model,
-              ready: plan.denoise.installed,
-              id: plan.denoise.model,
-            },
-          ]
-        : []),
-      {
-        key: "translate",
-        label: t("models.role_translate"),
-        // Translation is the one role that can be somebody else's server, and then there is nothing
-        // to install and nothing to be missing.
-        value: plan.translation.local
-          ? plan.translation.model
-          : plan.translation.provider
-            ? t("models.role_endpoint", { provider: plan.translation.provider })
-            : null,
-        // An endpoint is always ready — there is nothing to install. A local model is ready when
-        // it is on disk, which the daemon now reports rather than the interface assuming.
-        ready: !plan.translation.local || plan.translation.installed,
-        ...(plan.translation.local && plan.translation.model ? { id: plan.translation.model } : {}),
-      },
-    ];
+  }[] = [
+    {
+      key: "asr",
+      label: t("models.role_asr"),
+      value: plan.speech.name ?? plan.speech.model,
+      ready: plan.speech.installed,
+      ...(plan.speech.model ? { id: plan.speech.model } : {}),
+    },
+    // Only when there is one. This role is genuinely optional — most meetings are in one language
+    // and a second decode of every utterance would cost without adding — so an always-present row
+    // reading "none" would teach people to ignore a row that matters when it is not empty.
+    ...(plan.second_pass?.model
+      ? [
+          {
+            key: "second",
+            label: t("models.role_second"),
+            value: plan.second_pass?.name ?? plan.second_pass?.model,
+            ready: plan.second_pass?.installed === true,
+            id: plan.second_pass?.model,
+            // Said, because it was not asked for. Silence here reads as a choice the user made
+            // and forgot, and the one question they will have is why a second model is loaded.
+            note: plan.second_pass?.automatic ? t("models.second_automatic") : undefined,
+          },
+        ]
+      : []),
+    {
+      key: "vad",
+      label: t("models.role_vad"),
+      value: plan.detector.id,
+      ready: plan.detector.installed,
+      id: plan.detector.id,
+    },
+    {
+      key: "speaker",
+      label: t("models.role_speaker"),
+      value: plan.speakers.id,
+      ready: plan.speakers.installed,
+      id: plan.speakers.id,
+    },
+    // Only when one is chosen, like the second pass above and for the same reason: off is the
+    // normal state, and a permanent row reading "none" teaches people to skip a row that matters
+    // when it is not empty. Unlike the second pass, this one changes what the decoder *hears* —
+    // so when it is on it has to be visible, and until now it never was.
+    ...(plan.denoise?.model
+      ? [
+          {
+            key: "denoise",
+            label: t("models.role_denoise"),
+            value: plan.denoise.model,
+            ready: plan.denoise.installed,
+            id: plan.denoise.model,
+          },
+        ]
+      : []),
+    {
+      key: "translate",
+      label: t("models.role_translate"),
+      // Translation is the one role that can be somebody else's server, and then there is nothing
+      // to install and nothing to be missing.
+      value: plan.translation.local
+        ? plan.translation.model
+        : plan.translation.provider
+          ? t("models.role_endpoint", { provider: plan.translation.provider })
+          : null,
+      // An endpoint is always ready — there is nothing to install. A local model is ready when
+      // it is on disk, which the daemon now reports rather than the interface assuming.
+      ready: !plan.translation.local || plan.translation.installed,
+      ...(plan.translation.local && plan.translation.model ? { id: plan.translation.model } : {}),
+    },
+  ];
 
   return (
     <section
