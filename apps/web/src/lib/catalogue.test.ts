@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canRun, roleFor, type CatalogueModel, type Task } from "./catalogue";
+import { byTask, canRun, roleFor, type CatalogueModel, type Task } from "./catalogue";
 
 /** A card with only the fields under test filled in. */
 function model(over: Partial<CatalogueModel> = {}): CatalogueModel {
@@ -74,5 +74,54 @@ describe("which role a task fills", () => {
     for (const task of ["vad", "speaker-embed", "diarize-seg", "embed"] satisfies Task[]) {
       expect(roleFor(task)).toBeNull();
     }
+  });
+});
+
+describe("the order cards are shown in", () => {
+  /** The one group `byTask` makes when every model has the same task. */
+  const firstGroup = (models: CatalogueModel[]) => {
+    const groups = byTask(models);
+    expect(groups).toHaveLength(1);
+    return groups[0]!;
+  };
+
+  const speech = (id: string, size: number, accuracy?: number): CatalogueModel =>
+    model({
+      id,
+      size_bytes: size,
+      ...(accuracy === undefined ? {} : { accuracy: [{ lang: "en", accuracy }] }),
+    });
+
+  /**
+   * Size alone put the worst model in the catalogue at the top of the speech section.
+   * `zipformer-en` is 70 MB and measures 40 % accurate, so a reader scanning left to right met it
+   * before anything that works.
+   */
+  it("puts the better model before the smaller one", () => {
+    const group = firstGroup([
+      speech("small-and-bad", 70, 0.4),
+      speech("bigger-and-good", 160, 0.9),
+    ]);
+    expect(group.models.map((m) => m.id)).toEqual(["bigger-and-good", "small-and-bad"]);
+  });
+
+  /**
+   * After measured, not before it. Ahead of everything would let an unknown outrank a known-good
+   * model, which is the mistake the accuracy cell exists to prevent; ahead of nothing would bury a
+   * model nobody has got to yet.
+   */
+  it("sorts an unmeasured model after the measured ones and before nothing", () => {
+    const group = firstGroup([
+      speech("unmeasured", 10),
+      speech("good", 500, 0.9),
+      speech("bad", 20, 0.4),
+    ]);
+    expect(group.models.map((m) => m.id)).toEqual(["good", "bad", "unmeasured"]);
+  });
+
+  it("still puts what you have installed first", () => {
+    const mine = { ...speech("installed-and-bad", 900, 0.3), installed: true };
+    const group = firstGroup([speech("good", 100, 0.95), mine]);
+    expect(group.models[0]?.id).toBe("installed-and-bad");
   });
 });
