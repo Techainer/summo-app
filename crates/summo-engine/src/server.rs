@@ -5027,9 +5027,9 @@ async fn set_live_translation(
     };
 
     // Deduplicated, keeping the order the user picked. Asking for the same language twice is a
-    // double click, not a request to pay for the same subtitle twice — and the second copy would
-    // arrive as a second `Translation` event for one `seq`, which the transcript renders as two
-    // identical lines under the original.
+    // double click, not a request to pay for the same subtitle twice — the second copy would be a
+    // whole extra pass through the model, arriving as a second `Translation` event for one `seq`
+    // and one language, which the transcript then draws over the first one it already has.
     let mut wanted: Vec<String> = Vec::new();
     for lang in into {
         let lang = lang.trim().to_string();
@@ -5081,12 +5081,15 @@ async fn set_live_translation(
             // Every line, oldest first. `LiveTranslator` drains this only into room the live path
             // is not using, so a long meeting fills in from the top without a single subtitle for
             // current speech arriving late.
-            let already: Vec<(u64, String)> = active
+            // With the language each line was spoken in, so the backlog is filtered by the same
+            // rule as live speech. Without it, turning two-way translation on mid-meeting would
+            // fill in the past with the thing the present has stopped doing.
+            let already: Vec<(u64, String, Option<String>)> = active
                 .recorder
                 .document()
                 .transcript
                 .iter()
-                .map(|segment| (segment.seq, segment.text.clone()))
+                .map(|segment| (segment.seq, segment.text.clone(), segment.language.clone()))
                 .collect();
             let waiting = already.len();
             live.backfill(already);

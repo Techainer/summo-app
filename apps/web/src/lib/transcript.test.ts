@@ -109,10 +109,7 @@ describe("live translation", () => {
     });
 
     expect(state.segments[0]?.text).toBe("xin chào");
-    expect(state.segments[0]?.translation).toEqual({
-      lang: "en",
-      text: "hello",
-    });
+    expect(state.segments[0]?.translations).toEqual([{ lang: "en", text: "hello" }]);
   });
 
   // Out-of-order delivery would otherwise invent a segment with no text, no speaker and no timing,
@@ -128,7 +125,7 @@ describe("live translation", () => {
     expect(after).toBe(before);
   });
 
-  it("is replaced when a second translation arrives for the same line", () => {
+  it("is replaced when the same language is translated again", () => {
     let state = apply(withLine(), {
       kind: "translation",
       seq: 1,
@@ -141,7 +138,20 @@ describe("live translation", () => {
       lang: "en",
       text: "hello there",
     });
-    expect(state.segments[0]?.translation?.text).toBe("hello there");
+    expect(state.segments[0]?.translations).toEqual([{ lang: "en", text: "hello there" }]);
+  });
+
+  // The daemon sends one of these per target language, and this used to keep the last one — so a
+  // meeting translated for two readers showed one subtitle, and which one depended on the order two
+  // network requests came home in. The second reader never saw a line.
+  it("keeps a subtitle for every language asked for", () => {
+    let state = apply(withLine(), { kind: "translation", seq: 1, lang: "en", text: "hello" });
+    state = apply(state, { kind: "translation", seq: 1, lang: "ja", text: "こんにちは" });
+
+    expect(state.segments[0]?.translations).toEqual([
+      { lang: "en", text: "hello" },
+      { lang: "ja", text: "こんにちは" },
+    ]);
   });
 
   it("survives a revision of the line underneath it", () => {
@@ -154,6 +164,6 @@ describe("live translation", () => {
     state = apply(state, seg("revise", 1, "xin chào các bạn"));
 
     expect(state.segments[0]?.text).toBe("xin chào các bạn");
-    expect(state.segments[0]?.translation?.text).toBe("hello");
+    expect(state.segments[0]?.translations?.[0]?.text).toBe("hello");
   });
 });

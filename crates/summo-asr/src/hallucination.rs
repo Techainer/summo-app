@@ -45,6 +45,8 @@ pub enum Verdict {
     Repetition,
     /// The model itself reported the audio was almost certainly not speech.
     NoSpeech,
+    /// A subtitle annotation for something that was not speech: `[Music]`, `(Applause)`.
+    Annotation,
     /// Nothing but punctuation or whitespace.
     Empty,
 }
@@ -100,6 +102,14 @@ impl HallucinationFilter {
             return Verdict::Empty;
         }
 
+        // Before the blacklist, and on the raw text rather than the normalized form, because
+        // `normalize` is what hid these: it strips the brackets, so `[Music]` reached the list as
+        // `music` — a word somebody can say — and was kept. Seen on a real recording, where it then
+        // acquired a translated subtitle of its own.
+        if is_annotation(&transcript.text) {
+            return Verdict::Annotation;
+        }
+
         if let Some(p) = transcript.no_speech_prob {
             if p >= self.cfg.no_speech_max {
                 return Verdict::NoSpeech;
@@ -152,6 +162,58 @@ fn normalize(text: &str) -> String {
         }
     }
     out.trim_end().to_string()
+}
+
+/// Whether the whole utterance is one subtitle annotation rather than speech.
+///
+/// Whisper was trained on subtitles, where things that are not speech are written in brackets, so
+/// over music or applause it emits exactly what a subtitler would have written: `[Music]`,
+/// `(Applause)`, `[音楽]`. On a meeting recording those arrive in the transcript as though somebody
+/// had said them — and with live translation on, each one is paid for and rendered a second time
+/// underneath itself in another language.
+///
+/// The blacklist could not catch them. It compares against [`normalize`], which throws away every
+/// character that is not alphanumeric — the brackets included — so the one feature that identifies
+/// an annotation is removed before anything looks at it.
+///
+/// Only when the brackets hold the *entire* utterance, which is what makes this safe to apply with
+/// no `no_speech_prob` to qualify it: a person cannot say a bracket, and `(tiếng cười)` in the
+/// middle of a sentence is a real sentence with a marker in it. Deleting that sentence would be
+/// far worse than keeping the marker.
+///
+/// The full-width pairs are not decoration. Whisper writes a Japanese or Chinese annotation the way
+/// a Japanese or Chinese subtitler does — `（音楽）`, `【拍手】` — and an ASCII-only list would fix
+/// this in the two languages it happened to be noticed in and leave it in the other ninety-seven.
+fn is_annotation(text: &str) -> bool {
+    let text = text.trim();
+    let mut chars = text.chars();
+    let (first, last) = (chars.next(), text.chars().next_back());
+    // `next_back` on the iterator would consume from the same sequence as `next`, which reads the
+    // same character twice for a one-character string.
+    let closer = match first {
+        Some('[') => ']',
+        Some('(') => ')',
+        Some('［') => '］',
+        Some('（') => '）',
+        Some('【') => '】',
+        Some('〔') => '〕',
+        Some('《') => '》',
+        Some('♪') => '♪',
+        Some('♫') => '♫',
+        _ => return false,
+    };
+    if last != Some(closer) || text.chars().count() < 3 {
+        return false;
+    }
+
+    // Nothing may close early: `[a] xin chào [b]` opens and closes like an annotation and is a
+    // sentence with two of them in it.
+    let inner: String = text
+        .chars()
+        .skip(1)
+        .take(text.chars().count() - 2)
+        .collect();
+    !inner.contains(closer) && !inner.trim().is_empty()
 }
 
 /// Detect a stuck decoder.
@@ -216,6 +278,59 @@ mod tests {
                 filter.judge(&with_no_speech(text, 0.05)),
                 Verdict::Keep,
                 "rejected real speech: {text}"
+            );
+        }
+    }
+
+    /// Seen on a real recording, and it had a translation underneath it.
+    ///
+    /// Whisper writes non-speech the way a subtitler does. `normalize` strips the brackets before
+    /// anything compares, so every one of these reached the blacklist as an ordinary word and was
+    /// kept — and the confidence is not low enough to catch them either: the model is quite sure
+    /// there was music.
+    #[test]
+    fn a_subtitle_annotation_is_not_something_anybody_said() {
+        let filter = HallucinationFilter::default();
+        for text in [
+            "[Music]",
+            "[ Music ]",
+            "(Applause)",
+            "[音楽]",
+            "♪ lalala ♪",
+            // The same thing written by a subtitler who is not writing in English. Summo
+            // transcribes ninety-nine languages; a rule that only knows ASCII brackets fixes this
+            // in the two it was noticed in.
+            "（音楽）",
+            "【拍手】",
+            "［音楽］",
+        ] {
+            assert_eq!(
+                filter.judge(&with_no_speech(text, 0.05)),
+                Verdict::Annotation,
+                "kept an annotation: {text}"
+            );
+        }
+    }
+
+    /// And a sentence with a marker in it is still a sentence.
+    ///
+    /// This is the whole reason the rule requires the brackets to hold everything: deleting a line
+    /// because somebody laughed in the middle of it would be a far worse failure than the one being
+    /// fixed.
+    #[test]
+    fn a_marker_inside_a_sentence_does_not_delete_the_sentence() {
+        let filter = HallucinationFilter::default();
+        for text in [
+            "(tiếng cười) thì em nghĩ là được",
+            "chúng ta bắt đầu nhé [tiếng gõ cửa]",
+            "[a] xin chào [b]",
+            "（笑）そうですね",
+            "そうですね（笑）",
+        ] {
+            assert_eq!(
+                filter.judge(&with_no_speech(text, 0.05)),
+                Verdict::Keep,
+                "deleted real speech: {text}"
             );
         }
     }

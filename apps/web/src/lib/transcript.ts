@@ -61,6 +61,12 @@ export function apply(state: TranscriptState, event: Event): TranscriptState {
  * A translation for a `seq` that has not arrived is dropped rather than held: out-of-order delivery
  * would mean inventing a segment with no text, no speaker and no timing, which then renders as a
  * blank line in the transcript.
+ *
+ * Added to the line's list, not put in place of what is there. The daemon sends one of these per
+ * target language and this used to keep the last one, so asking for two subtitles produced one —
+ * and which one depended on the order two network requests happened to come home in. A second
+ * translation *into the same language* does replace the first: that is a line being retranslated,
+ * not a second reader.
  */
 export function translate(
   state: TranscriptState,
@@ -73,8 +79,15 @@ export function translate(
   const current = state.segments[at];
   if (!current) return state;
 
+  const existing = current.translations ?? [];
+  const already = existing.findIndex((each) => each.lang === lang);
+  const translations =
+    already === -1
+      ? [...existing, { lang, text }]
+      : existing.map((each, i) => (i === already ? { lang, text } : each));
+
   const segments = state.segments.slice();
-  segments[at] = { ...current, translation: { lang, text } };
+  segments[at] = { ...current, translations };
   return { segments, index: state.index };
 }
 

@@ -163,6 +163,42 @@ impl ZipformerDecoder {
     }
 }
 
+/// Give a sentence back the case its decoder never had.
+///
+/// Transducers in this family are trained on upper-cased, unpunctuated targets, so Gipformer — the
+/// model Summo recommends to every Vietnamese user — returns `TUY NHIÊN LOÀI CHIM VẪN CÓ RẤT NHIỀU
+/// ĐIỂM GIỐNG VỚI KHỦNG LONG`. That is the default reading experience of the product, and beside a
+/// Whisper line in ordinary case it reads like a fault in the app rather than a property of the
+/// model. It was visible in every screenshot and nothing had been done about it.
+///
+/// Applied only when the text contains **no lowercase letter at all**, which is the signal that the
+/// model carries no case information: there is then nothing to destroy. A model that cases its own
+/// output is left exactly as it wrote it.
+///
+/// And only from two words up. A single upper-case word is an acronym or an interjection — `API`,
+/// `OK`, `CV` — and "correcting" those is the one way this rule can make a line worse.
+///
+/// Proper nouns stay lower-cased, because the model did not say which words they were. `hà nội` is
+/// not right; it is more readable than `HÀ NỘI` in the middle of a sentence, and it is the most
+/// this can honestly claim to know.
+fn sentence_case(text: &str) -> String {
+    if text.chars().any(char::is_lowercase) || text.split_whitespace().nth(1).is_none() {
+        return text.to_string();
+    }
+
+    let mut out = String::with_capacity(text.len());
+    let mut first = true;
+    for ch in text.chars() {
+        if first && ch.is_alphabetic() {
+            out.push(ch);
+            first = false;
+        } else {
+            out.extend(ch.to_lowercase());
+        }
+    }
+    out
+}
+
 impl Decoder for ZipformerDecoder {
     fn decode(&mut self, pcm: &[f32]) -> Result<Transcript> {
         // A transducer given almost nothing returns an empty string; skipping the call avoids the
@@ -172,7 +208,7 @@ impl Decoder for ZipformerDecoder {
         }
         let text = self.inner.transcribe(SAMPLE_RATE, pcm);
         Ok(Transcript {
-            text: text.trim().to_string(),
+            text: sentence_case(text.trim()),
             // Transducers do not expose a no-speech probability. They also do not hallucinate
             // subtitle boilerplate over silence, which is what that signal is for.
             ..Transcript::default()
@@ -192,6 +228,53 @@ mod tests {
     /// on a machine that has not downloaded any models.
     fn model_dir() -> Option<std::path::PathBuf> {
         std::env::var_os("SUMMO_TEST_TRANSDUCER").map(std::path::PathBuf::from)
+    }
+
+    /// What a Vietnamese user actually reads. Gipformer writes in capitals and Summo recommends it.
+    #[test]
+    fn a_decoder_that_writes_in_capitals_is_given_sentence_case() {
+        assert_eq!(
+            sentence_case("TUY NHIÊN LOÀI CHIM VẪN CÓ ĐIỂM GIỐNG KHỦNG LONG"),
+            "Tuy nhiên loài chim vẫn có điểm giống khủng long"
+        );
+        assert_eq!(sentence_case("I LOV YOU"), "I lov you");
+    }
+
+    /// A model that cases its own output is not second-guessed. Whisper writes `Tuy nhiên, loài
+    /// chim…` with punctuation and proper nouns, and rewriting that would be a pure loss.
+    #[test]
+    fn a_model_that_writes_its_own_case_is_left_alone() {
+        for text in [
+            "Tuy nhiên, loài chim vẫn có điểm giống khủng long.",
+            "Anh nghĩ mình nên dùng Rust cho phần lõi",
+            "we should ship the API today",
+        ] {
+            assert_eq!(sentence_case(text), text);
+        }
+    }
+
+    /// The one way this rule can make a line worse: a lone capitalised word is an acronym, not a
+    /// sentence somebody shouted.
+    #[test]
+    fn a_single_capitalised_word_is_an_acronym() {
+        for text in ["API", "OK", "CV", "ONNX"] {
+            assert_eq!(sentence_case(text), text);
+        }
+    }
+
+    /// Summo transcribes ninety-nine languages, and most writing systems have no case at all.
+    ///
+    /// A script with no upper and lower form has no lowercase letter in it, so the guard above is
+    /// satisfied by every line of Japanese, Korean, Thai and Arabic that has a space in it. It
+    /// stays a no-op because lower-casing a caseless character returns it unchanged — but that is
+    /// a property worth a test rather than a property worth assuming, since the rule exists for
+    /// one Latin-script model family and is applied to whatever the decoder returns.
+    #[test]
+    fn a_writing_system_with_no_case_is_untouched() {
+        for text in ["これは テスト です", "안녕 하세요", "مرحبا بك", "สวัสดี ครับ"]
+        {
+            assert_eq!(sentence_case(text), text);
+        }
     }
 
     #[test]

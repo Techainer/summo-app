@@ -57,6 +57,14 @@ pub const MAX_QUEUE: usize = BATCH * 2;
 pub struct Pending {
     pub seq: u64,
     pub text: String,
+    /// What language it was spoken in, when the decoder or the manifest said.
+    ///
+    /// Carried because the target is decided per line, not per batch: a line already in the
+    /// language it would be translated into is not translated into it. `None` is every line
+    /// recorded before `Segment::language` existed and every model that reports nothing and
+    /// declares nothing — those are translated into everything asked for, which is what the
+    /// feature did for all of them until now.
+    pub language: Option<String>,
 }
 
 /// Collects lines and decides when to send them.
@@ -80,7 +88,7 @@ impl Batcher {
     ///
     /// Blank lines are not queued at all: the recogniser emits them on a cough, and paying for a
     /// translation request to render an empty subtitle is the worst trade in this module.
-    pub fn push(&mut self, seq: u64, text: &str) -> bool {
+    pub fn push(&mut self, seq: u64, text: &str, language: Option<String>) -> bool {
         let text = text.trim();
         if text.is_empty() {
             return true;
@@ -89,6 +97,7 @@ impl Batcher {
         self.queue.push_back(Pending {
             seq,
             text: text.to_string(),
+            language,
         });
 
         if self.queue.len() > MAX_QUEUE {
@@ -158,6 +167,26 @@ pub async fn translate_batch(
     let (parsed, _requests) = translator.run(&lines, lang, glossary).await?;
 
     Ok(pair(batch, &parsed, lang))
+}
+
+/// The lines of a batch that `lang` is actually a translation for.
+///
+/// Two languages has not meant "into two languages" since the offline pass learned to skip a line
+/// already in the language it would be translated into. The live path never learned it: it sent
+/// every line to every target, so a bilingual meeting with both languages chosen put a Vietnamese
+/// "translation" of each Vietnamese line under it, and paid a request for it. The rule was written,
+/// shipped, described in the interface — and read on one of the two paths that needed it.
+///
+/// Separate from [`Batcher`] on purpose. One line can be wanted by one target and not another, so
+/// the queue holds every line and the decision is made where the request is: filtering on the way
+/// in would mean a queue per language, holding the same lines, flushing on different clocks.
+#[must_use]
+pub fn for_target(batch: &[Pending], lang: &str) -> Vec<Pending> {
+    batch
+        .iter()
+        .filter(|p| !crate::translate::same_language(p.language.as_deref(), lang))
+        .cloned()
+        .collect()
 }
 
 /// Match a parsed response back to the sequence numbers it belongs to.
@@ -274,7 +303,8 @@ impl LiveTranslator {
             if self.since.is_none() {
                 self.since = Some(std::time::Instant::now());
             }
-            self.batcher.push(segment.seq, &segment.text);
+            self.batcher
+                .push(segment.seq, &segment.text, segment.language.clone());
         }
 
         let waited = self.since.map_or(0, |t| t.elapsed().as_millis() as u64);
@@ -302,8 +332,8 @@ impl LiveTranslator {
     /// Oldest first, so a meeting fills in from the top the way somebody reads it. Blank lines are
     /// skipped for the same reason the batcher skips them: paying for a request to render an empty
     /// subtitle is the worst trade in this module.
-    pub fn backfill(&mut self, lines: impl IntoIterator<Item = (u64, String)>) {
-        for (seq, text) in lines {
+    pub fn backfill(&mut self, lines: impl IntoIterator<Item = (u64, String, Option<String>)>) {
+        for (seq, text, language) in lines {
             let text = text.trim();
             if text.is_empty() {
                 continue;
@@ -311,6 +341,7 @@ impl LiveTranslator {
             self.backlog.push_back(Pending {
                 seq,
                 text: text.to_string(),
+                language,
             });
         }
     }
@@ -362,7 +393,19 @@ impl LiveTranslator {
         tokio::spawn(async move {
             let mut events = Vec::new();
             for lang in &langs {
-                match translate_batch(&translator, &batch, lang, &glossary).await {
+                // Per target, because the answer differs per target: on a Vietnamese-and-English
+                // meeting with both chosen, the Vietnamese lines of this batch belong to the
+                // English pass and none of the Vietnamese one. Filtering the batch before it is
+                // queued would need one queue per language for the same lines.
+                let mine = for_target(&batch, lang);
+                if mine.is_empty() {
+                    // Nothing said, deliberately. This is the batch where everybody was already
+                    // speaking the language somebody asked for — the "nothing happened" that the
+                    // note under the control exists to explain, and a per-batch notice for it
+                    // would fire on every sentence of a monolingual meeting.
+                    continue;
+                }
+                match translate_batch(&translator, &mine, lang, &glossary).await {
                     Ok(mut translated) => events.append(&mut translated),
                     // One failed target costs its subtitles, not the other targets and not the
                     // recording. Reported once per target, as a transient error, so the interface
@@ -509,6 +552,16 @@ mod tests {
         Pending {
             seq,
             text: text.into(),
+            language: None,
+        }
+    }
+
+    /// The same, from a speaker whose language the decoder reported.
+    fn spoken(seq: u64, text: &str, language: &str) -> Pending {
+        Pending {
+            seq,
+            text: text.into(),
+            language: Some(language.into()),
         }
     }
 
@@ -516,7 +569,7 @@ mod tests {
     fn a_batch_goes_once_it_is_full() {
         let mut b = Batcher::new();
         for i in 0..BATCH {
-            b.push(i as u64, "câu");
+            b.push(i as u64, "câu", None);
         }
         assert!(b.ready(0), "full: send without waiting");
         assert_eq!(b.take().len(), BATCH);
@@ -526,7 +579,7 @@ mod tests {
     #[test]
     fn a_lone_line_goes_once_it_has_waited_long_enough() {
         let mut b = Batcher::new();
-        b.push(1, "xin chào");
+        b.push(1, "xin chào", None);
         assert!(!b.ready(MAX_WAIT_MS - 1));
         assert!(b.ready(MAX_WAIT_MS));
     }
@@ -543,8 +596,8 @@ mod tests {
     #[test]
     fn a_blank_line_is_not_queued_at_all() {
         let mut b = Batcher::new();
-        b.push(1, "   ");
-        b.push(2, "");
+        b.push(1, "   ", None);
+        b.push(2, "", None);
         assert!(b.is_empty());
     }
 
@@ -554,9 +607,12 @@ mod tests {
     fn the_oldest_lines_are_dropped_when_the_model_falls_behind() {
         let mut b = Batcher::new();
         for i in 0..MAX_QUEUE {
-            assert!(b.push(i as u64, "câu"), "still room at {i}");
+            assert!(b.push(i as u64, "câu", None), "still room at {i}");
         }
-        assert!(!b.push(999, "mới"), "the overflowing push reports the drop");
+        assert!(
+            !b.push(999, "mới", None),
+            "the overflowing push reports the drop"
+        );
 
         assert_eq!(b.len(), MAX_QUEUE);
         assert_eq!(b.take_dropped(), 1);
@@ -571,7 +627,7 @@ mod tests {
     fn taking_a_batch_leaves_the_rest_queued() {
         let mut b = Batcher::new();
         for i in 0..BATCH + 3 {
-            b.push(i as u64, "câu");
+            b.push(i as u64, "câu", None);
         }
         assert_eq!(b.take().len(), BATCH);
         assert_eq!(b.len(), 3);
@@ -581,7 +637,7 @@ mod tests {
     fn draining_takes_everything_for_the_end_of_a_session() {
         let mut b = Batcher::new();
         for i in 0..BATCH + 3 {
-            b.push(i as u64, "câu");
+            b.push(i as u64, "câu", None);
         }
         assert_eq!(b.drain().len(), BATCH + 3);
         assert!(b.is_empty());
@@ -623,6 +679,59 @@ mod tests {
     fn a_response_with_fewer_lines_than_asked_for_is_survivable() {
         let batch = [pending(1, "một"), pending(2, "hai")];
         assert_eq!(pair(&batch, &[Some("one".into())], "en").len(), 1);
+    }
+
+    /// The headline case, and the one that was wrong live while being right offline.
+    ///
+    /// A Vietnamese company on a call with an English customer, both languages chosen. Each line
+    /// belongs to exactly one of the two passes: the Vietnamese ones are what the English subtitle
+    /// is for, and the English ones are what the Vietnamese subtitle is for. Before this, every
+    /// line went to both — so every Vietnamese line got a Vietnamese "translation" of itself
+    /// underneath it, at the price of a request.
+    #[test]
+    fn a_line_is_not_translated_into_the_language_it_is_already_in() {
+        let batch = [
+            spoken(1, "Xin chào các bạn", "vi"),
+            spoken(2, "Thanks for having me", "en"),
+        ];
+
+        let into_english = for_target(&batch, "en");
+        assert_eq!(into_english.len(), 1);
+        assert_eq!(into_english[0].seq, 1);
+
+        let into_vietnamese = for_target(&batch, "vi");
+        assert_eq!(into_vietnamese.len(), 1);
+        assert_eq!(into_vietnamese[0].seq, 2);
+    }
+
+    /// Region is a spelling of a language, not a different one. Whisper answers `en-US` on some
+    /// builds, and comparing it raw against a target of `en` would translate English into English.
+    #[test]
+    fn a_region_tag_counts_as_the_language_it_is_a_region_of() {
+        assert!(for_target(&[spoken(1, "hello", "en-US")], "en").is_empty());
+        assert_eq!(for_target(&[spoken(1, "hello", "en-US")], "vi").len(), 1);
+    }
+
+    /// A line nobody labelled is translated into everything asked for.
+    ///
+    /// That is every line recorded before `Segment::language` existed, and every model that reports
+    /// no language and declares none. Reading "unknown" as "already in this language" would turn
+    /// live translation off for them, which is a worse failure than a redundant subtitle.
+    #[test]
+    fn an_unlabelled_line_is_still_translated() {
+        assert_eq!(for_target(&[pending(1, "một câu")], "vi").len(), 1);
+        assert_eq!(for_target(&[pending(1, "một câu")], "en").len(), 1);
+    }
+
+    /// One target and the language everybody is speaking: nothing to send, and nothing sent.
+    ///
+    /// Somebody picks Vietnamese on a Vietnamese meeting. Nothing happening is the correct outcome
+    /// — the note under the control is what explains it — and a batch of zero must not become a
+    /// request with an empty prompt.
+    #[test]
+    fn a_monolingual_meeting_translated_into_its_own_language_asks_for_nothing() {
+        let batch = [spoken(1, "một", "vi"), spoken(2, "hai", "vi")];
+        assert!(for_target(&batch, "vi").is_empty());
     }
 
     #[test]
@@ -679,9 +788,9 @@ mod backfilling {
         assert_eq!(translator.backlog_len(), 0);
 
         translator.backfill([
-            (0, "xin chào".to_string()),
-            (1, "  ".to_string()),
-            (2, "hai".to_string()),
+            (0, "xin chào".to_string(), None),
+            (1, "  ".to_string(), None),
+            (2, "hai".to_string(), None),
         ]);
         assert_eq!(
             translator.backlog_len(),
@@ -698,7 +807,7 @@ mod backfilling {
     #[test]
     fn live_speech_is_never_held_up_by_the_backlog() {
         let mut translator = live(&["en"]);
-        translator.backfill((0..20).map(|seq| (seq, format!("câu {seq}"))));
+        translator.backfill((0..20).map(|seq| (seq, format!("câu {seq}"), None)));
         let before = translator.backlog_len();
         assert_eq!(before, 20);
 

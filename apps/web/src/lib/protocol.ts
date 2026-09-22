@@ -28,12 +28,27 @@ export interface Segment {
   conf?: number;
   words?: Word[];
   /**
-   * A live translation of this line, when one was asked for.
+   * What language it was spoken in, when the decoder said or the manifest declared.
+   *
+   * The daemon has sent this since `Segment::language` existed and nothing here read it, so a
+   * transcript with two languages in it rendered every line as though it were in the interface's
+   * language — which is what a screen reader then pronounced it as, and what a browser hyphenated
+   * it by. Absent for a model that reports nothing and declares nothing.
+   */
+  language?: string;
+  /**
+   * Live translations of this line, one per language asked for.
    *
    * Held beside the text rather than replacing it: the original is the record of what was said, and
    * anyone checking a subtitle against the speaker needs both on screen.
+   *
+   * A list, because the daemon has sent one `translation` event per target since targets became a
+   * list, and this field held one of them. The second subtitle overwrote the first, so a meeting
+   * translated into English and Japanese showed whichever arrived last — in a feature whose stated
+   * purpose is that "a meeting can have more than one reader". The reader who asked second never
+   * saw a line.
    */
-  translation?: { lang: string; text: string };
+  translations?: { lang: string; text: string }[];
 }
 
 export type Event =
