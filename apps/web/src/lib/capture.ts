@@ -111,6 +111,27 @@ function targets(
   return [...new Set(clean)];
 }
 
+/**
+ * Turn system audio on or off in the one place that decides it.
+ *
+ * There were two. The settings screen wrote `recording.capture_system_audio` into the daemon and
+ * the recording read `lanes` out of `localStorage`, so the switch labelled "capture system audio"
+ * in Settings changed a number nothing consulted — a control that does nothing, which is worse
+ * than a control that is missing.
+ *
+ * The lanes are still local, for the reason at the top of this file: they are a property of the
+ * machine in front of you rather than of the vault. What changed is that both controls now move the
+ * same one, and the daemon's copy is kept in step so the settings screen shows the truth.
+ */
+export function setSystemAudio(capture: Capture, on: boolean): Capture {
+  const lanes: Lane[] = on
+    ? [...new Set<Lane>([...capture.lanes, "system"])]
+    : capture.lanes.filter((lane) => lane !== "system");
+  // The daemon refuses a session with no lanes, so turning system audio off on a system-only
+  // capture leaves the microphone rather than nothing.
+  return { ...capture, lanes: lanes.length > 0 ? lanes : ["mic"] };
+}
+
 /** Whether live translation is on. */
 export function translating(capture: Capture): boolean {
   return capture.translateInto.length > 0;

@@ -17,7 +17,9 @@ const store = new Map<string, string>();
   },
 };
 
-const { DEFAULT, hearsOthers, load, normalize, save, translating } = await import("./capture");
+const { DEFAULT, hearsOthers, load, normalize, save, setSystemAudio, translating } =
+  await import("./capture");
+type Lane = "mic" | "system";
 
 beforeEach(() => store.clear());
 
@@ -113,5 +115,35 @@ describe("the spoken language", () => {
   it("is normalised, so `VI ` from an older build still matches a model", () => {
     expect(normalize({ spoken: " VI " }).spoken).toBe("vi");
     expect(normalize({ spoken: 7 as never }).spoken).toBe("");
+  });
+});
+
+describe("system audio has one home", () => {
+  /**
+   * It had two. The settings screen wrote `recording.capture_system_audio` into the daemon and a
+   * recording read `lanes` out of `localStorage`, so the switch labelled "capture system audio"
+   * moved a number nothing consulted — a control that does nothing, which is worse than one that
+   * is missing.
+   */
+  it("adds and removes the system lane", () => {
+    const mic = { ...DEFAULT, lanes: ["mic"] as Lane[] };
+    expect(setSystemAudio(mic, true).lanes).toEqual(["mic", "system"]);
+    expect(setSystemAudio(setSystemAudio(mic, true), false).lanes).toEqual(["mic"]);
+  });
+
+  /** Turning it on twice is one lane, not two. */
+  it("does not add the lane twice", () => {
+    const both = { ...DEFAULT, lanes: ["mic", "system"] as Lane[] };
+    expect(setSystemAudio(both, true).lanes).toEqual(["mic", "system"]);
+  });
+
+  /**
+   * The daemon refuses a session with no lanes, so turning system audio off on a system-only
+   * capture has to leave the microphone rather than nothing — otherwise this switch becomes a
+   * record button that fails.
+   */
+  it("never leaves a capture with nothing to hear", () => {
+    const only = { ...DEFAULT, lanes: ["system"] as Lane[] };
+    expect(setSystemAudio(only, false).lanes).toEqual(["mic"]);
   });
 });

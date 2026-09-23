@@ -688,6 +688,13 @@ async fn catalogue(
                 } else {
                     m.langs.clone()
                 },
+                // Whether that list was a star, which the expansion above destroys.
+                //
+                // The interface had to guess — `langs.length > 20` — because a manifest writing
+                // `["*"]` arrives here as a hundred codes and a model that genuinely lists a
+                // hundred looks identical. A guess about a fact the daemon holds is the shape of
+                // bug this file keeps finding; saying it costs one boolean.
+                "multilingual": m.langs.iter().any(|l| l == "*"),
                 "license": m.license,
                 "attribution": m.attribution,
                 "redistributable": m.redistributable,

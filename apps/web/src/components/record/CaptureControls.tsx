@@ -22,7 +22,7 @@ import { SpokenLanguage } from "./SpokenLanguage";
  * would leave a transcript subtitled in two languages with no way to tell which line is which.
  */
 export function CaptureControls() {
-  const { session } = useEngine();
+  const { session, handshake } = useEngine();
   const { t } = useI18n();
   const [capture, setCapture] = useState<Capture>(() => load());
 
@@ -38,6 +38,21 @@ export function CaptureControls() {
     // record button that fails.
     if (lanes.length === 0) return;
     update({ ...capture, lanes });
+
+    // And tell the daemon, because the settings screen reads its copy.
+    //
+    // One fact with two homes: this control moved the lanes and the settings screen moved
+    // `recording.capture_system_audio`, so each showed a state the other had not been told about
+    // — and the one in Settings decided nothing at all. Best effort, and silent on failure: the
+    // recording is already correct, and a toast about a settings write nobody asked for would be
+    // noise in the middle of starting a meeting.
+    if (lane === "system") {
+      void fetch(`http://127.0.0.1:${handshake.port}/settings/recording?token=${handshake.token}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ capture_system_audio: !has }),
+      }).catch(() => {});
+    }
   };
 
   const busy = session.recording;
