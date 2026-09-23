@@ -46,12 +46,14 @@ export function PerLanguage({
   const { locale } = useI18n();
 
   const speech = models.filter((model) => model.task === "asr" && model.installed);
-  // A language a model spells out, rather than one it reaches through `*`. `langs` arrives from the
-  // daemon with the star already expanded into a hundred codes, so a multilingual model is
-  // recognised by the size of its list rather than by its contents — see the note on `/catalogue`
-  // about why the expansion happens there.
+  // A language a model spells out, rather than one it reaches through `*`.
+  //
+  // `multilingual` comes from the daemon, which is the only place that still knows: `langs` arrives
+  // with the star already expanded into a hundred codes, and a model that genuinely lists a hundred
+  // is then identical to one that wrote `*`. The first version of this counted the list — a guess
+  // about a fact the daemon holds, which is the bug this file's own subject is an instance of.
   const base = (code: string) => code.toLowerCase().split("-")[0] ?? code;
-  const multilingual = (model: CatalogueModel) => model.langs.length > 20;
+  const multilingual = (model: CatalogueModel) => model.multilingual === true;
 
   const named = new Set<string>();
   for (const model of speech) {

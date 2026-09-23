@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { load as loadCapture, save as saveCapture, setSystemAudio } from "../../lib/capture";
 
 import { Button, Checkbox } from "../ui";
 import { HINT, LABEL } from "./fields";
@@ -28,7 +29,6 @@ import { useLoad } from "../../lib/use-load";
 interface RecordingSettings {
   capture_system_audio: boolean;
   device_id: string | null;
-  hotkey: string;
   suggest_on_meeting: boolean;
   vad_threshold: number;
   min_silence_ms: number;
@@ -54,7 +54,6 @@ export function Capture() {
       return {
         capture_system_audio: body.settings?.recording?.capture_system_audio ?? false,
         device_id: body.settings?.recording?.device_id ?? null,
-        hotkey: body.settings?.recording?.hotkey ?? "",
         suggest_on_meeting: body.settings?.recording?.suggest_on_meeting ?? true,
         vad_threshold: body.settings?.recording?.vad_threshold ?? SHIPPED.vad_threshold,
         min_silence_ms: body.settings?.recording?.min_silence_ms ?? SHIPPED.min_silence_ms,
@@ -98,10 +97,15 @@ export function Capture() {
       <h3 className="font-medium">{t("settings.capture_heading")}</h3>
       <p className="text-fg-dim text-meta mt-1 mb-4">{t("settings.capture_hint")}</p>
 
+      {/* Both halves, because this one fact had two homes.
+          The daemon's copy is what this screen reads back and what `/settings` reports; the lanes
+          in `localStorage` are what a recording actually opens. Writing only the first made this
+          switch a control that changed a number nothing consulted. */}
       <Checkbox
         checked={now.capture_system_audio ?? false}
         onChange={(on) => {
           setLive((current) => ({ ...current, capture_system_audio: on }));
+          saveCapture(setSystemAudio(loadCapture(), on));
           void write({ capture_system_audio: on });
         }}
       >

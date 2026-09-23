@@ -22,6 +22,14 @@ export interface CatalogueModel {
   mode: string;
   langs: string[];
   license: string;
+  /**
+   * Whether the manifest claimed the multilingual set rather than a list of languages.
+   *
+   * The daemon expands a manifest's `*` into a hundred codes before sending `langs`, which makes a
+   * multilingual model indistinguishable from one that lists a hundred. Anything here that needs
+   * the difference asked `langs.length > 20` and got it right by luck.
+   */
+  multilingual?: boolean;
   attribution?: string | null;
   /** `false` when Summo may not host the files and the download goes upstream. */
   redistributable: boolean;
