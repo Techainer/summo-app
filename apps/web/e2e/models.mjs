@@ -75,8 +75,18 @@ try {
   }
 
   // Every model the registry knows, not only the speech ones the setup screen offers.
-  for (const id of ["gipformer-65m", "small100", "silero-vad-v5", "campplus-sv"]) {
+  //
+  // `gipformer-1.5-68m` rather than the 65M it replaces: a model the registry marks `superseded_by`
+  // is not drawn unless it is installed. Two cards for one model, told apart by a parenthesis
+  // inside one of the names, is what that rule ended.
+  for (const id of ["gipformer-1.5-68m", "small100", "silero-vad-v5", "campplus-sv"]) {
     if (!body.includes(id)) fail(`${id} is missing from the catalogue`);
+  }
+
+  // And the one it replaced is not on the screen, because nothing here has it installed. A reader
+  // choosing a model for Vietnamese should not have to work out which of two Gipformers is current.
+  if (body.includes("gipformer-65m")) {
+    fail("a model the registry says has been replaced is still offered beside its replacement");
   }
 
   // Size before you commit to it.
@@ -312,8 +322,19 @@ try {
     }
   }
 
-  // The daemon refuses to remove a model the settings point at, because the alternative is a
-  // recording that fails to start much later with nothing connecting the two.
+  // Removing a model a role points at releases the role, rather than refusing.
+  //
+  // It used to refuse — `in use as the translation model; choose another one first` — and that is
+  // advice nobody can take when there is no other model of that kind on the machine. SMALL100
+  // installed, the settings pointing at it, 611 MB on disk, a Remove button that said no, and no
+  // way out of the app. Reported twice from real use, the second time as "model vẫn chưa xóa
+  // được".
+  //
+  // Pressing remove is not an accident. The role is un-pointed and the answer says what the next
+  // recording will use, which is the question somebody who just deleted their recogniser has.
+  //
+  // This block asks about a model that is *not installed*, so the honest answer is that there is
+  // nothing to remove — the role is released on the way through and the store reports the truth.
   // Passed in rather than read from the URL: the app strips `port` and `token` during its
   // handshake, so by now they are gone from `location`.
   const refused = await page.evaluate(
@@ -333,8 +354,49 @@ try {
     },
     { port: engine.port, token: engine.token },
   );
-  if (refused.ok || !refused.body.includes("translation")) {
-    fail(`removing the model in use was not refused with a reason: ${JSON.stringify(refused)}`);
+  if (refused.ok || !refused.body.includes("small100")) {
+    fail(`removing a model that is not installed did not say so: ${JSON.stringify(refused)}`);
+  }
+
+  // And the case the complaint was actually about: a model that *is* installed and *is* in use.
+  //
+  // With one speech model on the machine, "choose another one first" is advice with no answer — so
+  // the role is released and the reply names what the next recording will use. Asserted at the API
+  // rather than through the card, because the interesting part is the state the daemon is left in:
+  // a removal that left the settings pointing at a deleted model would trade this trap for the
+  // missing-file failure the old guard existed to prevent.
+  if (!missing.has("sense-voice-small")) {
+    const gone = await page.evaluate(
+      async ({ port, token }) => {
+        const head = { "content-type": "application/json" };
+        await fetch(`http://127.0.0.1:${port}/settings/models?token=${token}`, {
+          method: "POST",
+          headers: head,
+          body: JSON.stringify({ role: "live", model: "sense-voice-small" }),
+        });
+        const response = await fetch(
+          `http://127.0.0.1:${port}/models/sense-voice-small?token=${token}`,
+          { method: "DELETE" },
+        );
+        const body = await response.json().catch(() => ({}));
+        const plan = await (
+          await fetch(`http://127.0.0.1:${port}/settings/plan?token=${token}`)
+        ).json();
+        return { ok: response.ok, body, still: plan.speech?.model ?? null };
+      },
+      { port: engine.port, token: engine.token },
+    );
+    if (!gone.ok) {
+      fail(`a model in use could not be removed: ${JSON.stringify(gone)}`);
+    } else if (!("now_using" in gone.body)) {
+      fail(
+        `the removal did not say what the next recording will use: ${JSON.stringify(gone.body)}`,
+      );
+    } else if (gone.still === "sense-voice-small") {
+      fail("the settings still point at a model that is no longer on disk");
+    } else {
+      console.log(`removed a model in use; now using ${gone.body.now_using ?? "nothing"}`);
+    }
   }
 
   // An unreachable registry is a state, not a blank screen: this is an app expected to work on a
