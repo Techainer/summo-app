@@ -480,7 +480,12 @@
     "latency": "Từ lúc dứt lời tới lúc ra chữ",
     "accelerator": "Tăng tốc phần cứng",
     "accuracy_note": "Tỉ lệ từ nghe đúng trên bộ đo công khai. Ngôn ngữ chưa đo thì không liệt kê.",
-    "measured_elsewhere": "Đo trên lớp máy khác; chưa có số liệu cho máy này."
+    "measured_elsewhere": "Đo trên lớp máy khác; chưa có số liệu cho máy này.",
+    "per_language": "Tiếng nào dùng model nào",
+    "per_language_hint": "Mỗi thứ tiếng có thể dùng một model riêng. Thứ tiếng nào chưa chọn thì Summo tự xếp hạng.",
+    "per_language_for": "Model cho {language}",
+    "per_language_auto": "Tự chọn",
+    "per_language_auto_named": "Tự chọn — {model}"
   },
   "home": {
     "heading": "Không gian của bạn",

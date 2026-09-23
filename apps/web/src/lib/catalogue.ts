@@ -216,6 +216,27 @@ export class CatalogueClient {
   }
 
   /**
+   * Say which installed model serves one language.
+   *
+   * Separate from {@link use} because it is a different setting with the same role name: "use this
+   * for English" is not "use this". One `live` model cannot express a machine with a Vietnamese
+   * specialist and an English one side by side, which is the ordinary bilingual setup — and
+   * pressing "use" on one of them used to take the language control away from the other.
+   *
+   * An empty `model` returns that language to whatever the ranking says, which is where every
+   * language starts.
+   */
+  async useForLanguage(language: string, model: string): Promise<void> {
+    await readJson<unknown>(
+      await fetch(url(this.handshake, "/settings/models"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: "live", model, language }),
+      }),
+    );
+  }
+
+  /**
    * Load one installed model and run it once.
    *
    * Never rejects on a model that fails — a failure is the answer, and it comes back as

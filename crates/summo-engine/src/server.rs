@@ -958,6 +958,52 @@ async fn set_models(
         // thing, posting an empty string, and got
         // `configuration error: model id must be 1..=128 chars, got 0` in the user's face: a
         // parser error surfaced as a product error, for an action that is meant to be ordinary.
+        // Per language, when the caller said which. Handled before the roles below because it is a
+        // different setting with the same role name: "use this for English" is not "use this".
+        if let Some(code) = body
+            .language
+            .as_deref()
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+        {
+            if body.role != "live" {
+                return Err(Error::Config(format!(
+                    "only the speech model can be chosen per language, not `{}`",
+                    body.role
+                )));
+            }
+            let code = summo_vault::translation::sanitize_lang(code);
+            if code.is_empty() {
+                return Err(Error::Config("that is not a language code".into()));
+            }
+            if id.is_empty() {
+                // Back to "whatever the ranking says for this language", which is where every
+                // language starts. Removed rather than emptied: an empty string here would be a
+                // choice of nothing, and there is no such model.
+                settings.models.by_language.remove(&code);
+                settings.save(&path)?;
+                return Ok(settings);
+            }
+            let model_id = summo_core::ModelId::parse(id).map_err(Error::Config)?;
+            let manifest = state.engine.store().installed(&model_id)?;
+            if manifest.task != summo_models::Task::Asr {
+                return Err(Error::Config(format!("`{id}` cannot be the speech model")));
+            }
+            // Refused here rather than ignored at record time. Pinning Gipformer for English is
+            // the mistake this whole setting exists to stop somebody making by accident, and
+            // silently declining to honour it would leave the screen showing a choice the
+            // recording does not make.
+            if !summo_models::covers_language(&manifest, &code) {
+                return Err(Error::Config(format!(
+                    "`{id}` does not cover {code}; it covers {}",
+                    manifest.langs.join(", ")
+                )));
+            }
+            settings.models.by_language.insert(code, id.to_string());
+            settings.save(&path)?;
+            return Ok(settings);
+        }
+
         if id.is_empty() {
             match body.role.as_str() {
                 "live" => settings.models.live = None,
@@ -1031,6 +1077,13 @@ struct ModelsBody {
     /// `live`, `refine`, `vad`, `speaker`, `denoise`, `tts` or `translator`.
     role: String,
     model: String,
+    /// Which language this choice is for, when it is for one.
+    ///
+    /// Only meaningful with `role: "live"`. Absent is the old shape and still means "for
+    /// everything", which is the right answer for a machine with one speech model and the wrong
+    /// one for a machine with a Vietnamese specialist and an English one side by side.
+    #[serde(default)]
+    language: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1286,6 +1339,23 @@ fn choose_models(
 
     if spec.language.is_none() {
         spec.language = settings.models.language.clone();
+    }
+
+    // A model chosen for this language in particular, before the one chosen for everything.
+    //
+    // The narrower answer wins, which is the whole point of having both: `live` is what a language
+    // nobody has decided about falls back to, and that is nearly all of them.
+    if let Some(code) = spec
+        .language
+        .as_deref()
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+        && let Some(picked) = settings.models.by_language.get(code)
+        && !picked.trim().is_empty()
+        && language_is_covered(engine, picked, Some(code))
+    {
+        spec.live_model = picked.clone();
+        return spec;
     }
 
     if let Some(chosen) = settings
@@ -3313,12 +3383,22 @@ fn build_plan(state: &AppState) -> summo_core::Result<serde_json::Value> {
         .filter(|m| m.task == summo_models::Task::Asr)
         .collect();
 
-    // What a session would pick, by the same rules a session picks it — `pick_models` when nothing
-    // is pinned, the pin when there is one.
+    // What a session would pick, by the same rules a session picks it: the choice made for this
+    // language, then the one made for everything, then the ranking.
+    //
+    // The first of those was missing here while `resolve_models` had it, so the table answering
+    // "what will the next recording use" named a different model from the one the recording used.
+    // That is the failure this table exists to prevent, and it took a browser driving both to see
+    // it: picking Whisper for Vietnamese on the models screen left the plan still saying Gipformer.
     let chosen = settings
         .models
-        .live
-        .clone()
+        .language
+        .as_deref()
+        .map(str::trim)
+        .filter(|code| !code.is_empty())
+        .and_then(|code| settings.models.by_language.get(code).cloned())
+        .filter(|id| !id.trim().is_empty())
+        .or_else(|| settings.models.live.clone())
         .or_else(|| {
             let code = language.clone().unwrap_or_else(|| "*".into());
             summo_models::recommend(&installed, state.engine.hardware(), &code)
@@ -3733,6 +3813,30 @@ async fn languages(
     let languages =
         summo_models::languages::available(&manifests, state.engine.hardware(), &installed);
     let settings = summo_core::Settings::load(&state.engine.paths().settings()).unwrap_or_default();
+
+    // The choice somebody made for a language, laid over the ranking's answer for it.
+    //
+    // Both, not one: `model` stays the ranking's pick so a screen can say what would happen if the
+    // choice were cleared, and `chosen` is what will actually happen. Sending only the winner would
+    // leave a picker unable to draw the difference between "this is best" and "you picked this".
+    let languages: Vec<serde_json::Value> = languages
+        .into_iter()
+        .map(|language| {
+            let mut value = serde_json::to_value(&language).unwrap_or(serde_json::Value::Null);
+            if let Some(object) = value.as_object_mut() {
+                object.insert(
+                    "chosen".into(),
+                    settings
+                        .models
+                        .by_language
+                        .get(&language.code)
+                        .cloned()
+                        .map_or(serde_json::Value::Null, serde_json::Value::String),
+                );
+            }
+            value
+        })
+        .collect();
 
     as_response(Ok::<_, summo_core::Error>(serde_json::json!({
         // What the next recording would use, so a picker can open on the current answer rather than
@@ -6083,6 +6187,36 @@ mod resolve_tests {
         .unwrap()
     }
 
+    /// The other half of "choosing a model took the language away".
+    ///
+    /// A pin losing to the language is a refusal to do the wrong thing; this is the ability to say
+    /// the right one. A machine with a Vietnamese specialist and an English one is the ordinary
+    /// bilingual setup, and one `live` field cannot express it.
+    #[test]
+    fn a_choice_made_for_one_language_wins_for_that_language_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let mut settings = summo_core::Settings::default();
+        settings.models.live = Some("whisper-tiny".into());
+        settings
+            .models
+            .by_language
+            .insert("vi".into(), "gipformer-65m".into());
+        settings.save(&engine.paths().settings()).unwrap();
+
+        // Not installed in this store, so `language_is_covered` cannot confirm it — and an
+        // unconfirmable choice is still the user's choice. The route that writes it is what refuses
+        // a model that does not cover its own key.
+        let mut spec = crate::protocol::SessionSpec::new("");
+        spec.language = Some("vi".into());
+        assert_eq!(resolve_models(&spec, &engine).live_model, "gipformer-65m");
+
+        // And a language nobody decided about falls through to the model chosen for everything.
+        let mut other = crate::protocol::SessionSpec::new("");
+        other.language = Some("en".into());
+        assert_eq!(resolve_models(&other, &engine).live_model, "whisper-tiny");
+    }
+
     /// Choosing a model took the language away.
     ///
     /// Pressing "use" on a card writes one model for every meeting in every language, and the
@@ -7016,6 +7150,7 @@ mod tests {
             runtime: "test".into(),
             langs: langs.iter().map(|l| (*l).to_string()).collect(),
             domains: vec![],
+            superseded_by: None,
             license: "MIT".into(),
             attribution: None,
             redistributable: true,

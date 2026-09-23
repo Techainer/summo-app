@@ -480,7 +480,12 @@
     "latency": "话音结束到出字",
     "accelerator": "硬件加速",
     "accuracy_note": "公开基准上正确识别的词占比。未测过的语言不列出。",
-    "measured_elsewhere": "在另一类机器上测得；本机尚无公开数据。"
+    "measured_elsewhere": "在另一类机器上测得；本机尚无公开数据。",
+    "per_language": "哪个模型听哪种语言",
+    "per_language_hint": "每种语言都可以单独选模型。没有选的语言由 Summo 自动排名。",
+    "per_language_for": "{language} 的模型",
+    "per_language_auto": "自动选择",
+    "per_language_auto_named": "自动选择 — {model}"
   },
   "home": {
     "heading": "你的工作区",

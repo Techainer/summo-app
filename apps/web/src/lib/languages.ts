@@ -44,6 +44,14 @@ export interface Language {
   serving_name: string | null;
   /** Measured accuracy of `serving`, which is the number you will actually get today. */
   serving_accuracy: number;
+  /**
+   * The model somebody chose for this language, when they chose one.
+   *
+   * Beside `serving` rather than instead of it, so a screen can draw the difference between "this
+   * is the best one" and "you picked this one" — and say what would happen if the choice were
+   * cleared. `null` is every language nobody has decided about, which is nearly all of them.
+   */
+  chosen?: string | null;
 }
 
 /**

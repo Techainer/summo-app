@@ -40,7 +40,8 @@ import { fetchPlan, type Plan } from "../lib/plan";
 import { useErrorText } from "../lib/errors";
 import { listItem, stagger } from "../lib/motion";
 import { OnboardingClient, POLL_MS, isFinished, type Install } from "../lib/onboarding";
-import { languageName } from "../lib/languages";
+import { fetchLanguages, languageName, type Language } from "../lib/languages";
+import { PerLanguage } from "../components/models/PerLanguage";
 import { url } from "../lib/library";
 import { useRefresh } from "../lib/use-load";
 
@@ -114,15 +115,23 @@ export function ModelsScreen() {
    */
   const [checks, setChecks] = useState<Record<string, Check>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  /** What each language would be heard by, and what somebody chose for it. */
+  const [languages, setLanguages] = useState<Language[]>([]);
+  /** Which language row is waiting on the daemon, so its control can be held. */
+  const [choosing, setChoosing] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [next, running, current] = await Promise.all([
+      const [next, running, current, spoken] = await Promise.all([
         catalogue.load(),
         installer.installs(),
         fetchPlan(handshake).catch(() => null),
+        // Never fatal. This screen's subject is the catalogue; the per-language section is an extra
+        // that disappears if the daemon cannot answer, rather than a reason to show nothing.
+        fetchLanguages(handshake).catch(() => null),
       ]);
       setPlan(current);
+      setLanguages(spoken?.languages ?? []);
       setModels(next.models);
       setReachable(next.reachable);
       setInstalls(running);
@@ -181,6 +190,28 @@ export function ModelsScreen() {
       }
     },
     [catalogue, say],
+  );
+
+  /**
+   * Say which model serves one language, and read back what the daemon settled on.
+   *
+   * Reloaded rather than patched, for the same reason `choose` above takes the daemon's whole
+   * answer: this writes one key and the screen shows several derived from it.
+   */
+  const chooseForLanguage = useCallback(
+    async (language: string, model: string) => {
+      setChoosing(language);
+      try {
+        await catalogue.useForLanguage(language, model);
+        await load();
+        setError(null);
+      } catch (e) {
+        setError(say(e));
+      } finally {
+        setChoosing(null);
+      }
+    },
+    [catalogue, load, say],
   );
 
   /**
@@ -316,6 +347,17 @@ export function ModelsScreen() {
           installs={installs}
         />
       )}
+
+      {/* Which model hears which language, where there is more than one answer.
+          One "use" button wrote one model for every language while the picker went on offering a
+          hundred, so choosing a model took the language away. See `PerLanguage` — it draws nothing
+          on a machine where there is nothing to decide. */}
+      <PerLanguage
+        languages={languages}
+        models={models ?? []}
+        busy={choosing}
+        onChoose={(language, model) => void chooseForLanguage(language, model)}
+      />
 
       {/* Search and a task filter, because the catalogue is now long enough to scroll past what you
           came for. Both narrow the same list the language banner narrows — one row of controls, not

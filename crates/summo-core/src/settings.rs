@@ -108,6 +108,21 @@ pub struct Models {
     pub tts: Option<String>,
     /// ISO code, or `None` to let the model detect.
     pub language: Option<String>,
+    /// A model chosen for one language, by ISO code.
+    ///
+    /// `live` is one model for every meeting in every language, and the language picker offers a
+    /// hundred — so pressing "use" on a Vietnamese card and then switching to English recorded
+    /// English with a model that declares `vi`. Reported as "sao chọn 1 model dùng, tiếng Việt thì
+    /// lại không chọn được tiếng Anh": choosing the model took the language away.
+    ///
+    /// So the choice is per language where somebody has made one. `live` stays as the answer for a
+    /// language nobody has decided about, which is nearly all of them.
+    ///
+    /// Keyed on the bare code the picker writes. A value naming a model that is not installed, or
+    /// one that does not cover its own key, is ignored rather than honoured — the settings file is
+    /// editable by hand and outlives the models it names.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub by_language: BTreeMap<String, String>,
     /// Threads for inference. `None` follows the hardware probe.
     pub threads: Option<usize>,
     /// Fields a newer build wrote that this one does not know, kept so a downgrade does not erase
