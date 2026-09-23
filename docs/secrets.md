@@ -67,7 +67,6 @@ với v0.2.3.
 
 | Secret | Là gì |
 | --- | --- |
-| `SITE_DEPLOY_HOOK` | URL deploy hook của Cloudflare cho `summo-site` |
 
 Nút tải trên `summo.techainer.com` trỏ thẳng vào tệp — `Summo_0.2.8_aarch64.dmg`, kèm dung lượng —
 và danh sách đó đọc từ GitHub **lúc dựng trang**. Trang chỉ dựng khi repo trang đổi, không phải khi
@@ -80,5 +79,4 @@ tin bí mật ở đây, nên workflow đưa nó cho `curl` qua stdin chứ khô
 Lấy URL ở Cloudflare › Workers & Pages › `summo-site` › Settings › Builds › Deploy hooks.
 
 ```bash
-gh secret set SITE_DEPLOY_HOOK --repo Techainer/summo-app   # dán URL, Ctrl-D
 ```
