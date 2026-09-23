@@ -2,6 +2,7 @@ import { Bot, CheckCircle2, Circle, ListChecks } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import {
+  Alert,
   Avatar,
   Button,
   Card,
@@ -106,9 +107,7 @@ export function TasksScreen() {
   if (error && !board) {
     return (
       <div className="p-5">
-        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
-          {error}
-        </p>
+        <Alert tone="rec">{error}</Alert>
       </div>
     );
   }
@@ -137,9 +136,9 @@ export function TasksScreen() {
       }
     >
       {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec text-meta mt-3 rounded-lg border px-3 py-2">
+        <Alert tone="rec" className="mt-3">
           {error}
-        </p>
+        </Alert>
       )}
 
       {view === "people" ? (
@@ -287,7 +286,7 @@ function Column({
       }}
       aria-label={label}
       className={cn(
-        "flex min-h-0 flex-col rounded-[var(--radius-card)] border p-2 transition-colors",
+        "rounded-card flex min-h-0 flex-col border p-2 transition-colors",
         over ? "border-accent/50 bg-accent-soft" : "border-line bg-bg-soft/40",
       )}
     >
@@ -329,7 +328,7 @@ function PersonCard({
       }}
       onDragEnd={onDragEnd}
       className={cn(
-        "border-line bg-bg-raised cursor-grab rounded-[var(--radius-card)] border p-2.5",
+        "border-line bg-bg-raised rounded-card cursor-grab border p-2.5",
         "transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]",
         "active:cursor-grabbing",
         // Held, not hovered: a card under the pointer lifts a little, one being dragged lifts

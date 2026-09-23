@@ -70,7 +70,7 @@ export function BottomBar({
           <span
             className={cn(
               "bg-rec block transition-all duration-200",
-              recording ? "size-4 rounded-sm" : "size-6 rounded-full",
+              recording ? "rounded-control size-4" : "size-6 rounded-full",
             )}
           />
         </m.button>

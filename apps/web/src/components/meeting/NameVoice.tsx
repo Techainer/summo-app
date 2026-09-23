@@ -32,7 +32,7 @@ export function NameVoice({
   return (
     <div
       data-testid="name-voice"
-      className="border-line bg-bg-raised mt-1.5 rounded-[var(--radius-card)] border p-2.5"
+      className="border-line bg-bg-raised rounded-card mt-1.5 border p-2.5"
     >
       <p className="text-fg-dim text-micro">
         {t("people.name_this", { label: voice.label })}

@@ -126,7 +126,7 @@ function Block({ node, ...shared }: Shared & { node: JSONContent }): ReactNode {
       return <TaskItem node={node} {...shared} />;
     case "codeBlock":
       return (
-        <pre className="border-line bg-bg-soft text-meta overflow-x-auto rounded-lg border p-3">
+        <pre className="border-line bg-bg-soft text-meta rounded-control overflow-x-auto border p-3">
           <code>{(node.content ?? []).map((child) => child.text ?? "").join("")}</code>
         </pre>
       );
@@ -251,7 +251,7 @@ function Inline({ nodes, resolveImage }: Shared & { nodes?: JSONContent[] }) {
               key={at}
               src={resolveImage ? resolveImage(src) : src}
               alt={String(node.attrs?.alt ?? "")}
-              className="my-2 max-w-full rounded-lg"
+              className="rounded-control my-2 max-w-full"
             />
           );
         }

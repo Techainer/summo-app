@@ -74,7 +74,7 @@ function ThemeButton() {
       onClick={() => remember(handshake, next)}
       aria-label={t("theme.heading")}
       title={t(`theme.${scheme}`)}
-      className="text-fg-faint hover:bg-bg-soft hover:text-fg hidden rounded-lg px-2 py-1.5 transition-colors sm:block"
+      className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-control hidden px-2 py-1.5 transition-colors sm:block"
     >
       <Icon aria-hidden="true" className="size-4 stroke-[1.75]" />
     </button>

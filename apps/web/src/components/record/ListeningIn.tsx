@@ -42,7 +42,7 @@ export function ListeningIn() {
   if (!session.recording || dismissed || onMeeting) return null;
 
   return (
-    <div className="border-accent/30 bg-accent-soft rounded-[var(--radius-card)] border px-3 py-2">
+    <div className="border-accent/30 bg-accent-soft rounded-card border px-3 py-2">
       <SessionControls
         extras={
           <>

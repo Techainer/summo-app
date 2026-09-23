@@ -21,7 +21,7 @@
  * inside this file either way.
  */
 import { chromium } from "playwright";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 
 import { daemon } from "./daemon.mjs";
 
@@ -54,7 +54,42 @@ const SCREENS = [
   ["people", "/people"],
   ["models", "/models"],
   ["settings", "/settings"],
+  ["help", "/help"],
 ];
+
+/**
+ * Routes left out on purpose, each with the reason.
+ *
+ * The check below fails when a route exists in `src/router.tsx` and appears in neither list, which
+ * is the rule this suite learned the hard way: the one screen with a transcript on it was skipped
+ * for months behind a `null` and a comment, and the sideways-scroll check ran over eleven screens
+ * of short text while the screen where a recogniser's output lands went unlooked at.
+ *
+ * A screen added tomorrow cannot be quietly unmeasured. It is either photographed or it is written
+ * down here with a sentence saying why.
+ */
+const SKIPPED = new Map([
+  // Redirects to `/`, which is the first entry above. Photographing it twice is photographing the
+  // record screen twice.
+  ["/record", "redirects to /"],
+  // The same component as `/pages/$pageId`, reached by the older URL. Kept for links people saved.
+  ["/meetings/$meetingId", "renders the page screen, already shot as /pages/01E2E0"],
+]);
+
+// Every route the app declares is either in `SCREENS` or in `SKIPPED`.
+{
+  const router = readFileSync(new URL("../src/router.tsx", import.meta.url), "utf8");
+  const declared = [...router.matchAll(/^\s*path: "([^"]+)",/gm)].map((m) => m[1]);
+  const shot = new Set(SCREENS.map(([, route]) => route.replace(/\/pages\/.*/, "/pages/$pageId")));
+  const missed = declared.filter((route) => !shot.has(route) && !SKIPPED.has(route));
+  if (missed.length > 0) {
+    console.error(
+      `these routes are declared in router.tsx and photographed by nothing: ${missed.join(", ")}\n` +
+        "add them to SCREENS, or to SKIPPED with the reason.",
+    );
+    process.exit(1);
+  }
+}
 
 const VIEWPORTS = [
   ["wide", { width: 1280, height: 860 }],

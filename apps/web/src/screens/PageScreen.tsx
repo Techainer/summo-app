@@ -303,7 +303,7 @@ export function PageScreen() {
       <div className="p-5">
         <p
           role="alert"
-          className="border-danger/30 bg-danger-soft text-danger text-meta rounded-lg border px-3 py-2"
+          className="border-danger/30 bg-danger-soft text-danger text-meta rounded-control border px-3 py-2"
         >
           {error}
         </p>
@@ -426,7 +426,7 @@ export function PageScreen() {
       {error && (
         <p
           role="alert"
-          className="border-danger/30 bg-danger-soft text-danger text-meta mt-3 flex items-start justify-between gap-3 rounded-lg border px-3 py-2"
+          className="border-danger/30 bg-danger-soft text-danger text-meta rounded-control mt-3 flex items-start justify-between gap-3 border px-3 py-2"
         >
           <span>{error}</span>
           <button
@@ -511,7 +511,7 @@ export function PageScreen() {
                         onClick={() => setShape(shape.id)}
                         aria-pressed={shape.id === template}
                         className={cn(
-                          "text-micro rounded-[var(--radius-pill)] border px-2.5 py-1 transition-colors",
+                          "text-micro rounded-pill border px-2.5 py-1 transition-colors",
                           shape.id === template
                             ? "border-accent bg-accent-soft text-accent"
                             : "border-line hover:border-fg-faint",

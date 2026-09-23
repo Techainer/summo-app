@@ -32,7 +32,7 @@ export function Checkbox({
     <label
       className={cn(
         "group text-fg-dim text-meta flex cursor-pointer items-center gap-2.5 transition-colors",
-        "has-[:checked]:text-fg has-[:disabled]:cursor-default has-[:disabled]:opacity-60",
+        "has-[:checked]:text-fg has-[:disabled]:cursor-default has-[:disabled]:opacity-[var(--disabled-opacity)]",
         className,
       )}
     >
@@ -46,7 +46,7 @@ export function Checkbox({
       <span
         aria-hidden="true"
         className={cn(
-          "border-line-strong grid size-4 shrink-0 place-items-center rounded-[5px] border",
+          "border-line-strong rounded-control grid size-4 shrink-0 place-items-center border",
           "text-accent-fg text-[10px] transition-colors",
           "peer-checked:border-accent peer-checked:bg-accent",
           "peer-focus-visible:ring-accent peer-focus-visible:ring-2 peer-focus-visible:ring-offset-1",

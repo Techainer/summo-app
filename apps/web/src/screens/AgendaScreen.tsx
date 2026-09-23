@@ -76,7 +76,7 @@ export function AgendaScreen() {
                     initial="hidden"
                     animate="shown"
                     transition={GENTLE}
-                    className="border-line bg-bg-soft flex items-center gap-3 rounded-[var(--radius-card)] border px-3 py-2.5 shadow-[var(--shadow-sm)]"
+                    className="border-line bg-bg-soft rounded-card flex items-center gap-3 border px-3 py-2.5 shadow-[var(--shadow-sm)]"
                   >
                     <span className="tabular text-fg-dim w-24 shrink-0 text-sm">
                       {clock(entry.start_epoch)}

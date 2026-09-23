@@ -155,7 +155,7 @@ export function NudgeBar() {
               type="button"
               onClick={() => dismiss(nudge.key)}
               aria-label={t("nudge.dismiss", { title: nudge.title })}
-              className="text-fg-faint hover:text-fg rounded-lg px-2 py-1"
+              className="text-fg-faint hover:text-fg rounded-control px-2 py-1"
             >
               <X aria-hidden="true" className="size-3.5" />
             </button>

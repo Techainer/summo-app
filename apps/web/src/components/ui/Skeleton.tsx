@@ -16,7 +16,7 @@ export function Skeleton({ className }: { className?: string }) {
     <span
       aria-hidden="true"
       className={cn(
-        "bg-bg-soft relative block overflow-hidden rounded-[var(--radius-card)]",
+        "bg-bg-soft rounded-card relative block overflow-hidden",
         // The sweep is a child rather than a background-position animation: a gradient sliding
         // across a `background-size: 200%` costs a repaint of the whole box each frame, and a
         // transformed child is composited.

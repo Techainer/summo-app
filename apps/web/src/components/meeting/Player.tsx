@@ -99,14 +99,14 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
   // — there is no file to fail — so it is the one place the pruned sentence is true.
   if (!current) {
     return (
-      <p className="border-line bg-bg-soft text-fg-faint text-meta rounded-[var(--radius-card)] border px-4 py-3">
+      <p className="border-line bg-bg-soft text-fg-faint text-meta rounded-card border px-4 py-3">
         {t("meeting.no_audio")}
       </p>
     );
   }
 
   return (
-    <div className="border-line bg-bg-raised rounded-[var(--radius-card)] border p-3">
+    <div className="border-line bg-bg-raised rounded-card border p-3">
       <audio
         ref={audio}
         src={current.url}

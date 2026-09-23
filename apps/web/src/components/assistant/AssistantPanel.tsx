@@ -97,7 +97,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
           type="button"
           onClick={onClose}
           aria-label={t("common.close")}
-          className="text-fg-faint hover:bg-bg-raised hover:text-fg ms-auto rounded-lg p-1.5"
+          className="text-fg-faint hover:bg-bg-raised hover:text-fg rounded-control ms-auto p-1.5"
         >
           <X aria-hidden="true" className="size-4" />
         </button>
@@ -111,19 +111,19 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
         {turns.map((turn, index) => (
           <div key={`${turn.question}-${index}`} className="space-y-2">
             <p className="text-end">
-              <span className="bg-accent-soft text-accent text-meta inline-block rounded-[var(--radius-panel)] px-3 py-1.5">
+              <span className="bg-accent-soft text-accent text-meta rounded-panel inline-block px-3 py-1.5">
                 {turn.question}
               </span>
             </p>
 
             {turn.error && (
-              <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-[var(--radius-card)] border px-3 py-2">
+              <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-card border px-3 py-2">
                 {turn.error}
               </p>
             )}
 
             {turn.answer && (
-              <div className="border-line bg-bg-raised rounded-[var(--radius-card)] border p-3">
+              <div className="border-line bg-bg-raised rounded-card border p-3">
                 {/* A model answers in Markdown — it writes lists and emphasis whether or not anyone
                     asked — so the answer is rendered rather than printed with its markers on. */}
                 <Markdown markdown={turn.answer.text} className="text-body" />
@@ -143,7 +143,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
                             params: { pageId: source.meeting },
                           });
                         }}
-                        className="border-line text-fg-dim hover:border-accent/40 hover:text-accent text-micro rounded-[var(--radius-pill)] border px-2.5 py-1"
+                        className="border-line text-fg-dim hover:border-accent/40 hover:text-accent text-micro rounded-pill border px-2.5 py-1"
                       >
                         {source.title}
                       </button>
@@ -157,7 +157,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
                 autonomous task legible instead of a spinner: a user who can see which step went
                 wrong knows what to blame. */}
             {turn.errand && (
-              <div className="border-ai/25 bg-ai-soft rounded-[var(--radius-card)] border p-3">
+              <div className="border-ai/25 bg-ai-soft rounded-card border p-3">
                 <m.ul
                   initial="hidden"
                   animate="shown"
@@ -194,7 +194,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
       <div className="border-line border-t p-3">
         {/* Read or act, chosen rather than guessed. Inferring "do it" from a sentence is inferring
             permission to write to somebody's vault. */}
-        <div className="bg-bg-raised mb-2 flex gap-0.5 rounded-[var(--radius-pill)] p-0.5">
+        <div className="bg-bg-raised rounded-pill mb-2 flex gap-0.5 p-0.5">
           {[
             { on: false, labelKey: "assistant.mode_ask" },
             { on: true, labelKey: "assistant.mode_do" },
@@ -205,7 +205,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
               aria-pressed={acting === mode.on}
               onClick={() => setActing(mode.on)}
               className={cn(
-                "text-meta flex-1 rounded-[var(--radius-pill)] px-3 py-1 transition-colors",
+                "text-meta rounded-pill flex-1 px-3 py-1 transition-colors",
                 acting === mode.on
                   ? "bg-bg-elevated text-fg font-medium shadow-[var(--shadow-sm)]"
                   : "text-fg-dim hover:text-fg",
@@ -229,7 +229,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             }}
             placeholder={t(acting ? "assistant.do_placeholder" : "assistant.ask_placeholder")}
             aria-label={t("assistant.title")}
-            className="border-line bg-bg-raised text-body focus-visible:border-accent w-full resize-none rounded-[var(--radius-card)] border px-3 py-2 focus:outline-none"
+            className="border-line bg-bg-raised text-body focus-visible:border-accent rounded-card w-full resize-none border px-3 py-2 focus:outline-none"
           />
           <Button variant="primary" busy={busy} onClick={() => void send()}>
             <CornerDownLeft aria-hidden="true" className="size-3.5" />

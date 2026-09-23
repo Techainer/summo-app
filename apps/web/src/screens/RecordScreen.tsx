@@ -81,7 +81,7 @@ function Idle() {
               aria-hidden="true"
               className={cn(
                 "bg-rec transition-all duration-200",
-                session.recording ? "size-6 rounded-[6px]" : "size-10 rounded-full",
+                session.recording ? "rounded-control size-6" : "size-10 rounded-full",
               )}
             />
           </button>

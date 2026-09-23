@@ -20,7 +20,7 @@ export function LanguageMenu() {
       <DropdownMenu.Trigger
         aria-label={t("settings.language")}
         title={t("settings.language")}
-        className="text-fg-faint hover:bg-bg-soft hover:text-fg data-[state=open]:bg-bg-soft text-micro hidden rounded-lg px-2 py-1.5 font-medium tracking-wide uppercase transition-colors sm:block"
+        className="text-fg-faint hover:bg-bg-soft hover:text-fg data-[state=open]:bg-bg-soft text-micro rounded-control hidden px-2 py-1.5 font-medium tracking-wide uppercase transition-colors sm:block"
       >
         {locale.split("-")[0]}
       </DropdownMenu.Trigger>
@@ -28,14 +28,14 @@ export function LanguageMenu() {
         <DropdownMenu.Content
           sideOffset={4}
           align="end"
-          className="border-line bg-bg-elevated z-50 min-w-44 rounded-[var(--radius-card)] border p-1 shadow-[var(--shadow-pop)]"
+          className="border-line bg-bg-elevated rounded-card z-50 min-w-44 border p-1 shadow-[var(--shadow-pop)]"
         >
           {languages.map((language) => (
             <DropdownMenu.Item
               key={language.code}
               onSelect={() => setLocale(language.code)}
               className={cn(
-                "text-body data-[highlighted]:bg-bg-soft flex cursor-pointer items-center justify-between gap-6 rounded-md px-2 py-1.5 outline-none",
+                "text-body data-[highlighted]:bg-bg-soft rounded-control flex cursor-pointer items-center justify-between gap-6 px-2 py-1.5 outline-none",
                 language.code === locale && "font-medium",
               )}
             >

@@ -65,7 +65,7 @@ export function Shortcuts({ onClose }: { onClose: () => void }) {
         initial={{ opacity: 0, y: 10, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={GENTLE}
-        className="border-line bg-bg-elevated relative w-full max-w-lg rounded-[var(--radius-panel)] border p-5 shadow-[var(--shadow-pop)]"
+        className="border-line bg-bg-elevated rounded-panel relative w-full max-w-lg border p-5 shadow-[var(--shadow-pop)]"
       >
         <h2 className="text-title font-semibold">{t("shortcuts.title")}</h2>
         <p className="text-fg-dim text-meta mt-1">{t("shortcuts.lead")}</p>
@@ -78,7 +78,7 @@ export function Shortcuts({ onClose }: { onClose: () => void }) {
                 {row.keys.map((key, at) => (
                   <kbd
                     key={at}
-                    className="border-line bg-bg-soft text-micro tabular min-w-[26px] rounded-md border px-1.5 py-1 text-center"
+                    className="border-line bg-bg-soft text-micro tabular rounded-control min-w-[26px] border px-1.5 py-1 text-center"
                   >
                     {key === "mod" ? mod : key}
                   </kbd>

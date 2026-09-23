@@ -96,13 +96,13 @@ export function Recent({
           <button
             type="button"
             onClick={() => onOpen(entry)}
-            className="border-line bg-bg-soft lift flex w-full items-center gap-3 rounded-[var(--radius-card)] border p-2.5 text-left"
+            className="border-line bg-bg-soft lift rounded-card flex w-full items-center gap-3 border p-2.5 text-left"
           >
             {/* A note has no waveform because it was typed; it gets the pen instead, at the same
                 size, so the rows still line up. */}
             <span
               className={cn(
-                "bg-bg-raised ring-line grid size-11 shrink-0 place-items-center rounded-[var(--radius-card)] ring-1",
+                "bg-bg-raised ring-line rounded-card grid size-11 shrink-0 place-items-center ring-1",
                 entry.kind === "note" ? "text-fg-faint" : "text-accent/60 p-1.5",
               )}
             >

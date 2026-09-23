@@ -126,7 +126,20 @@
   --text-micro--line-height: 1rem;
 
   /* Rounder than before, which is most of what reads as current. A pill is its own token because
-   * "fully round" written as a number is a number somebody eventually changes. */
+   * "fully round" written as a number is a number somebody eventually changes.
+   *
+   * `--radius-sm` is the fourth and it arrived late, which is why it was needed: call sites had
+   * been reaching for Tailwind's own `rounded-lg`/`rounded-md` for anything smaller than a card —
+   * fifty-five and ten times respectively — so "how round is a box" had six answers in a system
+   * that defined three.
+   *
+   * Named for what it is on rather than for how small it is, like every other token here: it is the
+   * radius of a thing you operate — a button, a field, a chip, the box carrying a warning. Not
+   * `--radius-sm`, which would have silently redefined Tailwind's own `rounded-sm` and changed five
+   * call sites that were asking for Tailwind's 4px.
+   *
+   * `radius.test.ts` fails the build if a raw Tailwind radius comes back. */
+  --radius-control: 10px;
   --radius-card: 18px;
   --radius-panel: 24px;
   --radius-pill: 999px;

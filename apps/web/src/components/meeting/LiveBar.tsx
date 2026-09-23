@@ -40,7 +40,7 @@ export function LiveBar() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 260, damping: 24 }}
       data-testid="live-bar"
-      className="border-rec/30 bg-rec-soft rounded-[var(--radius-card)] border px-3.5 py-2.5"
+      className="border-rec/30 bg-rec-soft rounded-card border px-3.5 py-2.5"
     >
       <div className="flex items-center gap-3">
         {/* Two circles: a solid dot and a ring expanding out of it. The ring is what carries at the

@@ -5,7 +5,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
 import { Markdown } from "../components/page/Markdown";
-import { Button, Empty, Page, PageGlow, Progress, SectionTitle, Sheet } from "../components/ui";
+import {
+  Alert,
+  Button,
+  Empty,
+  Page,
+  PageGlow,
+  Progress,
+  SectionTitle,
+  Sheet,
+} from "../components/ui";
 import { useI18n, useT } from "../i18n/context";
 import { cn } from "../lib/cn";
 import {
@@ -303,22 +312,22 @@ export function ModelsScreen() {
       )}
 
       {!reachable && (
-        <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-4 flex items-center gap-2 rounded-lg border px-3 py-2">
+        <Alert tone="blocked" className="mt-4 flex items-center gap-2">
           <CloudOff aria-hidden="true" className="size-4 shrink-0" />
           {t("models.offline")}
-        </p>
+        </Alert>
       )}
       {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec text-meta mt-4 rounded-lg border px-3 py-2">
+        <Alert tone="rec" className="mt-4">
           {error}
-        </p>
+        </Alert>
       )}
 
       {/* Why this shelf is short. Somebody arrives here from a language they picked, and a
           catalogue that silently shows three of its eight models looks broken rather than
           filtered. */}
       {wanted && (
-        <p className="border-line bg-bg-soft text-meta mb-3 flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border px-3 py-2">
+        <p className="border-line bg-bg-soft text-meta rounded-card mb-3 flex flex-wrap items-center gap-2 border px-3 py-2">
           <span>{t("models.for_language", { language: languageName(wanted, locale) })}</span>
           <button
             type="button"
@@ -564,7 +573,7 @@ function Running({
   return (
     <section
       data-testid="running"
-      className="border-line bg-bg-raised mb-4 rounded-[var(--radius-card)] border p-4 shadow-[var(--shadow-sm)]"
+      className="border-line bg-bg-raised rounded-card mb-4 border p-4 shadow-[var(--shadow-sm)]"
     >
       <div className="mb-2.5 flex items-baseline justify-between gap-3">
         <h2 className="text-meta font-semibold">{t("models.running_title")}</h2>
@@ -578,7 +587,7 @@ function Running({
             <li
               key={row.key}
               data-testid={`running-${row.key}`}
-              className="border-line flex items-center gap-2.5 rounded-[var(--radius-card)] border px-3 py-2"
+              className="border-line rounded-card flex items-center gap-2.5 border px-3 py-2"
             >
               <span
                 aria-hidden="true"
@@ -614,12 +623,10 @@ function Running({
           matters most. Offered, never applied: the app does not swap models on somebody's behalf,
           and this one costs a second decode of every utterance. */}
       {plan.second_pass?.suggested && (
-        <div className="border-accent/30 bg-accent-soft text-meta mt-3 rounded-lg border px-3 py-2">
-          <p className="text-fg-dim">
-            <span className="text-fg font-medium">{plan.second_pass?.suggested.name}</span>{" "}
-            {plan.second_pass?.suggested.reason}
-          </p>
-          <div className="mt-2">
+        <Alert
+          tone="accent"
+          className="mt-3"
+          actions={
             <Button
               size="sm"
               variant="secondary"
@@ -630,8 +637,13 @@ function Running({
                 ? t("models.use_refine")
                 : t("models.role_missing")}
             </Button>
-          </div>
-        </div>
+          }
+        >
+          <span className="text-fg-dim">
+            <span className="text-fg font-medium">{plan.second_pass?.suggested.name}</span>{" "}
+            {plan.second_pass?.suggested.reason}
+          </span>
+        </Alert>
       )}
     </section>
   );
@@ -702,7 +714,7 @@ function Measured({ model }: { model: CatalogueModel }) {
   if (cells.length === 0) return null;
 
   return (
-    <dl className="border-line mt-3 grid grid-cols-3 gap-2 border-t pt-2.5">
+    <dl className="border-line mt-3 grid grid-cols-1 gap-2 border-t pt-2.5 sm:grid-cols-3">
       {/* One label per cell, not two.
           Each of these used to carry an `sr-only` `<dt>` *and* a visible `<p>` with the same words
           in it, so a screen reader read "so với thời gian thực, 16×, so với thời gian thực" — every
@@ -862,7 +874,7 @@ function Card({
       className={cn(
         // A real card on the page surface, not a translucent tint of it. Elevation is what tells
         // the eye these are eight separate things to choose between.
-        "border-line bg-bg-raised rounded-[var(--radius-card)] border p-4 shadow-[var(--shadow-sm)]",
+        "border-line bg-bg-raised rounded-card border p-4 shadow-[var(--shadow-sm)]",
         // Lifts under the pointer. The whole card is a decision — read it, install it, remove it —
         // so the whole card should acknowledge the cursor rather than only the button on it.
         "transition-[transform,box-shadow,border-color,background-color] duration-150",

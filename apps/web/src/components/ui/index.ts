@@ -1,3 +1,4 @@
+export { Alert, type Tone } from "./Alert";
 export { Empty, EmptyColumn } from "./Empty";
 export { Sticker, type StickerName } from "./Sticker";
 export { Checkbox } from "./Checkbox";

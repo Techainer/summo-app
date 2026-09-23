@@ -33,7 +33,7 @@ export function Starting({ error }: { error: string | null }) {
         {error !== null && (
           // `pre-wrap`: the daemon's output arrives with the line breaks it wrote, and a stack of
           // messages folded into one paragraph is unreadable exactly when it matters.
-          <p className="border-rec/30 bg-rec-soft text-rec text-meta w-full rounded-[var(--radius-card)] border px-3 py-2 text-start whitespace-pre-wrap">
+          <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-card w-full border px-3 py-2 text-start whitespace-pre-wrap">
             {error}
           </p>
         )}

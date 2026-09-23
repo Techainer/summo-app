@@ -339,7 +339,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={() => onNewPage({ folder: activeFolder })}
-              className="text-fg-faint hover:bg-bg-raised hover:text-fg mt-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-sm"
+              className="text-fg-faint hover:bg-bg-raised hover:text-fg rounded-control mt-1 flex w-full items-center gap-1.5 px-2 py-1 text-sm"
             >
               <Plus className="size-3.5" aria-hidden="true" />
               {t("nav.new_page")}
@@ -526,7 +526,7 @@ function PageRow({
         onDragEnd={onDragEnd}
         style={{ paddingLeft: `${depth * 12}px` }}
         className={cn(
-          "flex w-full items-center gap-1 rounded-lg py-1 pe-1 text-sm transition-colors",
+          "rounded-control flex w-full items-center gap-1 py-1 pe-1 text-sm transition-colors",
           // Two different facts are marked in this column and they must not look alike: which
           // *folder* is being browsed, and which *page* is open. The folder takes the neutral step
           // up; the open page takes the accent, the same way the notes list and the screen nav mark
@@ -607,7 +607,7 @@ function PageRow({
         <ul
           data-testid="move-page"
           aria-label={t("nav.move_page", { name: page.title })}
-          className="border-line bg-bg-raised my-0.5 ms-6 me-1 rounded-lg border py-1"
+          className="border-line bg-bg-raised rounded-control my-0.5 ms-6 me-1 border py-1"
         >
           {/* First, because it is the one destination that is not a place: it undoes the nesting
               rather than choosing a different one. Only offered when there is something to undo. */}
@@ -703,7 +703,7 @@ function FolderRow({
       {...drag}
       title={dropHint}
       className={cn(
-        "flex items-center rounded-lg text-sm transition-colors",
+        "rounded-control flex items-center text-sm transition-colors",
         // `raised` for the same reason as the page rows: the sidebar is `bg-soft`, so a highlight
         // of `bg-soft` is no highlight.
         selected ? "bg-bg-raised text-fg font-medium" : "text-fg-dim hover:bg-bg-raised",
@@ -789,7 +789,7 @@ function NavButton({
         // but without a stacking context here that negative index escapes the button entirely and
         // the pill painted *behind the sidebar's own background* — invisible on every screen. The
         // selected row had been nothing but green text for as long as this component has existed.
-        "relative isolate flex w-full items-center gap-2.5 rounded-[var(--radius-pill)] px-2.5 py-2 text-sm transition-colors",
+        "rounded-pill relative isolate flex w-full items-center gap-2.5 px-2.5 py-2 text-sm transition-colors",
         active ? "text-accent font-medium" : "text-fg-dim hover:bg-bg-raised hover:text-fg",
       )}
     >
@@ -802,7 +802,7 @@ function NavButton({
           layoutId="nav-active"
           aria-hidden="true"
           transition={{ type: "spring", stiffness: 420, damping: 34 }}
-          className="bg-accent-soft ring-accent/20 absolute inset-0 -z-10 rounded-[var(--radius-pill)] ring-1"
+          className="bg-accent-soft ring-accent/20 rounded-pill absolute inset-0 -z-10 ring-1"
         />
       )}
       {/* `size-4` and `stroke-[1.75]`: the same optical weight as the label beside it. A 2px stroke

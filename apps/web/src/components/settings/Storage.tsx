@@ -1,7 +1,7 @@
 import { HardDrive, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button, Card, CardBody, Checkbox, Input, SectionTitle } from "../ui";
+import { Alert, Button, Card, CardBody, Checkbox, Input, SectionTitle } from "../ui";
 import { FIELD, HINT, LABEL } from "./fields";
 import { useI18n, useT } from "../../i18n/context";
 import { StorageClient, bytes, type Pruned, type Usage } from "../../lib/storage";
@@ -184,14 +184,14 @@ export function Storage({ handshake }: { handshake: Handshake }) {
         </p>
       )}
       {done && (
-        <p className="border-accent/30 bg-accent-soft text-meta mt-3 rounded-lg border px-3 py-2">
+        <p className="border-accent/30 bg-accent-soft text-meta rounded-control mt-3 border px-3 py-2">
           {t("storage.freed", { size: bytes(done.freed_bytes, locale) })}
         </p>
       )}
       {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec text-meta mt-3 rounded-lg border px-3 py-2">
+        <Alert tone="rec" className="mt-3">
           {error}
-        </p>
+        </Alert>
       )}
 
       {/* Which meetings the space is in. Largest first, as the daemon sorted them, because the

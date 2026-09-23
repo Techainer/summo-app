@@ -102,7 +102,7 @@ export function ImportPanel() {
       {/* A dashed panel, because that is the shape people read as "a file goes here" — and the
           button inside it is what puts one there. The bare text field this replaced said nothing
           about what the screen wanted, what it accepted, or where the file would go. */}
-      <div className="border-line-strong bg-bg-soft/40 hover:border-fg-faint flex flex-col items-center gap-3 rounded-[var(--radius-panel)] border border-dashed px-6 py-10 text-center transition-colors">
+      <div className="border-line-strong bg-bg-soft/40 hover:border-fg-faint rounded-panel flex flex-col items-center gap-3 border border-dashed px-6 py-10 text-center transition-colors">
         <span className="bg-bg-soft ring-line grid size-12 place-items-center rounded-full ring-1">
           <FileAudio aria-hidden="true" className="text-fg-faint size-5 stroke-[1.5]" />
         </span>
@@ -127,7 +127,7 @@ export function ImportPanel() {
           }}
           placeholder={t("import.path_placeholder")}
           aria-label={t("import.path_label")}
-          className="border-line bg-bg-soft focus:border-accent text-meta min-w-0 flex-1 rounded-lg border px-3 py-1.5 outline-none"
+          className="border-line bg-bg-soft focus:border-accent text-meta rounded-control min-w-0 flex-1 border px-3 py-1.5 outline-none"
         />
         <Button size="sm" onClick={() => void submit(path)} disabled={!path.trim() || starting}>
           {t("import.submit")}
@@ -155,7 +155,7 @@ export function ImportPanel() {
                 animate="shown"
                 exit="gone"
                 transition={GENTLE}
-                className="border-line bg-bg-soft rounded-xl border p-3"
+                className="border-line bg-bg-soft rounded-card border p-3"
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate text-sm font-medium">

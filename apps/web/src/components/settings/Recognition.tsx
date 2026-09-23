@@ -15,7 +15,7 @@ import {
 } from "../../lib/languages";
 import { url } from "../../lib/library";
 import { useLoad } from "../../lib/use-load";
-import { Button, SegmentedControl, Select } from "../ui";
+import { Alert, Button, SegmentedControl, Select } from "../ui";
 
 /**
  * Which model does the listening, and in which language.
@@ -181,7 +181,7 @@ export function Recognition() {
   if (catalogue.data && speech.length === 0) {
     return (
       <section
-        className="border-line bg-bg-raised mt-6 rounded-2xl border p-5"
+        className="border-line bg-bg-raised rounded-card mt-6 border p-5"
         data-testid="settings-recognition"
       >
         <h3 className="font-medium">{t("settings.recognition_heading")}</h3>
@@ -196,7 +196,7 @@ export function Recognition() {
 
   return (
     <section
-      className="border-line bg-bg-raised mt-6 rounded-2xl border p-5"
+      className="border-line bg-bg-raised rounded-card mt-6 border p-5"
       data-testid="settings-recognition"
     >
       <h3 className="font-medium">{t("settings.recognition_heading")}</h3>
@@ -271,7 +271,7 @@ export function Recognition() {
               not installed. So the gap is stated with both numbers and closed by a button, and
               declining it leaves everything exactly as it is. */}
           {better && (
-            <div className="border-accent/30 bg-accent-soft text-meta mt-3 rounded-lg border px-3 py-2">
+            <div className="border-accent/30 bg-accent-soft text-meta rounded-control mt-3 border px-3 py-2">
               <p className="text-fg-dim">
                 {t("settings.better_available", {
                   model: better.model_name ?? better.model ?? "",
@@ -354,7 +354,7 @@ export function Recognition() {
           this pinned would fail at the moment of pressing record, which is the wrong place to find
           out. */}
       {mode === "model" && model && !model.installed && (
-        <p className="border-accent/30 bg-accent-soft text-meta mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
+        <p className="border-accent/30 bg-accent-soft text-meta rounded-control mt-3 flex flex-wrap items-center gap-2 border px-3 py-2">
           <span className="text-fg-dim">
             {t("settings.model_not_installed", {
               model: model.name,
@@ -374,12 +374,12 @@ export function Recognition() {
       {/* Overruling the ranking is allowed and is worth saying out loud, once, without a number
           nobody measured for this pair. */}
       {overruled && (
-        <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-3 rounded-lg border px-3 py-2">
+        <Alert tone="blocked" className="mt-3">
           {t("settings.model_overruled", {
             language: languageName(current, locale),
             model: overruled.model_name ?? overruled.model ?? "",
           })}
-        </p>
+        </Alert>
       )}
 
       {error && (

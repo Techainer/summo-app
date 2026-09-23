@@ -92,7 +92,7 @@ export function Capture() {
   return (
     <section
       data-testid="settings-capture"
-      className="border-line bg-bg-raised mt-6 rounded-2xl border p-5"
+      className="border-line bg-bg-raised rounded-card mt-6 border p-5"
     >
       <h3 className="font-medium">{t("settings.capture_heading")}</h3>
       <p className="text-fg-dim text-meta mt-1 mb-4">{t("settings.capture_hint")}</p>
@@ -187,7 +187,7 @@ export function Capture() {
             setLive((current) => ({ ...current, threads: Number(event.target.value) }))
           }
           onBlur={() => void write({ threads: now.threads ?? 0 })}
-          className="border-line bg-bg-soft text-fg h-9 w-24 rounded-[var(--radius-card)] border px-2 text-sm"
+          className="border-line bg-bg-soft text-fg rounded-card h-9 w-24 border px-2 text-sm"
         />
         <span className={HINT}>{t("settings.threads_hint")}</span>
       </label>
