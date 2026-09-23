@@ -137,77 +137,77 @@ The publisher reports 15.44 % against 15.53 % on their own tele-medium set. That
 benchmark on different audio and the two numbers are not comparable; both are quoted where they
 belong rather than averaged into one claim.
 
-## English: the model we were recommending was measured by somebody else
-
-`whisper-tiny` ranked first for English on `wer_whisper_testset_en: 0.045` — 4.5 %, published by
-OpenAI on OpenAI's own test set. Nothing else in this file was measured that way, so the one number
-deciding the English recommendation was the one number that could not be compared to any other.
+## English, and the bug that made three models look broken
 
 **Dataset:** FLEURS `en_us` test, **100 clips, 953.9 s**, built by the same recipe as the Vietnamese
 set above — first 100 by filename, digits left in.
 
-| Model | Threads | WER | CER | RTF | Empty |
-|---|---:|---:|---:|---:|---:|
-| zipformer-gigaspeech-en (int8) | 8 | **10.1 %** | 6.5 % | **0.018** | 0 |
-| zipformer-gigaspeech-en (int8) | 4 | **10.1 %** | 6.5 % | 0.021 | 0 |
-| whisper-base (int8) | 8 | 10.2 % | **5.0 %** | 0.134 | 0 |
-| whisper-tiny (fp32) | 8 | 13.8 % | 6.4 % | 0.074 | 0 |
-| parakeet-tdt-110m (int8) | 8 | 51.8 % | 50.5 % | 0.020 | **44** |
-| zipformer-en (int8) | 8 | 59.7 % | 53.5 % | 0.020 | **22** |
+Every figure below is taken with the harness **levelling each clip the way the recorder levels each
+utterance**. That is the whole of the correction in this section; see *The level* below.
 
-Whisper tiny is 13.8 % here, not 4.5 %.
+| Model | Threads | WER | CER | RTF | Empty | Size |
+|---|---:|---:|---:|---:|---:|---:|
+| parakeet-tdt-110m-en (int8) | 8 | **8.4 %** | **5.7 %** | 0.025 | 0 | 108 MB |
+| zipformer-gigaspeech-en (int8) | 8 | 8.9 % | 5.7 % | **0.020** | 0 | **73 MB** |
+| whisper-base (int8) | 8 | 10.7 % | **4.9 %** | 0.145 | 0 | 160 MB |
+| whisper-tiny (fp32) | 8 | 13.2 % | 6.0 % | 0.076 | 0 | 75 MB |
+| zipformer-en (int8) | 8 | 15.9 % | 8.5 % | 0.020 | 0 | 67 MB |
 
-### An English transducer that does work
+`whisper-tiny` ranked first for English for a long time on `wer_whisper_testset_en: 0.045` — 4.5 %,
+published by OpenAI on OpenAI's own test set, and the one number in this file that could not be
+compared to any other. It is 13.2 % here.
 
-`zipformer-gigaspeech-en` is level with Whisper base per word — 10.1 % against 10.2 % — at **six
-times the speed**, with nothing empty. It is slightly behind per character, 6.5 % against 5.0 %,
-which is a real difference and not a formatting one: the harness lower-cases and strips punctuation
-before scoring, so neither side is being charged for what a transducer does not emit.
+### The level
 
-The speed is not the reason it matters. It is a **transducer**, so it decodes a half-spoken
-utterance and produces text while somebody is still talking; Whisper declines to, because given
-half a sentence it invents an ending for it. Until this model, every English recording showed
-nothing at all until the speaker stopped.
+This file previously said that two English transducers **did not work**: `zipformer-en` at 59.7 %
+with 22 of the hundred clips producing no text at all, and `parakeet-tdt-110m-en` at 51.8 % with 44.
+It called the shape of those numbers — a word error rate almost equal to the character error rate —
+*"the shape of output that is absent rather than wrong"*, and that reading was right. The cause was
+not.
 
-The difference from the other English transducer here is the training data, not the architecture.
-`zipformer-en` is a LibriSpeech model — read audiobooks — and scores 59.7 % on these clips.
-GigaSpeech is ten thousand hours of podcasts, videos and audiobooks, and generalises.
+Both models are fine. Summo was handing them audio at whatever level it was recorded at.
 
-**whisper-tiny int8 is not whisper-tiny.** Re-running the baseline to check this table is still
-comparable gave 27.7 % instead of 13.8 %, which was not drift: `TransducerPaths::from_dir` and the
-Whisper loader both prefer a quantized export when both are present, and the mirror holds both. The
-recorded row is fp32, the registry installs fp32, and the fp32 re-run reproduces 13.8 % / 6.4 %
-exactly. The int8 build of tiny is degraded the same way it is on Vietnamese (81.3 % against
-67.6 %, above).
+The failures were deterministic per clip: the same clip decoded alone, decoded ten times in a row,
+and decoded in a batch gave the same answer every time, which ruled out state. The clips they
+refused were the quiet ones — peaks of **114 and 198 out of 32767**, against 13943 and 24533 for the
+clips they handled perfectly. Two different exports of Parakeet, a transducer and a CTC branch,
+failed on the same clips, which ruled out the export and the runtime and left the audio.
 
-**The published bytes are not the measured bytes unless you check.** sherpa-onnx ships this model
-as a `tar.bz2` on GitHub and as loose files on Hugging Face, and the two encoders differ — 57 bytes,
-different sha256. The manifest points at Hugging Face, so the numbers above were re-taken against
-the Hugging Face files; publishing a measurement of the archive beside a URL for the other copy
-would be a figure about a file nobody installs. Both score 10.1 % / 6.5 %, which is the answer that
-makes it safe to say so.
+A NeMo model normalises each mel bin over the utterance, which sounds like it should make level
+irrelevant and does not: a signal near the log-mel floor is mostly floor, and normalising that
+amplifies noise rather than speech.
 
-### The two transducers do not work
+Levelling each utterance before it reaches a model, with nothing else changed:
 
-The last column is the story. A model that mishears has a WER far above its CER; these two have them
-almost equal, which is the shape of output that is *absent* rather than wrong. Twenty-two and
-forty-four of the hundred clips produced no text at all.
+| Model | as recorded | levelled |
+|---|---:|---:|
+| parakeet-tdt-110m-en | 51.8 %, **44 clips empty** | **8.4 %**, none |
+| zipformer-en | 59.7 %, **22 clips empty** | **15.9 %**, none |
+| zipformer-gigaspeech-en | 10.1 % | **8.9 %** |
+| whisper-tiny (fp32) | 13.8 % | **13.2 %** |
+| gipformer-65m (vi) | 8.6 % | **8.3 %** |
+| whisper-base | 10.2 % | 10.7 % |
+| gipformer-1.5-68m (vi) | 8.3 % | 8.3 % |
 
-The ones that do produce text are not better. For *"Many people don't think about them as dinosaurs
-because they have feathers and can fly"*, zipformer-en answers `I DO THINK OF OTHER MISSINISTERS
-BECAUSE THEY HAVE FEATHERS AND CAN FLY`; for a whole sentence about pyramids, it answers `VERY`.
+Every model that changed, improved; the two Whispers are flat, which is what a model that normalises
+its own input looks like. **Twenty-six of the hundred Vietnamese clips peak below a tenth of full
+scale**, so this is the ordinary recording rather than an exotic one — a laptop microphone across a
+meeting room.
 
-This is not a small accuracy gap to be traded against speed. `zipformer-en` has been in the registry
-with no measurement against it, at 67 MB and Apache-2.0, looking like a reasonable English choice.
-Its measured row is published for that reason rather than removed.
+The rule is in `summo_asr::decoder::levelled`: boost only, never attenuate; leave anything already
+above half of full scale untouched; cap the lift at thirty decibels so an utterance the detector
+opened on a cough is not brought up to full scale; and do nothing at all to digital silence.
 
-Parakeet is a different case and is **left unmeasured on purpose**. NVIDIA publish it as a strong
-English model and 44 empty outputs is not a model mishearing, it is a model not running — a feature
-dimension, a decoding method, or something else in how sherpa is being handed it. Recording 51.8 %
-as its accuracy would publish a fact about our integration as if it were a fact about the model.
+### What this file was wrong about
 
-Both need finding before English has a specialist worth recommending. Until then the honest answer
-for English is a Whisper.
+The claim that a LibriSpeech model *"collapses on anything that is not an audiobook"* was written
+here about `zipformer-en` and is not what the numbers showed. LibriSpeech is still the reason it
+ends up last of the five — 15.9 % against 8.9 % for the GigaSpeech model at a similar size — but
+that is a gap, not a collapse, and the collapse was ours.
+
+The lesson worth keeping is narrower than the one that was written: **a word error rate close to the
+character error rate means output is missing, and missing output is more often the harness than the
+model.**
 
 ## Quantisation: does int8 pay on a CPU?
 

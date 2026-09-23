@@ -378,7 +378,9 @@ impl<D: Decoder> PseudoSession<D> {
 
         // The borrow checker cannot see that `decode` does not touch the gate, so copy the window.
         // At a few seconds of 16 kHz mono this is tens of kilobytes — noise next to the decode.
-        let window = self.gate.open_pcm()[committed..].to_vec();
+        // Levelled on the way in — see `decoder::levelled`. A quiet microphone is the ordinary
+        // recording, not an exotic one, and every model measured reads it better this way.
+        let window = crate::decoder::levelled(&self.gate.open_pcm()[committed..]).into_owned();
         let quiet = self.gate.quiet_samples();
         self.decodes += 1;
         let began = std::time::Instant::now();
@@ -450,6 +452,12 @@ impl<D: Decoder> PseudoSession<D> {
             },
         };
         let pcm: &[f32] = cleaned.as_deref().unwrap_or(pcm);
+
+        // Levelled once, here, and then it *is* the utterance — the same argument the denoiser
+        // above is made on. The second model gets the audio the first one heard, so the two cannot
+        // disagree about what was said because one of them was listening to a quieter copy.
+        let levelled = crate::decoder::levelled(pcm);
+        let pcm: &[f32] = &levelled;
 
         if self.cfg.keep_final_pcm {
             self.last_final_pcm = Some(pcm.to_vec());
@@ -557,11 +565,17 @@ mod tests {
     struct WindowSpy {
         seen: std::sync::Arc<std::sync::Mutex<Vec<usize>>>,
         finals: usize,
+        /// The samples of the last decode, for the one test that asks what the model heard rather
+        /// than how much of it there was.
+        keep: Option<std::sync::Arc<std::sync::Mutex<Vec<f32>>>>,
     }
 
     impl Decoder for WindowSpy {
         fn decode(&mut self, pcm: &[f32]) -> Result<Transcript> {
             self.seen.lock().unwrap().push(pcm.len());
+            if let Some(keep) = &self.keep {
+                *keep.lock().unwrap() = pcm.to_vec();
+            }
             self.finals += 1;
             Ok(Transcript::new(format!("câu {}", self.finals)))
         }
@@ -838,31 +852,44 @@ mod tests {
         );
     }
 
-    /// The retained audio is the cleaned audio, so a second model refining this line later hears
-    /// the same seconds the first one did. Two models listening to different audio would disagree
+    /// The retained audio is exactly what the first model heard, so a second model refining this
+    /// line later hears the same seconds. Two models listening to different audio would disagree
     /// about what was said for a reason no reader could see.
+    ///
+    /// Asserted against the decoder's own input rather than against an amplitude. It used to check
+    /// that the kept samples were quiet, because the stub denoiser halves them and the raw audio was
+    /// louder — and levelling made both copies end at the same peak, which is the point of levelling
+    /// and left that check asserting nothing about which copy it had.
     #[test]
-    fn the_audio_kept_for_a_second_model_is_the_cleaned_audio() {
-        let (denoiser, _) = counting(false);
+    fn the_audio_kept_for_a_second_model_is_what_the_first_one_heard() {
+        let heard = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (denoiser, cleaned) = counting(false);
         let mut s = PseudoSession::new(
-            FixedDecoder::new("xin chào"),
+            WindowSpy {
+                seen: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+                finals: 0,
+                keep: Some(heard.clone()),
+            },
             SessionConfig {
                 keep_final_pcm: true,
+                emit_partials: false,
                 ..SessionConfig::default()
             },
         )
         .with_denoiser(Some(denoiser));
 
         run(&mut s, &[(true, 200), (false, 60)]);
+        assert_eq!(
+            cleaned.load(std::sync::atomic::Ordering::Relaxed),
+            1,
+            "the enhancer did not run"
+        );
+
         let kept = s
             .take_final_pcm()
             .expect("the utterance should be retained");
-
-        // `Counting` halves every sample; the gate feeds 0.5, so anything above 0.3 is the original.
-        assert!(
-            kept.iter().all(|s| s.abs() <= 0.3),
-            "the original audio was kept, not the cleaned audio"
-        );
+        let decoded = heard.lock().unwrap().clone();
+        assert_eq!(kept, decoded, "the second model would hear different audio");
     }
 
     /// Noise costs words. A runtime that could not run costs nothing, as long as the original is
@@ -939,6 +966,7 @@ mod tests {
             WindowSpy {
                 seen: seen.clone(),
                 finals: 0,
+                keep: None,
             },
             SessionConfig::default(),
         );
