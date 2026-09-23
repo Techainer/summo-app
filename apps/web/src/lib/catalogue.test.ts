@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { byTask, canRun, roleFor, type CatalogueModel, type Task } from "./catalogue";
+import { byTask, canRun, current, roleFor, type CatalogueModel, type Task } from "./catalogue";
 
 /** A card with only the fields under test filled in. */
 function model(over: Partial<CatalogueModel> = {}): CatalogueModel {
@@ -102,7 +102,10 @@ describe("the order cards are shown in", () => {
       speech("small-and-bad", 70, 0.4),
       speech("bigger-and-good", 160, 0.9),
     ]);
-    expect(group.models.map((m) => m.id)).toEqual(["bigger-and-good", "small-and-bad"]);
+    expect(group.models.map((each: CatalogueModel) => each.id)).toEqual([
+      "bigger-and-good",
+      "small-and-bad",
+    ]);
   });
 
   /**
@@ -116,12 +119,69 @@ describe("the order cards are shown in", () => {
       speech("good", 500, 0.9),
       speech("bad", 20, 0.4),
     ]);
-    expect(group.models.map((m) => m.id)).toEqual(["good", "bad", "unmeasured"]);
+    expect(group.models.map((each: CatalogueModel) => each.id)).toEqual([
+      "good",
+      "bad",
+      "unmeasured",
+    ]);
   });
 
   it("still puts what you have installed first", () => {
     const mine = { ...speech("installed-and-bad", 900, 0.3), installed: true };
     const group = firstGroup([speech("good", 100, 0.95), mine]);
     expect(group.models[0]?.id).toBe("installed-and-bad");
+  });
+});
+
+describe("models a newer one replaced", () => {
+  const model = (id: string, extra: Partial<CatalogueModel> = {}): CatalogueModel => ({
+    id,
+    name: id,
+    task: "asr",
+    mode: "live",
+    langs: ["vi"],
+    license: "MIT",
+    redistributable: true,
+    gated: false,
+    size_bytes: 1,
+    installed: false,
+    fits: true,
+    min_ram_mb: 1,
+    runnable: true,
+    ...extra,
+  });
+
+  /**
+   * Two cards for one model, and the only thing telling them apart was a parenthesis inside a
+   * name. Reported as "sao lại có 2 card, có cái mới bỏ cái cũ hoặc có select version gì chứ?".
+   */
+  it("shows the replacement and not the model it replaced", () => {
+    const shown = current([
+      model("gipformer-65m", { superseded_by: "gipformer-1.5-68m" }),
+      model("gipformer-1.5-68m"),
+    ]);
+    expect(shown.map((each: CatalogueModel) => each.id)).toEqual(["gipformer-1.5-68m"]);
+  });
+
+  /**
+   * The exception that matters more than the rule. Hiding a superseded model that is on disk would
+   * hide the only control that removes it — and the replacement is another download, so somebody
+   * may be keeping the old one on purpose.
+   */
+  it("keeps one that is already installed", () => {
+    const shown = current([
+      model("gipformer-65m", { superseded_by: "gipformer-1.5-68m", installed: true }),
+      model("gipformer-1.5-68m"),
+    ]);
+    expect(shown.map((each: CatalogueModel) => each.id)).toEqual([
+      "gipformer-65m",
+      "gipformer-1.5-68m",
+    ]);
+  });
+
+  /** A promise the registry has not kept yet must not take a model away and put nothing back. */
+  it("keeps one whose replacement is not published", () => {
+    const shown = current([model("gipformer-65m", { superseded_by: "gipformer-2" })]);
+    expect(shown.map((each: CatalogueModel) => each.id)).toEqual(["gipformer-65m"]);
   });
 });

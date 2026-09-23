@@ -408,6 +408,7 @@ mod tests {
             installed_variant: None,
             params: Default::default(),
             description: None,
+            superseded_by: None,
         }
     }
 

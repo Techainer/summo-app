@@ -688,6 +688,7 @@ mod tests {
             variants: Vec::new(),
             params: Default::default(),
             description: None,
+            superseded_by: None,
         };
         let installed = InstalledModel {
             manifest,
@@ -734,6 +735,7 @@ mod tests {
             variants: Vec::new(),
             params: Default::default(),
             description: None,
+            superseded_by: None,
         };
         manifest.params.insert(
             "encoder".into(),

@@ -47,6 +47,7 @@
     "tab_upload": "取り込み",
     "start": "録音を開始",
     "stop": "録音を停止",
+    "back": "録音中の画面に戻る",
     "listening": "聞いています…",
     "idle": "録音を押して開始。",
     "audio_source": "音声の入力元",

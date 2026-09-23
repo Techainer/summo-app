@@ -47,6 +47,7 @@
     "tab_upload": "导入",
     "start": "开始录音",
     "stop": "停止录音",
+    "back": "返回正在录音的会议",
     "listening": "正在听…",
     "idle": "点击录音开始。",
     "audio_source": "音频来源",

@@ -693,6 +693,10 @@ async fn catalogue(
                 "redistributable": m.redistributable,
                 "gated": m.gated,
                 "description": m.description,
+                // The model that replaces this one, so the screen can stop drawing two cards for
+                // one thing. Sent always; whether to draw it is the interface's decision, and it
+                // needs the id to say "replaced by" rather than merely hiding a row.
+                "superseded_by": m.superseded_by,
                 // What *this machine* will download, not what the manifest declares.
                 //
                 // `size_bytes` is one number for a model that may ship several builds, and it was
@@ -1199,6 +1203,32 @@ fn automatic_second(engine: &EngineState, live: &str) -> Option<String> {
         .then_some(second.id)
 }
 
+/// Whether a pinned model can hear the language a session asked for.
+///
+/// True when no language was asked for — a detector is what "auto" means, and every model may
+/// attempt it — and true when the model is not installed, because "is it right for this language"
+/// is a question about a manifest and the caller has a better error for a missing one.
+#[cfg(feature = "models")]
+fn language_is_covered(engine: &EngineState, id: &str, language: Option<&str>) -> bool {
+    let installed = summo_core::ModelId::parse(id)
+        .ok()
+        .and_then(|parsed| engine.store().installed(&parsed).ok());
+    pin_serves(installed.as_ref(), language)
+}
+
+/// The decision itself, away from the store so it can be tested without one.
+#[cfg(feature = "models")]
+fn pin_serves(manifest: Option<&summo_models::Manifest>, language: Option<&str>) -> bool {
+    let Some(code) = language.map(str::trim).filter(|c| !c.is_empty()) else {
+        // No language asked for means the model is being asked to detect, which any of them may
+        // attempt. A pin is the right answer to a question nobody narrowed.
+        return true;
+    };
+    // Not installed is not this function's problem. "Is this model right for this language" is a
+    // question about a manifest, and the caller has a better error for a model that is not there.
+    manifest.is_none_or(|manifest| summo_models::covers_language(manifest, code))
+}
+
 /// The live model, and the refine model when the settings name one.
 #[cfg(feature = "models")]
 fn choose_models(
@@ -1264,8 +1294,27 @@ fn choose_models(
         .clone()
         .filter(|m| !m.trim().is_empty())
     {
-        spec.live_model = chosen;
-        return spec;
+        // Unless it cannot hear the language being spoken.
+        //
+        // Pressing "use" on a card writes one model here, for every meeting, in every language —
+        // and the language picker went on offering a hundred of them. Pick Gipformer for Vietnamese
+        // and then switch to English, and English was recorded by a model that declares `vi` and
+        // returns Vietnamese-shaped noise: no error, no warning, a transcript that reads like
+        // something. Reported as "sao chọn 1 model dùng, tiếng Việt thì lại không chọn được tiếng
+        // Anh", which is exactly right — choosing the model took the language away.
+        //
+        // A pin is a preference between models that *can* do the job. It is not an instruction to
+        // transcribe English with a Vietnamese recogniser, and reading it as one makes the language
+        // control decorative for anybody who has ever pressed "use".
+        if language_is_covered(engine, &chosen, spec.language.as_deref()) {
+            spec.live_model = chosen;
+            return spec;
+        }
+        tracing::info!(
+            pinned = %chosen,
+            language = ?spec.language,
+            "the chosen model does not cover this language; ranking the installed models instead"
+        );
     }
 
     let speech: Vec<_> = engine
@@ -1442,25 +1491,22 @@ async fn remove_model(
         // Nothing is lost by allowing it: the role already cannot be served, so removal cannot
         // break anything that was working.
         let settings = summo_core::settings::Settings::load(&paths.settings())?;
-        if let Some(role) = in_use(&settings, &id) {
-            // Installed *and* unrunnable. Both halves matter, and the first version of this had
-            // only the second: a model that is not installed at all also fails "can this build run
-            // it", so a role pointing at something never downloaded stopped being refused and
-            // became `model not found` from the store instead — a worse message for the same
-            // situation, and one the catalogue suite caught.
-            let stuck = state
-                .engine
-                .store()
-                .installed(&model_id)
-                .is_ok_and(|m| !crate::runtimes::runnable(&m.runtime));
-            if !stuck {
-                return Err(Error::Config(format!(
-                    "`{id}` is in use as the {role} model; choose another one first"
-                )));
-            }
-            // Un-point the role on the way out, or the settings are left naming a model that is
-            // no longer on disk — which is the failure this guard was written to prevent, arrived
-            // at from the other side.
+        if in_use(&settings, &id).is_some() {
+            // Un-pointed, not refused.
+            //
+            // This used to answer `in use as the speech model; choose another one first`, which is
+            // advice you cannot always take: with one speech model installed and pinned there is no
+            // other one to choose, so the model could not be removed and the app could not be got
+            // out of. Reported twice from real use — once about SMALL100 with no second translator
+            // on the machine, once as plainly "model vẫn chưa xóa được".
+            //
+            // Pressing remove is not an accident, and refusing it protected nothing: the user is
+            // holding the card for the model they want gone. So the role is released and the next
+            // recording settles a model the ordinary way — `resolve_models` ranks what is installed
+            // for the language being spoken, which is the same answer it gives a fresh install.
+            //
+            // What is left behind is said out loud below rather than left for the next recording to
+            // discover.
             release_role(&paths.settings(), &id)?;
         }
 
@@ -1470,7 +1516,32 @@ async fn remove_model(
         state.engine.warm().clear();
 
         let freed = state.engine.store().remove(&model_id)?;
-        Ok(serde_json::json!({ "removed": id, "freed_bytes": freed }))
+
+        // What the next recording will use now, which is the question somebody who just deleted
+        // their recogniser has. Answered from the same ranking a session uses, so this cannot
+        // promise a model the session would not pick.
+        let language = summo_core::settings::Settings::load(&paths.settings())
+            .ok()
+            .and_then(|s| s.models.language)
+            .unwrap_or_else(|| "*".into());
+        let speech: Vec<_> = state
+            .engine
+            .store()
+            .list()
+            .into_iter()
+            .filter(|m| m.task == summo_models::Task::Asr)
+            .collect();
+        let next = summo_models::recommend(&speech, state.engine.hardware(), &language)
+            .best()
+            .map(|best| best.id.clone())
+            .or_else(|| speech.first().map(|m| m.id.to_string()));
+
+        Ok(serde_json::json!({
+            "removed": id,
+            "freed_bytes": freed,
+            // `null` is a real answer and the one that matters: nothing left to record with.
+            "now_using": next,
+        }))
     })())
 }
 
@@ -5999,6 +6070,52 @@ mod resolve_tests {
         // voice detector along with the translator nobody can run.
         assert_eq!(after.models.tts.as_deref(), Some("keep-me"));
         assert_eq!(in_use(&after, "small100"), None);
+    }
+
+    /// A manifest with the languages it claims, for the two tests below.
+    #[cfg(feature = "models")]
+    fn manifest(id: &str, task: summo_models::Task, langs: &[&str]) -> summo_models::Manifest {
+        serde_json::from_value(serde_json::json!({
+            "schema": 1, "id": id, "name": id, "task": task, "mode": "live",
+            "runtime": "test", "langs": langs, "license": "MIT", "size_bytes": 1,
+            "files": [], "params": {},
+        }))
+        .unwrap()
+    }
+
+    /// Choosing a model took the language away.
+    ///
+    /// Pressing "use" on a card writes one model for every meeting in every language, and the
+    /// language picker went on offering a hundred of them. Pick Gipformer for Vietnamese, switch to
+    /// English, and English was recorded by a model that declares `vi` — no error, and a transcript
+    /// that reads like something. Reported as "sao chọn 1 model dùng, tiếng Việt thì lại không chọn
+    /// được tiếng Anh".
+    #[test]
+    fn a_pin_that_cannot_hear_the_language_does_not_win() {
+        let vietnamese = manifest("gipformer-65m", summo_models::Task::Asr, &["vi"]);
+        assert!(pin_serves(Some(&vietnamese), Some("vi")));
+        assert!(!pin_serves(Some(&vietnamese), Some("en")));
+
+        // A multilingual pin is right for every language, which is the case that must not regress:
+        // this rule exists to stop a specialist answering for a language, not to stop a pin.
+        let whisper = manifest("whisper-tiny", summo_models::Task::Asr, &["*"]);
+        assert!(pin_serves(Some(&whisper), Some("en")));
+        assert!(pin_serves(Some(&whisper), Some("vi")));
+    }
+
+    /// Auto-detect, and a model nobody has installed.
+    ///
+    /// No language means the model is being asked to detect one, which any of them may attempt — so
+    /// a pin stands. And a pin naming something not on disk is a missing-model problem with a
+    /// better error of its own; answering "wrong language" there would be a worse message for a
+    /// different fault.
+    #[test]
+    fn a_pin_stands_when_there_is_no_language_to_check_it_against() {
+        let vietnamese = manifest("gipformer-65m", summo_models::Task::Asr, &["vi"]);
+        assert!(pin_serves(Some(&vietnamese), None));
+        assert!(pin_serves(Some(&vietnamese), Some("")));
+        assert!(pin_serves(Some(&vietnamese), Some("   ")));
+        assert!(pin_serves(None, Some("en")));
     }
 
     /// Importing uses the model the user chose, not the first one the store lists.

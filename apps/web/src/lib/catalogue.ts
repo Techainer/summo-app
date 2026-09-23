@@ -28,6 +28,14 @@ export interface CatalogueModel {
   /** The upstream host serves it only to an authenticated account. */
   gated: boolean;
   description?: string | null;
+  /**
+   * The model that replaces this one, when the registry has published a successor.
+   *
+   * See {@link current}: a superseded model that is not installed is not a choice anybody should be
+   * asked to make, and one that *is* installed has to stay on screen — it is what earlier releases
+   * put on their disk, and its card is the only way to remove it.
+   */
+  superseded_by?: string | null;
   size_bytes: number;
   installed: boolean;
   /** Whether this machine has the memory. */
@@ -253,9 +261,32 @@ const TASK_ORDER: Task[] = [
 ];
 
 /** Group a catalogue into sections, in the order above, dropping empty ones. */
+/**
+ * Drop the models a newer one has replaced, unless they are on this machine.
+ *
+ * The catalogue drew two Gipformer cards side by side as equal choices, and the only thing saying
+ * otherwise was a parenthesis inside one of the names — "Gipformer 65M · Vietnamese (thay bằng
+ * 1.5)". Reported as, fairly, *"sao lại có 2 card, có cái mới bỏ cái cũ hoặc có select version gì
+ * chứ?"*. A reader choosing a model for Vietnamese had to read titles closely to find out that one
+ * of the two was the old one.
+ *
+ * Installed is the exception, and the important one. Hiding a superseded model that is on disk
+ * would hide the only control that removes it — and the replacement is not free: it is another
+ * download, so somebody may keep the old one deliberately.
+ *
+ * Only when the successor is actually in the catalogue. A manifest naming a replacement the
+ * registry has not published yet would otherwise take a model off the screen and put nothing back.
+ */
+export function current(models: CatalogueModel[]): CatalogueModel[] {
+  const here = new Set(models.map((model) => model.id));
+  return models.filter(
+    (model) => model.installed || !model.superseded_by || !here.has(model.superseded_by),
+  );
+}
+
 export function byTask(models: CatalogueModel[]): { task: Task; models: CatalogueModel[] }[] {
   const seen = new Map<Task, CatalogueModel[]>();
-  for (const model of models) {
+  for (const model of current(models)) {
     const bucket = seen.get(model.task);
     if (bucket) bucket.push(model);
     else seen.set(model.task, [model]);

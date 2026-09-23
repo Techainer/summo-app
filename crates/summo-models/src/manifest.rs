@@ -228,6 +228,16 @@ pub struct Manifest {
     pub params: BTreeMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// The model that replaces this one, when the registry has published a successor.
+    ///
+    /// The catalogue showed both Gipformers as equal choices — one named "Gipformer 65M · Vietnamese
+    /// (thay bằng 1.5)" in its own title, because the only place to say so was the title. Two cards
+    /// for one model, and the reader decides between them by reading a parenthesis.
+    ///
+    /// A superseded model that is **installed** still has to be listed: it is what earlier releases
+    /// put on people's disks, and hiding it would hide the only control that removes it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub superseded_by: Option<String>,
 }
 
 fn default_true() -> bool {

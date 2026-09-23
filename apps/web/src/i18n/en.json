@@ -47,6 +47,7 @@
     "tab_upload": "Upload",
     "start": "Start recording",
     "stop": "Stop recording",
+    "back": "Back to the recording",
     "listening": "Listening…",
     "idle": "Press record to start.",
     "audio_source": "Audio source",
