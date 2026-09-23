@@ -507,41 +507,20 @@ jobs:
           files: apps/mobile/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           draft: true
 
-  # Tell the marketing site there is something new to point at.
+  # The download page used to be poked from here, and no longer needs to be.
   #
-  # `summo.techainer.com` names the actual files — `Summo_0.2.6_aarch64.dmg`, with its size — rather
-  # than sending people to a list of twenty. It reads that list when it builds, and it builds when
-  # its own repository changes, which is not when a release happens. So without this the download
-  # button spends the days between a release and the next copy edit offering the version before.
+  # `summo.techainer.com` names the actual files — `Summo_0.19.0_aarch64.dmg`, with its size —
+  # rather than sending somebody to a list of twenty. It read that list at build time, so it was
+  # only ever as current as its last build, and this job posted a Cloudflare deploy hook to make one
+  # happen.
   #
-  # A deploy hook is a URL that starts a build and nothing else: no token, no scope, no access to
-  # anything. `SITE_DEPLOY_HOOK` is not set in every fork of this repository and does not need to be
-  # — the site then shows the release it was built with, and says which one that is.
+  # That fixed nothing twice over. `SITE_DEPLOY_HOOK` was never set, so every release since the job
+  # was written has left the page advertising an older version. And it would not have helped if it
+  # had been: the site is a Cloudflare **Worker**, its Git-connected builds have never worked, and
+  # every deployment of it has been run by hand — so there was nothing on the other end of the hook
+  # to trigger.
   #
-  # Last, and never fatal. A release that is built, signed, smoke-tested and published is not a
-  # failed release because a static site did not rebuild.
-  site:
-    needs: [bundle, installers]
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Rebuild the download page
-        env:
-          HOOK: ${{ secrets.SITE_DEPLOY_HOOK }}
-        run: |
-          if [ -z "$HOOK" ]; then
-            # A warning, not an `echo`. This job is allowed to do nothing — a fork has no site to
-            # rebuild — but "did nothing" and "rebuilt the download page" both looked like a green
-            # tick in the run list, so the page went on offering the previous version and the only
-            # sign was a line of log nobody reads after a successful release.
-            echo "::warning title=The download page was not rebuilt::SITE_DEPLOY_HOOK is not set, so summo.techainer.com still advertises whichever release it was last built with. Deploy it by hand, or add the secret."
-            exit 0
-          fi
-          # The URL *is* the credential, so it is handed over on standard input rather than as an
-          # argument: an argument is in the process list for as long as the request takes, and in
-          # any shell trace that gets turned on later.
-          if printf 'url = "%s"\n' "$HOOK" | curl -fsS -X POST --config - > /dev/null; then
-            echo "asked the site to rebuild"
-          else
-            echo "the site did not take the hook; it will rebuild on its next push"
-          fi
+  # The page asks its own origin now. The Worker already in front of it answers `/api/latest` by
+  # asking GitHub once every ten minutes for everybody, which is why this cannot be done from the
+  # reader's browser directly: GitHub answers 403 to an address that has asked sixty times in an
+  # hour, and every office is one address. Nothing has to be deployed when a release happens.
