@@ -565,6 +565,7 @@ mod tests {
                     .collect(),
                 files,
                 description: None,
+                superseded_by: None,
             }
         }
 

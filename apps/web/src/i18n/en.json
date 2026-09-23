@@ -47,6 +47,7 @@
     "tab_upload": "Upload",
     "start": "Start recording",
     "stop": "Stop recording",
+    "back": "Back to the recording",
     "listening": "Listening…",
     "idle": "Press record to start.",
     "audio_source": "Audio source",
@@ -479,7 +480,12 @@
     "latency": "End of speech to text",
     "accelerator": "Accelerator",
     "accuracy_note": "Words transcribed correctly on a public benchmark. Unmeasured languages are not listed.",
-    "measured_elsewhere": "Measured on another class of machine; none published for this one yet."
+    "measured_elsewhere": "Measured on another class of machine; none published for this one yet.",
+    "per_language": "Which model hears which language",
+    "per_language_hint": "Each language can have its own model. The ones you have not chosen are ranked automatically.",
+    "per_language_for": "Model for {language}",
+    "per_language_auto": "Chosen for me",
+    "per_language_auto_named": "Chosen for me — {model}"
   },
   "home": {
     "heading": "Your workspace",

@@ -47,6 +47,7 @@
     "tab_upload": "取り込み",
     "start": "録音を開始",
     "stop": "録音を停止",
+    "back": "録音中の画面に戻る",
     "listening": "聞いています…",
     "idle": "録音を押して開始。",
     "audio_source": "音声の入力元",
@@ -479,7 +480,12 @@
     "latency": "発話終了から文字化まで",
     "accelerator": "アクセラレータ",
     "accuracy_note": "公開ベンチマークで正しく認識された語の割合。未測定の言語は載せません。",
-    "measured_elsewhere": "別種のマシンでの実測値です。本機向けの数値は未公開です。"
+    "measured_elsewhere": "別種のマシンでの実測値です。本機向けの数値は未公開です。",
+    "per_language": "どの言語をどのモデルが聞くか",
+    "per_language_hint": "言語ごとに別のモデルを選べます。選んでいない言語は自動で順位づけされます。",
+    "per_language_for": "{language} のモデル",
+    "per_language_auto": "おまかせ",
+    "per_language_auto_named": "おまかせ — {model}"
   },
   "home": {
     "heading": "あなたのワークスペース",

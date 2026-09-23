@@ -576,6 +576,17 @@ export function RootLayout({ children }: { children: ReactNode }) {
     followed.current = meeting;
     void navigate({ to: "/pages/$pageId", params: { pageId: meeting } });
   }, [engine.session.recording, engine.session.meeting, navigate]);
+  /** Whether the recording is running somewhere other than the screen in front of the reader. */
+  const recordingElsewhere =
+    engine.session.recording &&
+    engine.session.meeting !== undefined &&
+    engine.session.meeting !== null &&
+    pathname !== `/pages/${engine.session.meeting}`;
+  const openRecording = () => {
+    const meeting = engine.session.meeting;
+    if (meeting) void navigate({ to: "/pages/$pageId", params: { pageId: meeting } });
+  };
+
   const warning = deviceWarning(engine.session);
   const latest = engine.transcript.segments.at(-1);
 
@@ -706,6 +717,11 @@ export function RootLayout({ children }: { children: ReactNode }) {
             recording={engine.session.recording}
             elapsed={engine.elapsed}
             onToggle={engine.toggle}
+            // Away from the meeting, this is the way back to it — see `RecordButton`. The overlay
+            // below keeps the plain toggle: it is a strip over somebody's film with no app behind
+            // it to navigate to.
+            onOpen={openRecording}
+            away={recordingElsewhere}
           />
           {/* Shrinking the window is a desktop affordance. At phone width there is no window to
               shrink, and keeping it pushed the header 27px past the viewport — the whole app

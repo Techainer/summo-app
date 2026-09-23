@@ -7,17 +7,39 @@ import { formatTime } from "../lib/protocol";
  *
  * No confirmation, no model picker, no dialog — the promise is that pressing record starts a
  * recording in under a second, so anything that stands between the press and the capture is a bug.
+ *
+ * ## What it does depends on where you are
+ *
+ * On the meeting being recorded, it stops. Anywhere else, it takes you back to that meeting.
+ *
+ * It used to stop from everywhere, on the reasoning that a meeting should be stoppable from
+ * anywhere — and the cost of that was not noticed until somebody drove it: navigate away while
+ * recording and there is **no route back to the meeting at all**. The sidebar has no entry for it,
+ * the home screen does not offer it, and the one thing on screen that says "your recording" is a
+ * red pill labelled *Dừng ghi* which ends it. Measured, not guessed: clicking it left the daemon
+ * `idle` and the browser still on `/models`.
+ *
+ * Stopping is now one click further away, and that click shows you what you are stopping. Ending
+ * a capture from a screen that says nothing about it is how somebody stops the wrong thing.
  */
 export function RecordButton({
   recording,
   elapsed,
   onToggle,
+  onOpen,
+  away = false,
 }: {
   recording: boolean;
   elapsed: number;
   onToggle: () => void;
+  /** Go to the meeting being recorded. Absent where there is nowhere to go — the overlay. */
+  onOpen?: () => void;
+  /** Whether the recording is happening somewhere other than the screen in front of you. */
+  away?: boolean;
 }) {
   const t = useT();
+  // Only when there is somewhere to go. Without `onOpen` this is the control it always was.
+  const returns = recording && away && onOpen !== undefined;
   return (
     <button
       type="button"
@@ -35,9 +57,10 @@ export function RecordButton({
           ? "border-rec bg-rec-soft shadow-[0_0_0_3px_var(--color-rec-soft),0_0_20px_-2px_var(--color-rec)]"
           : "border-line bg-bg-soft hover:border-fg-faint hover:bg-bg-raised",
       )}
-      onClick={onToggle}
+      onClick={returns ? onOpen : onToggle}
       aria-pressed={recording}
-      aria-label={recording ? t("record.stop") : t("record.start")}
+      aria-label={returns ? t("record.back") : recording ? t("record.stop") : t("record.start")}
+      title={returns ? t("record.back") : undefined}
     >
       {/* Only pulses while recording: a dot that always throbs stops meaning anything, and this
           is the one state that must never be mistaken for another. */}

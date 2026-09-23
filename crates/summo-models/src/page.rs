@@ -376,6 +376,7 @@ mod tests {
             runtime: "sherpa-onnx/whisper".into(),
             langs: vec!["vi".into(), "en".into()],
             domains: vec![],
+            superseded_by: None,
             license: "MIT".into(),
             attribution: Some("OpenAI".into()),
             redistributable: true,

@@ -317,6 +317,7 @@ mod tests {
 
     fn manifest(variants: Vec<Variant>, files: Vec<FileEntry>, ram_mb: u32) -> Manifest {
         Manifest {
+            superseded_by: None,
             schema: 1,
             id: ModelId::parse("m").unwrap(),
             name: "M".into(),
