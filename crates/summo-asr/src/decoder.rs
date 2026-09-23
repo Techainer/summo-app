@@ -202,3 +202,129 @@ mod tests {
         assert_eq!(d.calls, 3);
     }
 }
+
+/// Bring an utterance up to the level the models were trained at.
+///
+/// ## What this is worth
+///
+/// Measured on the same hundred FLEURS clips and the same harness as every other figure in
+/// `docs/benchmarks.md`, with nothing changed but the input level:
+///
+/// | Model | as recorded | levelled |
+/// | --- | ---: | ---: |
+/// | parakeet CTC 110m (en) | 51.9 %, **40 clips empty** | **8.9 %**, none empty |
+/// | zipformer-gigaspeech (en) | 10.1 % | **9.2 %** |
+/// | whisper-tiny fp32 (en) | 13.8 % | **13.3 %** |
+/// | gipformer-65m (vi) | 8.6 % | **8.4 %** |
+///
+/// Every model improves; one of them goes from unusable to the best English result here. Twenty-six
+/// of the hundred Vietnamese clips peak below a tenth of full scale, which is what a laptop
+/// microphone across a meeting room sounds like — so this is not an exotic case, it is the ordinary
+/// one.
+///
+/// ## Why it was found the hard way
+///
+/// `parakeet-tdt-110m-en` produced no text at all for 44 of a hundred clips, and the failures were
+/// deterministic per clip: the same clip decoded alone, decoded ten times in a row, or decoded in a
+/// batch gave the same answer every time. The clips it refused were the quiet ones — peaks of 114
+/// and 198 out of 32767, against 13943 and 24533 for the clips it handled perfectly. Two different
+/// exports of that model, a transducer and a CTC branch, failed on the same clips, which is what
+/// ruled out the model and the runtime and left the audio.
+///
+/// A NeMo model normalises each mel bin over the utterance, which sounds like it should make level
+/// irrelevant and does not: a signal near the log-mel floor is mostly floor, and normalising that
+/// amplifies the noise rather than the speech.
+///
+/// ## The rules
+///
+/// Boost only, never attenuate: audio that is already loud is already what the model expects, and
+/// pulling it down could only lose the thing that made it easy.
+///
+/// Capped, because the gain is applied to whatever is in the window, and an utterance the detector
+/// opened on a cough is noise that would be brought up to full scale along with everything else.
+/// Thirty decibels is a very quiet microphone; more than that is a microphone that is not working.
+///
+/// And nothing at all below [`SILENCE`], which is digital silence rather than quiet speech. There
+/// is no speech in it to bring up.
+#[must_use]
+pub fn levelled(pcm: &[f32]) -> std::borrow::Cow<'_, [f32]> {
+    let peak = pcm.iter().fold(0.0_f32, |seen, x| seen.max(x.abs()));
+    if peak <= SILENCE {
+        return std::borrow::Cow::Borrowed(pcm);
+    }
+    // Already in range. Left untouched rather than nudged to exactly the target: a copy here would
+    // be one per partial re-decode, several times a second, to move audio the model already handles
+    // by a fraction of a decibel.
+    if peak >= LOUD_ENOUGH {
+        return std::borrow::Cow::Borrowed(pcm);
+    }
+    let gain = (TARGET_PEAK / peak).min(MAX_GAIN);
+    std::borrow::Cow::Owned(pcm.iter().map(|x| x * gain).collect())
+}
+
+/// Where a levelled utterance lands. Short of full scale, so nothing clips on the way.
+const TARGET_PEAK: f32 = 0.95;
+
+/// Most a quiet recording is lifted by: thirty decibels.
+const MAX_GAIN: f32 = 32.0;
+
+/// Loud enough to leave alone: half of full scale, six decibels down.
+///
+/// Everything the measurements above turned on was far below this — the clips that broke parakeet
+/// peaked at 0.003 and 0.006 of full scale — so the threshold costs none of the gain and keeps the
+/// ordinary case a borrow rather than a copy.
+const LOUD_ENOUGH: f32 = 0.5;
+
+/// Below this there is no speech to lift, only noise to amplify.
+const SILENCE: f32 = 1e-4;
+
+#[cfg(test)]
+mod level_tests {
+    use super::levelled;
+
+    /// The case this exists for: a microphone across the room.
+    #[test]
+    fn a_quiet_utterance_is_brought_up() {
+        let quiet: Vec<f32> = (0..100).map(|i| 0.01 * (i as f32 * 0.1).sin()).collect();
+        let out = levelled(&quiet);
+        let peak = out.iter().fold(0.0_f32, |s, x| s.max(x.abs()));
+        assert!(peak > 0.2, "still quiet: {peak}");
+        assert!(peak <= 0.96, "clipped: {peak}");
+    }
+
+    /// Audio that is already loud is left exactly as it is, byte for byte.
+    ///
+    /// Not merely "not attenuated": the borrowed branch is what keeps this free for the common case,
+    /// and a copy taken here would be one per partial re-decode, several times a second — to move
+    /// audio the model already handles by a fraction of a decibel.
+    #[test]
+    fn a_loud_utterance_is_not_touched() {
+        for level in [0.9_f32, 0.7, 0.55] {
+            let loud: Vec<f32> = (0..100).map(|i| level * (i as f32 * 0.1).sin()).collect();
+            assert!(
+                matches!(levelled(&loud), std::borrow::Cow::Borrowed(_)),
+                "copied audio that peaks at {level}"
+            );
+        }
+    }
+
+    /// Silence has nothing in it to bring up, and bringing it up thirty decibels would hand the
+    /// recogniser a window of amplified noise — which is what it invents text over.
+    #[test]
+    fn silence_is_left_silent() {
+        let silence = vec![0.0_f32; 100];
+        assert!(matches!(levelled(&silence), std::borrow::Cow::Borrowed(_)));
+
+        let almost = vec![1e-6_f32; 100];
+        assert!(matches!(levelled(&almost), std::borrow::Cow::Borrowed(_)));
+    }
+
+    /// And the lift is bounded, so a very quiet window is improved rather than blown up.
+    #[test]
+    fn the_lift_is_capped() {
+        let tiny: Vec<f32> = (0..100).map(|i| 0.0005 * (i as f32).sin()).collect();
+        let out = levelled(&tiny);
+        let peak = out.iter().fold(0.0_f32, |s, x| s.max(x.abs()));
+        assert!(peak < 0.5, "a whisper was amplified to {peak}");
+    }
+}

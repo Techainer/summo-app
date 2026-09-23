@@ -105,9 +105,12 @@ pub fn evaluate(decoder: &mut dyn Decoder, dir: &Path, items: &[AsrItem]) -> Res
 
     for item in items {
         let pcm = read_wav(&dir.join(&item.wav))?;
-
+        // Levelled, because the recording pipeline levels — see `summo_asr::decoder::levelled`.
+        // A harness that skipped it would publish a number for a path nobody takes, and the
+        // difference is not decorative: one model goes from 51.9 % with forty empty clips to 8.9 %
+        // with none. Inside the timer, because the product pays for it too.
         let start = Instant::now();
-        let hypothesis = decoder.decode(&pcm)?;
+        let hypothesis = decoder.decode(&summo_asr::decoder::levelled(&pcm))?;
         decode += start.elapsed();
         decoder.reset();
 
