@@ -391,8 +391,18 @@ async function settled(what, check) {
     // one — and a control still reading "translate into X and Y" describes behaviour the daemon
     // stopped having. A user who picks their own spoken language and sees nothing happen has been
     // told nothing about why.
+    // Waited for, not counted once. Everything above this polls the *daemon* — `settled` reads
+    // `/status` — and this reads the *screen*, which re-renders on its own schedule. Asserting on
+    // the count the instant the daemon agreed made this fail on a loaded CI runner and pass
+    // everywhere else, which is the worst kind of red: a real assertion about a real property,
+    // failing for a reason that has nothing to do with either.
     const note = page.getByText(/thứ tiếng còn lại/);
-    if ((await note.count()) === 0) {
+    const said = await note
+      .first()
+      .waitFor({ timeout: 15000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!said) {
       problems.push("two targets are set and nothing says translation runs both ways");
     } else if (!/↔/.test(await note.first().innerText())) {
       problems.push(`the both-ways note does not name the pair: ${await note.first().innerText()}`);
