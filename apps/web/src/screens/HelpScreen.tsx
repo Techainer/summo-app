@@ -135,6 +135,10 @@ export function HelpScreen() {
                   <span className="flex-1 font-medium">{t(`help.${topic.id}_q`)}</span>
                 </button>
 
+                {/* `ps-15` is 60px, which is the question row's own start: `px-4` (16) plus the
+                    icon disc `size-8` (32) plus `gap-3` (12). The answer lines up under the
+                    question text rather than under the icon. Off the spacing scale on purpose and
+                    named in `spacing.test.ts` — an alignment, not a rhythm step. */}
                 {shown && (
                   <CardBody className="ps-15 pt-0">
                     <p className="text-fg-dim leading-relaxed">{t(`help.${topic.id}_a`)}</p>

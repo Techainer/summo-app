@@ -1,9 +1,9 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { callSites } from "./call-sites";
+
 /**
- * One question, four answers, and a test so it stays four.
+ * One question, five answers, and a test so it stays five.
  *
  * "How round is a box" had six answers in a system that defined three. Counted across `src`:
  * `rounded-lg` 55 times, `rounded-md` 10, `rounded-2xl` 5, `rounded-xl` 4 — Tailwind's own scale,
@@ -11,9 +11,15 @@ import { describe, expect, it } from "vitest";
  * way. Nobody chose that; it is what happens when a token exists and reaching past it is one
  * character shorter.
  *
- * So the tokens are `control`, `card`, `panel`, `pill`, and this fails the build on anything else.
- * A rule is only a rule if something checks it — `theme.test.ts` next door exists for the same
- * reason, guarding the light/dark pairs against drift.
+ * So the tokens are `inline`, `control`, `card`, `panel`, `pill`, and this fails the build on
+ * anything else. A rule is only a rule if something checks it — `theme.test.ts` next door exists
+ * for the same reason, guarding the light/dark pairs against drift.
+ *
+ * This test shipped a release ago matching `rounded-`, and therefore said nothing at all about the
+ * twelve call sites writing bare `rounded` — Tailwind's 4px, the exact class of thing it exists to
+ * catch, sitting in nine files while the token block claimed it could not come back. The pattern
+ * below anchors on the word. A guard with a hole in it is worse than no guard, because the hole is
+ * invisible and the claim is not.
  *
  * What is deliberately still allowed, because each is a different question:
  *
@@ -24,35 +30,29 @@ import { describe, expect, it } from "vitest";
  * - a token spelled out, `rounded-t-[var(--radius-panel)]` — a sheet rounding only its top edge.
  */
 const ALLOWED = [
-  /^rounded-(control|card|panel|pill|full|none)$/,
-  /^rounded-[tblrse]{1,2}-(control|card|panel|pill|full|none)$/,
-  /^rounded-[tblrse]{1,2}?-?\[var\(--radius-(control|card|panel|pill)\)\]$/,
+  /^rounded-(inline|control|card|panel|pill|full|none)$/,
+  /^rounded-[tblrse]{1,2}-(inline|control|card|panel|pill|full|none)$/,
+  /^rounded-[tblrse]{1,2}?-?\[var\(--radius-(inline|control|card|panel|pill)\)\]$/,
   /^rounded-\[\d+%\]$/,
 ];
 
-function tsxFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) return tsxFiles(path);
-    return path.endsWith(".tsx") ? [path] : [];
-  });
-}
+/**
+ * Anchored on the word, so bare `rounded` is a finding rather than a blind spot.
+ *
+ * `\brounded-[\w…]*` matched the hyphen before anything could follow it, which meant `rounded` on
+ * its own never entered the loop. Matching the word and letting the suffix be optional is what
+ * makes the two cases the same case.
+ */
+const RADIUS = /\brounded(-[\w[\]()%-]*)?/g;
 
 describe("border radius", () => {
-  it("is always one of the four tokens", () => {
+  it("is always one of the five tokens", () => {
     const offenders: string[] = [];
-    for (const file of tsxFiles("src")) {
-      const source = readFileSync(file, "utf8");
-      for (const [line, text] of source.split("\n").entries()) {
-        // Only what is being applied, not what a comment is quoting: several primitives document
-        // the hand-rolled strings they replaced, and those quotations are the evidence for why the
-        // primitive exists. A test that forced them to be edited would erase its own reason.
-        if (/^\s*(\*|\/\/)/.test(text)) continue;
-        for (const match of text.matchAll(/\brounded-[\w[\]()%-]*/g)) {
-          const found = match[0];
-          if (!ALLOWED.some((shape) => shape.test(found))) {
-            offenders.push(`${file}:${line + 1} ${found}`);
-          }
+    for (const { file, line, text } of callSites("src")) {
+      for (const match of text.matchAll(RADIUS)) {
+        const found = match[0];
+        if (!ALLOWED.some((shape) => shape.test(found))) {
+          offenders.push(`${file}:${line} ${found}`);
         }
       }
     }

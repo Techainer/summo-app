@@ -381,7 +381,7 @@ export function PageScreen() {
       {/* A recording's title is a heading; a note's title is the first line of the note, and the
           editor below already shows it. Drawing it twice would put the user's own first sentence
           above the field they are about to edit it in. */}
-      {!note && <h1 className="mt-2 text-2xl font-semibold tracking-tight">{summary.title}</h1>}
+      {!note && <h1 className="text-heading mt-2 font-semibold tracking-tight">{summary.title}</h1>}
       <div className="text-fg-dim text-meta mt-2 flex flex-wrap items-center gap-2">
         <Pill>{summary.day}</Pill>
         {!note && <Pill>{formatDuration(summary.duration, locale)}</Pill>}

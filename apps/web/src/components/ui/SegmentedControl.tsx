@@ -64,7 +64,7 @@ export function SegmentedControl<T extends string>({
               // segment that cannot be seen to have focus is a control a keyboard cannot use. Same
               // ring as `Button` and `Chip`.
               "focus-visible:ring-accent focus-visible:ring-offset-bg focus-visible:ring-2 focus-visible:ring-offset-[var(--ring-offset)] focus-visible:outline-none",
-              size === "sm" ? "text-meta h-7 px-3" : "h-8 px-4 text-sm",
+              size === "sm" ? "text-meta h-7 px-3" : "text-body h-8 px-4",
               selected ? "text-accent-fg" : "text-fg-dim hover:text-fg",
             )}
           >

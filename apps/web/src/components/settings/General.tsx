@@ -1,5 +1,5 @@
 import { SegmentedControl, Select } from "../ui";
-import { CONTROL, FIELD, LABEL } from "./fields";
+import { CONTROL, FIELD, HINT, LABEL } from "./fields";
 import { useI18n, useT } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { SCHEMES, remember as rememberScheme } from "../../lib/theme";
@@ -49,9 +49,7 @@ function LanguagePicker() {
           ))}
         </Select>
       </label>
-      <p className="text-fg-faint text-micro mt-1.5 ml-[162px] leading-normal">
-        {t("settings.language_hint")}
-      </p>
+      <p className={HINT}>{t("settings.language_hint")}</p>
     </>
   );
 }

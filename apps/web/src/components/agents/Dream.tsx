@@ -72,7 +72,7 @@ export function DreamPanel() {
     <section className="border-line bg-bg-soft rounded-panel mt-6 border p-4" data-testid="dream">
       <div className="flex flex-wrap items-center gap-2">
         <Moon className="text-ai size-4 shrink-0" aria-hidden="true" />
-        <h2 className="flex-1 text-sm font-semibold">{t("agents.dream")}</h2>
+        <h2 className="text-body flex-1 font-semibold">{t("agents.dream")}</h2>
         <label className="text-meta flex items-center gap-1.5">
           <input
             type="checkbox"
@@ -90,7 +90,7 @@ export function DreamPanel() {
       <p className="text-fg-faint text-micro mt-1">{t("agents.dream_hint")}</p>
 
       {error && (
-        <p role="alert" className="text-danger mt-2 text-sm">
+        <p role="alert" className="text-danger text-body mt-2">
           {error}
         </p>
       )}

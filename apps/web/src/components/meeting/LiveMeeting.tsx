@@ -83,7 +83,7 @@ export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
                 aria-label={t("meeting.your_notes")}
                 value={text}
                 onChange={(e) => edit(e.target.value)}
-                className="h-full w-full resize-none bg-transparent p-4 font-mono text-[13px] outline-none"
+                className="text-meta h-full w-full resize-none bg-transparent p-4 font-mono outline-none"
               />
             ) : (
               <Suspense fallback={null}>

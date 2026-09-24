@@ -154,7 +154,7 @@ export function CalendarSources({ onChange }: { onChange: () => void }) {
       </details>
 
       {error && (
-        <p role="alert" className="text-danger mt-3 text-sm">
+        <p role="alert" className="text-danger text-body mt-3">
           {error}
         </p>
       )}
@@ -167,7 +167,7 @@ export function CalendarSources({ onChange }: { onChange: () => void }) {
               className="border-line bg-bg rounded-card flex flex-wrap items-center gap-2 border px-3 py-2"
             >
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{subscription.title}</span>
+                <span className="text-body block truncate font-medium">{subscription.title}</span>
                 <span
                   className={`text-micro block truncate ${
                     subscription.last_error ? "text-danger" : "text-fg-faint"
@@ -208,7 +208,7 @@ export function CalendarSources({ onChange }: { onChange: () => void }) {
               className="border-line bg-bg rounded-card flex flex-wrap items-center gap-2 border px-3 py-2"
             >
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{file.name}</span>
+                <span className="text-body block truncate font-medium">{file.name}</span>
                 {/* Said plainly. A file calendar that stopped matching reality is otherwise
                     indistinguishable from a subscription that is working. */}
                 <span className="text-fg-faint text-micro block truncate">

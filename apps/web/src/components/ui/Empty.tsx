@@ -85,7 +85,7 @@ export function Empty({
         // centred. The gap-after-a-form problem is real but it belongs to the caller: `full` means
         // "this is the whole screen", and the screen with a subscribe form above it should not be
         // asking for it. See `AgendaScreen`.
-        full ? "h-full py-10" : "py-14",
+        full ? "h-full py-10" : "py-12",
         className,
       )}
     >

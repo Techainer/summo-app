@@ -135,11 +135,35 @@ async function textColours(page) {
  * `label` is how a failure names itself — the caller knows whether that is a screen at a viewport
  * or a primitive in a state, and neither should have to be spelled here.
  */
+/**
+ * Things a developer writes to a checker, which a user should never be shown.
+ *
+ * `i18n-exempt` marks a string that deliberately is not translated, and it is written as a trailing
+ * `//` comment. Children of a JSX element are text, not code, so the same marker put *inside* one
+ * renders — and it did: three labels on the gallery page read "đã chọn // i18n-exempt" and
+ * "hành động // i18n-exempt" through a release. It satisfied `no-baked-in-text.test.ts`, which
+ * looks for the marker on the line and asks nothing about where on the line it is, and it was under
+ * the fold of a screenshot that stopped at one screenful. Two checks agreeing that nothing was
+ * wrong.
+ *
+ * Checked against what is painted rather than against the source, because "it rendered" is the
+ * actual failure and is the one thing neither of those checks was looking at.
+ */
+const NEVER_RENDERED = [/i18n-exempt/, /\bTODO\b/, /\beslint-disable/, /\bundefined\b/];
+
 export async function legible(page, label, problems) {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   if (overflow > 2) problems.push(`${label}: page scrolls sideways by ${overflow}px`);
+
+  const shown = await page.evaluate(() => document.body.innerText);
+  for (const marker of NEVER_RENDERED) {
+    const hit = marker.exec(shown);
+    if (!hit) continue;
+    const around = shown.slice(Math.max(0, hit.index - 30), hit.index + 40).replace(/\s+/g, " ");
+    problems.push(`${label}: "${hit[0]}" is on the screen — "…${around}…"`);
+  }
 
   for (const run of await textColours(page)) {
     // WCAG AA: 4.5 for body text, 3.0 for large text (18.66px bold, or 24px).

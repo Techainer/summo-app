@@ -203,7 +203,7 @@ function PaletteDialog({
             // says so, which is the same argument the note editor makes for itself.
             className="text-body text-fg placeholder:text-fg-faint w-full bg-transparent outline-none focus-visible:outline-none"
           />
-          <kbd className="text-fg-faint text-micro border-line rounded border px-1.5 py-0.5">
+          <kbd className="text-fg-faint text-micro border-line rounded-inline border px-1.5 py-0.5">
             esc
           </kbd>
         </div>
@@ -262,7 +262,7 @@ function PaletteDialog({
                   {/* On the row the keyboard is on, not on all of them. It answers "what does
                       Enter do" for the row Enter would actually reach. */}
                   {index === cursor && (
-                    <kbd className="text-fg-faint text-micro border-line hidden shrink-0 rounded border px-1.5 py-0.5 sm:block">
+                    <kbd className="text-fg-faint text-micro border-line rounded-inline hidden shrink-0 border px-1.5 py-0.5 sm:block">
                       ⏎
                     </kbd>
                   )}
@@ -276,12 +276,12 @@ function PaletteDialog({
             a palette people click their way through, which is the mouse journey it replaced. */}
         <div className="border-line text-fg-faint text-micro flex items-center gap-3 border-t px-4 py-2">
           <span className="flex items-center gap-1">
-            <kbd className="border-line rounded border px-1 py-0.5">↑</kbd>
-            <kbd className="border-line rounded border px-1 py-0.5">↓</kbd>
+            <kbd className="border-line rounded-inline border px-1 py-0.5">↑</kbd>
+            <kbd className="border-line rounded-inline border px-1 py-0.5">↓</kbd>
             {t("palette.move")}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="border-line rounded border px-1 py-0.5">⏎</kbd>
+            <kbd className="border-line rounded-inline border px-1 py-0.5">⏎</kbd>
             {t("palette.choose")}
           </span>
         </div>

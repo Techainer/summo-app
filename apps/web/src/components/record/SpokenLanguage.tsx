@@ -120,7 +120,7 @@ export function SpokenLanguage({
 
   return (
     <div className={compact ? "flex flex-wrap items-center gap-2" : ""}>
-      <label className="text-fg-faint flex items-center gap-2 text-sm">
+      <label className="text-fg-faint text-body flex items-center gap-2">
         {t("record.spoken")}
         <Select
           size="sm"

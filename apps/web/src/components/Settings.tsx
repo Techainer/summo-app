@@ -194,7 +194,7 @@ export function Settings({
           initial="hidden"
           animate="shown"
           transition={GENTLE}
-          className={cn("mx-auto w-full max-w-[720px]", narrow ? "pt-4" : "px-7 py-6")}
+          className={cn("mx-auto w-full max-w-[720px]", narrow ? "pt-4" : "px-6 py-6")}
           lang={locale}
         >
           {/* One heading, drawn here rather than by each section: six panels each rendering their

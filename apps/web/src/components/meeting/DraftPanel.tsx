@@ -161,7 +161,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
                     placeholder={t("draft.revise_placeholder")}
                     aria-label={t("draft.revise_label")}
                     disabled={busy}
-                    className="border-line bg-bg rounded-control flex-1 border px-2.5 py-1.5 text-sm"
+                    className="border-line bg-bg rounded-control text-body flex-1 border px-2.5 py-1.5"
                   />
                   <Button size="sm" variant="primary" type="submit" busy={busy}>
                     {t("draft.apply")}
@@ -204,7 +204,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
                 placeholder={t("draft.chat_placeholder")}
                 aria-label={t("draft.chat_send")}
                 disabled={busy}
-                className="border-line bg-bg rounded-control flex-1 border px-2.5 py-1.5 text-sm"
+                className="border-line bg-bg rounded-control text-body flex-1 border px-2.5 py-1.5"
               />
               <Button size="sm" type="submit" busy={busy}>
                 {t("draft.send")}

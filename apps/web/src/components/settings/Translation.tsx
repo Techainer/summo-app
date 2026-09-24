@@ -2,7 +2,7 @@ import { Check, HardDriveDownload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button, Input, Progress, Select } from "../ui";
-import { CONTROL, FIELD, HINT, LABEL } from "./fields";
+import { CONTROL, FIELD, HINT, INDENT, LABEL } from "./fields";
 import { useT } from "../../i18n/context";
 import { CatalogueClient, canRun, size, type CatalogueModel } from "../../lib/catalogue";
 import { cn } from "../../lib/cn";
@@ -253,7 +253,7 @@ function LocalModel({ model, missing }: { model: string | null; missing?: string
       </Button>
       {/* The whole story rather than a percentage. This said `0%` for the first minute of a 611 MB
           download and somebody reasonably read that as broken. */}
-      {running && job && <Progress install={job} className="ml-[162px] max-w-sm" />}
+      {running && job && <Progress install={job} className={`${INDENT} max-w-sm`} />}
       {job?.state === "failed" && <p className="text-rec text-micro mt-2">{job.error}</p>}
       {error && <p className="text-rec text-micro mt-2">{error}</p>}
     </div>

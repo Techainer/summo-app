@@ -117,11 +117,27 @@
    *
    * The interface had thirty-odd distinct sizes written as `text-[13px]`, `text-[0.76rem]`,
    * `text-[11px]`, and two screens meaning the same thing said it in different numbers. Five steps
-   * cover everything here: a screen title, a card title, prose, a label beside prose, and a
-   * timestamp. */
+   * covered a screen title, a card title, prose, a label beside prose, and a timestamp.
+   *
+   * Five turned out to be four too few at the top. Between `title` at 18px and `display` at 32px
+   * there was nothing, and seven call sites needed something there — so they reached past the scale
+   * for Tailwind's `text-xl` and `text-2xl`, and one wrote `text-[22px]`. That last one is the
+   * clearest evidence the gap was real rather than sloppy: `Library` drew a document title at 24px
+   * and its *edit field for the same title* at 22px, so the words changed size when you clicked
+   * them. Nobody chooses that either.
+   *
+   * `heading` and `subhead` fill the gap, and the forty-eight `text-sm` below them are the same
+   * story at the other end: 14px is not 15px, and Tailwind's scale sits near this one everywhere
+   * without landing on it. `type.test.ts` fails the build when a raw size comes back. */
   --text-display: 2rem;
   --text-display--line-height: 2.375rem;
   --text-display--letter-spacing: -0.02em;
+  --text-heading: 1.5rem;
+  --text-heading--line-height: 1.875rem;
+  --text-heading--letter-spacing: -0.02em;
+  --text-subhead: 1.25rem;
+  --text-subhead--line-height: 1.625rem;
+  --text-subhead--letter-spacing: -0.01em;
   --text-title: 1.125rem;
   --text-title--line-height: 1.5rem;
   --text-title--letter-spacing: -0.01em;
@@ -135,9 +151,9 @@
   /* Rounder than before, which is most of what reads as current. A pill is its own token because
    * "fully round" written as a number is a number somebody eventually changes.
    *
-   * `--radius-sm` is the fourth and it arrived late, which is why it was needed: call sites had
-   * been reaching for Tailwind's own `rounded-lg`/`rounded-md` for anything smaller than a card —
-   * fifty-five and ten times respectively — so "how round is a box" had six answers in a system
+   * `--radius-control` is the fourth and it arrived late, which is why it was needed: call sites
+   * had been reaching for Tailwind's own `rounded-lg`/`rounded-md` for anything smaller than a card
+   * — fifty-five and ten times respectively — so "how round is a box" had six answers in a system
    * that defined three.
    *
    * Named for what it is on rather than for how small it is, like every other token here: it is the
@@ -145,7 +161,28 @@
    * `--radius-sm`, which would have silently redefined Tailwind's own `rounded-sm` and changed five
    * call sites that were asking for Tailwind's 4px.
    *
-   * `radius.test.ts` fails the build if a raw Tailwind radius comes back. */
+   * `--radius-inline` is the fifth, and it is here because the guard that was supposed to prevent
+   * a fifth had a hole in it: the test matched `rounded-` and so said nothing about twelve call
+   * sites writing bare `rounded`, which is Tailwind's 4px. They were not sloppiness. A keycap, a
+   * highlight behind a word, the hover square under a 20px icon — all boxes 16 to 24 pixels tall,
+   * where `--radius-control`'s 10px is half the height and reads as a pill. The scale was missing a
+   * step and the call sites had found it without it.
+   *
+   * `radius.test.ts` fails the build if a raw Tailwind radius comes back, bare `rounded` included
+   * now. */
+  /* A settings row, which three files had to agree about by hand.
+   *
+   * `fields.ts` set a label to `w-[150px]` and the note beneath it to `ml-[162px]` — correct, being
+   * 150 plus the row's own `gap-3`, and written as a number that knew nothing about either. Two
+   * call sites then hand-copied that 162 rather than importing the constant sitting in a file they
+   * already imported from. Three places that must agree, none of which could notice disagreeing.
+   *
+   * Now the indent is the sum, so changing a label width moves every hint under it. */
+  --settings-label: 150px;
+  --settings-field-gap: 0.75rem;
+  --settings-indent: calc(var(--settings-label) + var(--settings-field-gap));
+
+  --radius-inline: 6px;
   --radius-control: 10px;
   --radius-card: 18px;
   --radius-panel: 24px;

@@ -40,8 +40,8 @@ export function About() {
   }, [handshake]);
 
   return (
-    <section className="border-line mt-10 border-t pt-6 text-sm">
-      <h2 className="text-base font-medium">{t("about.title")}</h2>
+    <section className="border-line text-body mt-10 border-t pt-6">
+      <h2 className="text-title font-medium">{t("about.title")}</h2>
 
       {/* The sentence that was here promised audio never leaves the machine. It was deleted when
           summaries grew an endpoint setting and the claim stopped being true; the call to it was
