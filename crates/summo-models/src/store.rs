@@ -347,11 +347,13 @@ mod tests {
                 name: Some("int8".into()),
                 accel: None,
                 precision: Some(Precision::Int8),
+                preferred: false,
             },
             Variant {
                 name: Some("fp32".into()),
                 accel: None,
                 precision: Some(Precision::Fp32),
+                preferred: false,
             },
         ];
 
@@ -417,11 +419,13 @@ mod tests {
                 name: Some("int8".into()),
                 accel: None,
                 precision: Some(Precision::Int8),
+                preferred: false,
             },
             Variant {
                 name: Some("fp32".into()),
                 accel: None,
                 precision: Some(Precision::Fp32),
+                preferred: false,
             },
         ];
         manifest.params = [
@@ -480,11 +484,13 @@ mod tests {
                 name: Some("int8".into()),
                 accel: None,
                 precision: Some(Precision::Int8),
+                preferred: false,
             },
             Variant {
                 name: Some("fp32".into()),
                 accel: None,
                 precision: Some(Precision::Fp32),
+                preferred: false,
             },
         ];
 

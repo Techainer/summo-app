@@ -77,6 +77,26 @@ pub struct Variant {
     pub accel: Option<Accel>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub precision: Option<Precision>,
+    /// The build the publisher measured and recommends, whatever the precision rule would say.
+    ///
+    /// The rule below is a guess — full precision is usually more accurate — and a guess is what
+    /// you use when nobody has looked. Somebody has now, on the two models here that ship both, and
+    /// the guess is right once and badly wrong once:
+    ///
+    /// | model | full precision | int8 |
+    /// |---|---|---|
+    /// | `sense-voice-small` | 7.4% WER, RTF 0.035, 938 MB | 7.5%, RTF 0.023, **239 MB** |
+    /// | `whisper-tiny` | 13.2% WER, RTF 0.075, 152 MB | **20.6%**, RTF 0.084, 103 MB |
+    ///
+    /// Quantising SenseVoice costs a tenth of a point, runs a third faster and saves seven hundred
+    /// megabytes of download, disk and memory. Quantising Whisper tiny costs seven and a half
+    /// points and is *slower* — on the smallest model here, the one a weak machine reaches for, so
+    /// a blanket "always quantise" rule would hurt worst exactly where it was meant to help.
+    ///
+    /// Neither of those is derivable from the manifest. They are measurements, so they belong in
+    /// the manifest as a statement rather than in this file as a heuristic.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub preferred: bool,
 }
 
 /// Which variant a file belongs to.
@@ -256,7 +276,19 @@ fn rank(variant: &Variant, hw: &HwProfile) -> f32 {
         score += 100.0 - position as f32;
     }
 
+    // Then what the publisher measured, which beats any guess about precision and loses to a real
+    // accelerator — a GPU is worth more than the difference between two builds of the same weights.
+    //
+    // Fifty rather than four so it cannot be outvoted by the precision rule below it, and so the
+    // ordering stays readable: accelerator, then measurement, then guess.
+    if variant.preferred {
+        score += 50.0;
+    }
+
     // Then precision, as high as memory allows. `fits` has already excluded what does not.
+    //
+    // A guess, and deliberately still here: most models in this registry ship one build, and for a
+    // publisher who has not measured anything, full precision is the safer default.
     score += match variant.precision {
         Some(Precision::Fp32) => 3.0,
         Some(Precision::Fp16) => 2.0,
@@ -276,6 +308,11 @@ fn describe(variant: &Variant, hw: &HwProfile) -> String {
     if let Some(precision) = variant.precision {
         parts.push(format!("{precision:?}").to_lowercase());
     }
+    // Said out loud, because it is the one part of this decision a user could reasonably disagree
+    // with: everything else here is what the machine allows, and this is what somebody measured.
+    if variant.preferred {
+        parts.push("measured best for this model".into());
+    }
     parts.push(format!("{} MB free", hw.room_mb()));
     parts.join(", ")
 }
@@ -288,6 +325,7 @@ pub fn files<'a>(manifest: &'a Manifest, choice: &Choice) -> Vec<&'a FileEntry> 
         name: choice.variant.clone(),
         accel: None,
         precision: None,
+        preferred: false,
     };
     manifest
         .files
@@ -360,7 +398,95 @@ mod tests {
             name: Some(name.into()),
             accel,
             precision,
+            preferred: false,
         }
+    }
+
+    /// The same, but the publisher says they measured this one.
+    fn measured(name: &str, precision: Option<Precision>) -> Variant {
+        Variant {
+            preferred: true,
+            ..v(name, None, precision)
+        }
+    }
+
+    /// A measurement beats the guess, which is the entire point of recording one.
+    ///
+    /// `sense-voice-small` in one test: quantising it costs a tenth of a point of word error rate,
+    /// runs a third faster, and saves seven hundred megabytes. The precision rule alone would fetch
+    /// the 938 MB build onto every machine with the room for it, including plenty that have the
+    /// room and would rather have the speed.
+    #[test]
+    fn a_variant_the_publisher_measured_beats_the_precision_guess() {
+        let m = manifest(
+            vec![
+                measured("int8", Some(Precision::Int8)),
+                v("fp32", None, Some(Precision::Fp32)),
+            ],
+            vec![
+                file("model.int8.onnx", Some("int8"), None),
+                file("model.onnx", Some("fp32"), None),
+            ],
+            100,
+        );
+        let choice = choose(&m, &hw(vec![Accel::Cpu], 64_000));
+        assert_eq!(choice.variant.as_deref(), Some("int8"));
+        assert!(
+            choice.reason.contains("measured best"),
+            "the reason must say why the guess was overruled: {}",
+            choice.reason
+        );
+        assert_eq!(choice.alternatives, vec!["fp32".to_string()]);
+    }
+
+    /// And the guess still decides when nobody has measured anything.
+    ///
+    /// Most manifests here are one build by one publisher who never ran a benchmark. Full precision
+    /// remains the safer default for them, and adding the flag must not have quietly changed that.
+    #[test]
+    fn without_a_measurement_full_precision_still_wins() {
+        let m = manifest(
+            vec![
+                v("int8", None, Some(Precision::Int8)),
+                v("fp32", None, Some(Precision::Fp32)),
+            ],
+            vec![
+                file("model.int8.onnx", Some("int8"), None),
+                file("model.onnx", Some("fp32"), None),
+            ],
+            100,
+        );
+        assert_eq!(
+            choose(&m, &hw(vec![Accel::Cpu], 64_000)).variant.as_deref(),
+            Some("fp32")
+        );
+    }
+
+    /// A recommendation is not a demand: memory still refuses what will not fit.
+    ///
+    /// `whisper-tiny` is the case — its full-precision build is the measured one, and a machine
+    /// that cannot hold it should get the quantised build rather than nothing. The flag moves a
+    /// candidate up the ranking; `fits` has already removed what cannot run at all.
+    #[test]
+    fn a_measured_variant_that_does_not_fit_still_loses_to_one_that_does() {
+        let m = manifest(
+            vec![
+                v("int8", None, Some(Precision::Int8)),
+                measured("fp32", Some(Precision::Fp32)),
+            ],
+            vec![
+                file("model.int8.onnx", Some("int8"), None),
+                file("model.onnx", Some("fp32"), None),
+            ],
+            4_000,
+        );
+        let choice = choose(&m, &hw(vec![Accel::Cpu], 1_200));
+        assert_eq!(choice.variant.as_deref(), Some("int8"));
+        assert!(
+            choice.rejected.iter().any(|r| r.variant == "fp32"),
+            "and it must say the measured build was refused for room: {:?}",
+            choice.rejected
+        );
     }
 
     /// The common case, and it must stay free of ceremony: one build, fetch it.

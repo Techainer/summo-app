@@ -392,11 +392,13 @@ mod tests {
                 name: Some("int8".into()),
                 accel: None,
                 precision: Some(crate::variant::Precision::Int8),
+                preferred: false,
             },
             crate::variant::Variant {
                 name: Some("fp32".into()),
                 accel: None,
                 precision: Some(crate::variant::Precision::Fp32),
+                preferred: false,
             },
         ];
         m.files = vec![
