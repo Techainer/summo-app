@@ -268,7 +268,28 @@ const helpRoute = createRoute({
   component: lazyRouteComponent(screens.help, "HelpScreen"),
 });
 
+/**
+ * Every primitive in every state, for the eye and for `ui-shots.mjs`.
+ *
+ * Only in a development build. `shots.mjs` photographs screens, which cannot show a disabled
+ * button or a busy one — nothing in this app renders those on purpose — so the states that drift
+ * unseen are exactly the ones no picture contains. This page contains them.
+ *
+ * Added conditionally rather than guarded inside the component, so the screen and everything it
+ * imports are absent from the release bundle instead of merely unreachable in it.
+ */
+const galleryRoutes = import.meta.env.DEV
+  ? [
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/__ui",
+        component: lazyRouteComponent(() => import("./screens/GalleryScreen"), "GalleryScreen"),
+      }),
+    ]
+  : [];
+
 const routeTree = rootRoute.addChildren([
+  ...galleryRoutes,
   homeRoute,
   recordRoute,
   libraryRoute,

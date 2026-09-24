@@ -64,7 +64,10 @@ export function Wave({
             // A fixed narrow bar, not `w-full`: stretched across a thousand pixels the bars became
             // 14px wide, and a 14px bar with a full round is a dot. Three pixels reads as sound at
             // any width, and `justify-between` spreads them.
-            "w-[3px] shrink-0 rounded-[2px] bg-current opacity-70",
+            // `rounded-pill` rather than the 2px it used to carry: on a 3px bar the two differ by
+            // half a pixel, and an exception nobody can see is not worth remembering. The argument
+            // above is about a *wide* bar, where a full round would make it a dot.
+            "rounded-pill w-[3px] shrink-0 bg-current opacity-70",
             live && "animate-[wave_1.1s_ease-in-out_infinite]",
             breathe && !live && "animate-[breathe_4s_ease-in-out_infinite]",
           )}

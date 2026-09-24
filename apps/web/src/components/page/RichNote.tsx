@@ -541,7 +541,7 @@ export function RichNote({
           data-testid="table-tools"
           role="toolbar"
           aria-label={t("notes.table_tools")}
-          className="border-line bg-bg-raised sticky top-0 z-10 mb-2 flex flex-wrap items-center gap-1 rounded-[var(--radius-card)] border p-1 shadow-[var(--shadow-sm)]"
+          className="border-line bg-bg-raised rounded-card sticky top-0 z-10 mb-2 flex flex-wrap items-center gap-1 border p-1 shadow-[var(--shadow-sm)]"
         >
           {tableActions.map((action) => (
             <button
@@ -549,7 +549,7 @@ export function RichNote({
               type="button"
               onClick={() => editor && action.apply(editor.chain().focus()).run()}
               className={cn(
-                "text-micro rounded-[var(--radius-pill)] px-2 py-1 transition-colors",
+                "text-micro rounded-pill px-2 py-1 transition-colors",
                 action.key === "delete"
                   ? "text-danger hover:bg-danger-soft"
                   : "text-fg-dim hover:bg-bg-soft hover:text-fg",
@@ -592,7 +592,7 @@ export function RichNote({
           highlighting and no way to ask for any. A select, in the flow, only while the caret is in
           a code block. */}
       {editor?.isActive("codeBlock") && (
-        <label className="border-line bg-bg-raised sticky bottom-2 z-10 mt-2 flex w-fit items-center gap-2 rounded-[var(--radius-pill)] border px-3 py-1.5 shadow-[var(--shadow-sm)]">
+        <label className="border-line bg-bg-raised rounded-pill sticky bottom-2 z-10 mt-2 flex w-fit items-center gap-2 border px-3 py-1.5 shadow-[var(--shadow-sm)]">
           <span className="text-fg-faint text-micro">{t("notes.code_language")}</span>
           <select
             aria-label={t("notes.code_language")}
@@ -623,7 +623,7 @@ export function RichNote({
         <BubbleMenu
           editor={editor}
           options={{ placement: "top" }}
-          className="border-line bg-bg-raised flex items-center gap-0.5 rounded-[var(--radius-pill)] border p-1 shadow-[var(--shadow-pop)]"
+          className="border-line bg-bg-raised rounded-pill flex items-center gap-0.5 border p-1 shadow-[var(--shadow-pop)]"
         >
           {marks.map((mark) => (
             <button
@@ -634,7 +634,7 @@ export function RichNote({
               title={t(`notes.mark_${mark.key}`)}
               onClick={() => mark.apply(editor.chain().focus()).run()}
               className={cn(
-                "grid size-7 place-items-center rounded-[var(--radius-pill)] transition-colors",
+                "rounded-pill grid size-7 place-items-center transition-colors",
                 editor.isActive(mark.is)
                   ? "bg-accent-soft text-accent"
                   : "text-fg-dim hover:bg-bg-soft hover:text-fg",
@@ -660,7 +660,7 @@ export function RichNote({
               else chain.setLink({ href: href.trim() }).run();
             }}
             className={cn(
-              "grid size-7 place-items-center rounded-[var(--radius-pill)] transition-colors",
+              "rounded-pill grid size-7 place-items-center transition-colors",
               editor.isActive("link")
                 ? "bg-accent-soft text-accent"
                 : "text-fg-dim hover:bg-bg-soft hover:text-fg",
@@ -680,7 +680,7 @@ export function RichNote({
           data-testid="block-menu"
           role="listbox"
           aria-label={t("notes.insert")}
-          className="border-line bg-bg-raised mt-1 w-56 rounded-[var(--radius-card)] border py-1 shadow-[var(--shadow-pop)]"
+          className="border-line bg-bg-raised rounded-card mt-1 w-56 border py-1 shadow-[var(--shadow-pop)]"
         >
           {shown.map((block, index) => (
             <li key={block.key} role="option" aria-selected={index === chosen}>

@@ -1,9 +1,11 @@
 import { NotebookPen } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
-import { Button, Empty } from "../components/ui";
+import { Alert, Button, Empty } from "../components/ui";
 import { NoteEditor } from "../components/page/NoteEditor";
 import { useErrorText } from "../lib/errors";
+import { useIsNarrow } from "../lib/breakpoint";
+import { cn } from "../lib/cn";
 import { useSearch } from "@tanstack/react-router";
 
 import { useI18n } from "../i18n/context";
@@ -45,6 +47,7 @@ export function NotesScreen() {
   const [openId, setOpenId] = useState<string | null>(wanted ?? null);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const narrow = useIsNarrow();
 
   const refresh = useCallback(async () => {
     try {
@@ -98,7 +101,23 @@ export function NotesScreen() {
 
   return (
     <div className="flex h-full min-h-0">
-      <aside className="border-line flex w-72 shrink-0 flex-col border-r">
+      {/* Master and detail, stacked on a phone rather than sitting beside each other.
+       *
+       * This column was a flat `w-72` with no narrow branch at all — 288 fixed pixels, which is
+       * 74 % of a 390px screen before the note itself starts. It survived because this screen is
+       * the one route `RootLayout`'s nav deliberately omits (the shelf in the library replaced it),
+       * so it was reachable only by a kept link — and it was in neither `shots.mjs` nor
+       * `density.mjs`, so nothing measured it either. Both of those are fixed alongside this.
+       *
+       * The pattern is the one `AppShell` and `Settings` already use: ask `useIsNarrow`, and give
+       * the phone one thing at a time. With a note open the list steps aside; with none open the
+       * list is the screen. */}
+      <aside
+        className={cn(
+          "border-line flex shrink-0 flex-col",
+          narrow ? (openId === null ? "w-full" : "hidden") : "w-72 border-r",
+        )}
+      >
         <div className="border-line flex items-center justify-between gap-2 border-b px-3 py-2">
           <h1 className="text-sm font-semibold">{t("notes.title")}</h1>
           <div className="relative flex items-center gap-1">
@@ -113,13 +132,13 @@ export function NotesScreen() {
               aria-label={t("notes.kind")}
               aria-expanded={picking}
               onClick={() => setPicking((p) => !p)}
-              className="border-line text-fg-dim hover:text-fg h-8 rounded-[var(--radius-card)] border px-1.5 text-xs"
+              className="border-line text-fg-dim hover:text-fg rounded-card h-8 border px-1.5 text-xs"
             >
               ▾
             </button>
             {picking && (
               <ul
-                className="border-line bg-bg-raised absolute end-0 z-10 mt-1 w-40 rounded-[var(--radius-card)] border py-1 shadow-[var(--shadow-pop)]"
+                className="border-line bg-bg-raised rounded-card absolute end-0 z-10 mt-1 w-40 border py-1 shadow-[var(--shadow-pop)]"
                 aria-label={t("notes.kind")}
                 data-testid="note-kinds"
               >
@@ -155,7 +174,7 @@ export function NotesScreen() {
                       type="button"
                       onClick={() => setOpenId(note.id)}
                       aria-current={note.id === openId}
-                      className={`flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm ${
+                      className={`rounded-control flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-sm ${
                         note.id === openId
                           ? "bg-accent-soft text-accent"
                           : "text-fg-dim hover:bg-bg-soft hover:text-fg"
@@ -174,14 +193,31 @@ export function NotesScreen() {
         </div>
       </aside>
 
-      <section className="flex min-w-0 flex-1 flex-col">
+      <section
+        className={cn(
+          "min-w-0 flex-1 flex-col",
+          // On a phone the detail is the screen, and only when something is open.
+          narrow && openId === null ? "hidden" : "flex",
+        )}
+      >
+        {/* The way back, and only where there is one to take.
+         *
+         * On a phone the list steps aside when a note opens, which leaves the note as the whole
+         * screen and no route back to the list — this screen is not in the navigation, so the
+         * sidebar cannot rescue anybody either. A thing that takes over the screen owes you the
+         * door it came through. */}
+        {narrow && openId !== null && (
+          <div className="border-line border-b px-3 py-2">
+            <Button variant="ghost" size="sm" onClick={() => setOpenId(null)}>
+              ← {t("notes.title")}
+            </Button>
+          </div>
+        )}
+
         {error && (
-          <p
-            role="alert"
-            className="border-danger/30 bg-danger-soft text-danger text-meta border-b px-4 py-2"
-          >
+          <Alert tone="danger" className="rounded-none border-x-0 border-t-0">
             {error}
-          </p>
+          </Alert>
         )}
 
         {openId === null ? (

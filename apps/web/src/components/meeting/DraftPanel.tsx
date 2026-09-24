@@ -129,7 +129,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
                   // Violet for the same reason the card is — this is the model's prose. The *selection*
                   // inside it stays the accent, because that one is the user choosing, which is exactly
                   // what green means everywhere else.
-                  className="bg-ai-soft selection:bg-accent selection:text-accent-fg mt-1 rounded-md px-2 py-1.5"
+                  className="bg-ai-soft selection:bg-accent selection:text-accent-fg rounded-control mt-1 px-2 py-1.5"
                   onMouseUp={(e) => onSelect(section.heading, section.body, e.currentTarget)}
                   onKeyUp={(e) => onSelect(section.heading, section.body, e.currentTarget)}
                 >
@@ -142,7 +142,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
             ))}
 
             {picked && (
-              <div className="border-ai/40 bg-bg-soft rounded-[var(--radius-card)] border p-2.5">
+              <div className="border-ai/40 bg-bg-soft rounded-card border p-2.5">
                 <p className="text-fg-dim text-micro">
                   {t("draft.revising", { heading: picked.heading })}{" "}
                   <span className="italic">“{shorten(picked.text)}”</span>
@@ -161,7 +161,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
                     placeholder={t("draft.revise_placeholder")}
                     aria-label={t("draft.revise_label")}
                     disabled={busy}
-                    className="border-line bg-bg flex-1 rounded-lg border px-2.5 py-1.5 text-sm"
+                    className="border-line bg-bg rounded-control flex-1 border px-2.5 py-1.5 text-sm"
                   />
                   <Button size="sm" variant="primary" type="submit" busy={busy}>
                     {t("draft.apply")}
@@ -204,7 +204,7 @@ export function DraftPanel({ draft, busy, onRefine, onChat, onConfirm, onDiscard
                 placeholder={t("draft.chat_placeholder")}
                 aria-label={t("draft.chat_send")}
                 disabled={busy}
-                className="border-line bg-bg flex-1 rounded-lg border px-2.5 py-1.5 text-sm"
+                className="border-line bg-bg rounded-control flex-1 border px-2.5 py-1.5 text-sm"
               />
               <Button size="sm" type="submit" busy={busy}>
                 {t("draft.send")}

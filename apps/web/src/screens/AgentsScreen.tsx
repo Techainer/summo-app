@@ -5,12 +5,13 @@ import { AnimatePresence, m } from "motion/react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
+  Alert,
   Avatar,
   Button,
-  Empty,
   Card,
   CardBody,
   CardHeader,
+  Empty,
   Page,
   PageGlow,
   StatusChip,
@@ -157,30 +158,20 @@ export function AgentsScreen() {
       <PageGlow />
       <DreamPanel />
 
-      {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="rec">{error}</Alert>}
 
       {/* A `spawns` entry naming nobody is otherwise invisible until a run tries to delegate, at
           which point the failure reads as the model's fault. */}
       {roster?.dangling.map(([from, to]) => (
-        <p
-          key={`${from}-${to}`}
-          className="border-blocked/30 bg-blocked-soft text-blocked text-meta rounded-lg border px-3 py-2"
-        >
+        <Alert key={`${from}-${to}`} tone="blocked">
           {t("agents.dangling", { from, to })}
-        </p>
+        </Alert>
       ))}
 
       {roster?.skipped.map((broken) => (
-        <p
-          key={broken.path}
-          className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2"
-        >
+        <Alert key={broken.path} tone="rec">
           {t("agents.unreadable", { path: broken.path, reason: broken.reason })}
-        </p>
+        </Alert>
       ))}
 
       {/* A roster that came back with nobody in it.
@@ -285,7 +276,7 @@ export function AgentsScreen() {
                   }}
                   spellCheck={false}
                   aria-label={t("agents.definition")}
-                  className="border-line bg-bg text-fg focus-visible:border-accent text-meta h-72 w-full resize-y rounded-lg border px-3 py-2 font-mono leading-relaxed focus:outline-none"
+                  className="border-line bg-bg text-fg focus-visible:border-accent text-meta rounded-control h-72 w-full resize-y border px-3 py-2 font-mono leading-relaxed focus:outline-none"
                 />
 
                 <div className="flex flex-wrap items-center gap-3">

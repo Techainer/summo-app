@@ -3,7 +3,7 @@ import { MessageCircleQuestion } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Markdown } from "../components/page/Markdown";
 
-import { Button, Card, CardBody, Empty } from "../components/ui";
+import { Alert, Button, Card, CardBody, Empty, Input } from "../components/ui";
 import { cn } from "../lib/cn";
 import { useT } from "../i18n/context";
 import { useEngine } from "../lib/engine-context";
@@ -93,16 +93,12 @@ export function ChatScreen() {
         {history.map((exchange, i) => (
           <div key={`${exchange.question}-${i}`} className="space-y-2">
             <p className="text-right">
-              <span className="bg-accent-soft text-accent inline-block rounded-2xl px-3 py-1.5 text-sm">
+              <span className="bg-accent-soft text-accent rounded-card inline-block px-3 py-1.5 text-sm">
                 {exchange.question}
               </span>
             </p>
 
-            {exchange.error && (
-              <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
-                {exchange.error}
-              </p>
-            )}
+            {exchange.error && <Alert tone="rec">{exchange.error}</Alert>}
 
             {exchange.answer && (
               <Card>
@@ -153,13 +149,13 @@ export function ChatScreen() {
           void send();
         }}
       >
-        <input
+        <Input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={t("chat.placeholder")}
           aria-label={t("chat.question")}
           disabled={busy}
-          className="border-line bg-bg-soft flex-1 rounded-lg border px-3 py-2 text-sm"
+          className="flex-1"
         />
         <Button variant="primary" type="submit" busy={busy}>
           {t("chat.ask")}

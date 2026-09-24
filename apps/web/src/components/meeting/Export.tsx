@@ -196,7 +196,7 @@ function Choice({
       onClick={onClick}
       aria-pressed={on}
       className={cn(
-        "text-micro rounded-[var(--radius-pill)] border px-2.5 py-1 transition-colors",
+        "text-micro rounded-pill border px-2.5 py-1 transition-colors",
         on ? "border-accent bg-accent-soft text-accent" : "border-line hover:border-fg-faint",
       )}
     >

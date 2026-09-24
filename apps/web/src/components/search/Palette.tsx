@@ -167,7 +167,7 @@ function PaletteDialog({
         aria-modal="true"
         aria-label={t("palette.title")}
         data-testid="palette"
-        className="border-line bg-bg-raised w-full max-w-xl overflow-hidden rounded-[var(--radius-panel)] border shadow-[var(--shadow-pop)]"
+        className="border-line bg-bg-raised rounded-panel w-full max-w-xl overflow-hidden border shadow-[var(--shadow-pop)]"
       >
         <div className="border-line flex items-center gap-2.5 border-b px-4 py-3">
           <Search aria-hidden="true" className="text-fg-faint size-4 shrink-0" />
@@ -230,7 +230,7 @@ function PaletteDialog({
                   onClick={() => run(result)}
                   aria-current={index === cursor ? "true" : undefined}
                   className={cn(
-                    "group/row flex w-full items-center gap-3 rounded-[var(--radius-card)] px-3 py-2 text-left transition-colors",
+                    "group/row rounded-card flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
                     index === cursor ? "bg-bg-elevated" : "hover:bg-bg-soft",
                   )}
                 >

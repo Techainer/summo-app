@@ -59,10 +59,7 @@ export function AskPanel({ meeting }: { meeting: string }) {
   const usual: Habit[] = habits.data ?? [];
 
   return (
-    <section
-      className="border-line bg-bg-soft rounded-[var(--radius-panel)] border p-4"
-      data-testid="ask"
-    >
+    <section className="border-line bg-bg-soft rounded-panel border p-4" data-testid="ask">
       <div className="flex items-center gap-2">
         <Sparkles className="text-ai size-4 shrink-0" aria-hidden="true" />
         <h2 className="flex-1 text-sm font-semibold">{t("ask.title")}</h2>

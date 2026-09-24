@@ -7,7 +7,7 @@ import { cn } from "../../lib/cn";
  * One input, everywhere.
  *
  * There were twenty-four `<input>` and `<textarea>` elements in this app and no two agreed. Some
- * were `rounded-full border px-2.5 py-1 text-meta`, some `rounded-xl border px-3 py-2 text-sm`, one
+ * were `rounded-full border px-2.5 py-1 text-meta`, some `rounded-lg border px-3 py-2 text-sm`, one
  * was a bare `rounded-md`. Height, radius, focus colour and the size of the text inside all varied,
  * so a form was a row of controls that had never met. That is the kind of thing nobody can name
  * when they look at a screen and say it feels unfinished, and it is most of why they say it.
@@ -18,7 +18,7 @@ import { cn } from "../../lib/cn";
  * fifth that reads right to left should not be a search through the styles.
  */
 const BASE = [
-  "w-full min-w-0 rounded-[var(--radius-card)] border transition-colors",
+  "w-full min-w-0 rounded-card border transition-colors",
   "border-line bg-bg-soft text-fg placeholder:text-fg-faint",
   "hover:border-line-strong",
   "focus-visible:border-accent focus-visible:ring-accent/25 focus-visible:ring-2 focus:outline-none",

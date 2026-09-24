@@ -82,6 +82,13 @@
    * move the other. */
   --color-danger: #fb6b70;
   --color-danger-soft: #fb6b701a;
+  /* What is legible *on* `--color-danger`, which is not the same answer in both themes.
+   *
+   * The danger button was `bg-rec text-white` in every theme. In light that is white on #c62f32 and
+   * fine; in dark it is white on a light coral — contrast 2.82 against the 4.5 that AA asks for.
+   * No screen in the app renders a destructive button, so `shots.mjs` had nothing to photograph and
+   * the gallery found it on its first run. */
+  --color-danger-fg: #2a0708;
 
   /* Task and job states. Semantic, not decorative. */
   --color-done: #64e3a1;
@@ -126,7 +133,20 @@
   --text-micro--line-height: 1rem;
 
   /* Rounder than before, which is most of what reads as current. A pill is its own token because
-   * "fully round" written as a number is a number somebody eventually changes. */
+   * "fully round" written as a number is a number somebody eventually changes.
+   *
+   * `--radius-sm` is the fourth and it arrived late, which is why it was needed: call sites had
+   * been reaching for Tailwind's own `rounded-lg`/`rounded-md` for anything smaller than a card —
+   * fifty-five and ten times respectively — so "how round is a box" had six answers in a system
+   * that defined three.
+   *
+   * Named for what it is on rather than for how small it is, like every other token here: it is the
+   * radius of a thing you operate — a button, a field, a chip, the box carrying a warning. Not
+   * `--radius-sm`, which would have silently redefined Tailwind's own `rounded-sm` and changed five
+   * call sites that were asking for Tailwind's 4px.
+   *
+   * `radius.test.ts` fails the build if a raw Tailwind radius comes back. */
+  --radius-control: 10px;
   --radius-card: 18px;
   --radius-panel: 24px;
   --radius-pill: 999px;
@@ -217,6 +237,7 @@
     --color-rec-soft: #c62f3214;
     --color-danger: #c62f32;
     --color-danger-soft: #c62f3214;
+    --color-danger-fg: #ffffff;
     --color-done: #0f7350;
     --color-running: #2f5fc0;
     --color-running-soft: #2f5fc014;
@@ -325,6 +346,7 @@
   --color-rec: #c62f32;
   --color-rec-soft: #c62f3214;
   --color-danger: #c62f32;
+  --color-danger-fg: #ffffff;
   --color-danger-soft: #c62f3214;
   --color-done: #0f7350;
   --color-running: #2f5fc0;
@@ -370,6 +392,7 @@
   --color-rec: #fb6b70;
   --color-rec-soft: #fb6b701a;
   --color-danger: #fb6b70;
+  --color-danger-fg: #2a0708;
   --color-danger-soft: #fb6b701a;
   --avatar-fill-l: 0.72;
   --avatar-fill-c: 0.11;

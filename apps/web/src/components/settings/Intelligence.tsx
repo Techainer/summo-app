@@ -174,7 +174,7 @@ export function Intelligence({ settings }: { settings: LlmSettings }) {
           type="button"
           onClick={() => void test()}
           disabled={testing}
-          className="bg-accent text-accent-fg rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="bg-accent text-accent-fg rounded-control px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {testing ? t("settings.testing") : t("settings.test")}
         </button>
@@ -184,7 +184,7 @@ export function Intelligence({ settings }: { settings: LlmSettings }) {
       {result && (
         <p
           data-testid="test-result"
-          className={`text-meta mt-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 ${
+          className={`text-meta rounded-control mt-3 flex flex-wrap items-center gap-2 border px-3 py-2 ${
             result.ok ? "border-accent/30 bg-accent-soft" : "border-rec/30 bg-rec-soft text-rec"
           }`}
         >

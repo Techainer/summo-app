@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Recent } from "../components/library/Recent";
 import {
+  Alert,
   Avatar,
   Button,
   Card,
@@ -140,11 +141,7 @@ export function HomeScreen() {
     >
       <PageGlow />
 
-      {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-[var(--radius-card)] border px-3 py-2">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="rec">{error}</Alert>}
 
       <m.div
         initial="hidden"
@@ -186,7 +183,7 @@ export function HomeScreen() {
                   <span
                     className={cn(
                       "bg-rec block transition-all duration-200",
-                      session.recording ? "size-5 rounded-md" : "size-8 rounded-full",
+                      session.recording ? "rounded-control size-5" : "size-8 rounded-full",
                     )}
                   />
                 </button>
@@ -303,7 +300,7 @@ export function HomeScreen() {
                       <button
                         type="button"
                         onClick={() => void navigate({ to: item.to })}
-                        className="hover:bg-bg-elevated group flex w-full items-center gap-2.5 rounded-[var(--radius-card)] px-2.5 py-2 text-left transition-colors"
+                        className="hover:bg-bg-elevated group rounded-card flex w-full items-center gap-2.5 px-2.5 py-2 text-left transition-colors"
                       >
                         <span
                           className={cn(

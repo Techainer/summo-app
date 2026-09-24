@@ -612,7 +612,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
             "text-meta min-w-0 flex-1 truncate",
             // On top of a film the line has to be readable against anything, so it gets its own
             // plate rather than relying on whatever is behind it.
-            overlay ? "text-fg bg-bg/75 rounded-lg px-2 py-1 backdrop-blur" : "text-fg-dim",
+            overlay ? "text-fg bg-bg/75 rounded-control px-2 py-1 backdrop-blur" : "text-fg-dim",
           )}
         >
           {latest?.text ?? t("record.listening")}
@@ -623,7 +623,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           aria-pressed={overlay}
           aria-label={t("nav.overlay")}
           title={t("nav.overlay_hint")}
-          className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1"
+          className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-control px-2 py-1"
         >
           <Subtitles aria-hidden="true" className="size-4 stroke-[1.75]" />
         </button>
@@ -635,7 +635,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           }}
           aria-label={t("nav.expand")}
           title={t("nav.expand_hint")}
-          className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1"
+          className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-control px-2 py-1"
         >
           <Maximize2 aria-hidden="true" className="size-4 stroke-[1.75]" />
         </button>
@@ -664,15 +664,15 @@ export function RootLayout({ children }: { children: ReactNode }) {
           onClick={() => setNavOpen((open) => !open)}
           aria-label={navOpen ? t("nav.hide_sidebar") : t("nav.show_sidebar")}
           aria-expanded={navOpen}
-          className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1.5"
+          className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-control px-2 py-1.5"
         >
           <Menu aria-hidden="true" className="size-[18px] stroke-[1.75]" />
         </button>
         <div className="flex items-center gap-2 font-semibold tracking-tight">
           <span className="flex h-4 items-end gap-[2.5px]" aria-hidden="true">
-            <i className="bg-accent h-2 w-[3px] rounded-sm" />
-            <i className="bg-accent h-4 w-[3px] rounded-sm" />
-            <i className="bg-accent h-1.5 w-[3px] rounded-sm" />
+            <i className="bg-accent rounded-control h-2 w-[3px]" />
+            <i className="bg-accent rounded-control h-4 w-[3px]" />
+            <i className="bg-accent rounded-control h-1.5 w-[3px]" />
           </span>
           Summo
         </div>
@@ -683,7 +683,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           type="button"
           onClick={() => setPaletteOpen(true)}
           aria-label={t("palette.title")}
-          className="border-line bg-bg-soft text-fg-faint hover:border-line-strong hover:text-fg-dim text-meta ms-1 hidden items-center gap-2 rounded-[var(--radius-pill)] border px-3 py-1.5 transition-colors sm:flex"
+          className="border-line bg-bg-soft text-fg-faint hover:border-line-strong hover:text-fg-dim text-meta rounded-pill ms-1 hidden items-center gap-2 border px-3 py-1.5 transition-colors sm:flex"
         >
           <Search aria-hidden="true" className="size-3.5" />
           {t("palette.placeholder")}
@@ -707,7 +707,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
             aria-label={t("assistant.title")}
             title={t("assistant.title")}
             className={cn(
-              "rounded-[var(--radius-pill)] px-2 py-1.5 transition-colors",
+              "rounded-pill px-2 py-1.5 transition-colors",
               assistantOpen ? "bg-ai-soft text-ai" : "text-fg-faint hover:bg-bg-soft hover:text-fg",
             )}
           >
@@ -731,7 +731,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
             onClick={() => setCompact(true)}
             aria-label={t("nav.shrink")}
             title={t("nav.shrink_hint")}
-            className="text-fg-faint hover:bg-bg-soft hover:text-fg hidden rounded-lg px-2 py-1.5 sm:block"
+            className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-control hidden px-2 py-1.5 sm:block"
           >
             <Minimize2 aria-hidden="true" className="size-4 stroke-[1.75]" />
           </button>

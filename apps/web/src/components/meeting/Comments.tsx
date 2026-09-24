@@ -126,7 +126,7 @@ export function Comments({
                 animate="shown"
                 exit="gone"
                 transition={GENTLE}
-                className={`group rounded-xl border p-2.5 ${
+                className={`group rounded-card border p-2.5 ${
                   fromAgent ? "border-accent/30 bg-accent-soft" : "border-line bg-bg-soft"
                 }`}
               >
@@ -217,7 +217,7 @@ export function Comments({
           }}
           placeholder={t("comments.placeholder")}
           aria-label={t("comments.title")}
-          className="border-line bg-bg-soft focus:border-accent text-meta min-w-0 flex-1 rounded-xl border px-3 py-1.5 outline-none"
+          className="border-line bg-bg-soft focus:border-accent text-meta rounded-card min-w-0 flex-1 border px-3 py-1.5 outline-none"
         />
         <Button size="sm" onClick={() => void send()} disabled={!draft.trim() || busy}>
           {t("comments.send")}

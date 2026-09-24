@@ -8,7 +8,7 @@ import { SNAPPY } from "../../lib/motion";
  * A small labelled thing: a tag, a filter, a person, a count.
  *
  * The app had six spellings of this — `rounded-full border px-2.5 py-1 text-meta`, `rounded-full
- * px-2 py-0.5 text-micro`, `rounded-lg px-2.5 py-0.5 font-mono text-micro` — and they sat next to
+ * px-2 py-0.5 text-micro`, `rounded-md px-2.5 py-0.5 font-mono text-micro` — and they sat next to
  * each other in the same rows. Two heights of pill in one line is the sort of thing that reads as
  * sloppiness without anyone being able to point at it.
  *
@@ -22,6 +22,7 @@ export function Chip({
   tone = "neutral",
   count,
   onClick,
+  disabled = false,
   className,
   title,
 }: {
@@ -31,11 +32,13 @@ export function Chip({
   /** A number after the label, in tabular figures so a column of chips does not jitter. */
   count?: number;
   onClick?: () => void;
+  /** Only meaningful with `onClick`: a chip that is not a control cannot be disabled. */
+  disabled?: boolean;
   className?: string;
   title?: string;
 }) {
   const shell = cn(
-    "text-meta inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border px-2.5 py-1 transition-colors",
+    "text-meta inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-1 transition-colors",
     on
       ? tone === "ai"
         ? "border-ai/40 bg-ai-soft text-ai font-medium"
@@ -68,7 +71,15 @@ export function Chip({
       title={title}
       whileTap={{ scale: 0.96 }}
       transition={SNAPPY}
-      className={shell}
+      disabled={disabled}
+      // The same ring `Button` draws, for the same reason. A chip that can be pressed is a control,
+      // and this branch was leaving the keyboard to whatever the browser happened to paint — which
+      // on a dark surface is a blue halo nobody chose, and on some is nothing at all.
+      className={cn(
+        shell,
+        "focus-visible:ring-accent focus-visible:ring-offset-bg focus-visible:ring-2 focus-visible:ring-offset-[var(--ring-offset)] focus-visible:outline-none",
+        disabled && "pointer-events-none opacity-[var(--disabled-opacity)]",
+      )}
     >
       {inner}
     </m.button>

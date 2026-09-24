@@ -117,7 +117,7 @@ export function Permissions({ compact = false }: { compact?: boolean }) {
   return (
     <section
       className={cn(
-        "border-line bg-bg-raised rounded-[var(--radius-card)] border p-5 shadow-[var(--shadow-card)]",
+        "border-line bg-bg-raised rounded-card border p-5 shadow-[var(--shadow-card)]",
         // Each row draws a rule above itself to separate it from the one before. With no heading
         // there is nothing before the first one, and the rule becomes a line across the top of the
         // card for no reason.

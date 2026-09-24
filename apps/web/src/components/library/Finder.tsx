@@ -50,7 +50,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
         {active && (
           <button
             type="button"
-            className="text-fg-dim hover:bg-bg-soft hover:text-fg text-micro rounded-md px-1.5 py-0.5"
+            className="text-fg-dim hover:bg-bg-soft hover:text-fg text-micro rounded-control px-1.5 py-0.5"
             onClick={() => {
               onFolder(undefined);
               onTags([]);
@@ -74,7 +74,7 @@ export function Finder({ view, folder, tags, colour, onFolder, onTags, onColour 
               aria-pressed={folder === node.path}
               style={{ paddingInlineStart: `${8 + node.depth * 14}px` }}
               className={cn(
-                "text-meta flex items-center gap-1.5 rounded-md py-1 pe-2 text-left transition-colors",
+                "text-meta rounded-control flex items-center gap-1.5 py-1 pe-2 text-left transition-colors",
                 folder === node.path
                   ? "bg-bg-soft text-fg font-medium"
                   : "text-fg-dim hover:bg-bg-soft hover:text-fg",

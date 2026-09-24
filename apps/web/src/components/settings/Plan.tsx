@@ -50,7 +50,7 @@ export function Plan() {
         />
 
         {(wrong || missing) && (
-          <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta flex items-start gap-2 rounded-[var(--radius-card)] border px-3 py-2">
+          <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta rounded-card flex items-start gap-2 border px-3 py-2">
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
             <span>{missing ? t("plan.no_model") : t("plan.wrong_language")}</span>
           </p>

@@ -132,7 +132,7 @@ export function Settings({
             aria-current={active ? "page" : undefined}
             onClick={() => onSection?.(id)}
             className={cn(
-              "text-meta flex items-center gap-2.5 rounded-[var(--radius-card)] px-3 py-2 text-start transition-colors",
+              "text-meta rounded-card flex items-center gap-2.5 px-3 py-2 text-start transition-colors",
               narrow && "shrink-0 whitespace-nowrap",
               active
                 ? "bg-bg-raised text-fg font-medium shadow-[var(--shadow-sm)]"
@@ -157,7 +157,7 @@ export function Settings({
           to={to}
           search={{}}
           className={cn(
-            "text-meta text-fg-dim hover:bg-bg-soft hover:text-fg flex items-center gap-2.5 rounded-[var(--radius-card)] px-3 py-2 text-start transition-colors",
+            "text-meta text-fg-dim hover:bg-bg-soft hover:text-fg rounded-card flex items-center gap-2.5 px-3 py-2 text-start transition-colors",
             narrow && "shrink-0 whitespace-nowrap",
           )}
         >

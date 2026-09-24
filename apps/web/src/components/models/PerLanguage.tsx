@@ -78,10 +78,7 @@ export function PerLanguage({
   if (rows.length === 0) return null;
 
   return (
-    <section
-      data-testid="per-language"
-      className="border-line rounded-[var(--radius-card)] border p-4"
-    >
+    <section data-testid="per-language" className="border-line rounded-card border p-4">
       <h2 className="text-meta font-medium">{t("models.per_language")}</h2>
       <p className="text-fg-dim text-micro mt-1">{t("models.per_language_hint")}</p>
       <ul className="mt-3 flex flex-col gap-2">

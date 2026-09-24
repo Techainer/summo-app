@@ -68,7 +68,7 @@ export function WindowControls() {
         onClick={() => void act("minimise")}
         aria-label={t("nav.minimise")}
         title={t("nav.minimise")}
-        className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1.5"
+        className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-control px-2 py-1.5"
       >
         <Minus aria-hidden="true" className="size-4 stroke-[1.75]" />
       </button>
@@ -77,7 +77,7 @@ export function WindowControls() {
         onClick={() => void act("toggle")}
         aria-label={maximised ? t("nav.restore") : t("nav.maximise")}
         title={maximised ? t("nav.restore") : t("nav.maximise")}
-        className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-lg px-2 py-1.5"
+        className="text-fg-faint hover:bg-bg-soft hover:text-fg rounded-control px-2 py-1.5"
       >
         {maximised ? (
           <Copy aria-hidden="true" className="size-3.5 stroke-[1.75]" />
@@ -94,7 +94,7 @@ export function WindowControls() {
         // person can take by accident and cannot undo by clicking again. The same pair as every
         // other red surface in the app, so it is the palette's red on the palette's tint rather
         // than white on a saturated fill that has to be checked separately in both schemes.
-        className="text-fg-faint hover:bg-rec-soft hover:text-rec rounded-lg px-2 py-1.5"
+        className="text-fg-faint hover:bg-rec-soft hover:text-rec rounded-control px-2 py-1.5"
       >
         <X aria-hidden="true" className="size-4 stroke-[1.75]" />
       </button>

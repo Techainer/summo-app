@@ -12,7 +12,7 @@ import {
 import { m } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Recent } from "./library/Recent";
-import { Avatar, Button, Empty, SectionTitle, Select, Wave } from "./ui";
+import { Alert, Avatar, Button, Empty, SectionTitle, Select, Wave } from "./ui";
 import { cn } from "../lib/cn";
 import { formatDuration } from "../lib/duration";
 import { useI18n, useT } from "../i18n/context";
@@ -310,7 +310,7 @@ export function Library({
       >
         <div className="flex gap-2">
           <input
-            className="border-line bg-bg-soft text-fg focus-visible:border-accent w-full rounded-lg border px-3 py-2 text-sm focus:outline-none"
+            className="border-line bg-bg-soft text-fg focus-visible:border-accent rounded-control w-full border px-3 py-2 text-sm focus:outline-none"
             type="search"
             value={typed}
             placeholder={t("library.search_placeholder")}
@@ -326,7 +326,7 @@ export function Library({
             product. `Tất cả` first and selected, because both together is the honest default. */}
         {hits === null && (
           <div
-            className="bg-bg-soft flex gap-0.5 rounded-[var(--radius-pill)] p-0.5"
+            className="bg-bg-soft rounded-pill flex gap-0.5 p-0.5"
             role="group"
             aria-label={t("library.filter_kind")}
           >
@@ -336,7 +336,7 @@ export function Library({
                 type="button"
                 aria-pressed={kind === k.value}
                 className={cn(
-                  "text-meta flex-1 rounded-[var(--radius-pill)] px-3 py-1.5 transition-colors",
+                  "text-meta rounded-pill flex-1 px-3 py-1.5 transition-colors",
                   kind === k.value
                     ? "bg-bg-raised text-fg font-medium shadow-[var(--shadow-sm)]"
                     : "text-fg-dim hover:text-fg",
@@ -351,7 +351,7 @@ export function Library({
 
         {hits === null && (
           <div
-            className="bg-bg-soft flex gap-0.5 rounded-[var(--radius-pill)] p-0.5"
+            className="bg-bg-soft rounded-pill flex gap-0.5 p-0.5"
             role="group"
             aria-label={t("library.group_by")}
           >
@@ -360,7 +360,7 @@ export function Library({
                 key={g.value}
                 type="button"
                 className={cn(
-                  "text-meta flex-1 rounded-[var(--radius-pill)] px-3 py-1.5 transition-colors",
+                  "text-meta rounded-pill flex-1 px-3 py-1.5 transition-colors",
                   group === g.value
                     ? "bg-bg-raised text-fg font-medium shadow-[var(--shadow-sm)]"
                     : "text-fg-dim hover:text-fg",
@@ -387,7 +387,7 @@ export function Library({
             folded filter that is *applied* has to say so — otherwise the list is short and nothing
             on screen explains why. */}
         {view && hits === null && narrow && (
-          <details className="group border-line rounded-[var(--radius-card)] border">
+          <details className="group border-line rounded-card border">
             <summary className="text-meta text-fg-dim flex cursor-pointer items-center gap-2 px-3 py-2 marker:content-none">
               {/* A chevron, because without one this reads as an empty text field. Turned by the
                   element's own `:open` state rather than by React holding a second copy of it. */}
@@ -464,7 +464,7 @@ export function Library({
               type="button"
               data-testid="library-more"
               onClick={() => setLimit((l) => l + PAGE)}
-              className="text-fg-dim hover:bg-bg-soft text-meta w-full rounded-lg px-2 py-2"
+              className="text-fg-dim hover:bg-bg-soft text-meta rounded-control w-full px-2 py-2"
             >
               {t("library.more", { count: undrawn })}
             </button>
@@ -503,7 +503,7 @@ export function Library({
         {view?.skipped.map((s) => (
           <p
             key={s.path}
-            className="border-blocked/30 bg-blocked-soft text-micro rounded-lg border px-2.5 py-1.5"
+            className="border-blocked/30 bg-blocked-soft text-micro rounded-control border px-2.5 py-1.5"
           >
             {t("library.unreadable", { path: s.path, reason: s.reason })}
           </p>
@@ -514,11 +514,7 @@ export function Library({
         hidden={narrow && selected === null}
         className="min-h-0 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
       >
-        {error && (
-          <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
-            {error}
-          </p>
-        )}
+        {error && <Alert tone="rec">{error}</Alert>}
 
         {/* The way back to the list, which on a phone is the only way — there is no list beside
             this one to click away to. */}
@@ -526,7 +522,7 @@ export function Library({
           <button
             type="button"
             onClick={() => setSelected(null)}
-            className="text-fg-dim hover:bg-bg-soft hover:text-fg text-meta -ms-1 mb-3 rounded-lg px-2 py-1"
+            className="text-fg-dim hover:bg-bg-soft hover:text-fg text-meta rounded-control -ms-1 mb-3 px-2 py-1"
           >
             <span aria-hidden="true">←</span> {t("library.title")}
           </button>
@@ -576,7 +572,7 @@ function MeetingRow({
       transition={GENTLE}
       type="button"
       className={cn(
-        "flex w-full items-baseline gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors",
+        "rounded-control flex w-full items-baseline gap-2.5 px-2 py-1.5 text-left transition-colors",
         selected ? "bg-bg-soft shadow-[inset_2px_0_0_var(--color-accent)]" : "hover:bg-bg-soft",
       )}
       data-testid="meeting-row"
@@ -780,7 +776,7 @@ function Dashboard({
             {/* Unsummarised is not a statistic, it is a chore: it belongs beside the others only when
             there are some, and coloured like the work it is. */}
             {stats.without_summary > 0 && (
-              <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta mt-3 inline-flex items-center gap-2 rounded-[var(--radius-pill)] border px-3 py-1.5">
+              <p className="border-blocked/30 bg-blocked-soft text-blocked text-meta rounded-pill mt-3 inline-flex items-center gap-2 border px-3 py-1.5">
                 <CircleAlert aria-hidden="true" className="size-3.5" />
                 {t("meeting.no_summary")} · {stats.without_summary}
               </p>
@@ -826,7 +822,7 @@ function Tile({
     >
       <span
         className={cn(
-          "mb-1.5 grid size-8 place-items-center rounded-[var(--radius-card)]",
+          "rounded-card mb-1.5 grid size-8 place-items-center",
           tone === "accent" ? "bg-accent-soft text-accent" : "bg-bg-raised text-fg-faint",
         )}
       >
@@ -927,7 +923,7 @@ function MeetingPane({
           <label className="text-fg-faint text-meta flex min-w-0 grow basis-56 items-center gap-1.5">
             {t("library.by_tag")}
             <input
-              className="border-line bg-bg-soft text-fg focus-visible:border-accent text-meta min-w-32 flex-1 rounded-lg border px-2 py-1 focus:outline-none"
+              className="border-line bg-bg-soft text-fg focus-visible:border-accent text-meta rounded-control min-w-32 flex-1 border px-2 py-1 focus:outline-none"
               value={tags}
               disabled={busy}
               aria-label={t("library.by_tag")}
@@ -949,25 +945,26 @@ function MeetingPane({
             disabled={busy}
             onChoose={onColour}
           />
+          {/* Three buttons, and two of them were not buttons.
+              `className="ghost"` named a CSS rule that does not exist anywhere in this repository,
+              and the cancel beside it carried no class at all — so the most destructive control on
+              this panel was drawn by the browser's default chrome, next to a sibling that had been
+              styled by hand. All three are `Button` now, which is where the focus ring, the
+              disabled opacity and the sizes already live. */}
           {confirming ? (
             <span className="text-fg-dim text-meta flex items-center gap-1.5">
               {t("library.trash_confirm")}
-              <button
-                type="button"
-                onClick={onTrash}
-                disabled={busy}
-                className="border-rec text-rec hover:bg-rec-soft text-meta rounded-md border px-2.5 py-1 disabled:opacity-50"
-              >
+              <Button variant="danger" size="sm" onClick={onTrash} disabled={busy}>
                 {t("library.trash_yes")}
-              </button>
-              <button type="button" onClick={() => setConfirming(false)}>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
                 {t("common.cancel")}
-              </button>
+              </Button>
             </span>
           ) : (
-            <button type="button" className="ghost" onClick={() => setConfirming(true)}>
+            <Button variant="ghost" size="sm" onClick={() => setConfirming(true)}>
               {t("common.delete")}
-            </button>
+            </Button>
           )}
         </div>
       </header>

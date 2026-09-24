@@ -69,10 +69,7 @@ export function DreamPanel() {
   const last = state.data?.last ?? null;
 
   return (
-    <section
-      className="border-line bg-bg-soft mt-6 rounded-[var(--radius-panel)] border p-4"
-      data-testid="dream"
-    >
+    <section className="border-line bg-bg-soft rounded-panel mt-6 border p-4" data-testid="dream">
       <div className="flex flex-wrap items-center gap-2">
         <Moon className="text-ai size-4 shrink-0" aria-hidden="true" />
         <h2 className="flex-1 text-sm font-semibold">{t("agents.dream")}</h2>

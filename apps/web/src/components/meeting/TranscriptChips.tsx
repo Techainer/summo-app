@@ -254,7 +254,7 @@ function Chip({
   );
 
   const className = cn(
-    "block w-full rounded-[var(--radius-card)] border px-3 py-2 text-left transition-colors",
+    "block w-full rounded-card border px-3 py-2 text-left transition-colors",
     active
       ? "border-accent/40 bg-accent-soft"
       : "border-transparent hover:border-line hover:bg-bg-soft",

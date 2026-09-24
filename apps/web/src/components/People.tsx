@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { useCallback, useState } from "react";
 
-import { Avatar, Empty, Page, SectionTitle } from "./ui";
+import { Alert, Avatar, Empty, Page, SectionTitle } from "./ui";
 import { listItem, stagger } from "../lib/motion";
 import { useI18n } from "../i18n/context";
 import { formatDuration } from "../lib/duration";
@@ -125,13 +125,9 @@ export function People({ client }: Props) {
     // two lines tall — and the result is an empty state pinned to the top of five hundred pixels
     // of nothing, which is what it looked like before.
     <Page title={t("people.title")} subtitle={t("people.subtitle")} width="narrow" fill>
-      {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="rec">{error}</Alert>}
       {notice && (
-        <p className="border-accent/30 bg-accent-soft text-meta flex items-center gap-2 rounded-lg border px-3 py-2">
+        <p className="border-accent/30 bg-accent-soft text-meta rounded-control flex items-center gap-2 border px-3 py-2">
           {notice}
           <button
             type="button"
@@ -277,7 +273,7 @@ export function People({ client }: Props) {
             <m.li
               key={person.id}
               variants={listItem}
-              className="border-line bg-bg-soft flex items-center gap-3 rounded-[var(--radius-card)] border p-3 shadow-[var(--shadow-sm)]"
+              className="border-line bg-bg-soft rounded-card flex items-center gap-3 border p-3 shadow-[var(--shadow-sm)]"
             >
               <Avatar name={person.name} />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -295,7 +291,7 @@ export function People({ client }: Props) {
                       aria-label={t("people.rename_who", { name: person.name })}
                       onChange={(e) => setDraft(e.target.value)}
                       onBlur={() => void commitRename(person.id)}
-                      className="border-accent bg-bg w-full rounded-md border px-2 py-0.5 text-sm focus:outline-none"
+                      className="border-accent bg-bg rounded-control w-full border px-2 py-0.5 text-sm focus:outline-none"
                     />
                   </form>
                 ) : (
@@ -320,7 +316,7 @@ export function People({ client }: Props) {
               </div>
               <button
                 type="button"
-                className="border-line bg-bg-soft text-fg-dim hover:border-rec hover:text-rec grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition-colors"
+                className="border-line bg-bg-soft text-fg-dim hover:border-rec hover:text-rec rounded-control grid h-8 w-8 shrink-0 place-items-center border transition-colors"
                 aria-label={t("people.forget_who", { name: person.name })}
                 title={t("people.remove")}
                 onClick={() => void forget(person)}

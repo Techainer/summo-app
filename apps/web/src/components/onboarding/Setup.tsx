@@ -300,7 +300,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
           <m.p
             variants={listItem}
             role="alert"
-            className="border-rec/30 bg-rec-soft text-rec text-meta mt-6 rounded-[var(--radius-card)] border px-3 py-2"
+            className="border-rec/30 bg-rec-soft text-rec text-meta rounded-card mt-6 border px-3 py-2"
           >
             {error}
           </m.p>
@@ -474,7 +474,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
                           indicator would have had to reimplement. */}
                       <label
                         className={cn(
-                          "flex cursor-pointer gap-3 rounded-[var(--radius-card)] border p-3 transition-colors",
+                          "rounded-card flex cursor-pointer gap-3 border p-3 transition-colors",
                           picked
                             ? "border-accent bg-accent-soft"
                             : "border-line bg-bg-soft hover:border-line-strong",
@@ -578,7 +578,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
           </Step>
         ) : (
           <m.section variants={listItem} className="mt-6">
-            <div className="border-accent/30 bg-accent-soft flex items-start gap-3 rounded-[var(--radius-card)] border p-4">
+            <div className="border-accent/30 bg-accent-soft rounded-card flex items-start gap-3 border p-4">
               <span className="bg-accent text-accent-fg mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full">
                 <Check aria-hidden="true" className="size-4" />
               </span>

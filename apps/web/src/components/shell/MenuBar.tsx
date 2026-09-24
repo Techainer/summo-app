@@ -27,7 +27,7 @@ export function MenuBar({ onChoose }: { onChoose: (id: string) => void }) {
         <DropdownMenu.Root key={group.labelKey}>
           <DropdownMenu.Trigger
             className={cn(
-              "text-meta rounded-md px-2 py-1 transition-colors",
+              "text-meta rounded-control px-2 py-1 transition-colors",
               "hover:bg-bg-soft data-[state=open]:bg-bg-soft text-fg-dim hover:text-fg",
             )}
           >
@@ -37,7 +37,7 @@ export function MenuBar({ onChoose }: { onChoose: (id: string) => void }) {
             <DropdownMenu.Content
               sideOffset={4}
               align="start"
-              className="border-line bg-bg-elevated z-50 min-w-56 rounded-[var(--radius-card)] border p-1 shadow-[var(--shadow-pop)]"
+              className="border-line bg-bg-elevated rounded-card z-50 min-w-56 border p-1 shadow-[var(--shadow-pop)]"
             >
               {group.items.map((item, at) =>
                 item === "separator" ? (
@@ -46,7 +46,7 @@ export function MenuBar({ onChoose }: { onChoose: (id: string) => void }) {
                   <DropdownMenu.Item
                     key={item.id}
                     onSelect={() => onChoose(item.id)}
-                    className="text-body data-[highlighted]:bg-bg-soft flex cursor-pointer items-center justify-between gap-6 rounded-md px-2 py-1.5 outline-none"
+                    className="text-body data-[highlighted]:bg-bg-soft rounded-control flex cursor-pointer items-center justify-between gap-6 px-2 py-1.5 outline-none"
                   >
                     {t(item.labelKey)}
                     {item.keys && (

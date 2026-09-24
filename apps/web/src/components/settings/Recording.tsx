@@ -46,7 +46,7 @@ export function Recording() {
           Somebody who never opens it gets exactly the behaviour they had. */}
       <Recognition />
 
-      <section className="border-line bg-bg-raised mt-6 rounded-2xl border p-5">
+      <section className="border-line bg-bg-raised rounded-card mt-6 border p-5">
         <h3 className="font-medium">{t("settings.spoken_heading")}</h3>
         <p className="text-fg-dim text-meta mt-1 mb-3">{t("settings.spoken_hint")}</p>
         <SpokenLanguage

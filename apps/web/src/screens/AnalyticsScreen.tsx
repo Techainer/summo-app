@@ -4,6 +4,7 @@ import { m } from "motion/react";
 import { useMemo, useState } from "react";
 
 import {
+  Alert,
   Avatar,
   Card,
   CardBody,
@@ -73,11 +74,7 @@ export function AnalyticsScreen() {
     >
       <PageGlow />
 
-      {error && (
-        <p className="border-rec/30 bg-rec-soft text-rec text-meta rounded-lg border px-3 py-2">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="rec">{error}</Alert>}
 
       {/* `full`, because when this is on screen it *is* the screen. Stacked at the top it left
           four hundred pixels of background under one sentence — which is what a quiet week looks
@@ -161,7 +158,7 @@ export function AnalyticsScreen() {
                     key={tag}
                     to="/library"
                     search={{ tag }}
-                    className="border-line bg-bg-soft hover:border-accent hover:text-accent text-meta inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border px-2.5 py-1 transition-colors"
+                    className="border-line bg-bg-soft hover:border-accent hover:text-accent text-meta rounded-pill inline-flex items-center gap-1.5 border px-2.5 py-1 transition-colors"
                   >
                     #{tag}
                     <span className="text-fg-faint text-micro">
@@ -262,7 +259,7 @@ function Days({
                     height: peak > 0 ? `${Math.max(2, (day.seconds / peak) * 100)}%` : "2px",
                   }}
                   className={cn(
-                    "w-full max-w-8 origin-bottom rounded-sm",
+                    "rounded-control w-full max-w-8 origin-bottom",
                     day.seconds > 0 ? "bg-accent" : "bg-line",
                   )}
                 />

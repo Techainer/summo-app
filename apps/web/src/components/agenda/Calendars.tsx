@@ -113,7 +113,7 @@ export function CalendarSources({ onChange }: { onChange: () => void }) {
   const calendars: CalendarList = list.data ?? { subscriptions: [], files: [] };
 
   return (
-    <section className="border-line bg-bg-soft mt-5 rounded-[var(--radius-panel)] border p-4">
+    <section className="border-line bg-bg-soft rounded-panel mt-5 border p-4">
       <div className="flex flex-wrap items-end gap-2">
         <Labelled label={t("agenda.subscribe_label")} className="min-w-[16rem] flex-1">
           <Input
@@ -129,7 +129,7 @@ export function CalendarSources({ onChange }: { onChange: () => void }) {
             spellCheck={false}
           />
         </Labelled>
-        <Labelled label={t("agenda.name_label")} className="w-40">
+        <Labelled label={t("agenda.name_label")} className="w-full sm:w-40">
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -164,7 +164,7 @@ export function CalendarSources({ onChange }: { onChange: () => void }) {
           {calendars.subscriptions.map((subscription) => (
             <li
               key={subscription.name}
-              className="border-line bg-bg flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border px-3 py-2"
+              className="border-line bg-bg rounded-card flex flex-wrap items-center gap-2 border px-3 py-2"
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{subscription.title}</span>
@@ -205,7 +205,7 @@ export function CalendarSources({ onChange }: { onChange: () => void }) {
           {calendars.files.map((file) => (
             <li
               key={file.name}
-              className="border-line bg-bg flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border px-3 py-2"
+              className="border-line bg-bg rounded-card flex flex-wrap items-center gap-2 border px-3 py-2"
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{file.name}</span>
