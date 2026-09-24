@@ -673,11 +673,18 @@ jobs:
       # this is the job that links a test binary against both.
       - name: The speech libraries, where the linker will look
         run: |
-          cargo build -p summo-engine --features models,tts
+          # The check comes first, and that ordering is the whole fix.
+          #
+          # Written the other way round — build, then notice the libraries are missing, then clean
+          # and build again — it cannot work: `cargo build -p summo-engine` builds the crate's
+          # binary as well as its library, so the build sent to *produce* the libraries is itself a
+          # link that needs them. Under `bash -e` the step dies on that first command and never
+          # reaches the repair. It appeared to work locally only because the first build's output
+          # had been sent to /dev/null with no `-e` in sight.
           if [ ! -e target/debug/libsherpa-onnx-c-api.so ] || [ ! -e target/debug/libonnxruntime.so ]; then
             cargo clean -p sherpa-rs-sys -p ort-sys
-            cargo build -p summo-engine --features models,tts
           fi
+          cargo build -p summo-engine --features models,tts
           ls -l target/debug/libsherpa* target/debug/libonnxruntime*
       - run: cargo clippy -p summo-engine --features models,tts --all-targets -- -D warnings
       - run: cargo test -p summo-engine --features models,tts
@@ -795,21 +802,27 @@ jobs:
       # Same feature set as the full-flow job below, so the two share the compiled artefacts rather
       # than each paying for sherpa-onnx separately. `tts` is what `dub` turns on in the shipped
       # binary; here it is what lets a voice be checked.
-      - run: cargo build --bin summo-engine --features bundled,models,mt-onnx,tts
-      # `ort-sys` as well as `sherpa-rs-sys`.
+      # Before the link, not after it.
       #
-      # This guard checked for the sherpa library only, and the same cache behaviour applies to
-      # `libonnxruntime.so`: neither is carried back by `Swatinem/rust-cache`, while the
-      # fingerprints saying both crates are built are. The `gated` job hit exactly that and failed
-      # to link on a commit that changed only a version number; it was luck rather than design that
-      # this one had not.
-      - name: The speech libraries, beside the binary
+      # `Swatinem/rust-cache` carries back the fingerprints saying `sherpa-rs-sys` and `ort-sys` are
+      # built, and does not carry back the libraries their build scripts placed — so a cache hit can
+      # leave a link with nothing to link against. The repair is to clean those two so their build
+      # scripts run again, and it has to happen *before* the build: a build cannot be the thing that
+      # repairs its own prerequisites, which is how the first attempt at this in the `gated` job
+      # died on its own first command.
+      - name: The speech libraries, before the link that needs them
         run: |
           if [ ! -e target/debug/libsherpa-onnx-c-api.so ] || [ ! -e target/debug/libonnxruntime.so ]; then
             cargo clean -p sherpa-rs-sys -p ort-sys
+          fi
+      - run: cargo build --bin summo-engine --features bundled,models,mt-onnx,tts
+      - name: The speech libraries, beside the binary
+        run: |
+          if [ ! -e target/debug/libsherpa-onnx-c-api.so ]; then
+            cargo clean -p sherpa-rs-sys
             cargo build --bin summo-engine --features bundled,models,mt-onnx,tts
           fi
-          ls -l target/debug/libsherpa* target/debug/libonnxruntime*
+          ls -l target/debug/libsherpa*
       - run: pnpm -C apps/web e2e
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
