@@ -402,7 +402,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
             <Card>
               <CardBody className="pt-5">
                 <h2 className="text-body font-semibold">{t("setup.no_recognition")}</h2>
-                <p className="text-fg-dim mt-1.5 text-sm">{t("setup.no_recognition_hint")}</p>
+                <p className="text-fg-dim text-body mt-1.5">{t("setup.no_recognition_hint")}</p>
               </CardBody>
             </Card>
           </m.section>
@@ -420,7 +420,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
               // being blocked: still asking, asked and nothing came back, asked and this language
               // has nothing. The first is what everybody sees for the first moment of a perfectly
               // healthy install.
-              <p className="text-fg-faint mt-4 text-sm">
+              <p className="text-fg-faint text-body mt-4">
                 {listing === "loading" && t("setup.listing")}
                 {listing === "ok" && (
                   <>
@@ -584,7 +584,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
               </span>
               <span>
                 <span className="block font-medium">{t("setup.ready")}</span>
-                <span className="text-fg-dim mt-1 block text-sm">{t("setup.ready_hint")}</span>
+                <span className="text-fg-dim text-body mt-1 block">{t("setup.ready_hint")}</span>
               </span>
             </div>
           </m.section>
@@ -610,7 +610,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
             <h2 className="text-fg-faint text-micro font-medium tracking-wide uppercase">
               {t("setup.later")}
             </h2>
-            <ul className="text-fg-dim mt-2 space-y-1 text-sm">
+            <ul className="text-fg-dim text-body mt-2 space-y-1">
               {later.map((check) => (
                 <li key={check.step}>
                   <b className="text-fg font-medium">{t(`setup.step_${check.step}`)}</b> —{" "}

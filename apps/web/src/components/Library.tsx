@@ -310,7 +310,7 @@ export function Library({
       >
         <div className="flex gap-2">
           <input
-            className="border-line bg-bg-soft text-fg focus-visible:border-accent rounded-control w-full border px-3 py-2 text-sm focus:outline-none"
+            className="border-line bg-bg-soft text-fg focus-visible:border-accent rounded-control text-body w-full border px-3 py-2 focus:outline-none"
             type="search"
             value={typed}
             placeholder={t("library.search_placeholder")}
@@ -439,7 +439,7 @@ export function Library({
               // where the only other feedback is that some rows are gone.
               <m.section
                 key={`${g.key}-${folder ?? ""}-${tags.join()}-${colour ?? ""}`}
-                className="mb-3.5"
+                className="mb-4"
                 initial="hidden"
                 animate="shown"
                 transition={stagger(g.meetings.length)}
@@ -512,7 +512,7 @@ export function Library({
 
       <section
         hidden={narrow && selected === null}
-        className="min-h-0 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
+        className="min-h-0 overflow-y-auto px-4 py-5 md:px-6 md:py-6"
       >
         {error && <Alert tone="rec">{error}</Alert>}
 
@@ -651,7 +651,7 @@ function SearchResults({
   return (
     <>
       {hits.map((hit) => (
-        <section key={hit.meeting.id} className="mb-3.5">
+        <section key={hit.meeting.id} className="mb-4">
           <MeetingRow
             meeting={hit.meeting}
             selected={hit.meeting.id === selected}
@@ -782,7 +782,7 @@ function Dashboard({
               </p>
             )}
 
-            <section className="mt-7 flex flex-col gap-2.5">
+            <section className="mt-6 flex flex-col gap-2.5">
               <SectionTitle>{t("library.recent_heading")}</SectionTitle>
               <Recent limit={6} columns={2} onOpen={(entry) => onOpen(entry.id)} />
             </section>
@@ -818,7 +818,7 @@ function Tile({
   return (
     <m.div
       variants={listItem}
-      className="rounded-card border-line bg-bg-soft flex flex-col gap-0.5 border p-3.5 shadow-[var(--shadow-sm)]"
+      className="rounded-card border-line bg-bg-soft flex flex-col gap-0.5 border p-4 shadow-[var(--shadow-sm)]"
     >
       <span
         className={cn(
@@ -834,7 +834,7 @@ function Tile({
           than as a number. `word-break: keep-all` keeps a word whole; the wrap still happens, at
           the space between the hours and the minutes, where a reader expects it. */}
       <span
-        className="nums text-2xl font-semibold tracking-tight text-balance break-keep"
+        className="nums text-heading font-semibold tracking-tight text-balance break-keep"
         data-testid="tile-value"
       >
         {value}
@@ -890,7 +890,7 @@ function MeetingPane({
           the folder, tags and colour off the edge of the pane. */}
       <header className="flex flex-col gap-1">
         <input
-          className="text-fg hover:border-line focus:border-accent w-full border-0 border-b border-transparent bg-transparent px-0 py-0.5 text-[22px] font-semibold tracking-tight focus:outline-none"
+          className="text-fg hover:border-line focus:border-accent text-heading w-full border-0 border-b border-transparent bg-transparent px-0 py-0.5 font-semibold tracking-tight focus:outline-none"
           value={title}
           aria-label={t("meeting.title_label")}
           onChange={(e) => setTitle(e.target.value)}

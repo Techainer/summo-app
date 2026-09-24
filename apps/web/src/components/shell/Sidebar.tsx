@@ -339,7 +339,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={() => onNewPage({ folder: activeFolder })}
-              className="text-fg-faint hover:bg-bg-raised hover:text-fg rounded-control mt-1 flex w-full items-center gap-1.5 px-2 py-1 text-sm"
+              className="text-fg-faint hover:bg-bg-raised hover:text-fg rounded-control text-body mt-1 flex w-full items-center gap-1.5 px-2 py-1"
             >
               <Plus className="size-3.5" aria-hidden="true" />
               {t("nav.new_page")}
@@ -526,7 +526,7 @@ function PageRow({
         onDragEnd={onDragEnd}
         style={{ paddingLeft: `${depth * 12}px` }}
         className={cn(
-          "rounded-control flex w-full items-center gap-1 py-1 pe-1 text-sm transition-colors",
+          "rounded-control text-body flex w-full items-center gap-1 py-1 pe-1 transition-colors",
           // Two different facts are marked in this column and they must not look alike: which
           // *folder* is being browsed, and which *page* is open. The folder takes the neutral step
           // up; the open page takes the accent, the same way the notes list and the screen nav mark
@@ -571,7 +571,7 @@ function PageRow({
           onClick={onAdd}
           aria-label={t("nav.new_page_in", { name: page.title })}
           className={cn(
-            "text-fg-faint hover:text-fg flex size-5 shrink-0 items-center justify-center rounded transition-opacity",
+            "text-fg-faint hover:text-fg rounded-inline flex size-5 shrink-0 items-center justify-center transition-opacity",
             "opacity-0 group-hover/page:opacity-100 focus-visible:opacity-100",
           )}
         >
@@ -587,7 +587,7 @@ function PageRow({
             aria-expanded={filing}
             aria-label={t("nav.move_page", { name: page.title })}
             className={cn(
-              "text-fg-faint hover:text-fg flex size-5 shrink-0 items-center justify-center rounded transition-opacity",
+              "text-fg-faint hover:text-fg rounded-inline flex size-5 shrink-0 items-center justify-center transition-opacity",
               // Shown on hover and whenever it has focus, so tabbing to it does not tab to
               // something invisible. `opacity` rather than `hidden`, because a row that changes
               // width on hover makes the title reflow under the pointer.
@@ -703,7 +703,7 @@ function FolderRow({
       {...drag}
       title={dropHint}
       className={cn(
-        "rounded-control flex items-center text-sm transition-colors",
+        "rounded-control text-body flex items-center transition-colors",
         // `raised` for the same reason as the page rows: the sidebar is `bg-soft`, so a highlight
         // of `bg-soft` is no highlight.
         selected ? "bg-bg-raised text-fg font-medium" : "text-fg-dim hover:bg-bg-raised",
@@ -789,7 +789,7 @@ function NavButton({
         // but without a stacking context here that negative index escapes the button entirely and
         // the pill painted *behind the sidebar's own background* — invisible on every screen. The
         // selected row had been nothing but green text for as long as this component has existed.
-        "rounded-pill relative isolate flex w-full items-center gap-2.5 px-2.5 py-2 text-sm transition-colors",
+        "rounded-pill text-body relative isolate flex w-full items-center gap-2.5 px-2.5 py-2 transition-colors",
         active ? "text-accent font-medium" : "text-fg-dim hover:bg-bg-raised hover:text-fg",
       )}
     >

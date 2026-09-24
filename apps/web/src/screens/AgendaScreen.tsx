@@ -48,7 +48,7 @@ export function AgendaScreen() {
       <PageGlow />
 
       {error && (
-        <p role="alert" className="text-danger mt-4 text-sm">
+        <p role="alert" className="text-danger text-body mt-4">
           {error}
         </p>
       )}
@@ -78,7 +78,7 @@ export function AgendaScreen() {
                     transition={GENTLE}
                     className="border-line bg-bg-soft rounded-card flex items-center gap-3 border px-3 py-2.5 shadow-[var(--shadow-sm)]"
                   >
-                    <span className="tabular text-fg-dim w-24 shrink-0 text-sm">
+                    <span className="tabular text-fg-dim text-body w-24 shrink-0">
                       {clock(entry.start_epoch)}
                       {entry.duration_s ? (
                         <span className="text-fg-faint"> · {length(entry.duration_s)}</span>
@@ -86,7 +86,7 @@ export function AgendaScreen() {
                     </span>
 
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{entry.summary}</span>
+                      <span className="text-body block truncate font-medium">{entry.summary}</span>
                       <span className="text-fg-faint text-micro block truncate">
                         {[
                           entry.location,

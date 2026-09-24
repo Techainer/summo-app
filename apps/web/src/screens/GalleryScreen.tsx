@@ -1,4 +1,4 @@
-import { Check, Info } from "lucide-react";
+import { CircleAlert, Info, OctagonX, TriangleAlert } from "lucide-react";
 
 import {
   Alert,
@@ -61,6 +61,14 @@ const SAMPLE = {
   example: "ví dụ", // i18n-exempt
   downloading: "Đang tải", // i18n-exempt
   queued: "Đang xếp hàng", // i18n-exempt
+};
+
+/** What each tone means, said twice: once in colour, once in a shape colour-blind readers can see. */
+const ALERT_ICON = {
+  accent: <Info className="size-4" />,
+  danger: <OctagonX className="size-4" />,
+  blocked: <TriangleAlert className="size-4" />,
+  rec: <CircleAlert className="size-4" />,
 };
 
 function Row({ title, children }: { title: string; children: React.ReactNode }) {
@@ -127,12 +135,19 @@ export function GalleryScreen() {
         </Chip>
       </Row>
 
+      {/* `SAMPLE.checked` rather than the words with a trailing `// i18n-exempt`.
+       *
+       * Children of a JSX element are *text*, so that marker was never a comment — it rendered, and
+       * the checkbox on this page read "đã chọn // i18n-exempt". Three labels here said that. It
+       * survived a release because everything below the fields was outside the screenshot: the
+       * suite shot `fullPage` on a document that does not scroll, so the only proof of this was in
+       * no picture anybody had. The entries in `SAMPLE` for these three already existed, unused. */}
       <Row title="checkbox">
         <Checkbox checked onChange={() => {}}>
-          đã chọn // i18n-exempt
+          {SAMPLE.checked}
         </Checkbox>
         <Checkbox checked={false} onChange={() => {}}>
-          chưa chọn // i18n-exempt
+          {SAMPLE.unchecked}
         </Checkbox>
         <Checkbox checked disabled onChange={() => {}}>
           disabled
@@ -174,10 +189,14 @@ export function GalleryScreen() {
           <Alert
             key={tone}
             tone={tone}
-            icon={tone === "accent" ? <Info className="size-4" /> : <Check className="size-4" />}
+            // The icon a caller would actually pass. Every tone but `accent` was drawn with a tick,
+            // so three of the four alerts on this page announced a failure with the mark for
+            // "done" — which is the sort of thing a page of examples is read to decide, and it was
+            // answering it wrongly.
+            icon={ALERT_ICON[tone]}
             actions={
               <Button size="sm" variant="secondary">
-                hành động // i18n-exempt
+                {SAMPLE.action}
               </Button>
             }
           >

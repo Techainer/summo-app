@@ -135,7 +135,7 @@ export function ImportPanel() {
       </div>
 
       {error && (
-        <p role="alert" className="text-danger mt-2 text-sm">
+        <p role="alert" className="text-danger text-body mt-2">
           {error}
         </p>
       )}
@@ -158,7 +158,7 @@ export function ImportPanel() {
                 className="border-line bg-bg-soft rounded-card border p-3"
               >
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate text-sm font-medium">
+                  <span className="text-body min-w-0 truncate font-medium">
                     {job.title || baseName(job.source)}
                   </span>
                   <span

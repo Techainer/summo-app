@@ -116,7 +116,7 @@ export function AnalyticsScreen() {
                 {report.people.slice(0, 8).map((person) => (
                   <div key={person.name} className="flex items-center gap-2.5">
                     <Avatar name={person.name} size="sm" />
-                    <span className="w-28 shrink-0 truncate text-sm">{person.name}</span>
+                    <span className="text-body w-28 shrink-0 truncate">{person.name}</span>
                     <span className="bg-bg-soft h-2 flex-1 overflow-hidden rounded-full">
                       {/* Grown from the left rather than drawn at length. A bar chart that
                           animates in reads as measured; one that appears reads as decoration. */}
@@ -180,7 +180,10 @@ export function AnalyticsScreen() {
               />
               <CardBody className="space-y-1.5">
                 {report.open_actions.map((action, i) => (
-                  <div key={`${action.meeting}-${i}`} className="flex items-baseline gap-2 text-sm">
+                  <div
+                    key={`${action.meeting}-${i}`}
+                    className="text-body flex items-baseline gap-2"
+                  >
                     <Square
                       aria-hidden="true"
                       className="text-fg-faint mt-0.5 size-3.5 shrink-0 stroke-[1.75]"
@@ -285,7 +288,7 @@ function Metric({ label, value }: { label: string; value: string }) {
           "1 giờ 27 phút" broke as "1 giờ 27" / "phút", which reads as two facts. Vietnamese has no
           abbreviation for `giờ` or `phút`, so `Intl`'s short form does nothing here and the fix has
           to be the wrap rather than the wording. */}
-      <p className="nums mt-1 text-xl font-semibold text-balance">
+      <p className="nums text-subhead mt-1 font-semibold text-balance">
         <Ticker value={value} />
       </p>
     </Card>

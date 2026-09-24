@@ -105,7 +105,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={GENTLE}
-          className="text-fg-dim mt-2 text-sm text-pretty"
+          className="text-fg-dim text-body mt-2 text-pretty"
         >
           {t(`tour.${step}_body`)}
         </m.p>

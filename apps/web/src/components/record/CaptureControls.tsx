@@ -81,7 +81,7 @@ export function CaptureControls() {
           {(["mic", "system"] as Lane[]).map((lane) => (
             <Checkbox
               key={lane}
-              className="border-line bg-bg-soft has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:checked]:text-accent rounded-full border px-3 py-1.5 text-sm"
+              className="border-line bg-bg-soft has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:checked]:text-accent text-body rounded-full border px-3 py-1.5"
               checked={capture.lanes.includes(lane)}
               onChange={() => toggleLane(lane)}
             >
@@ -98,7 +98,7 @@ export function CaptureControls() {
             compact
           />
 
-          <span className="text-fg-faint ms-auto flex items-center gap-2 text-sm">
+          <span className="text-fg-faint text-body ms-auto flex items-center gap-2">
             {t("record.translate_live")}
             {/* The same control the running meeting uses, so a target added here and a target added
                 mid-call are one idea rather than two dropdowns that behave differently. `TARGETS`

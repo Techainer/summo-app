@@ -78,7 +78,7 @@ export function ChatScreen() {
 
   return (
     <div className="mx-auto flex h-full max-w-3xl flex-col p-5">
-      <h1 className="text-xl font-semibold tracking-tight">{t("chat.heading")}</h1>
+      <h1 className="text-subhead font-semibold tracking-tight">{t("chat.heading")}</h1>
 
       <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto">
         {history.length === 0 && (
@@ -93,7 +93,7 @@ export function ChatScreen() {
         {history.map((exchange, i) => (
           <div key={`${exchange.question}-${i}`} className="space-y-2">
             <p className="text-right">
-              <span className="bg-accent-soft text-accent rounded-card inline-block px-3 py-1.5 text-sm">
+              <span className="bg-accent-soft text-accent rounded-card text-body inline-block px-3 py-1.5">
                 {exchange.question}
               </span>
             </p>

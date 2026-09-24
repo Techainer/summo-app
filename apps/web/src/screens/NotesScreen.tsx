@@ -119,7 +119,7 @@ export function NotesScreen() {
         )}
       >
         <div className="border-line flex items-center justify-between gap-2 border-b px-3 py-2">
-          <h1 className="text-sm font-semibold">{t("notes.title")}</h1>
+          <h1 className="text-body font-semibold">{t("notes.title")}</h1>
           <div className="relative flex items-center gap-1">
             {/* The common action stays one click. Putting the shapes *behind* the New button made
                 every blank note cost a menu, which is the wrong trade: most notes are blank, and
@@ -132,7 +132,7 @@ export function NotesScreen() {
               aria-label={t("notes.kind")}
               aria-expanded={picking}
               onClick={() => setPicking((p) => !p)}
-              className="border-line text-fg-dim hover:text-fg rounded-card h-8 border px-1.5 text-xs"
+              className="border-line text-fg-dim hover:text-fg rounded-card text-meta h-8 border px-1.5"
             >
               ▾
             </button>
@@ -147,7 +147,7 @@ export function NotesScreen() {
                     <button
                       type="button"
                       onClick={() => void create(kind)}
-                      className="hover:bg-bg-soft w-full px-3 py-1.5 text-start text-sm"
+                      className="hover:bg-bg-soft text-body w-full px-3 py-1.5 text-start"
                     >
                       {t(`notes.kind_${kind}`)}
                     </button>
@@ -174,7 +174,7 @@ export function NotesScreen() {
                       type="button"
                       onClick={() => setOpenId(note.id)}
                       aria-current={note.id === openId}
-                      className={`rounded-control flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-sm ${
+                      className={`rounded-control text-body flex w-full items-center gap-1.5 px-2 py-1.5 text-left ${
                         note.id === openId
                           ? "bg-accent-soft text-accent"
                           : "text-fg-dim hover:bg-bg-soft hover:text-fg"

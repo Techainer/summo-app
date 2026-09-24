@@ -53,7 +53,7 @@ export function Wave({
     <span
       aria-hidden="true"
       className={cn(
-        "flex h-full w-full items-center justify-between gap-[2px] overflow-hidden",
+        "flex h-full w-full items-center justify-between gap-0.5 overflow-hidden",
         className,
       )}
     >

@@ -34,7 +34,11 @@ export function Avatar({
       aria-hidden="true"
       className={cn(
         "grid shrink-0 place-items-center rounded-full font-semibold",
-        size === "sm" ? "size-5 text-[0.6rem]" : "size-7 text-[0.7rem]",
+        // The discs were `text-[0.6rem]` and `text-[0.7rem]` — 9.6px and 11.2px, both written as
+        // raw sizes because neither is a step on any scale. The smaller one was below anything
+        // else in the interface, which is how two letters end up unreadable on a disc built to be
+        // read at a glance.
+        size === "sm" ? "text-micro size-5" : "text-meta size-7",
         className,
       )}
       style={{

@@ -199,7 +199,7 @@ function Chip({
             onClick={() => onAsk(open ? null : segment.speaker!)}
             aria-expanded={open}
             aria-label={t("people.name_this", { label: segment.speaker })}
-            className="text-accent hover:bg-accent-soft text-micro -mx-1 rounded px-1 font-semibold underline decoration-dotted underline-offset-2"
+            className="text-accent hover:bg-accent-soft text-micro rounded-inline -mx-1 px-1 font-semibold underline decoration-dotted underline-offset-2"
           >
             {segment.speaker}
           </button>
@@ -222,7 +222,9 @@ function Chip({
         // recogniser emitted, not prose somebody typed. A URL read aloud, or a SenseVoice
         // transcript of Chinese with no spaces in it, is one token as far as line breaking goes.
         "mt-0.5 block break-words",
-        reading ? "text-body leading-[1.75] font-[var(--font-reading)]" : "text-sm leading-relaxed",
+        reading
+          ? "text-body leading-[1.75] font-[var(--font-reading)]"
+          : "text-body leading-relaxed",
         // A partial is still being revised; showing it as settled text makes the app look like
         // it changes its mind.
         segment.source === "partial" && "text-fg-dim italic",

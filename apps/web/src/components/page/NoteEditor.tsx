@@ -280,7 +280,7 @@ export function NoteEditor({
         aria-label={t("notes.title_field")}
         spellCheck={false}
         placeholder={t("notes.untitled")}
-        className="font-reading text-fg placeholder:text-fg-faint bg-transparent px-6 pt-5 pb-1 text-2xl font-semibold tracking-tight outline-none"
+        className="font-reading text-fg placeholder:text-fg-faint text-heading bg-transparent px-6 pt-5 pb-1 font-semibold tracking-tight outline-none"
       />
 
       {mode === "rich" ? (

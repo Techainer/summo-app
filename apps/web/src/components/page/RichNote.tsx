@@ -567,7 +567,7 @@ export function RichNote({
         <DragHandle editor={editor} nested>
           <div
             aria-hidden="true"
-            className="text-fg-faint hover:bg-bg-soft hover:text-fg-dim mr-1 grid size-6 cursor-grab place-items-center rounded active:cursor-grabbing"
+            className="text-fg-faint hover:bg-bg-soft hover:text-fg-dim rounded-inline mr-1 grid size-6 cursor-grab place-items-center active:cursor-grabbing"
           >
             <GripVertical className="size-4" />
           </div>

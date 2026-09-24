@@ -114,7 +114,7 @@ export function Capture() {
       <p className={HINT}>{t("settings.capture_system_hint")}</p>
 
       <Checkbox
-        className="mt-3.5"
+        className="mt-4"
         checked={now.suggest_on_meeting ?? true}
         onChange={(on) => {
           setLive((current) => ({ ...current, suggest_on_meeting: on }));
@@ -187,7 +187,7 @@ export function Capture() {
             setLive((current) => ({ ...current, threads: Number(event.target.value) }))
           }
           onBlur={() => void write({ threads: now.threads ?? 0 })}
-          className="border-line bg-bg-soft text-fg rounded-card h-9 w-24 border px-2 text-sm"
+          className="border-line bg-bg-soft text-fg rounded-card text-body h-9 w-24 border px-2"
         />
         <span className={HINT}>{t("settings.threads_hint")}</span>
       </label>

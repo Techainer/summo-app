@@ -110,7 +110,7 @@ export function Storage({ handshake }: { handshake: Handshake }) {
           ] as const
         ).map(([key, value]) => (
           <Card key={key}>
-            <CardBody className="p-3.5">
+            <CardBody className="p-4">
               <p className="text-fg-faint text-micro">{t(key)}</p>
               <p className="text-title nums mt-0.5 font-semibold" data-testid={`usage-${key}`}>
                 {value === undefined ? "—" : bytes(value, locale)}
@@ -128,7 +128,7 @@ export function Storage({ handshake }: { handshake: Handshake }) {
         >
           {t("storage.keep_audio")}
         </Checkbox>
-        <p className="text-fg-faint text-micro mt-1.5 ml-7 leading-normal">
+        <p className="text-fg-faint text-micro mt-1.5 ml-6 leading-normal">
           {t("storage.keep_audio_hint")}
         </p>
       </div>

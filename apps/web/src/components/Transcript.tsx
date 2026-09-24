@@ -20,6 +20,17 @@ import type { Event } from "../lib/protocol";
  * different job from being readable afterwards. See `lib/reading.ts` for the grouping and overlap
  * rules; the two things decided here are scrolling and how an overlap is drawn.
  */
+
+/**
+ * Where a row's content starts: past the time column, level with the speaker's disc.
+ *
+ * The time column is `w-11` (44px) and the header row's gap is `gap-2.5` (10px), which puts the
+ * avatar's left edge at 54. Two places wrote 52 — the rail under a speaker and the live row at the
+ * bottom — so both sat two pixels to the left of the thing they line up under, and both had to be
+ * remembered together. Written once, as the sum, so it follows the column it depends on.
+ */
+const INDENT = "ms-[calc(var(--spacing)*11+var(--spacing)*2.5)]";
+
 export function Transcript({
   segments,
   live = false,
@@ -97,7 +108,7 @@ export function Transcript({
       <div
         ref={parentRef}
         onScroll={onScroll}
-        className="h-full overflow-x-hidden overflow-y-auto px-4 py-3.5"
+        className="h-full overflow-x-hidden overflow-y-auto px-4 py-4"
         data-testid="transcript"
       >
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
@@ -168,7 +179,7 @@ export function Transcript({
                     // both give a child `min-width: auto`, which means "never narrower than your
                     // content". Wrapping the text is only half the fix if the box around it still
                     // refuses to be narrow.
-                    "border-line relative ms-[52px] min-w-0 border-s ps-4",
+                    cn("border-line relative min-w-0 border-s ps-4", INDENT),
                     overlapping && "border-accent/40 border-s-2",
                   )}
                   data-overlapping={overlapping || undefined}
@@ -276,7 +287,10 @@ export function Transcript({
         {/* The open end of the rail. Under the last line, on the same column as the dots, so the
             timeline visibly continues rather than stopping at whatever was said last. */}
         {live && (
-          <div className="ms-[52px] flex items-center gap-2.5 ps-0" data-testid="transcript-live">
+          <div
+            className={cn(INDENT, "flex items-center gap-2.5 ps-0")}
+            data-testid="transcript-live"
+          >
             <span aria-hidden="true" className="relative flex size-2 shrink-0">
               <span className="bg-rec absolute inline-flex size-2 rounded-full" />
               <span className="bg-rec/60 absolute inline-flex size-2 rounded-full motion-safe:animate-ping" />

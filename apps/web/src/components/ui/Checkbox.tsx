@@ -47,7 +47,7 @@ export function Checkbox({
         aria-hidden="true"
         className={cn(
           "border-line-strong rounded-control grid size-4 shrink-0 place-items-center border",
-          "text-accent-fg text-[10px] transition-colors",
+          "text-accent-fg text-micro transition-colors",
           "peer-checked:border-accent peer-checked:bg-accent",
           "peer-focus-visible:ring-accent peer-focus-visible:ring-2 peer-focus-visible:ring-offset-1",
           "peer-focus-visible:ring-offset-bg",

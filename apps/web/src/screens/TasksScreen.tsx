@@ -338,7 +338,7 @@ function PersonCard({
     >
       <p
         className={cn(
-          "text-sm leading-snug",
+          "text-body leading-snug",
           task.status === "done" && "text-fg-faint line-through",
         )}
       >

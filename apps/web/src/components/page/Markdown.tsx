@@ -98,7 +98,7 @@ function Block({ node, ...shared }: Shared & { node: JSONContent }): ReactNode {
         <h4
           className={cn(
             "mt-4 mb-1 font-semibold first:mt-0",
-            Number(node.attrs?.level ?? 1) > 2 ? "text-sm" : "text-base",
+            Number(node.attrs?.level ?? 1) > 2 ? "text-body" : "text-title",
           )}
         >
           <Inline nodes={node.content} {...shared} />
@@ -141,7 +141,7 @@ function Block({ node, ...shared }: Shared & { node: JSONContent }): ReactNode {
     case "table":
       return (
         <div className="overflow-x-auto">
-          <table className="border-line w-full border-collapse text-sm">
+          <table className="border-line text-body w-full border-collapse">
             <tbody>{children}</tbody>
           </table>
         </div>
@@ -229,6 +229,11 @@ function TaskItem({ node, ...shared }: Shared & { node: JSONContent }) {
         </span>
       </label>
       {rest.length > 0 && (
+        // 22px, which is the checkbox above (`size-3.5`, 14px) plus the gap beside it (`gap-2`,
+        // 8px) — so a nested block starts exactly where its parent's text does. Off the spacing
+        // scale on purpose and named in `spacing.test.ts`: this is an alignment to a specific
+        // sibling, not a step in a rhythm, and rounding it to 24px would visibly misalign every
+        // nested task. If the checkbox changes size, this changes with it.
         <div className="ms-5.5 mt-1 space-y-1">
           {rest.map((child, at) => (
             <Block key={at} node={child} {...shared} />
@@ -282,11 +287,13 @@ function Marked({
     // The same `==text==` the editor writes. Without this a highlighted line reads as ordinary
     // text everywhere it is *displayed* rather than edited — the meeting page, a citation, search.
     else if (mark.type === "highlight")
-      out = <mark className="bg-accent-soft text-fg rounded px-0.5">{out}</mark>;
+      out = <mark className="bg-accent-soft text-fg rounded-inline px-0.5">{out}</mark>;
     else if (mark.type === "code")
       // `break-all`, because the longest inline code in this app is a sha256 — one 64-character
       // token with nowhere to break, which pushes a table wider than the panel holding it.
-      out = <code className="bg-bg-soft rounded px-1 py-0.5 text-[0.9em] break-all">{out}</code>;
+      out = (
+        <code className="bg-bg-soft rounded-inline px-1 py-0.5 text-[0.9em] break-all">{out}</code>
+      );
     else if (mark.type === "link") {
       // Only a string is a link. Anything else in that attribute came from a document this
       // converter did not write, and `[object Object]` is not an address.

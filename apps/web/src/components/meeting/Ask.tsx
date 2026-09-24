@@ -62,7 +62,7 @@ export function AskPanel({ meeting }: { meeting: string }) {
     <section className="border-line bg-bg-soft rounded-panel border p-4" data-testid="ask">
       <div className="flex items-center gap-2">
         <Sparkles className="text-ai size-4 shrink-0" aria-hidden="true" />
-        <h2 className="flex-1 text-sm font-semibold">{t("ask.title")}</h2>
+        <h2 className="text-body flex-1 font-semibold">{t("ask.title")}</h2>
       </div>
       <p className="text-fg-faint text-micro mt-1">{t("ask.hint")}</p>
 
@@ -107,7 +107,7 @@ export function AskPanel({ meeting }: { meeting: string }) {
       </div>
 
       {error && (
-        <p role="alert" className="text-danger mt-3 text-sm">
+        <p role="alert" className="text-danger text-body mt-3">
           {error}
         </p>
       )}

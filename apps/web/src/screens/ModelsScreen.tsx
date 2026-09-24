@@ -726,7 +726,7 @@ function Measured({ model }: { model: CatalogueModel }) {
           <dt className="text-fg-faint text-micro mt-1 truncate leading-none">{cell.label}</dt>
           <dd
             className={cn(
-              "nums text-sm leading-none font-semibold tabular-nums",
+              "nums text-body leading-none font-semibold tabular-nums",
               cell.dim ? "text-fg-faint" : "text-fg",
             )}
           >

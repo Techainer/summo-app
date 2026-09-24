@@ -167,7 +167,7 @@ export function People({ client }: Props) {
                   return (
                     <li
                       key={voice.label}
-                      className="rounded-card border-line bg-bg-soft border p-3.5"
+                      className="rounded-card border-line bg-bg-soft border p-4"
                     >
                       <div className="flex items-baseline gap-2.5">
                         <strong className="text-body">{voice.label}</strong>
@@ -291,13 +291,13 @@ export function People({ client }: Props) {
                       aria-label={t("people.rename_who", { name: person.name })}
                       onChange={(e) => setDraft(e.target.value)}
                       onBlur={() => void commitRename(person.id)}
-                      className="border-accent bg-bg rounded-control w-full border px-2 py-0.5 text-sm focus:outline-none"
+                      className="border-accent bg-bg rounded-control text-body w-full border px-2 py-0.5 focus:outline-none"
                     />
                   </form>
                 ) : (
                   <button
                     type="button"
-                    className="text-accent text-left text-sm font-medium hover:underline"
+                    className="text-accent text-body text-left font-medium hover:underline"
                     onClick={() => {
                       setRenaming(person.id);
                       setDraft(person.name);

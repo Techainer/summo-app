@@ -669,7 +669,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
           <Menu aria-hidden="true" className="size-[18px] stroke-[1.75]" />
         </button>
         <div className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="flex h-4 items-end gap-[2.5px]" aria-hidden="true">
+          <span className="flex h-4 items-end gap-0.5" aria-hidden="true">
             <i className="bg-accent rounded-control h-2 w-[3px]" />
             <i className="bg-accent rounded-control h-4 w-[3px]" />
             <i className="bg-accent rounded-control h-1.5 w-[3px]" />
@@ -687,7 +687,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
         >
           <Search aria-hidden="true" className="size-3.5" />
           {t("palette.placeholder")}
-          <kbd className="text-micro border-line ms-4 rounded border px-1.5 py-0.5">⌘K</kbd>
+          <kbd className="text-micro border-line rounded-inline ms-4 border px-1.5 py-0.5">⌘K</kbd>
         </button>
         <div className="ml-auto flex min-w-0 items-center gap-2.5">
           {/* The meter is the first thing to go when there is no room: the record button says the

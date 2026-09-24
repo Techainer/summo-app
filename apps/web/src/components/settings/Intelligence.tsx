@@ -155,7 +155,7 @@ export function Intelligence({ settings }: { settings: LlmSettings }) {
       </label>
 
       <Checkbox
-        className="mt-3.5"
+        className="mt-4"
         checked={llm.summarize_on_stop}
         onChange={(summarize_on_stop) => void save({ ...llm, summarize_on_stop })}
       >
@@ -174,7 +174,7 @@ export function Intelligence({ settings }: { settings: LlmSettings }) {
           type="button"
           onClick={() => void test()}
           disabled={testing}
-          className="bg-accent text-accent-fg rounded-control px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="bg-accent text-accent-fg rounded-control text-body px-4 py-2 font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
         >
           {testing ? t("settings.testing") : t("settings.test")}
         </button>
