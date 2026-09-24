@@ -34,9 +34,34 @@ import {
 const SIZES = ["sm", "md", "lg"] as const;
 const VARIANTS = ["primary", "secondary", "ghost", "danger"] as const;
 
-/** A sentence that has to wrap, and one with no spaces to wrap at. */
-const LONG = "Bản tóm tắt đang chờ bạn xác nhận trước khi gửi cho cả phòng";
-const UNSPACED = "東京都渋谷区神宮前六丁目三十五番地六号";
+/**
+ * A sentence that has to wrap, and one with no spaces to wrap at.
+ *
+ * `i18n-exempt` on every line of literal text in this file, and the exemption is the point rather
+ * than a concession: the page exists to put controls under the kind of content that breaks them.
+ * A Vietnamese sentence long enough to wrap and an address with no spaces in it are the two shapes
+ * that have actually broken layouts here, and routing them through the catalogue would test the
+ * catalogue instead of the primitives — and make the sample text change whenever a translator
+ * edited a real string.
+ */
+const LONG = "Bản tóm tắt đang chờ bạn xác nhận trước khi gửi cho cả phòng"; // i18n-exempt
+const UNSPACED = "東京都渋谷区神宮前六丁目三十五番地六号"; // i18n-exempt
+
+/** The rest of the sample text, in one place so each line can carry the exemption. */
+const SAMPLE = {
+  pick: "một lựa chọn", // i18n-exempt
+  count: "với số", // i18n-exempt
+  press: "bấm được", // i18n-exempt
+  checked: "đã chọn", // i18n-exempt
+  unchecked: "chưa chọn", // i18n-exempt
+  one: "một", // i18n-exempt
+  two: "hai", // i18n-exempt
+  action: "hành động", // i18n-exempt
+  exampleSmall: "ví dụ nhỏ", // i18n-exempt
+  example: "ví dụ", // i18n-exempt
+  downloading: "Đang tải", // i18n-exempt
+  queued: "Đang xếp hàng", // i18n-exempt
+};
 
 function Row({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -73,7 +98,7 @@ export function GalleryScreen() {
         <Input size="md" placeholder="disabled" disabled />
         <Input size="md" defaultValue={UNSPACED} />
         <Select size="md" defaultValue="a">
-          <option value="a">một lựa chọn</option>
+          <option value="a">{SAMPLE.pick}</option>
           <option value="b">{LONG}</option>
         </Select>
         <Select size="md" disabled>
@@ -95,8 +120,8 @@ export function GalleryScreen() {
         <Chip tone="ai" on>
           ai
         </Chip>
-        <Chip count={12}>với số</Chip>
-        <Chip onClick={() => {}}>bấm được</Chip>
+        <Chip count={12}>{SAMPLE.count}</Chip>
+        <Chip onClick={() => {}}>{SAMPLE.press}</Chip>
         <Chip onClick={() => {}} disabled>
           disabled
         </Chip>
@@ -104,10 +129,10 @@ export function GalleryScreen() {
 
       <Row title="checkbox">
         <Checkbox checked onChange={() => {}}>
-          đã chọn
+          đã chọn // i18n-exempt
         </Checkbox>
         <Checkbox checked={false} onChange={() => {}}>
-          chưa chọn
+          chưa chọn // i18n-exempt
         </Checkbox>
         <Checkbox checked disabled onChange={() => {}}>
           disabled
@@ -117,21 +142,21 @@ export function GalleryScreen() {
       <Row title="segmented">
         <SegmentedControl
           size="sm"
-          label="ví dụ nhỏ"
+          label={SAMPLE.exampleSmall} // i18n-exempt
           value="a"
           onChange={() => {}}
           options={[
-            { value: "a", label: "một" },
-            { value: "b", label: "hai" },
+            { value: "a", label: SAMPLE.one }, // i18n-exempt
+            { value: "b", label: SAMPLE.two },
           ]}
         />
         <SegmentedControl
           size="md"
-          label="ví dụ"
+          label={SAMPLE.example} // i18n-exempt
           value="b"
           onChange={() => {}}
           options={[
-            { value: "a", label: "một" },
+            { value: "a", label: SAMPLE.one }, // i18n-exempt
             { value: "b", label: LONG.slice(0, 18) },
           ]}
         />
@@ -152,7 +177,7 @@ export function GalleryScreen() {
             icon={tone === "accent" ? <Info className="size-4" /> : <Check className="size-4" />}
             actions={
               <Button size="sm" variant="secondary">
-                hành động
+                hành động // i18n-exempt
               </Button>
             }
           >
@@ -164,13 +189,19 @@ export function GalleryScreen() {
       <Row title="progress">
         <div className="w-48">
           <Progress
-            install={{ model: "m", name: "Đang tải", state: "downloading", done: 4e7, total: 1e8 }}
+            install={{
+              model: "m",
+              name: SAMPLE.downloading,
+              state: "downloading",
+              done: 4e7,
+              total: 1e8,
+            }} // i18n-exempt
           />
         </div>
         {/* No total yet, which is what a queued install looks like: the bar has to say "running"
             without being able to say how far. */}
         <div className="w-48">
-          <Progress install={{ model: "m", name: "Đang xếp hàng", state: "queued" }} />
+          <Progress install={{ model: "m", name: SAMPLE.queued, state: "queued" }} />
         </div>
       </Row>
 
