@@ -78,8 +78,19 @@ export class EngineClient {
       if (typeof message.data !== "string") return;
       try {
         this.options.onEvent(JSON.parse(message.data) as Event);
-      } catch {
-        // A malformed frame is the daemon's bug, not a reason to tear down the session.
+      } catch (e) {
+        // A malformed frame is the daemon's bug, not a reason to tear down the session — but it
+        // was also not a reason to say nothing. Dropped in silence, the symptom is a feature that
+        // simply does not happen, with nothing anywhere connecting it to a frame that arrived
+        // broken. The daemon's own tests treat this as a fault in the other direction:
+        // `protocol::tests::an_empty_frame_is_an_error_not_a_silent_no_op`.
+        //
+        // `warn` rather than `error`, in development only: `shots.mjs` fails a screen on a console
+        // error, and a daemon bug should not be reported as a broken screen. A user gets the same
+        // resilience as before and none of the noise.
+        if (import.meta.env.DEV) {
+          console.warn("the daemon sent a frame this build could not read", e, message.data);
+        }
       }
     };
 
