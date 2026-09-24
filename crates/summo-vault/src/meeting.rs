@@ -496,8 +496,27 @@ fn render_segment(segment: &Segment) -> String {
         Some(code) if !code.is_empty() => format!(" lang:{code}"),
         _ => String::new(),
     };
+    // `start` beside `end`, for the same reason and in the same way `lang` was added.
+    //
+    // The heading's `[HH:MM:SS]` is what a person reads, and it is whole seconds — so `t0` was
+    // written truncated and came back truncated, while `t1` round-tripped to a hundredth. Saving a
+    // meeting and reading it again moved the beginning of every line up to a second earlier and
+    // left its end where it was.
+    //
+    // That is not only cosmetic. Subtitles exported from a reloaded meeting overlapped the line
+    // before them — measured on a real import: one cue ended at 2.180 and the next began at 2.000.
+    // `summo dub` places each spoken line at `t0` and fits it to `t1 - t0`, so every dubbed line
+    // started early inside a slot up to a second too long.
+    //
+    // Written only when it adds something. A line that genuinely starts on a whole second says so
+    // in the heading already, and the duplicate would be noise in a file people read.
+    let start = if (segment.t0 - segment.t0.floor()).abs() < 0.005 {
+        String::new()
+    } else {
+        format!(" start:{:.2}", segment.t0)
+    };
     format!(
-        "**[{}] {}** — {} <!-- seq:{} end:{:.2}{language} -->",
+        "**[{}] {}** — {} <!-- seq:{}{start} end:{:.2}{language} -->",
         format_timestamp(segment.t0),
         speaker,
         segment.text.trim(),
@@ -514,7 +533,7 @@ fn parse_segment(line: &str, fallback_seq: u64) -> Option<Segment> {
     let (timestamp, rest) = rest.split_once("] ")?;
     let (speaker, text) = rest.split_once("** — ")?;
 
-    let t0 = parse_timestamp(timestamp)?;
+    let heading = parse_timestamp(timestamp)?;
     let speaker = SpeakerId::from(speaker.trim().to_string());
     // A file may be hand-edited, and the mic/system distinction is not recorded per line; the lane
     // is recovered from the speaker rather than guessed.
@@ -526,31 +545,55 @@ fn parse_segment(line: &str, fallback_seq: u64) -> Option<Segment> {
 
     let meta = segment_meta(text);
     let text = text.split("<!--").next().unwrap_or(text);
+
+    // The precise start when the file carries one, and the heading otherwise — which is every file
+    // written before `start` existed, and every line that begins on a whole second.
+    //
+    // Only within the second the heading names. A hand-edited file where the two disagree is a file
+    // whose heading somebody moved, and the number a reader can see should win over one they cannot.
+    let t0 = match meta.start {
+        Some(start) if (start - heading) >= 0.0 && (start - heading) < 1.0 => start,
+        _ => heading,
+    };
     // An end before the start would make a negative-duration subtitle; clamped rather than
     // rejected, because the line's text is still worth keeping.
-    let t1 = meta.1.filter(|t| *t >= t0).unwrap_or(t0);
+    let t1 = meta.end.filter(|t| *t >= t0).unwrap_or(t0);
 
-    let mut segment = Segment::new(meta.0.unwrap_or(fallback_seq), lane, text.trim(), t0, t1);
+    let mut segment = Segment::new(meta.seq.unwrap_or(fallback_seq), lane, text.trim(), t0, t1);
     segment.speaker = Some(speaker);
-    segment.language = meta.2;
+    segment.language = meta.language;
     segment.source = summo_core::segment::SegmentSource::Final;
     Some(segment)
 }
 
-/// `seq`, `end` and `lang` out of a trailing `<!-- … -->`, if it has one.
-fn segment_meta(text: &str) -> (Option<u64>, Option<f64>, Option<String>) {
-    let Some(start) = text.find("<!--") else {
-        return (None, None, None);
+/// What a segment's trailing `<!-- … -->` carries.
+///
+/// A struct rather than a tuple since `start` made it four: `meta.1` for the end time was already
+/// one field past the point where a reader has to go and count.
+#[derive(Debug, Default)]
+struct Meta {
+    seq: Option<u64>,
+    start: Option<f64>,
+    end: Option<f64>,
+    language: Option<String>,
+}
+
+/// `seq`, `start`, `end` and `lang` out of a trailing `<!-- … -->`, if it has one.
+fn segment_meta(text: &str) -> Meta {
+    let Some(at) = text.find("<!--") else {
+        return Meta::default();
     };
-    let comment = &text[start + 4..];
+    let comment = &text[at + 4..];
     let comment = comment.split("-->").next().unwrap_or(comment);
 
     let mut seq = None;
+    let mut start = None;
     let mut end = None;
     let mut language = None;
     for field in comment.split_whitespace() {
         match field.split_once(':') {
             Some(("seq", value)) => seq = value.parse().ok(),
+            Some(("start", value)) => start = value.parse().ok(),
             Some(("end", value)) => end = value.parse().ok(),
             // Bare codes only. A hand-edited file is a file somebody typed into, and a "language"
             // of `vi-VN-x-something` routed on as if it were a code would send a line to a
@@ -564,7 +607,12 @@ fn segment_meta(text: &str) -> (Option<u64>, Option<f64>, Option<String>) {
             _ => {}
         }
     }
-    (seq, end, language)
+    Meta {
+        seq,
+        start,
+        end,
+        language,
+    }
 }
 
 /// Seconds to `HH:MM:SS`.
@@ -675,6 +723,70 @@ mod tests {
         let parsed = MeetingDoc::parse(&doc.to_markdown().unwrap()).unwrap();
         assert_eq!(parsed.transcript[0].t0, 12.0);
         assert_eq!(parsed.transcript[0].t1, 14.5);
+    }
+
+    /// And when it started, which only `t1` used to survive.
+    ///
+    /// The heading is `[HH:MM:SS]`, so a start of 2.43 was written as `00:00:02` and read back as
+    /// 2.0 while the end kept its hundredths. Every line's beginning moved up to a second earlier
+    /// each time the file was saved, and only its beginning: measured on a real import, one
+    /// exported subtitle ended at 2.180 and the next began at 2.000, overlapping the line before
+    /// it. `summo dub` places speech at `t0` and fits it to `t1 - t0`, so a dubbed line started
+    /// early in a slot up to a second too long.
+    #[test]
+    fn a_segment_keeps_when_it_started_to_the_hundredth() {
+        use summo_core::segment::{Lane, Segment};
+
+        let mut doc = MeetingDoc::new(Frontmatter::new(MeetingId::new(), "2026-08-10"), "Họp");
+        doc.transcript
+            .push(Segment::new(0, Lane::System, "xin chào", 2.43, 6.12));
+        doc.transcript
+            .push(Segment::new(1, Lane::System, "cảm ơn", 59.97, 61.5));
+
+        let markdown = doc.to_markdown().unwrap();
+        // The heading a person reads is still whole seconds, and still the second the line is in.
+        assert!(markdown.contains("**[00:00:02]"), "{markdown}");
+        assert!(markdown.contains("**[00:00:59]"), "{markdown}");
+
+        let parsed = MeetingDoc::parse(&markdown).unwrap();
+        assert_eq!(parsed.transcript[0].t0, 2.43);
+        assert_eq!(parsed.transcript[1].t0, 59.97);
+        assert_eq!(parsed.transcript[0].t1, 6.12);
+    }
+
+    /// A whole-second start says so in the heading, and repeating it in the comment would be noise
+    /// in a file people read and edit.
+    #[test]
+    fn a_line_that_starts_on_a_whole_second_carries_no_duplicate() {
+        use summo_core::segment::{Lane, Segment};
+
+        let mut doc = MeetingDoc::new(Frontmatter::new(MeetingId::new(), "2026-08-10"), "Họp");
+        doc.transcript
+            .push(Segment::new(0, Lane::System, "xin chào", 12.0, 14.5));
+
+        let markdown = doc.to_markdown().unwrap();
+        assert!(!markdown.contains("start:"), "{markdown}");
+        assert_eq!(MeetingDoc::parse(&markdown).unwrap().transcript[0].t0, 12.0);
+    }
+
+    /// Every meeting written before this existed still reads, and reads the way it always did.
+    #[test]
+    fn a_file_written_before_start_existed_falls_back_to_its_heading() {
+        let markdown = "---\nid: 01J\ndate: 2026-08-10\n---\n\n# Họp\n\n## Transcript\n             **[00:00:02] S1** — xin chào <!-- seq:0 end:6.12 lang:vi -->\n";
+        let doc = MeetingDoc::parse(markdown).unwrap();
+        assert_eq!(doc.transcript[0].t0, 2.0);
+        assert_eq!(doc.transcript[0].t1, 6.12);
+    }
+
+    /// A heading somebody moved by hand wins over a `start` left behind in the comment.
+    ///
+    /// The heading is the number a reader can see. A `start` more than a second away from it is not
+    /// a more precise version of the same moment, it is a stale one.
+    #[test]
+    fn a_start_that_contradicts_its_heading_is_ignored() {
+        let markdown = "---\nid: 01J\ndate: 2026-08-10\n---\n\n# Họp\n\n## Transcript\n             **[00:01:30] S1** — xin chào <!-- seq:0 start:2.43 end:92.0 -->\n";
+        let doc = MeetingDoc::parse(markdown).unwrap();
+        assert_eq!(doc.transcript[0].t0, 90.0);
     }
 
     /// Files written before segments carried their own id must still parse, and a hand-written line
