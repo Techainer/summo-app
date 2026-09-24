@@ -569,9 +569,15 @@ jobs:
       # a tightening of the manifest rules in this repo that would reject a manifest already in the
       # wild, which would break `summo pull` for everybody rather than only in review.
       #
-      # `continue-on-error`, because the repository does not exist yet. Without it every push to
-      # this one fails red on something nobody in this repository can fix, and a CI that is always
-      # red is a CI nobody reads. The step below notices the absence and says so instead.
+      # `continue-on-error` on the checkout only, so a network blip names itself in the step below
+      # rather than as a git error forty lines deep.
+      #
+      # It used to be paired with a warning, because the catalogue did not exist and every push
+      # would otherwise have failed red on something nobody here could fix. It exists now, `summo
+      # pull` depends on it, and every run since has genuinely checked it — so "could not reach the
+      # catalogue" stopped meaning "not built yet" and started meaning "this run did not check the
+      # thing this job is named after". A green tick for that is the failure mode this repository
+      # has spent two releases removing, so it fails instead.
       - id: catalogue
         continue-on-error: true
         uses: actions/checkout@v4
@@ -584,10 +590,11 @@ jobs:
       - name: Validate every published manifest against this build
         if: steps.catalogue.outcome == 'success'
         run: cargo run --quiet -p summo-cli -- registry check registry
-      - name: Say so when there is no published registry to check
+      - name: Fail when the published registry could not be reached
         if: steps.catalogue.outcome != 'success'
         run: |
-          echo "::warning::Techainer/summo-registry is not reachable, so no published manifest was checked."
+          echo "::error::Techainer/summo-registry could not be checked out, so no published manifest was validated against this build. This job passing would mean nothing."
+          exit 1
 
   # The two in-process translation runtimes. `cargo test --workspace` covers neither: the crate is
   # empty without a feature, so a change that breaks the ONNX path compiles and tests green.
@@ -617,6 +624,55 @@ jobs:
       # here for the reason above; the tag build is where llama.cpp would be compiled, and it is
       # not in the shipped feature set.
       - run: cargo clippy -p summo-engine --features mt-onnx --all-targets -- -D warnings
+
+  # The tests behind a feature flag, which is a hundred and two of them.
+  #
+  # The job above noticed this for one crate and stopped there. Every crate here defaults to no
+  # features, so `cargo test --workspace` — the only `cargo test` that runs on a pull request —
+  # compiles the speech and model paths out and reports a green tick over what is left:
+  #
+  #   summo-engine   364 tests, and 432 with `models`
+  #   summo-asr       48 tests, and  77 with `sherpa`
+  #   summo-vad       15 tests, and  18 with `silero`
+  #   summo-cli       22 tests, and  24 with `serve,engine,transcribe`
+  #
+  # `--all-targets` clippy did not cover them either: it runs on the default feature set, so the
+  # `#[cfg(all(test, feature = "models"))]` module in `server.rs` was never even *parsed* by CI.
+  # Those are not obscure tests. They are the ones that say a model chosen for one language does
+  # not decide another, that deleting a model releases the roles pointing at it, and that a pin
+  # which cannot hear the language does not win — every one of which is a bug a user reported.
+  #
+  # They pass. Nothing was enforcing that, and "it passes on the machine it was written on" is the
+  # state this repository keeps finding its checks in.
+  gated:
+    name: the tests behind a feature flag
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # cpal wants the ALSA headers to build even where no microphone is opened, and the media
+      # crate wants Opus.
+      - name: System dependencies
+        run: ./scripts/apt.sh libasound2-dev libopus-dev
+      - run: cargo clippy -p summo-engine --features models,tts --all-targets -- -D warnings
+      - run: cargo test -p summo-engine --features models,tts
+      - run: cargo clippy -p summo-asr --features sherpa --all-targets -- -D warnings
+      - run: cargo test -p summo-asr --features sherpa
+      - run: cargo test -p summo-vad --features silero
+      - run: cargo test -p summo-cli --features serve,engine,transcribe
+      # Two shipped subcommands that no workflow compiled. `mcp` serves the vault to an editor and
+      # `dub` speaks a summary aloud; both pull whole crates in behind a flag, so nothing was
+      # checking that either still builds. Clippy rather than tests, because what they own is a
+      # command wired to a library the library's own tests already cover.
+      - run: cargo clippy -p summo-cli --features mcp,dub --all-targets -- -D warnings
+      # The measuring tool. Every accuracy figure this project publishes comes out of
+      # `summo-bench asr`, and `bench.yml` only ever names `silero` — so the harness behind those
+      # numbers was the one thing unable to prove it still compiles.
+      - run: cargo clippy -p summo-bench --features asr --all-targets -- -D warnings
 
   # The browser suites. They need a daemon with the interface compiled in, which is why they are
   # their own job: the check above builds the web app, this one bakes it into the binary and drives
@@ -820,6 +876,23 @@ jobs:
       # every one was found by a user, because "written to the settings file" and "reaches a
       # recording" look identical from outside. This suite is what that looks like from outside.
       - run: pnpm -C apps/web e2e:denoise
+        env:
+          SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+          GITHUB_TOKEN: ${{ github.token }}
+
+      # Every primitive in every state, which no other suite can photograph.
+      #
+      # This was written, shipped, and never wired to anything — the one assertion suite in `e2e/`
+      # that CI did not run, for a release. It was not idle in the meantime: the first run after it
+      # was fixed found a destructive button below AA in the dark theme, three labels rendering the
+      # words "// i18n-exempt", and three of four alert tones drawn with a tick. All of that was on
+      # a page nothing looked at.
+      #
+      # Last, because it is the only suite that needs a dev server rather than the bundled daemon,
+      # and a failure here is about a component rather than about the product working.
+      #
+      # `e2e/suites.test.mjs` now fails the unit run if a suite is added and not listed here.
+      - run: pnpm -C apps/web e2e:ui
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
           GITHUB_TOKEN: ${{ github.token }}
