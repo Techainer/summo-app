@@ -222,6 +222,7 @@ export async function boot({
   seed = true,
   registry = REGISTRY,
   onboarded = true,
+  dev = false,
 } = {}) {
   const home = join("/tmp", `summo-${name}-${process.pid}`);
   rmSync(home, { recursive: true, force: true });
@@ -231,7 +232,14 @@ export async function boot({
   if (onboarded) writeFileSync(join(home, ONBOARDED), "");
   if (seed) seedVault(home);
 
-  const child = spawn(BINARY, ["--home", home, "--port", "0"], {
+  // `--dev` only when a caller asks, and one does.
+  //
+  // A shipped daemon refuses a page served from anywhere but itself, which is what stops a website
+  // on the internet reaching somebody's microphone. `ui-shots.mjs` drives the *development* server,
+  // because the gallery it photographs exists only in a development build — so for that one suite
+  // the page and the engine really are two origins, and the flag that exists for exactly this is
+  // the honest way to say so.
+  const child = spawn(BINARY, ["--home", home, "--port", "0", ...(dev ? ["--dev"] : [])], {
     stdio: "pipe",
     // The registry the catalogue reads from. Pointed at the checkout beside this one so the suite
     // tests a real registry without depending on a deployed CDN — and so it keeps passing when the

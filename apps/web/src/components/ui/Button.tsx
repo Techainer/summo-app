@@ -10,7 +10,10 @@ const VARIANTS: Record<Variant, string> = {
   primary: "bg-accent text-accent-fg hover:brightness-110 active:brightness-95",
   secondary: "bg-bg-soft text-fg border border-line hover:border-line-strong",
   ghost: "text-fg-dim hover:text-fg hover:bg-bg-soft",
-  danger: "bg-rec text-white hover:brightness-110",
+  // `text-danger-fg`, not `text-white`: the fill is a light coral in dark mode, where white text
+  // scores 2.82 against the 4.5 AA asks for. The token answers per theme; a hard-coded colour
+  // cannot.
+  danger: "bg-danger text-danger-fg hover:brightness-110",
 };
 
 const SIZES: Record<Size, string> = {
