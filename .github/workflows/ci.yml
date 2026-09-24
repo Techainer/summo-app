@@ -590,6 +590,25 @@ jobs:
       - name: Validate every published manifest against this build
         if: steps.catalogue.outcome == 'success'
         run: cargo run --quiet -p summo-cli -- registry check registry
+      # `summo registry pages` says in its own help that "the pages cannot drift from the models".
+      # They can, and had: nothing ran it and nothing checked it. Four of fifteen models had no page
+      # at all — including the English transducer this project shipped a release about — and five
+      # more were stale. `whisper-tiny`'s page advertised a real-time factor of 0.120 where its
+      # manifest says 0.074, and a 4.5% word error rate on a benchmark the manifest had since
+      # replaced with a measured 13.2%. A page is what somebody reads before downloading 200 MB.
+      #
+      # Regenerating and failing on a difference is the check: the generator is the only author,
+      # so anything it would change is something a hand wrote or a manifest outgrew.
+      - name: The model pages are generated rather than written
+        if: steps.catalogue.outcome == 'success'
+        run: |
+          cargo run --quiet -p summo-cli -- registry pages registry
+          if [ -n "$(git -C registry status --porcelain)" ]; then
+            echo "::error::registry pages/ is out of step with models/. Run: summo registry pages <dir>"
+            git -C registry status --porcelain
+            git -C registry diff --stat
+            exit 1
+          fi
       - name: Fail when the published registry could not be reached
         if: steps.catalogue.outcome != 'success'
         run: |
