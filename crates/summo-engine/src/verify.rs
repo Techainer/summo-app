@@ -206,12 +206,20 @@ fn translate(store: &ModelStore, manifest: &Manifest, _threads: usize) -> Result
     }
 }
 
-/// One word through the voice.
+/// A greeting the voice can actually pronounce, through the voice.
 ///
 /// The check a voice needs more than any other model: it arrives as a 397-member archive, and
 /// everything that can go wrong with unpacking one — a missing `espeak-ng-data` table, a `params`
 /// key pointing at the wrong level of the directory — produces a voice that is present, correct by
 /// digest, and silent.
+///
+/// The line has to be in a language the voice speaks, which this said "Xin chào" to everything
+/// until there was more than one voice to say it to. A VITS voice does not refuse a language it was
+/// not trained for: measured against the published English voice, it read the Vietnamese as 0.89 s
+/// of nonsense and the check called that a pass; the Chinese one logged `OOV` per word and emitted
+/// 0.10 s, which also passed, because the bar was `samples.is_empty()`. So both halves move — the
+/// phrase comes from the manifest's `langs`, and a tenth of a second of near-silence is no longer a
+/// pass.
 #[cfg(feature = "tts")]
 fn tts(store: &ModelStore, manifest: &Manifest, threads: usize) -> Result<String, String> {
     let installed = store.resolve(manifest).map_err(|e| e.to_string())?;
@@ -222,16 +230,67 @@ fn tts(store: &ModelStore, manifest: &Manifest, threads: usize) -> Result<String
         )
     })?;
 
+    let line = greeting(&manifest.langs);
     let mut voice = summo_tts::vits::Vits::load(&dir, threads).map_err(|e| e.to_string())?;
-    let speech = voice.say_at("Xin chào", 1.0).map_err(|e| e.to_string())?;
-    if speech.samples.is_empty() {
-        return Err("loaded, but synthesised no audio for a short line".into());
+    let speech = voice.say_at(line, 1.0).map_err(|e| e.to_string())?;
+
+    let seconds = speech.duration_s();
+    if seconds < MIN_GREETING_S {
+        return Err(format!(
+            "loaded, but {line:?} came out as {seconds:.2}s of audio — a voice that cannot \
+             pronounce its own language emits almost nothing"
+        ));
     }
+    // Present and silent is the failure this check was written for, and length alone does not catch
+    // it: a graph that loads and outputs zeros produces a respectable number of samples.
+    let peak = speech
+        .samples
+        .iter()
+        .fold(0.0_f32, |peak, s| peak.max(s.abs()));
+    if peak < 1e-4 {
+        return Err(format!(
+            "loaded and produced {seconds:.2}s of silence for {line:?}"
+        ));
+    }
+
     Ok(format!(
-        "loaded and spoke one line ({} samples at {} Hz)",
-        speech.samples.len(),
+        "loaded and spoke {line:?} ({seconds:.2}s at {} Hz)",
         speech.rate
     ))
+}
+
+/// Shorter than any real greeting, long enough that `OOV`-and-emit-nothing cannot clear it.
+///
+/// Measured by `summo verify` against the three published voices: "Xin chào" 0.39 s on the
+/// Vietnamese one, "Hello there." 0.80 s on the English, "你好" 0.89 s on the Mandarin. A word the
+/// voice could not pronounce came out at 0.10 s.
+#[cfg(feature = "tts")]
+const MIN_GREETING_S: f64 = 0.25;
+
+/// A short line in a language the voice claims.
+///
+/// English for `*` and for a voice that declares nothing: a multilingual voice covers it by
+/// definition, and one that declares nothing has told us only that we are guessing — in which case
+/// guess the language most voices are trained on rather than the least.
+#[cfg(feature = "tts")]
+fn greeting(langs: &[String]) -> &'static str {
+    for lang in langs {
+        match lang
+            .split('-')
+            .next()
+            .unwrap_or(lang)
+            .to_lowercase()
+            .as_str()
+        {
+            "vi" => return "Xin chào",
+            "zh" | "yue" => return "你好",
+            "ja" => return "こんにちは",
+            "ko" => return "안녕하세요",
+            "en" => return "Hello there.",
+            _ => {}
+        }
+    }
+    "Hello there."
 }
 
 /// Resolve one `params` key to a path on disk, in the words a reader needs.
@@ -384,5 +443,38 @@ mod tests {
     fn nothing_installed_is_an_empty_list() {
         let (_tmp, store) = store();
         assert!(check_all(&store, 1).is_empty());
+    }
+
+    /// The line a voice is checked with has to be one it can pronounce.
+    ///
+    /// Before, every voice was asked to say "Xin chào". The published English voice read it as 0.89 s
+    /// of nonsense and passed; the Chinese one logged `OOV` twice and emitted 0.10 s, and passed too.
+    #[cfg(feature = "tts")]
+    #[test]
+    fn a_voice_is_greeted_in_a_language_it_speaks() {
+        assert_eq!(greeting(&["vi".into()]), "Xin chào");
+        assert_eq!(greeting(&["en".into()]), "Hello there.");
+        assert_eq!(greeting(&["zh".into()]), "你好");
+        assert_eq!(greeting(&["ja".into()]), "こんにちは");
+        // A regional code names its language.
+        assert_eq!(greeting(&["en-US".into()]), "Hello there.");
+        assert_eq!(greeting(&["zh-CN".into()]), "你好");
+    }
+
+    /// `*` means every language, so any line is in one of them; a manifest declaring nothing has
+    /// told us only that we are guessing. Both get the language most voices are trained on.
+    #[cfg(feature = "tts")]
+    #[test]
+    fn a_voice_that_names_no_language_is_greeted_in_english() {
+        assert_eq!(greeting(&["*".into()]), "Hello there.");
+        assert_eq!(greeting(&[]), "Hello there.");
+    }
+
+    /// The first language the table knows, not the first one listed — a voice may declare a
+    /// language this has no line for beside one it does.
+    #[cfg(feature = "tts")]
+    #[test]
+    fn an_unknown_language_falls_through_to_the_next_one() {
+        assert_eq!(greeting(&["fa".into(), "en".into()]), "Hello there.");
     }
 }

@@ -42,32 +42,48 @@ pub struct Options {
 /// separator, so the two cannot be confused — and trying the store first means `--voice
 /// vits-vi-vais1000` works on a machine where a directory of that name happens to exist in the
 /// working directory, which is the reading somebody typing an id intends.
-fn resolve_voice(paths: &Paths, wanted: Option<&str>) -> Result<PathBuf> {
+///
+/// `lang` is the language the dub is in, and it is checked against the voice. A VITS voice does not
+/// fail on a language it was not trained for: it runs the text through the phoneme table it has and
+/// says whatever comes out. A Vietnamese voice handed an English line produces confident nonsense,
+/// and a lexicon-based Chinese one logs `OOV` per word and emits a tenth of a second — both of which
+/// this wrote over the recording without a word until the comparison below existed.
+fn resolve_voice(paths: &Paths, wanted: Option<&str>, lang: &str) -> Result<PathBuf> {
+    let store = summo_models::ModelStore::new(paths.clone());
     let wanted = match wanted.map(str::trim).filter(|w| !w.is_empty()) {
         Some(wanted) => wanted.to_string(),
-        None => chosen_voice(paths)?,
+        None => chosen_voice(paths, &store, lang)?,
     };
     let wanted = wanted.as_str();
 
-    if let Ok(id) = summo_core::ModelId::parse(wanted) {
-        let store = summo_models::ModelStore::new(paths.clone());
-        if let Ok(manifest) = store.installed(&id) {
-            if manifest.task != summo_models::Task::Tts {
-                bail!(
-                    "`{wanted}` is a {} model, not a voice",
-                    summo_models::page::task_name(manifest.task)
-                );
-            }
-            let installed = store.resolve(&manifest)?;
-            // `dir` points inside the archive the voice ships as: a piper voice is an `.onnx` plus
-            // several hundred phoneme tables, and `Vits::load` is given the folder holding them.
-            return installed
-                .param_dir("dir")
-                .or_else(|| installed.files.values().next().cloned())
-                .with_context(|| format!("`{wanted}` is installed but has no voice directory"));
+    if let Ok(id) = summo_core::ModelId::parse(wanted)
+        && let Ok(manifest) = store.installed(&id)
+    {
+        if manifest.task != summo_models::Task::Tts {
+            bail!(
+                "`{wanted}` is a {} model, not a voice",
+                summo_models::page::task_name(manifest.task)
+            );
         }
+        if !summo_models::langs_cover(&manifest.langs, lang) {
+            bail!(
+                "`{wanted}` speaks {}, not {lang}.{}",
+                spoken(&manifest.langs),
+                alternatives(&installed_voices(&store), lang)
+            );
+        }
+        let installed = store.resolve(&manifest)?;
+        // `dir` points inside the archive the voice ships as: a piper voice is an `.onnx` plus
+        // several hundred phoneme tables, and `Vits::load` is given the folder holding them.
+        return installed
+            .param_dir("dir")
+            .or_else(|| installed.files.values().next().cloned())
+            .with_context(|| format!("`{wanted}` is installed but has no voice directory"));
     }
 
+    // A directory carries no manifest, so there is nothing to compare `lang` against. Left
+    // unchecked rather than guessed at from the folder's name: `--voice /path` is the escape hatch
+    // for somebody running a voice they trained, and they know what it speaks.
     let path = PathBuf::from(wanted);
     if path.is_dir() {
         return Ok(path);
@@ -75,51 +91,126 @@ fn resolve_voice(paths: &Paths, wanted: Option<&str>) -> Result<PathBuf> {
     // One space after the full stop. The literal was wrapped by hand and the indentation went into
     // the string, so every user who mistyped `--voice` got ten spaces in the middle of the sentence.
     bail!(
-        "no voice `{wanted}`: not an installed model, and not a directory. Install one with \
-         `summo pull vits-vi-vais1000`."
+        "no voice `{wanted}`: not an installed model, and not a directory. `summo registry ls` \
+         lists the voices there are to pull."
     )
+}
+
+/// Every installed voice, manifest and all.
+fn installed_voices(store: &summo_models::ModelStore) -> Vec<summo_models::Manifest> {
+    store
+        .list()
+        .into_iter()
+        .filter(|m| m.task == summo_models::Task::Tts)
+        .collect()
 }
 
 /// The voice to use when none was named on the command line.
 ///
-/// `models.tts` first — the app writes it, and a choice made on a screen has to be the choice a
-/// command honours or the screen is decoration. Then the only installed voice, because on a machine
-/// with one there is nothing to choose and asking is ceremony.
-///
-/// Deliberately *not* "the first installed voice" when there are several: which one reads a meeting
-/// aloud is not a decision to make silently on somebody's behalf, and with two installed the answer
-/// is to say so and name them.
-fn chosen_voice(paths: &Paths) -> Result<String> {
+/// Only voices that speak `lang` are candidates. A voice that cannot say the line is not a choice
+/// between, it is a wrong answer, so the screen's preference is honoured **among those** rather
+/// than over them: `models.tts` first when it covers the language, then the only remaining voice.
+/// Several is still a question rather than a silent pick — but publishing an English and a Chinese
+/// voice beside the Vietnamese one made "several are installed" the normal state, and filtering by
+/// language is what keeps that from turning every dub into a prompt.
+fn chosen_voice(paths: &Paths, store: &summo_models::ModelStore, lang: &str) -> Result<String> {
     let settings = summo_core::Settings::load(&paths.settings()).unwrap_or_default();
-    if let Some(id) = settings.models.tts.filter(|id| !id.trim().is_empty()) {
-        return Ok(id);
-    }
+    pick_voice(
+        &installed_voices(store),
+        settings.models.tts.as_deref(),
+        lang,
+    )
+}
 
-    let voices: Vec<_> = summo_models::ModelStore::new(paths.clone())
-        .list()
-        .into_iter()
-        .filter(|m| m.task == summo_models::Task::Tts)
-        .map(|m| m.id.to_string())
+/// The decision inside [`chosen_voice`], with the disk taken out of it.
+///
+/// Separated so it can be tested. Choosing a voice is three rules interacting — a preference, a
+/// language, and how many are installed — and the version of this that read `Paths` could only be
+/// exercised by installing a voice, which is why it shipped with none of the cases checked.
+fn pick_voice(
+    installed: &[summo_models::Manifest],
+    preferred: Option<&str>,
+    lang: &str,
+) -> Result<String> {
+    let preferred = preferred.map(str::trim).filter(|id| !id.is_empty());
+
+    let speaks: Vec<&summo_models::Manifest> = installed
+        .iter()
+        .filter(|m| summo_models::langs_cover(&m.langs, lang))
         .collect();
 
-    match voices.as_slice() {
-        [] => bail!(
-            "no voice installed. Install one with `summo pull vits-vi-vais1000`, or pass --voice \
-             with a directory."
+    if let Some(id) = preferred {
+        // Not installed, or installed and unreadable: say nothing and let `resolve_voice` report
+        // it. A stale id in settings is its problem to name, not this function's.
+        let known = installed.iter().any(|m| m.id.as_str() == id);
+        if !known || speaks.iter().any(|m| m.id.as_str() == id) {
+            return Ok(id.to_string());
+        }
+    }
+
+    match speaks.as_slice() {
+        [] if installed.is_empty() => bail!(
+            "no voice installed. `summo registry ls` lists them; pull one that speaks {lang}, or \
+             pass --voice with a directory."
         ),
-        [only] => Ok(only.clone()),
+        [] => bail!("no installed voice speaks {lang}.{}", spoken_by(installed)),
+        [only] => Ok(only.id.to_string()),
         several => bail!(
-            "several voices are installed ({}). Choose one on the models screen, or pass --voice.",
-            several.join(", ")
+            "several installed voices speak {lang} ({}). Choose one on the models screen, or pass \
+             --voice.",
+            several
+                .iter()
+                .map(|m| m.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
     }
+}
+
+/// The languages a manifest claims, as a reader would say them.
+fn spoken(langs: &[String]) -> String {
+    if langs.iter().any(|l| l == "*") {
+        return "every language".into();
+    }
+    if langs.is_empty() {
+        return "no declared language".into();
+    }
+    langs.join(", ")
+}
+
+/// What is installed and what each one speaks, for an error that has to name the way out.
+fn spoken_by(installed: &[summo_models::Manifest]) -> String {
+    if installed.is_empty() {
+        return String::new();
+    }
+    format!(
+        " Installed: {}. `summo registry ls` lists the voices there are to pull.",
+        installed
+            .iter()
+            .map(|m| format!("{} ({})", m.id, spoken(&m.langs)))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+/// The installed voices that *would* have worked, appended to a refusal.
+fn alternatives(installed: &[summo_models::Manifest], lang: &str) -> String {
+    let speaks: Vec<String> = installed
+        .iter()
+        .filter(|m| summo_models::langs_cover(&m.langs, lang))
+        .map(|m| m.id.to_string())
+        .collect();
+    if speaks.is_empty() {
+        return spoken_by(installed);
+    }
+    format!(" Installed and speaking {lang}: {}.", speaks.join(", "))
 }
 
 pub fn run(paths: &Paths, opts: &Options) -> Result<()> {
     // The voice first, before the meeting and the translation are read. A mistyped `--voice` used
     // to be reported after all of that, which on a long meeting is a wait for an answer that was
     // available immediately.
-    let voice = resolve_voice(paths, opts.voice.as_deref())?;
+    let voice = resolve_voice(paths, opts.voice.as_deref(), &opts.lang)?;
 
     let id = summo_core::MeetingId::from(opts.meeting.clone());
 
@@ -290,4 +381,124 @@ fn read_wav_at(path: &Path, rate: u32) -> Result<Vec<f32>> {
     Ok((0..out_len)
         .map(|i| mono[((i as f64 * ratio) as usize).min(mono.len() - 1)])
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn voice(id: &str, langs: &[&str]) -> summo_models::Manifest {
+        let json = serde_json::json!({
+            "schema": 1,
+            "id": id,
+            "name": id,
+            "task": "tts",
+            "mode": "batch",
+            "runtime": "sherpa-onnx/vits",
+            "langs": langs,
+            "license": "MIT",
+            "attribution": "nobody",
+            "files": [{
+                "name": "voice.tar.bz2",
+                "sha256": "a".repeat(64),
+                "size": 1,
+                "url": "https://example.invalid/voice.tar.bz2",
+                "archive": "tar-bz2"
+            }],
+            "params": {"dir": "voice.tar.bz2/voice"}
+        });
+        summo_models::Manifest::parse(&json.to_string()).unwrap()
+    }
+
+    /// The bug this whole comparison exists for.
+    ///
+    /// One voice installed and it speaks Vietnamese; the dub is English. Before, "the only installed
+    /// voice" was the answer and a Vietnamese phoneme table read the English aloud.
+    #[test]
+    fn the_only_voice_is_not_the_answer_when_it_speaks_another_language() {
+        let installed = [voice("vits-vi-vais1000", &["vi"])];
+        let err = pick_voice(&installed, None, "en").unwrap_err().to_string();
+        assert!(err.contains("no installed voice speaks en"), "{err}");
+        // An error about a missing voice has to name what is there, or the reader's next move is a
+        // guess.
+        assert!(err.contains("vits-vi-vais1000 (vi)"), "{err}");
+    }
+
+    #[test]
+    fn the_only_voice_that_speaks_the_language_needs_no_asking() {
+        let installed = [
+            voice("vits-vi-vais1000", &["vi"]),
+            voice("vits-en-ljspeech", &["en"]),
+        ];
+        assert_eq!(
+            pick_voice(&installed, None, "en").unwrap(),
+            "vits-en-ljspeech"
+        );
+        assert_eq!(
+            pick_voice(&installed, None, "vi").unwrap(),
+            "vits-vi-vais1000"
+        );
+    }
+
+    /// The screen's choice is honoured among the voices that can do the job, not over them.
+    ///
+    /// A preference is a preference between candidates. Reading an English line in a Vietnamese
+    /// voice because a screen once said Vietnamese is not honouring a choice, it is producing
+    /// nonsense on the strength of one.
+    #[test]
+    fn a_preference_for_a_voice_that_cannot_say_the_line_does_not_win() {
+        let installed = [
+            voice("vits-vi-vais1000", &["vi"]),
+            voice("vits-en-ljspeech", &["en"]),
+        ];
+        let chosen = pick_voice(&installed, Some("vits-vi-vais1000"), "en").unwrap();
+        assert_eq!(chosen, "vits-en-ljspeech");
+        // And it does win where it applies.
+        let chosen = pick_voice(&installed, Some("vits-vi-vais1000"), "vi").unwrap();
+        assert_eq!(chosen, "vits-vi-vais1000");
+    }
+
+    /// A stale id in settings is reported by the resolver, which knows it is not installed. Swallowing
+    /// it here would turn "you chose a voice that is gone" into a different voice speaking.
+    #[test]
+    fn a_preference_naming_nothing_installed_is_passed_through_to_be_reported() {
+        let installed = [voice("vits-en-ljspeech", &["en"])];
+        let chosen = pick_voice(&installed, Some("vits-gone"), "en").unwrap();
+        assert_eq!(chosen, "vits-gone");
+    }
+
+    #[test]
+    fn several_voices_for_one_language_is_a_question() {
+        let installed = [
+            voice("vits-en-ljspeech", &["en"]),
+            voice("vits-en-other", &["en"]),
+        ];
+        let err = pick_voice(&installed, None, "en").unwrap_err().to_string();
+        assert!(err.contains("vits-en-ljspeech, vits-en-other"), "{err}");
+    }
+
+    /// `langs: ["*"]` is a claim to every language, and `langs_cover` honours it. A multilingual
+    /// voice must not be filtered out of its own job.
+    #[test]
+    fn a_voice_claiming_every_language_covers_the_one_asked_for() {
+        let installed = [voice("vits-multi", &["*"])];
+        assert_eq!(pick_voice(&installed, None, "ja").unwrap(), "vits-multi");
+    }
+
+    /// `en-US` asks for `en`.
+    #[test]
+    fn a_regional_code_matches_the_language_it_belongs_to() {
+        let installed = [voice("vits-en-ljspeech", &["en"])];
+        assert_eq!(
+            pick_voice(&installed, None, "en-US").unwrap(),
+            "vits-en-ljspeech"
+        );
+    }
+
+    #[test]
+    fn nothing_installed_says_so_rather_than_listing_an_empty_set() {
+        let err = pick_voice(&[], None, "en").unwrap_err().to_string();
+        assert!(err.contains("no voice installed"), "{err}");
+        assert!(err.contains("speaks en"), "{err}");
+    }
 }
