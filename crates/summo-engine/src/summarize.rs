@@ -89,11 +89,18 @@ pub async fn run(
 
     // A template may pin a language; otherwise the user's setting decides, and only if neither is
     // set does the model follow the transcript.
-    let settings = summo_core::settings::Settings::load(&paths.settings()).ok();
-    let configured = settings
-        .as_ref()
-        .map(|s| s.llm.language.as_str())
-        .unwrap_or("");
+    // `?` rather than `.ok()`.
+    //
+    // `Settings::load` already answers a missing file with the defaults, so the only things `.ok()`
+    // threw away were settings that do not parse and settings written by a newer Summo than this
+    // one. Both dropped the user's chosen summary language without a word and let the model follow
+    // the transcript instead — a summary quietly in the wrong language, which is the same failure
+    // this project fixed in the setup screen and did not want a second copy of.
+    //
+    // Both messages name the file and say which of the two it is, and both describe something the
+    // settings screen cannot be working around either.
+    let settings = summo_core::settings::Settings::load(&paths.settings())?;
+    let configured = settings.llm.language.as_str();
     let language = [template.language.as_str(), configured]
         .into_iter()
         .find(|l| !l.is_empty())

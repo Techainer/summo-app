@@ -210,8 +210,23 @@ pub fn last(paths: &Paths) -> Option<serde_json::Value> {
 pub fn mark(paths: &Paths, day: &str, dreamt: &[Dreamt]) {
     let path = paths.root().join("dreams.json");
     let record = serde_json::json!({ "day": day, "agents": dreamt });
-    if let Ok(bytes) = serde_json::to_vec_pretty(&record) {
-        let _ = summo_vault::write::write_atomically(&path, &bytes);
+    // Said out loud when it fails, because of what failing quietly costs here.
+    //
+    // This file is the only thing that stops `due` returning true again, so a write that goes
+    // nowhere is not a lost note — it is a language-model call every half hour, all night, for an
+    // answer that cannot change. That is the exact outcome the paragraph above says this function
+    // exists to prevent, and it used to be reachable by a full disk with nothing printed.
+    //
+    // A warning rather than an error: the caller is a timer with nobody to report to, and the
+    // dreaming itself already happened. What a log can do is explain the repetition somebody is
+    // about to notice in their usage.
+    match serde_json::to_vec_pretty(&record) {
+        Ok(bytes) => {
+            if let Err(e) = summo_vault::write::write_atomically(&path, &bytes) {
+                tracing::warn!(error = %e, path = %path.display(), "could not record tonight's run; it will be retried");
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "could not describe tonight's run"),
     }
 }
 

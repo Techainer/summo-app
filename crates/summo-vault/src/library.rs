@@ -601,13 +601,40 @@ impl Library {
             ));
             n += 1;
         }
-        std::fs::rename(&entry.path, &target).map_err(|e| Error::io(&target, e))?;
-
+        // The audio first, and put it back if the note cannot follow it.
+        //
+        // This used to be the other way round with the audio's result thrown away, so `trash`
+        // returned `Ok` — "moved a meeting and its audio", says the line above — whether or not the
+        // audio had gone anywhere. A rename fails for ordinary reasons: the file is open, which on
+        // Windows is enough on its own and is exactly the state somebody is in when they play a
+        // recording back and then decide to delete it; a permission or a full disk; a target that
+        // already exists, which Windows refuses where Unix overwrites.
+        //
+        // What was left behind was the worst shape available. The note had moved, so the meeting
+        // was gone from the index and from the screen, while the largest file in the vault stayed
+        // where it was with nothing left pointing at it — invisible to the interface, so not
+        // deletable through it either, and the user had been told the deletion worked.
+        //
+        // Moving the audio first makes the failure honest: nothing has moved, the error names the
+        // path, and the meeting is still there to try again.
         let audio = self.paths.audio_for(id);
-        if audio.exists() {
-            let audio_target = trash.join(format!("audio-{}", id.as_str()));
-            let _ = std::fs::rename(&audio, &audio_target);
+        let audio_target = audio
+            .exists()
+            .then(|| trash.join(format!("audio-{}", id.as_str())));
+        if let Some(moved) = &audio_target {
+            std::fs::rename(&audio, moved).map_err(|e| Error::io(moved, e))?;
         }
+
+        if let Err(e) = std::fs::rename(&entry.path, &target) {
+            // Best effort, and deliberately discarded: the error being returned is the one that
+            // explains what happened, and a failure to undo must not replace it with a second
+            // message about a file the user never asked about.
+            if let Some(moved) = &audio_target {
+                let _ = std::fs::rename(moved, &audio);
+            }
+            return Err(Error::io(&target, e));
+        }
+
         Ok(target)
     }
 }
@@ -1161,6 +1188,60 @@ mod tests {
                 .unwrap()
                 .contains("Weekly Sync"),
             "the trashed file must still be the meeting"
+        );
+    }
+
+    /// The audio, which is the part worth the disk it takes.
+    ///
+    /// `deleting_moves_to_trash_rather_than_unlinking` seeds no audio, so until this test the
+    /// branch that moves it had never run in a test at all.
+    #[test]
+    fn deleting_takes_the_audio_with_it() {
+        let (dir, lib) = library();
+        let id = MeetingId::from("01A".to_string());
+        let paths = Paths::at(dir.path());
+        fs::create_dir_all(paths.audio()).unwrap();
+        fs::write(paths.audio_for(&id), b"not really opus").unwrap();
+
+        lib.trash(&id).unwrap();
+
+        assert!(!paths.audio_for(&id).exists(), "the audio must have moved");
+        assert!(
+            paths.vault().join(".trash").join("audio-01A").exists(),
+            "and it must be in the trash beside the note"
+        );
+    }
+
+    /// A deletion that could not take the audio is a deletion that did not happen.
+    ///
+    /// The failure is forced with a directory where the audio is going, because renaming a file
+    /// onto a directory is refused by every platform — which is the portable way to reach the
+    /// case that reaches real users as a file open in a player, a permission, or a full disk.
+    ///
+    /// What matters is not only the error. It is that the meeting is still in the vault
+    /// afterwards: the old order moved the note first, so a failure here left a meeting gone from
+    /// the screen and an orphaned audio file nothing could reach.
+    #[test]
+    fn a_meeting_whose_audio_cannot_be_moved_is_left_alone() {
+        let (dir, lib) = library();
+        let id = MeetingId::from("01A".to_string());
+        let paths = Paths::at(dir.path());
+        fs::create_dir_all(paths.audio()).unwrap();
+        fs::write(paths.audio_for(&id), b"not really opus").unwrap();
+        fs::create_dir_all(paths.vault().join(".trash").join("audio-01A")).unwrap();
+
+        let before = lib.scan().unwrap().get(&id).map(|e| e.path.clone());
+        assert!(before.is_some(), "the meeting is there to begin with");
+
+        assert!(lib.trash(&id).is_err(), "a partial delete must be an error");
+
+        assert!(
+            paths.audio_for(&id).exists(),
+            "the audio must be back where it was"
+        );
+        assert!(
+            lib.scan().unwrap().get(&id).is_some(),
+            "and the meeting must still be in the vault"
         );
     }
 }
