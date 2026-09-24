@@ -609,6 +609,82 @@ jobs:
             git -C registry diff --stat
             exit 1
           fi
+      # A README is the first thing anyone reads and the last thing anyone re-measures.
+      #
+      # `summo pull gipformer-65m  # 2.4 % WER on Fleurs VI` sat in both READMEs for releases.
+      # `docs/benchmarks.md` in this same repository says, in bold, that those numbers *replace* a
+      # 15-clip run that reported 2.4 % — the real figure is 8.5 %, the manifest agrees, and the
+      # README kept advertising the one the project had already retracted. It also pointed at a
+      # model the registry marks superseded.
+      #
+      # So the line a reader copies is checked against the manifest behind it: the id exists, is not
+      # superseded, and every figure in the comment — word error rate, size, licence — is the
+      # figure the registry publishes.
+      - name: The README's model figures are the registry's
+        if: steps.catalogue.outcome == 'success'
+        run: |
+          python3 - <<'PY'
+          import glob, json, re, sys
+
+          manifests = {}
+          for path in glob.glob("registry/models/*.json"):
+              manifest = json.load(open(path))
+              manifests[manifest["id"]] = manifest
+
+          # `summo pull <id>` followed by a `#` comment. Any README line without a comment is a
+          # bare example making no claim, and nothing to check.
+          LINE = re.compile(r"summo pull ([a-z0-9][a-z0-9.\-]*)\s+#\s*(.+)$")
+          failures = []
+
+          for readme in ("README.md", "README.vi.md"):
+              for number, text in enumerate(open(readme), start=1):
+                  found = LINE.search(text.rstrip())
+                  if not found:
+                      continue
+                  id, claim = found.group(1), found.group(2)
+                  where = f"{readme}:{number}"
+
+                  manifest = manifests.get(id)
+                  if manifest is None:
+                      failures.append(f"{where}: no model `{id}` in the registry")
+                      continue
+                  if manifest.get("superseded_by"):
+                      failures.append(
+                          f"{where}: `{id}` is superseded by `{manifest['superseded_by']}`"
+                      )
+
+                  # Vietnamese writes 8,3 where English writes 8.3.
+                  wer = re.search(r"([0-9]+)[.,]([0-9]+)\s*%\s*WER", claim)
+                  if wer:
+                      said = float(f"{wer.group(1)}.{wer.group(2)}")
+                      quality = manifest.get("profile", {}).get("quality", {})
+                      measured = [v * 100 for k, v in quality.items() if k.startswith("wer_")]
+                      if not measured:
+                          failures.append(f"{where}: `{id}` publishes no word error rate to match")
+                      elif not any(abs(said - m) < 0.1 for m in measured):
+                          failures.append(
+                              f"{where}: says {said} % WER, manifest measures "
+                              + ", ".join(f"{m:.1f} %" for m in sorted(measured))
+                          )
+
+                  size = re.search(r"~\s*([0-9]+)\s*MB", claim)
+                  if size:
+                      said = int(size.group(1))
+                      real = manifest["size_bytes"] / (1024 * 1024)
+                      # A tilde is a rounding, not a measurement. Five per cent of slack, so a
+                      # re-export that changes the size by a megabyte does not fail the build.
+                      if abs(said - real) > max(1.0, real * 0.05):
+                          failures.append(f"{where}: says ~{said} MB, manifest is {real:.0f} MB")
+
+                  licence = manifest["license"]
+                  if licence not in claim and licence.replace("-", " ") not in claim:
+                      failures.append(f"{where}: does not name the licence, which is {licence}")
+
+          for failure in failures:
+              print(f"::error::{failure}")
+          sys.exit(1 if failures else 0)
+          PY
+
       - name: Fail when the published registry could not be reached
         if: steps.catalogue.outcome != 'success'
         run: |

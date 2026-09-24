@@ -166,7 +166,7 @@ JSON tĩnh, mỗi manifest ghi rõ giấy phép, sha256 của từng file, và c
 
 ```bash
 summo recommend --lang vi     # máy này chạy được gì, và vì sao
-summo pull gipformer-65m      # 2,4 % WER trên Fleurs VI, ~70 MB, MIT
+summo pull gipformer-1.5-68m  # 8,3 % WER trên Fleurs VI, ~70 MB, MIT
 ```
 
 Danh mục nằm ở [Techainer/summo-registry](https://github.com/Techainer/summo-registry) (giấy phép

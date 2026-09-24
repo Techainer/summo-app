@@ -164,7 +164,7 @@ manifests, each carrying a licence, a sha256 per file and the numbers measured f
 
 ```bash
 summo recommend --lang vi     # what would run here, and why
-summo pull gipformer-65m      # 2.4 % WER on Fleurs VI, ~70 MB, MIT
+summo pull gipformer-1.5-68m  # 8.3 % WER on Fleurs VI, ~70 MB, MIT
 summo verify                  # load every installed model and run it once
 ```
 
