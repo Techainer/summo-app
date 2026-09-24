@@ -213,11 +213,27 @@ try {
     const promised = await sense.innerText();
     await sense.getByRole("button", { name: "Cài", exact: true }).click();
 
-    let total = 0;
-    for (let i = 0; i < 120 && total === 0; i++) {
+    // Waiting on the job, not on one number out of it.
+    //
+    // This polled `total` and stopped when it was non-zero, which gives the same answer — zero —
+    // for a job still being queued, a job whose first request has not answered yet, and a job that
+    // failed outright. CI reported "the daemon fetches 0 MB" for thirty seconds of *something*,
+    // and the sentence named the symptom of every possible cause.
+    //
+    // So: keep the last job seen, and say what state it was in when time ran out.
+    let job = null;
+    for (let i = 0; i < 240 && !(job?.total > 0); i++) {
       await page.waitForTimeout(250);
       const jobs = await (await fetch(`${engine.url}/installs?token=${engine.token}`)).json();
-      total = jobs.find((job) => job.model === "sense-voice-small")?.total ?? 0;
+      job = jobs.find((j) => j.model === "sense-voice-small") ?? job;
+      // A failure is terminal; waiting out the rest of the minute adds nothing but delay.
+      if (job?.state === "failed") break;
+    }
+    const total = job?.total ?? 0;
+    if (total === 0) {
+      fail(
+        `the install never reported a size: ${job ? `state ${job.state}, error ${job.error ?? "none"}` : "no job for sense-voice-small at all"}`,
+      );
     }
     const mb = Math.round(total / 1e6);
     const onCard = Number(/(\d[\d.,]*)\s*MB/.exec(promised)?.[1]?.replace(/,/g, "") ?? 0);
