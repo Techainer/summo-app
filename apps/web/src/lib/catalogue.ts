@@ -45,6 +45,25 @@ export interface CatalogueModel {
    */
   superseded_by?: string | null;
   size_bytes: number;
+  /**
+   * Which build of this model this machine will fetch, when the model ships more than one.
+   *
+   * `size_bytes` above is already derived from this decision, so the card showed the consequence
+   * of a choice it did not mention: SenseVoice ships at 938 MB and 239 MB and appeared as one
+   * number with nothing saying which.
+   *
+   * `measured` separates evidence from default. `true` means the publisher benchmarked the builds
+   * against each other and named this one — quantised SenseVoice costs a tenth of a point of word
+   * error rate and saves 700 MB, while quantised Whisper tiny costs seven and a half points — and
+   * `false` means the precision rule picked, which is only a guess about this model.
+   *
+   * A name and a flag rather than the daemon's sentence, which is assembled in English. The words
+   * belong in the catalogue where they can be translated.
+   *
+   * `null` for a model with one build, which is most of them. Optional, because an older daemon
+   * does not send it.
+   */
+  build?: { name: string; measured: boolean } | null;
   installed: boolean;
   /** Whether this machine has the memory. */
   fits: boolean;

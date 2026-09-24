@@ -727,6 +727,40 @@ async fn catalogue(
                     0 => m.size_bytes,
                     real => real,
                 },
+                // Which build, and why that one.
+                //
+                // `choose` has always produced a name and a sentence explaining it, and both went
+                // straight into the log. The number above is derived from that decision, so the
+                // card was already showing its *consequence* while keeping the decision itself
+                // hidden — a model that ships at 938 MB appearing as 240 MB with nothing on screen
+                // saying which of the two a user was about to get.
+                //
+                // It matters more now that the answer is not simply "the biggest one that fits":
+                // a manifest can say which build its publisher measured, and SenseVoice takes the
+                // quantised one on a machine with room to spare. That is a good decision and an
+                // astonishing one to make silently.
+                //
+                // `null` for the common case of a single build, so the interface has nothing to
+                // draw rather than a sentence about a choice nobody made.
+                //
+                // The name and a flag, not `choose`'s sentence. That sentence is assembled in
+                // English — "cpu, int8, measured best for this model, 64000 MB free" — and putting
+                // it on a card would put English on a Vietnamese screen, which is a bug this
+                // project has already shipped once and fixed. The catalogue owns the words; the
+                // daemon owns the decision.
+                "build": match summo_models::variant::choose(m, hardware) {
+                    c if c.variant.is_none() => serde_json::Value::Null,
+                    c => serde_json::json!({
+                        "name": c.variant,
+                        // Whether the publisher's own measurement decided this, rather than the
+                        // precision rule. Worth distinguishing: one is evidence and the other is
+                        // a default, and only the first is a reason to stop wondering.
+                        "measured": m
+                            .variants
+                            .iter()
+                            .any(|v| v.name == c.variant && v.preferred),
+                    }),
+                },
                 "installed": installed.contains_key(&id),
                 // Whether this machine can run it at all, so a phone is not offered a model that
                 // will be refused at load with an out-of-memory error.

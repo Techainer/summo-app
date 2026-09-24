@@ -909,6 +909,12 @@ function Card({
           <p className="text-fg-faint tabular text-micro mt-0.5">
             {model.id}
             {model.size_bytes > 0 && ` · ${size(model.size_bytes)}`}
+            {/* The build, beside the size it explains.
+                A model that ships at 938 MB and 239 MB showed one number and never said which,
+                and the answer is no longer "the biggest one that fits" — a publisher can name the
+                build they measured, and SenseVoice takes the small one on a machine with room to
+                spare. Here it is the name only; the sheet has the room to say why. */}
+            {model.build && ` · ${model.build.name}`}
           </p>
         </div>
       </div>
@@ -1076,6 +1082,18 @@ function Card({
             {model.id}
             {model.size_bytes > 0 && ` · ${size(model.size_bytes)}`}
           </p>
+          {/* Which build, and whether anybody measured it.
+              A user who opens this sheet is deciding, and "int8" on its own is a fact about a file
+              rather than a reason. The two cases are genuinely different: a publisher who
+              benchmarked both builds and named one is evidence, and the precision rule is a
+              default that knows nothing about this model in particular. */}
+          {model.build && (
+            <p className="text-fg-dim text-micro mt-1">
+              {model.build.measured
+                ? t("models.build_measured", { build: model.build.name })
+                : t("models.build_fits", { build: model.build.name })}
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {model.installed ? (
               <Button size="sm" variant="ghost" onClick={onRemove}>

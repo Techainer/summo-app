@@ -605,5 +605,7 @@
     "shortcuts": "キーボードショートカット",
     "docs": "ドキュメント",
     "issue": "問題を報告"
-  }
+  },
+  "models.build_measured": "ビルド: {build} — 公開元が各ビルドを比較測定し、これが選ばれました。",
+  "models.build_fits": "ビルド: {build} — この端末のメモリとアクセラレータに合わせて選択。"
 }

@@ -605,5 +605,7 @@
     "shortcuts": "Phím tắt",
     "docs": "Tài liệu",
     "issue": "Báo lỗi"
-  }
+  },
+  "models.build_measured": "Bản: {build} — nhà phát hành đã đo các bản với nhau và bản này thắng.",
+  "models.build_fits": "Bản: {build} — chọn theo bộ nhớ và bộ tăng tốc của máy này."
 }

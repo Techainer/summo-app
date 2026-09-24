@@ -605,5 +605,7 @@
     "shortcuts": "Keyboard shortcuts",
     "docs": "Documentation",
     "issue": "Report a problem"
-  }
+  },
+  "models.build_measured": "Build: {build} — the publisher measured the builds against each other and this one won.",
+  "models.build_fits": "Build: {build} — chosen for this machine's memory and accelerator."
 }

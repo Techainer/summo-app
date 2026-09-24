@@ -605,5 +605,7 @@
     "shortcuts": "键盘快捷键",
     "docs": "文档",
     "issue": "报告问题"
-  }
+  },
+  "models.build_measured": "构建：{build} — 发布方对各构建做过实测对比，此版本胜出。",
+  "models.build_fits": "构建：{build} — 依据本机内存与加速器选择。"
 }
