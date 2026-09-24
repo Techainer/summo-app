@@ -658,6 +658,27 @@ jobs:
       # crate wants Opus.
       - name: System dependencies
         run: ./scripts/apt.sh libasound2-dev libopus-dev
+      # The runtime libraries, where the linker will look for them.
+      #
+      # `sherpa-rs-sys` and `ort-sys` put `libsherpa-onnx-c-api.so` and `libonnxruntime.so` into
+      # `target/debug` from their build scripts, and `Swatinem/rust-cache` carries neither back. It
+      # does carry back the fingerprints saying both crates are already built, so on a cache *hit*
+      # the build scripts do not run, the libraries are absent, and the link fails with
+      # `unable to find library -lonnxruntime` on a commit that changed nothing but a version
+      # number. This job passed on a cold cache and failed on the next push, which is the least
+      # useful order for a failure to arrive in.
+      #
+      # `cargo clean` on the two sys crates is what forces their build scripts to run again. The
+      # browser suites job carries the same guard for sherpa alone; both are needed here, because
+      # this is the job that links a test binary against both.
+      - name: The speech libraries, where the linker will look
+        run: |
+          cargo build -p summo-engine --features models,tts
+          if [ ! -e target/debug/libsherpa-onnx-c-api.so ] || [ ! -e target/debug/libonnxruntime.so ]; then
+            cargo clean -p sherpa-rs-sys -p ort-sys
+            cargo build -p summo-engine --features models,tts
+          fi
+          ls -l target/debug/libsherpa* target/debug/libonnxruntime*
       - run: cargo clippy -p summo-engine --features models,tts --all-targets -- -D warnings
       - run: cargo test -p summo-engine --features models,tts
       - run: cargo clippy -p summo-asr --features sherpa --all-targets -- -D warnings
@@ -775,13 +796,20 @@ jobs:
       # than each paying for sherpa-onnx separately. `tts` is what `dub` turns on in the shipped
       # binary; here it is what lets a voice be checked.
       - run: cargo build --bin summo-engine --features bundled,models,mt-onnx,tts
+      # `ort-sys` as well as `sherpa-rs-sys`.
+      #
+      # This guard checked for the sherpa library only, and the same cache behaviour applies to
+      # `libonnxruntime.so`: neither is carried back by `Swatinem/rust-cache`, while the
+      # fingerprints saying both crates are built are. The `gated` job hit exactly that and failed
+      # to link on a commit that changed only a version number; it was luck rather than design that
+      # this one had not.
       - name: The speech libraries, beside the binary
         run: |
-          if [ ! -e target/debug/libsherpa-onnx-c-api.so ]; then
-            cargo clean -p sherpa-rs-sys
+          if [ ! -e target/debug/libsherpa-onnx-c-api.so ] || [ ! -e target/debug/libonnxruntime.so ]; then
+            cargo clean -p sherpa-rs-sys -p ort-sys
             cargo build --bin summo-engine --features bundled,models,mt-onnx,tts
           fi
-          ls -l target/debug/libsherpa*
+          ls -l target/debug/libsherpa* target/debug/libonnxruntime*
       - run: pnpm -C apps/web e2e
         env:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
