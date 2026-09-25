@@ -474,7 +474,7 @@ mod tests {
             "the laptop deleted its own vault"
         );
         assert_eq!(laptop.read("notes/b.md").as_deref(), Some("ghi chú\n"));
-        assert_eq!(desktop.read("meetings/a.md").is_some(), true);
+        assert!(desktop.read("meetings/a.md").is_some());
     }
 
     /// The same failure with one file, reached from the other direction: a machine whose run
