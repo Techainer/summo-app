@@ -37,9 +37,13 @@ rules follow from that, and they decide most of the design:
 Usable end to end: record or import a recording, get a transcript with speakers named, an
 agent-drafted summary you approve, tasks on a board, questions answered from the vault with
 citations, live translation of whatever is playing, dubbing, calendars, comments, a roster of agents
-you edit as files, and encrypted sync between machines through any folder you both can reach. Notes
-are written in a block editor with tables, pictures, drag-to-reorder and pages inside pages — over a
-file that is still Markdown, and that opens as plain text rather than lose anything it cannot hold.
+you edit as files, and encrypted sync between machines through any folder you both can reach. A
+recording can be a file, a folder of them, or a link, and an imported `.mp4` is watched back in the
+app with subtitles — in what was said, in a translation, or in both at once. A meeting in progress
+can be minimised to a small window that floats above everything else and shows the line being said
+with its translation underneath. Notes are written in a block editor with tables, pictures,
+drag-to-reorder and pages inside pages — over a file that is still Markdown, and that opens as plain
+text rather than lose anything it cannot hold.
 Subscribe to a calendar by URL and it stays current, prompts before a meeting starts — it never
 records on its own — and drafts the follow-up email afterwards, which you send yourself.
 

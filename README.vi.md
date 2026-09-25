@@ -46,6 +46,9 @@ cơ sở dữ liệu của ai khác. Ba nguyên tắc sau đây theo từ đó, 
 một bản tóm tắt do agent soạn để bạn duyệt, việc cần làm trên bảng kanban, hỏi đáp trả lời từ kho dữ
 liệu kèm trích dẫn, dịch trực tiếp nội dung đang phát, lồng tiếng (dubbing), lịch, bình luận, một
 dàn agent bạn chỉnh sửa như file, và đồng bộ mã hoá giữa các máy qua bất kỳ thư mục dùng chung nào.
+Bản ghi có thể là một file, một thư mục, hoặc một link; file `.mp4` nhập vào xem lại được ngay trong
+app kèm phụ đề — nguyên văn, bản dịch, hoặc cả hai cùng lúc. Buổi họp đang chạy có thể thu nhỏ thành
+một cửa sổ nhỏ nổi trên mọi ứng dụng khác, hiện câu vừa nói và bản dịch ngay dưới.
 Ghi chú viết trong trình soạn thảo khối: có bảng, ảnh, kéo thả để đổi thứ tự, và trang lồng trong
 trang — trên một file vẫn là Markdown, và mở ở dạng văn bản thuần thay vì làm mất thứ nó chưa giữ
 được. Đăng ký lịch bằng URL thì lịch luôn cập nhật, sắp tới giờ họp app hỏi có ghi chú không —
