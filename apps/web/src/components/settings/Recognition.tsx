@@ -10,6 +10,7 @@ import {
   betterFor,
   fetchLanguages,
   languageName,
+  missingFor,
   ordered,
   rememberLanguage,
 } from "../../lib/languages";
@@ -130,6 +131,15 @@ export function Recognition() {
    */
   const [declined, setDeclined] = useState<string[]>([]);
   const better = declined.includes(current) ? undefined : betterFor(serving);
+  /**
+   * The language the user has chosen and nothing installed can hear.
+   *
+   * A different question from `better`, and the one the panel used to answer with a full stop:
+   * "nothing here can transcribe this" and no button, while the fix was one download away. Not
+   * dismissable, because unlike a recommendation this is not advice — it is the reason the next
+   * recording will produce nothing.
+   */
+  const missing = missingFor(serving);
 
   /** Install the recommended model and point the `live` role at it — both, or neither. */
   const adopt = async (id: string) => {
@@ -264,6 +274,45 @@ export function Recognition() {
                 ? t("settings.served_by", { model: serving.serving_name })
                 : t("settings.served_by_none")}
             </p>
+          )}
+
+          {/* Chosen a language nothing installed can hear.
+
+              This said "nothing here can transcribe this" and stopped, which is a dead end in a
+              panel whose whole job is to let somebody choose a language — the thing that would
+              fix it was one download away and the screen did not mention it.
+
+              Not dismissable, unlike the recommendation below. That one is advice; this is the
+              reason the next recording will produce nothing. */}
+          {missing && (
+            <div
+              className="border-accent/30 bg-accent-soft text-meta rounded-control mt-3 border px-3 py-2"
+              data-testid="language-needs-model"
+            >
+              <p className="text-fg-dim">
+                {t("settings.needs_model", {
+                  language: languageName(current, locale),
+                  model: missing.model_name ?? missing.model ?? "",
+                  size: size(missing.size_bytes),
+                  accuracy: String(Math.round(missing.accuracy * 100)),
+                })}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button size="sm" busy={busy} onClick={() => void adopt(missing.model as string)}>
+                  {t("settings.install_and_use")}
+                </Button>
+                {/* The other way to the same place, for somebody who would rather read the card
+                    first — a 73 MB download is a decision, and the catalogue is where the licence,
+                    the languages and the measurements are. */}
+                <button
+                  type="button"
+                  onClick={() => void navigate({ to: "/models" })}
+                  className="text-fg-faint text-micro underline"
+                >
+                  {t("settings.see_models")}
+                </button>
+              </div>
+            </div>
           )}
 
           {/* A recommendation, offered rather than applied.

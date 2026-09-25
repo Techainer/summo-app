@@ -12,6 +12,7 @@ export const SECTION_IDS = [
   "ai",
   "translation",
   "storage",
+  "sync",
   "about",
 ] as const;
 

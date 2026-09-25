@@ -124,7 +124,9 @@
     "subtitles_original": "Nguyên văn",
     "subtitles_both": "{language} + nguyên văn",
     "imported_audio": "Âm thanh đã nhập",
-    "source_moved": "File gốc của buổi họp này không còn ở {path} nữa. Bản ghi chữ vẫn đầy đủ; chỉ phần xem lại cần file."
+    "source_moved": "File gốc của buổi họp này không còn ở {path} nữa. Bản ghi chữ vẫn đầy đủ; chỉ phần xem lại cần file.",
+    "voice_over": "Lồng tiếng",
+    "voice_over_off": "Gốc"
   },
   "tasks": {
     "title": "Việc cần làm",
@@ -616,5 +618,23 @@
     "issue": "Báo lỗi"
   },
   "models.build_measured": "Bản: {build} — nhà phát hành đã đo các bản với nhau và bản này thắng.",
-  "models.build_fits": "Bản: {build} — chọn theo bộ nhớ và bộ tăng tốc của máy này."
+  "models.build_fits": "Bản: {build} — chọn theo bộ nhớ và bộ tăng tốc của máy này.",
+  "perf": {
+    "title": "Summo đang tốn gì",
+    "hide": "Ẩn bảng này",
+    "setting": "Hiện bảng tài nguyên ở góc",
+    "setting_hint": "Bộ nhớ Summo đang giữ, phần CPU đang dùng, và model nào đang nạp. Mặc định tắt — bật khi bạn muốn biết nền đang chạy gì.",
+    "memory": "Bộ nhớ",
+    "cpu": "CPU",
+    "listening": "Đang nghe",
+    "listening_value": "{minutes} phút · {lines} câu",
+    "role_live": "Nghe",
+    "role_refine": "Soát lại",
+    "role_denoise": "Lọc ồn",
+    "role_warm": "Giữ sẵn",
+    "waiting": "Đang đo…",
+    "busy_imports": "{count} đang nhập",
+    "busy_installs": "{count} đang tải",
+    "busy_dubs": "{count} đang lồng tiếng"
+  }
 }

@@ -120,6 +120,13 @@ export interface MeetingDetail {
   source: MeetingSource | null;
   /** Languages this meeting has been translated into. */
   subtitles: string[];
+  /**
+   * Languages this meeting has a finished dub in, for the voice-over picker.
+   *
+   * What is on disk, not what was asked for: a dub still being synthesised has no file yet, and a
+   * track offered before it exists is a player that will not start.
+   */
+  dubs: string[];
 }
 
 export type GroupBy = "day" | "week" | "folder" | "none";

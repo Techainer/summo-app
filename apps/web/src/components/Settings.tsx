@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import {
   AudioLines,
   Bot,
+  FolderSync,
   HardDrive,
   Info,
   Languages,
@@ -17,6 +18,7 @@ import { General } from "./settings/General";
 import { Intelligence } from "./settings/Intelligence";
 import { Recording } from "./settings/Recording";
 import { Storage } from "./settings/Storage";
+import { Sync } from "./settings/Sync";
 import { Translation } from "./settings/Translation";
 import { useLlm } from "./settings/llm";
 import { cn } from "../lib/cn";
@@ -62,6 +64,7 @@ const SECTIONS: Section[] = [
   { id: "ai", icon: Bot, labelKey: "settings.section_ai" },
   { id: "translation", icon: SlidersHorizontal, labelKey: "settings.section_translation" },
   { id: "storage", icon: HardDrive, labelKey: "settings.section_storage" },
+  { id: "sync", icon: FolderSync, labelKey: "settings.section_sync" },
   { id: "about", icon: Info, labelKey: "settings.section_about" },
 ];
 
@@ -207,6 +210,7 @@ export function Settings({
           {section === "ai" && <Intelligence settings={llm} />}
           {section === "translation" && <Translation settings={llm} />}
           {section === "storage" && <Storage handshake={handshake} />}
+          {section === "sync" && <Sync handshake={handshake} />}
           {section === "about" && <About />}
         </m.div>
       </div>

@@ -39,17 +39,28 @@ export interface StartOptions {
   model?: string;
   language?: string;
   diarize?: boolean;
+  /**
+   * Copy the media into the vault, so watching it back survives the original being moved.
+   *
+   * Off unless asked for. A meeting recorded as an `.mp4` runs to gigabytes, and silently doubling
+   * that inside somebody's vault is not a decision to make on their behalf.
+   */
+  keepSource?: boolean;
 }
 
 export class ImportClient {
   constructor(private readonly handshake: Handshake) {}
 
   async start(path: string, options: StartOptions = {}): Promise<Job> {
+    const { keepSource, ...rest } = options;
     return readJson<Job>(
       await fetch(url(this.handshake, "/imports"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ path, ...options }),
+        // `keep_source` is the daemon's spelling. Spread-and-rename rather than spreading the
+        // whole object, because a field the daemon does not know is silently dropped by serde —
+        // sending `keepSource` would have been accepted, ignored, and looked like it worked.
+        body: JSON.stringify({ path, ...rest, keep_source: keepSource ?? false }),
       }),
     );
   }

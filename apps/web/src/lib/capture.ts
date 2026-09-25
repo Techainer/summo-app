@@ -39,9 +39,19 @@ export interface Capture {
    * another pass through a model that is already loaded rather than another model.
    */
   translateInto: string[];
+  /**
+   * The microphone to open. Empty means whatever the operating system calls default.
+   *
+   * Here for the reason `spoken` is: the recording opens the device, and it has to know which one
+   * before any network call completes. The daemon's `recording.device_id` is the default this
+   * starts from and the copy the settings file shows — and it was the *only* copy for several
+   * releases, saved and read by nobody, so somebody with a headset and a built-in microphone could
+   * name the one they wanted and be recorded by the other.
+   */
+  device: string;
 }
 
-export const DEFAULT: Capture = { lanes: ["mic"], translateInto: [], spoken: "" };
+export const DEFAULT: Capture = { lanes: ["mic"], translateInto: [], spoken: "", device: "" };
 
 /**
  * Read the saved choice.
@@ -86,6 +96,9 @@ export function normalize(input: Partial<Capture> | null | undefined): Capture {
     // Lower-cased, because a language code is compared against the manifests' own spelling and
     // `VI` from an older build must not read as a language nothing covers.
     spoken: typeof input?.spoken === "string" ? input.spoken.trim().toLowerCase() : "",
+    // Not lower-cased: a `deviceId` is an opaque token the browser minted, and changing its case
+    // changes which device it names — or names none at all.
+    device: typeof input?.device === "string" ? input.device.trim() : "",
   };
 }
 

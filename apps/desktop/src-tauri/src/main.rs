@@ -19,15 +19,57 @@ use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::TrayIconBuilder,
 };
+use std::str::FromStr;
+
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-/// Toggle recording from anywhere. Chosen to avoid the system shortcuts on all three platforms.
+/// What `recording.hotkey` starts out as. Must match `summo_core::settings::Recording::default`.
 ///
-/// A function rather than a `const`: `Shortcut::new` is not `const fn`, and the compiler is right
-/// that it cannot be called in a constant. Building it twice costs nothing — it is two enum values
-/// and a bitflag.
-fn record_shortcut() -> Shortcut {
-    Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyR)
+/// Repeated here rather than depended on: this crate does not link `summo-core` — it is a window,
+/// a tray icon and a shortcut, and pulling the whole settings model in to read one string would
+/// make the shell as heavy as the thing it launches. The test below reads the field out of
+/// `settings.rs` and fails when the two drift.
+const DEFAULT_HOTKEY: &str = "CmdOrCtrl+Shift+R";
+
+/// Toggle recording from anywhere, as the user has set it.
+///
+/// It was hardcoded to `SUPER+SHIFT+R`, and `recording.hotkey` has existed in `settings.json` the
+/// whole time — validated on the way in, saved, reported back by the daemon, and read by nobody.
+/// Changing it did nothing, which is the worst kind of setting: the user makes a choice, the app
+/// says it was saved, and the old shortcut keeps working.
+///
+/// It was also *wrong* on two platforms. The stored default is `CmdOrCtrl+Shift+R`, which is
+/// ⌘⇧R on macOS and Ctrl+Shift+R elsewhere; `SUPER` is ⌘ on macOS and the Windows key on Windows
+/// and Linux. So the documented default and the registered binding disagreed everywhere except
+/// macOS — and the comment below about `⊞+Shift+R` being taken is the consequence, not the cause.
+///
+/// Anything unparseable falls back to the default rather than leaving the app with no shortcut at
+/// all. A hand-edited settings file should cost the line that was mistyped, not the feature.
+fn record_shortcut(home: Option<&std::path::Path>) -> Shortcut {
+    let wanted = home.and_then(stored_hotkey);
+    let fallback = || {
+        Shortcut::from_str(DEFAULT_HOTKEY)
+            .unwrap_or_else(|_| Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyR))
+    };
+    match wanted {
+        Some(text) => Shortcut::from_str(&text).unwrap_or_else(|e| {
+            eprintln!("summo: `{text}` is not a shortcut ({e}); using {DEFAULT_HOTKEY}.");
+            fallback()
+        }),
+        None => fallback(),
+    }
+}
+
+/// `recording.hotkey` out of the settings file, if there is one and it says anything.
+///
+/// Read directly rather than through the daemon: this runs in `setup`, before the sidecar has
+/// started, and a shortcut that only works once the daemon is up is a shortcut that does not work
+/// when it is most wanted — the app has just launched and nobody has opened the window.
+fn stored_hotkey(home: &std::path::Path) -> Option<String> {
+    let text = std::fs::read_to_string(home.join("settings.json")).ok()?;
+    let parsed: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let said = parsed.get("recording")?.get("hotkey")?.as_str()?.trim();
+    (!said.is_empty()).then(|| said.to_string())
 }
 
 /// The language a `summo://` URL is asking for, or `None` if it is not asking for one.
@@ -59,6 +101,28 @@ fn offer_language(app: &tauri::AppHandle, url: &str) {
     if let Some(code) = language_from(url) {
         let _ = app.emit("summo://set-locale", code);
     }
+}
+
+/// Bind the record shortcut to whatever the settings file now says.
+///
+/// Called by the interface after it saves the setting. Without it a new shortcut would only take
+/// effect on the next launch — which a user reads as the setting not working, because from where
+/// they are standing that is exactly what happened.
+///
+/// The old binding is released first. Registering a second one without doing so leaves both live,
+/// so a shortcut somebody deliberately moved away from keeps firing.
+#[tauri::command]
+fn set_hotkey(app: tauri::AppHandle) -> Result<String, String> {
+    let home = engine::home(&app).ok();
+    let shortcut = record_shortcut(home.as_deref());
+    let manager = app.global_shortcut();
+    // Unregistering everything rather than the previous shortcut: the shell owns exactly one, and
+    // remembering which it was is state that can go stale in a way this cannot.
+    let _ = manager.unregister_all();
+    manager
+        .register(shortcut)
+        .map_err(|e| format!("{e}"))
+        .map(|()| shortcut.into_string())
 }
 
 fn main() {
@@ -97,13 +161,20 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             engine::engine_handshake,
             window::set_shape,
-            window::can_float
+            window::can_float,
+            set_hotkey
         ])
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, shortcut, event| {
+                .with_handler(|app, _shortcut, event| {
                     // Only act on press; firing on release too would toggle twice per keystroke.
-                    if shortcut == &record_shortcut() && event.state() == ShortcutState::Pressed {
+                    //
+                    // Whichever shortcut fired, because exactly one is ever registered and it is
+                    // now whatever the user chose. Comparing against a rebuilt `record_shortcut()`
+                    // would re-read the settings file on every keystroke *and* stop working the
+                    // moment the user changed it — the plugin would still call this with the new
+                    // binding and the comparison would reject it.
+                    if event.state() == ShortcutState::Pressed {
                         let _ = app.emit("summo://toggle-record", ());
                     }
                 })
@@ -119,7 +190,11 @@ fn main() {
             // combination bound to something else, and to anybody who launches Summo twice.
             //
             // Found the first time this app was ever started on Windows, by the release job.
-            if let Err(e) = app.global_shortcut().register(record_shortcut()) {
+            let home = engine::home(app.handle()).ok();
+            if let Err(e) = app
+                .global_shortcut()
+                .register(record_shortcut(home.as_deref()))
+            {
                 eprintln!(
                     "summo: the global record shortcut is not available ({e}). \
                      Everything else works; use the record button in the window."
@@ -497,7 +572,84 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::language_from;
+    use super::{DEFAULT_HOTKEY, language_from, record_shortcut, stored_hotkey};
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::Shortcut;
+
+    /// The default written here and the default written in `settings.json` are one string.
+    ///
+    /// This crate cannot link `summo-core` — it is a window, a tray icon and a shortcut — so the
+    /// constant is repeated, and a repeated constant is a constant that drifts. Read out of the
+    /// source rather than trusted.
+    #[test]
+    fn the_default_here_is_the_default_the_settings_file_writes() {
+        let settings = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../crates/summo-core/src/settings.rs");
+        let text = std::fs::read_to_string(&settings)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", settings.display()));
+        assert!(
+            text.contains(&format!("hotkey: \"{DEFAULT_HOTKEY}\".into()")),
+            "`{DEFAULT_HOTKEY}` is not what Recording::default() writes — the shell would register \
+             one shortcut and the settings screen would display another"
+        );
+    }
+
+    /// The bug this whole function exists for.
+    ///
+    /// `recording.hotkey` was validated, saved and reported by the daemon, and read by nobody. A
+    /// user changed it, the app said it was saved, and the old shortcut kept working.
+    #[test]
+    fn the_shortcut_comes_from_the_settings_file() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(
+            home.path().join("settings.json"),
+            r#"{"recording":{"hotkey":"Alt+Shift+K"}}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            record_shortcut(Some(home.path())),
+            Shortcut::from_str("Alt+Shift+K").unwrap()
+        );
+    }
+
+    /// `CmdOrCtrl` is ⌘ on macOS and Ctrl everywhere else, and the hardcoded binding was `SUPER`
+    /// on all three — the Windows key on two of them. So the default the settings screen showed
+    /// and the shortcut the shell registered disagreed on Windows and Linux.
+    #[test]
+    fn no_settings_file_means_the_documented_default_and_not_some_other_key() {
+        let home = tempfile::tempdir().unwrap();
+        let expected = Shortcut::from_str(DEFAULT_HOTKEY).unwrap();
+        assert_eq!(record_shortcut(Some(home.path())), expected);
+        assert_eq!(record_shortcut(None), expected);
+    }
+
+    /// A hand-edited file should cost the line that was mistyped, not the feature.
+    #[test]
+    fn nonsense_falls_back_rather_than_leaving_no_shortcut_at_all() {
+        let home = tempfile::tempdir().unwrap();
+        let expected = Shortcut::from_str(DEFAULT_HOTKEY).unwrap();
+
+        for written in [
+            r#"{"recording":{"hotkey":"Ctrl+Shift+NotAKey"}}"#,
+            r#"{"recording":{"hotkey":"   "}}"#,
+            r#"{"recording":{"hotkey":42}}"#,
+            r#"{"recording":{}}"#,
+            "{not json",
+        ] {
+            std::fs::write(home.path().join("settings.json"), written).unwrap();
+            assert_eq!(
+                record_shortcut(Some(home.path())),
+                expected,
+                "{written} should have fallen back"
+            );
+        }
+    }
+
+    #[test]
+    fn an_absent_settings_file_is_not_an_error() {
+        assert_eq!(stored_hotkey(std::path::Path::new("/nowhere/at/all")), None);
+    }
 
     #[test]
     fn reads_the_language_out_of_a_link() {

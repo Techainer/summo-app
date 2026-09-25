@@ -210,6 +210,32 @@ pub struct MeetingDetail {
     pub source: Option<SourceView>,
     /// Languages this meeting has been translated into, for the subtitle picker.
     pub subtitles: Vec<String>,
+    /// Languages this meeting has been *spoken* into, for the voice-over picker.
+    ///
+    /// Derived from what is on disk rather than from what was requested, for the same reason
+    /// `audio` is: a dub the daemon is still synthesising has no file, and offering a track that
+    /// does not exist yet is a player that will not start. See [`dubbed`].
+    pub dubs: Vec<String>,
+}
+
+/// The languages a meeting has a finished dub in, from the names of its audio files.
+///
+/// `dub-vi.wav` beside `mic.opus`. This is the reading half of a convention
+/// `summo_engine::dub::lane_name` writes and `summo_engine::audio_stream::is_dub_lane` serves; all
+/// three are the same shape, and the engine has a test that walks it end to end.
+fn dubbed(audio: &[String]) -> Vec<String> {
+    let mut found: Vec<String> = audio
+        .iter()
+        .filter_map(|name| {
+            name.strip_suffix(".wav")
+                .and_then(|stem| stem.strip_prefix("dub-"))
+                .filter(|lang| !lang.is_empty())
+                .map(str::to_string)
+        })
+        .collect();
+    found.sort();
+    found.dedup();
+    found
 }
 
 /// What an imported meeting can play back, and where it is.
@@ -393,11 +419,13 @@ impl Library {
             }
         });
         let subtitles = crate::translation::languages(&self.paths, id);
+        let dubs = dubbed(&audio);
 
         Ok(MeetingDetail {
             summary: MeetingSummary::new(entry, &self.root()),
             source,
             subtitles,
+            dubs,
             frontmatter: doc.frontmatter,
             sections: doc
                 .sections
@@ -778,6 +806,34 @@ fn relative(path: &Path, root: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Only dubs, and only the language part.
+    ///
+    /// `import.wav` is a wav in the same directory and is not a dub; `source.mp4` is the kept
+    /// original and is not a track at all. A reader that took every `.wav` would offer the
+    /// recogniser's own input as a voice-over.
+    #[test]
+    fn the_voice_over_list_is_the_dubs_and_nothing_else() {
+        let audio = [
+            "import.wav".to_string(),
+            "mic.opus".to_string(),
+            "source.mp4".to_string(),
+            "dub-vi.wav".to_string(),
+            "dub-zh-hans.wav".to_string(),
+            // Not one: no language after the hyphen.
+            "dub-.wav".to_string(),
+            // Not one: the extension is what makes it a finished file rather than a half-written
+            // one, and a player handed this would ask for a lane that does not resolve.
+            "dub-ja.wav.part".to_string(),
+        ];
+        assert_eq!(dubbed(&audio), vec!["vi".to_string(), "zh-hans".to_string()]);
+    }
+
+    #[test]
+    fn a_meeting_nobody_dubbed_offers_no_voice_over() {
+        assert!(dubbed(&["mic.opus".to_string()]).is_empty());
+        assert!(dubbed(&[]).is_empty());
+    }
 
     /// A page inside a page is a link in the child's frontmatter and nothing else. In particular it
     /// is not a move: the user filed that note in that folder, and nesting it under another page is

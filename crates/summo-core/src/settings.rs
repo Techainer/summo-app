@@ -26,6 +26,7 @@ pub struct Settings {
     pub storage: Storage,
     pub interface: Interface,
     pub agents: Agents,
+    pub sync: Sync,
     /// Fields this build does not know about, kept so a downgrade does not erase them.
     #[serde(flatten)]
     pub unknown: BTreeMap<String, serde_json::Value>,
@@ -231,6 +232,30 @@ pub struct Storage {
     pub unknown: BTreeMap<String, serde_json::Value>,
 }
 
+/// Keeping this vault in step with a folder on a NAS mount, a synced drive or a USB stick.
+///
+/// **The passphrase is not here, and must never be.** It is the only thing between somebody
+/// holding the folder and every meeting in the vault, and `settings.json` is a plaintext file that
+/// gets copied into bug reports, backups and support threads. It is asked for each run and kept in
+/// memory for exactly as long as that run — see the `sync` module in `summo-engine`.
+///
+/// What *is* here is the folder and the machine name, because both are answers a user should give
+/// once rather than every time, and neither is a secret.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Sync {
+    /// The shared folder, or `None` when sync has never been set up.
+    pub folder: Option<String>,
+    /// What this machine calls itself in a conflict copy's name, so "which of these two is mine"
+    /// has an answer. Empty falls back to the host name.
+    pub machine: String,
+    /// Fields a newer build wrote that this one does not know, kept so a downgrade does not erase
+    /// them. See {@link Settings::unknown} — the guarantee has to hold at every level, because the
+    /// place a new setting appears is almost always inside one of these, not beside them.
+    #[serde(flatten)]
+    pub unknown: BTreeMap<String, serde_json::Value>,
+}
+
 /// What the app looks like, and in which language.
 ///
 /// Here rather than only in the browser's `localStorage` for the reason `models.language` is: a
@@ -248,6 +273,17 @@ pub struct Storage {
 pub struct Interface {
     /// `system`, `light` or `dark`.
     pub theme: String,
+    /// Draw a readout of what Summo is costing: memory, a share of a core, which models are
+    /// loaded.
+    ///
+    /// **Off by default, and that is the whole design.** A permanent gauge in the corner of a
+    /// recorder is an invitation to watch a number instead of a meeting. It exists for the person
+    /// who wants to know what a background daemon is doing on their laptop, and for them it should
+    /// be one switch away — not a thing everybody else has to look at.
+    ///
+    /// A field by this name was here once and was deleted, correctly, because nothing read it and
+    /// there was no readout to toggle. There is one now; see `/perf`.
+    pub show_performance: bool,
     /// The interface language as a tag — `vi`, `en`, `ja`, `zh` — or empty to follow the browser.
     ///
     /// Empty is not the same as a language: it means nobody has chosen, and the app should keep
@@ -281,6 +317,7 @@ impl Default for Settings {
             storage: Storage::default(),
             interface: Interface::default(),
             agents: Agents::default(),
+            sync: Sync::default(),
             unknown: BTreeMap::new(),
         }
     }
@@ -337,6 +374,9 @@ impl Default for Interface {
             // machine would open in Vietnamese because a struct had an opinion. Nobody has chosen
             // is a state, and the app already knows what to do with it: ask the browser.
             language: String::new(),
+            // Off. See the field: a permanent gauge in the corner of a recorder is a thing to
+            // watch instead of the meeting, and it must be asked for rather than endured.
+            show_performance: false,
             unknown: BTreeMap::new(),
         }
     }
@@ -602,6 +642,33 @@ mod tests {
             !json.contains("api_key"),
             "settings gained a key field: {json}"
         );
+    }
+
+    /// The same rule, stated for everything that is not an API key.
+    ///
+    /// `settings.json` is plaintext, is copied into backups, is *itself synced*, and is the first
+    /// file anybody pastes into a support thread. The sync passphrase is the sharpest case — it is
+    /// the only thing between whoever holds the shared folder and every meeting in the vault, and
+    /// the obvious place to put it is beside the folder path, one line away. It is deliberately
+    /// not there; it is typed per run and held in memory. This fails the moment somebody adds it.
+    #[test]
+    fn no_secret_of_any_kind_can_be_stored_in_settings() {
+        let settings = Settings::default();
+        let json = serde_json::to_string(&settings).unwrap();
+        for forbidden in [
+            "passphrase", "password", "secret", "token", "credential", "private_key",
+        ] {
+            assert!(
+                !json.contains(forbidden),
+                "settings gained a `{forbidden}` field. Secrets belong in the OS keychain or in \
+                 memory for one operation; this file is plaintext, is backed up, is synced, and \
+                 gets pasted into support threads: {json}"
+            );
+            assert!(
+                !settings.keys().iter().any(|k| k.contains(forbidden)),
+                "a settable path contains `{forbidden}`"
+            );
+        }
     }
 
     #[test]

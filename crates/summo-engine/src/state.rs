@@ -92,6 +92,11 @@ struct Inner {
     hw: HwProfile,
     status: RwLock<SessionStatus>,
     imports: crate::imports::Imports,
+    /// A repeated reading of this process. Stateful on purpose — CPU use is a rate, and a rate
+    /// needs two samples, so a fresh meter per request would report nothing forever.
+    meter: parking_lot::Mutex<summo_models::hw::ProcessMeter>,
+    #[cfg(feature = "tts")]
+    dubs: crate::dub::Dubs,
     installs: crate::install::Installs,
     /// One speech model kept loaded, so pressing record does not wait 3.4 seconds for one.
     #[cfg(feature = "models")]
@@ -126,6 +131,9 @@ impl EngineState {
                 hw: HwProfile::detect(),
                 status: RwLock::new(SessionStatus::Idle),
                 imports: crate::imports::Imports::new(),
+                meter: parking_lot::Mutex::new(summo_models::hw::ProcessMeter::new()),
+                #[cfg(feature = "tts")]
+                dubs: crate::dub::Dubs::new(),
                 installs: crate::install::Installs::new(),
                 #[cfg(feature = "models")]
                 warm: crate::warm::Warm::default(),
@@ -144,11 +152,29 @@ impl EngineState {
         &self.inner.warm
     }
 
+    /// What this process is costing right now: resident memory, and share of a core.
+    ///
+    /// `None` on a platform where the process cannot see itself. Not zero — a daemon that cannot
+    /// be measured and one using nothing must not draw the same.
+    #[must_use]
+    pub fn process_use(&self) -> Option<summo_models::hw::ProcessUse> {
+        self.inner.meter.lock().read()
+    }
+
     /// Imports running in this daemon. Shared, so a job started from one window is visible in
     /// every other one and in the CLI.
     #[must_use]
     pub fn imports(&self) -> &crate::imports::Imports {
         &self.inner.imports
+    }
+
+    /// Dubs running in this daemon. Shared for the same reason imports are, and for one more: a
+    /// dub started from `summo dub` is then visible on the meeting's screen, which is what makes
+    /// the command line and the app two doors into one feature rather than two features.
+    #[cfg(feature = "tts")]
+    #[must_use]
+    pub fn dubs(&self) -> &crate::dub::Dubs {
+        &self.inner.dubs
     }
 
     /// Model downloads running in this daemon. Shared for the same reason imports are: a download

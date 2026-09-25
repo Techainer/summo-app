@@ -32,6 +32,14 @@ interface Props {
   video?: { url: string } | null;
   /** Subtitle tracks to offer. Empty for a meeting nobody has translated. */
   tracks?: SubtitleTrack[];
+  /**
+   * Voice-overs to offer: the meeting spoken in another language, over its own recording.
+   *
+   * Not a lane, and not a second `src`. A dub has to play *with* the picture, and an element has
+   * one audio track — so the recording is muted and a second element carries the dub, slaved to
+   * this one. See the sync effect below for what "slaved" costs and what it buys.
+   */
+  voiceOvers?: { key: string; label: string; url: string }[];
   /** Seconds at which each utterance starts, drawn as marks on the scrubber. */
   marks?: number[];
   /** Reported as playback moves, so the transcript can follow along. */
@@ -51,13 +59,25 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
  * Speed is a control rather than a preference because the reason to use it changes within one
  * recording — 2× through a status round, 1× through the part that mattered.
  */
-export function Player({ lanes, video, tracks = [], marks = [], onTime, ref }: Props) {
+export function Player({
+  lanes,
+  video,
+  tracks = [],
+  voiceOvers = [],
+  marks = [],
+  onTime,
+  ref,
+}: Props) {
   const t = useT();
   // `HTMLMediaElement`, not `HTMLAudioElement`: the same transport drives both, and the only
   // difference between watching and listening is which element the browser was given.
   const audio = useRef<HTMLMediaElement>(null);
+  /** The dub, when one is playing. Slaved to `audio`; never the element the user controls. */
+  const over = useRef<HTMLAudioElement>(null);
   /** Which subtitle track is showing, `""` for none. */
   const [subtitle, setSubtitle] = useState("");
+  /** Which voice-over is playing, `""` for the original. */
+  const [voice, setVoice] = useState("");
   const [lane, setLane] = useState(lanes[0]?.key ?? "");
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -84,6 +104,7 @@ export function Player({ lanes, video, tracks = [], marks = [], onTime, ref }: P
   const [failed, setFailed] = useState<{ lane: string } | null>(null);
 
   const current = lanes.find((l) => l.key === lane) ?? lanes[0];
+  const dub = voiceOvers.find((v) => v.key === voice) ?? null;
 
   useImperativeHandle(ref, () => ({
     seek(seconds) {
@@ -120,6 +141,56 @@ export function Player({ lanes, video, tracks = [], marks = [], onTime, ref }: P
     }
   }, [subtitle, tracks]);
 
+  /**
+   * Keep the dub in step with the recording.
+   *
+   * Two elements rather than one, because a dub has to play *with* the picture and a media element
+   * has one audio track. The recording is the master — it owns the scrubber, the duration and the
+   * speed — and the dub follows.
+   *
+   * Following means four events and a correction. Play, pause and rate are mirrored as they happen;
+   * seeking is the one that cannot be, because `seeked` fires after the browser has already moved
+   * and a dub left where it was would be a whole meeting out. So drift is measured on every
+   * `timeupdate` and corrected past a quarter of a second — under that, resetting `currentTime`
+   * costs an audible click for an error nobody can hear.
+   */
+  useEffect(() => {
+    const master = audio.current;
+    const slave = over.current;
+    if (!master || !slave) return undefined;
+
+    const follow = () => {
+      slave.playbackRate = master.playbackRate;
+      if (Math.abs(slave.currentTime - master.currentTime) > 0.25) {
+        slave.currentTime = master.currentTime;
+      }
+    };
+    const start = () => {
+      follow();
+      void slave.play().catch(() => undefined);
+    };
+    const stop = () => slave.pause();
+
+    master.addEventListener("play", start);
+    master.addEventListener("pause", stop);
+    master.addEventListener("seeked", follow);
+    master.addEventListener("ratechange", follow);
+    master.addEventListener("timeupdate", follow);
+    // Already playing when the dub was switched on: the `play` event is in the past.
+    if (!master.paused) start();
+
+    return () => {
+      master.removeEventListener("play", start);
+      master.removeEventListener("pause", stop);
+      master.removeEventListener("seeked", follow);
+      master.removeEventListener("ratechange", follow);
+      master.removeEventListener("timeupdate", follow);
+      slave.pause();
+    };
+    // `dub?.url` and not `dub`: the object is rebuilt on every render of the parent, and an effect
+    // that tears down and re-attaches five listeners per frame is a dub that stutters.
+  }, [dub?.url]);
+
   const unplayable = failed?.lane === lane;
 
   const onTimeUpdate = useCallback(() => {
@@ -155,6 +226,10 @@ export function Player({ lanes, video, tracks = [], marks = [], onTime, ref }: P
         ref={audio as never}
         src={source}
         preload="metadata"
+        // Muted, not stopped. The recording still drives the scrubber, the duration and the speed
+        // while the dub speaks over it — the dub already carries the original underneath at a low
+        // gain, so hearing both would be hearing it twice.
+        muted={dub !== null}
         // A video needs a box to draw in; an audio element has none and must not get one.
         className={video ? "rounded-inline mb-3 aspect-video w-full bg-black" : undefined}
         onLoadedMetadata={(e: { currentTarget: HTMLMediaElement }) =>
@@ -176,6 +251,16 @@ export function Player({ lanes, video, tracks = [], marks = [], onTime, ref }: P
           />
         ))}
       </MediaTag>
+
+      {/* The dub. No controls of its own: everything a person can press drives the element above,
+          and a second transport would be two playheads to keep in your head. */}
+      {dub && (
+        // No `<track>`: the subtitles belong to the element above, which is the one on screen and
+        // the one that owns the playhead. A second set of cues on a hidden element would draw
+        // nothing and mean nothing — this is an audio track, not a second player.
+        // eslint-disable-next-line jsx-a11y/media-has-caption -- see above
+        <audio ref={over} src={dub.url} preload="metadata" aria-hidden="true" />
+      )}
 
       <div className="flex items-center gap-3">
         <button
@@ -212,7 +297,11 @@ export function Player({ lanes, video, tracks = [], marks = [], onTime, ref }: P
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
-        {lanes.length > 1 && (
+        {/* Not while a video is showing. The element's `src` is the video, so switching lanes
+            would change a label and nothing else — the picture carries its own sound. It has never
+            been reachable (an imported meeting has one lane) and it becomes reachable the moment
+            anything else lands in that directory, which is what a dub does. */}
+        {!video && lanes.length > 1 && (
           <SegmentedControl
             label={t("record.audio_source")}
             size="sm"
@@ -233,6 +322,20 @@ export function Player({ lanes, video, tracks = [], marks = [], onTime, ref }: P
             ]}
             value={subtitle}
             onChange={setSubtitle}
+          />
+        )}
+        {/* The meeting, spoken. Only when there is one — a dub is minutes of synthesis and most
+            meetings have none, so an empty picker would be a promise the screen cannot keep. */}
+        {voiceOvers.length > 0 && (
+          <SegmentedControl
+            label={t("meeting.voice_over")}
+            size="sm"
+            options={[
+              { value: "", label: t("meeting.voice_over_off") },
+              ...voiceOvers.map((each) => ({ value: each.key, label: each.label })),
+            ]}
+            value={voice}
+            onChange={setVoice}
           />
         )}
         {/* The same control as the lane picker beside it, rather than a row of loose pills that

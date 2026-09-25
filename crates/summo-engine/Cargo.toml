@@ -60,6 +60,8 @@ summo-llm.workspace = true
 summo-mt = { workspace = true, optional = true }
 summo-vault.workspace = true
 summo-mcp.workspace = true
+# Sync is a daemon route as well as a subcommand; the glue both call is `summo_sync::session`.
+summo-sync.workspace = true
 summo-vad = { workspace = true, optional = true }
 summo-asr = { workspace = true, optional = true }
 summo-tts = { workspace = true, optional = true }

@@ -24,6 +24,10 @@ pub mod calsync;
 pub mod collaborate;
 pub mod draft;
 pub mod dream;
+/// Speaking a translation over the recording it came from. Needs a synthesiser, so it is gated on
+/// the same feature `summo verify` uses to check one.
+#[cfg(feature = "tts")]
+pub mod dub;
 pub mod embedded;
 pub mod errand;
 pub mod fetch;

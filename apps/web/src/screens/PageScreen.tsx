@@ -10,6 +10,7 @@ import { useErrorText } from "../lib/errors";
 import { useI18n } from "../i18n/context";
 import { DraftPanel } from "../components/meeting/DraftPanel";
 import { AskPanel } from "../components/meeting/Ask";
+import { Dub } from "../components/meeting/Dub";
 import { Export } from "../components/meeting/Export";
 import { Player, type PlayerHandle } from "../components/meeting/Player";
 import { TranscriptChips } from "../components/meeting/TranscriptChips";
@@ -212,10 +213,43 @@ export function PageScreen() {
     ];
   }, [detail?.subtitles, handshake, pageId, locale, t]);
 
+  /**
+   * The meeting spoken in another language, one entry per finished dub.
+   *
+   * From `detail.dubs`, which is what is on disk — a dub still being synthesised has no file, and
+   * a track offered before it exists is a player that will not start.
+   */
+  const voiceOvers = useMemo(() => {
+    const names = new Intl.DisplayNames([locale], { type: "language" });
+    return (detail?.dubs ?? []).map((code) => {
+      let label: string;
+      try {
+        label = names.of(code) ?? code;
+      } catch {
+        // A code `Intl` does not recognise. The tag itself is a worse label than a name and a far
+        // better one than a blank pill.
+        label = code;
+      }
+      return {
+        key: code,
+        label,
+        url: url(handshake, `/meetings/${encodeURIComponent(pageId)}/audio/dub-${code}`),
+      };
+    });
+  }, [detail?.dubs, handshake, pageId, locale]);
+
   const marks = useMemo(
     () => (detail?.transcript ?? []).map((segment) => segment.t0),
     [detail?.transcript],
   );
+
+  /** Re-read the meeting, for when something outside this screen changed what is on disk. */
+  const reload = useCallback(() => {
+    void library
+      .detail(pageId)
+      .then((d) => setLoaded({ id: pageId, detail: d }))
+      .catch(() => undefined);
+  }, [library, pageId]);
 
   /**
    * Which summary shape to ask for, empty for "let the meeting decide".
@@ -617,6 +651,7 @@ export function PageScreen() {
             lanes={lanes}
             video={video}
             tracks={tracks}
+            voiceOvers={voiceOvers}
             marks={marks}
             onTime={setAt}
             ref={player}
@@ -639,6 +674,10 @@ export function PageScreen() {
 
           {/* Taking it out again, last: read what happened, then send it to somebody. */}
           <Export meeting={pageId} title={summary.title} day={summary.day ?? ""} recorded={!note} />
+
+          {/* Under the export panel, because it needs what that panel makes: a dub speaks a
+              translation, and the translate row above is where one comes from. */}
+          <Dub meeting={pageId} recorded={!note} onDone={reload} />
         </div>
 
         <aside className="space-y-3">

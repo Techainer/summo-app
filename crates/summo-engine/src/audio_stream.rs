@@ -60,9 +60,13 @@ pub fn locate(paths: &Paths, meeting: &MeetingId, lane: &str) -> Result<PathBuf>
         "mic" => format!("{}.opus", lane_name(Lane::Mic)),
         "system" => format!("{}.opus", lane_name(Lane::System)),
         "import" => "import.wav".to_string(),
+        // `dub-vi`, `dub-zh`: one per language somebody has dubbed this meeting into. Unlike the
+        // three above there is no fixed set, so the *shape* is checked rather than the value — see
+        // `is_dub_lane`, which is what keeps a caller-supplied language out of the path.
+        dub if is_dub_lane(dub) => format!("{dub}.wav"),
         other => {
             return Err(Error::Other(format!(
-                "no such lane `{other}`: expected `mic`, `system` or `import`"
+                "no such lane `{other}`: expected `mic`, `system`, `import` or `dub-<language>`"
             )));
         }
     };
@@ -76,14 +80,36 @@ pub fn locate(paths: &Paths, meeting: &MeetingId, lane: &str) -> Result<PathBuf>
     Ok(path)
 }
 
+/// Whether a lane name is a dub, and a safe one.
+///
+/// The language in `dub-<language>` arrives in a URL and becomes part of a file name, so this is
+/// the boundary that has to hold: letters, digits and hyphens only, and a length. `dub-..`, and
+/// anything containing a separator, is not a dub lane and gets the same refusal as a typo.
+///
+/// The rule is stated once here and applied from the other side by
+/// [`crate::dub::normalise_lang`], which writes the file. A lane this rejects and a file that
+/// module writes would be a dub nobody could play; `dub.rs` has a test that walks that path.
+#[must_use]
+pub fn is_dub_lane(lane: &str) -> bool {
+    let Some(language) = lane.strip_prefix("dub-") else {
+        return false;
+    };
+    !language.is_empty()
+        && language.len() <= 16
+        && language
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
 /// The content type for a track served by [`locate`].
 ///
-/// A recorded lane is Opus in Ogg; an import is the 16 kHz wav the recogniser was fed. Sending
-/// `audio/ogg` for a wav is the kind of wrong that works in one browser and not the next.
+/// A recorded lane is Opus in Ogg; an import and a dub are wav. Sending `audio/ogg` for a wav is
+/// the kind of wrong that works in one browser and not the next.
 #[must_use]
 pub fn lane_mime(lane: &str) -> &'static str {
     match lane {
         "import" => "audio/wav",
+        dub if is_dub_lane(dub) => "audio/wav",
         _ => "audio/ogg",
     }
 }
@@ -329,6 +355,48 @@ mod tests {
             let err = locate(&paths, &meeting, lane).expect_err("must be refused");
             assert!(err.to_string().contains("no such lane"), "{lane}: {err}");
         }
+    }
+
+    /// A dub lane is the one lane whose name is not a fixed string, so it is the one that has to be
+    /// checked by shape. Every item here contains `dub-` and none of them may become a path.
+    #[test]
+    fn a_dub_lane_that_is_not_a_language_is_refused() {
+        let (_d, paths, meeting) = paths_with_audio("mic");
+        for lane in [
+            "dub-..",
+            "dub-../../etc/passwd",
+            "dub-vi/../../x",
+            "dub-",
+            "dub-VI",
+            "dub-vi.wav",
+            "dub-aaaaaaaaaaaaaaaaaaaaaaaa",
+        ] {
+            assert!(!is_dub_lane(lane), "{lane} passed the shape check");
+            let err = locate(&paths, &meeting, lane).expect_err("must be refused");
+            assert!(err.to_string().contains("no such lane"), "{lane}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_dub_lane_resolves_to_the_wav_beside_the_recording() {
+        let (_d, paths, meeting) = paths_with_audio("mic");
+        let audio = paths.audio_for(&meeting);
+        std::fs::write(audio.join("dub-zh-hans.wav"), vec![1u8; 10]).unwrap();
+
+        assert!(is_dub_lane("dub-zh-hans"));
+        let path = locate(&paths, &meeting, "dub-zh-hans").expect("locate");
+        assert!(path.ends_with("dub-zh-hans.wav"), "{}", path.display());
+        // A wav announced as Ogg is the kind of wrong that works in one browser and not the next.
+        assert_eq!(lane_mime("dub-zh-hans"), "audio/wav");
+    }
+
+    /// A lane the player could ask for and no file behind it is a 404, not a lane that does not
+    /// exist — the distinction is what lets the screen say "not dubbed yet" rather than "unknown".
+    #[test]
+    fn a_dub_nobody_has_made_is_missing_rather_than_unknown() {
+        let (_d, paths, meeting) = paths_with_audio("mic");
+        let err = locate(&paths, &meeting, "dub-ja").expect_err("no such file");
+        assert!(err.to_string().contains("no dub-ja recording"), "{err}");
     }
 
     #[test]

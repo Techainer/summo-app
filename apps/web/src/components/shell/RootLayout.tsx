@@ -58,6 +58,7 @@ import { same, useErrorText } from "../../lib/errors";
 import * as sidebar from "../../lib/sidebar";
 import { RecordButton } from "../RecordButton";
 import { ListeningIn } from "../record/ListeningIn";
+import { PerfHud } from "../PerfHud";
 import { StatusBar } from "../StatusBar";
 import { Waveform } from "../Waveform";
 import { m } from "motion/react";
@@ -873,6 +874,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
           <Shortcuts onClose={() => setShortcutsOpen(false)} />
         </Suspense>
       )}
+      {/* Off unless asked for; see `lib/perf.ts`. Rendered here rather than inside a screen so
+          the reading follows the reader from page to page — the question it answers is about the
+          daemon, which does not change when the route does. */}
+      <PerfHud />
       <StatusBar
         stat={engine.stat}
         speakers={speakersOf(engine.transcript.segments)}

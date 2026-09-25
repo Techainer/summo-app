@@ -16,6 +16,7 @@ tauri-build = { version = "2", features = [] }
 
 # `#[tokio::test]` only. Kept out of the shipped feature set: the app's own runtime is Tauri's.
 [dev-dependencies]
+tempfile = "3"
 tokio = { version = "1", features = ["macros"] }
 
 [dependencies]

@@ -39,6 +39,8 @@ pub mod merge;
 pub mod plan;
 pub mod remote;
 pub mod run;
+/// One sync, against a folder, for whoever asked. The glue every caller would otherwise rewrite.
+pub mod session;
 pub mod snapshot;
 
 pub use crypto::{Key, Sealed};
@@ -46,4 +48,5 @@ pub use merge::{Merged, merge};
 pub use plan::{Action, Plan, Side, Summary, plan};
 pub use remote::{Manifest, Remote};
 pub use run::{Outcome, sync};
+pub use session::{Report, Request};
 pub use snapshot::Snapshot;

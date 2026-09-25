@@ -1,13 +1,17 @@
-import { SegmentedControl, Select } from "../ui";
+import { useEffect, useState } from "react";
+
+import { Checkbox, SegmentedControl, Select } from "../ui";
 import { CONTROL, FIELD, HINT, LABEL } from "./fields";
 import { useI18n, useT } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { SCHEMES, remember as rememberScheme } from "../../lib/theme";
 import { useScheme } from "../../lib/use-scheme";
+import { isOn as perfIsOn, onChange as onPerfChange, show as showPerf } from "../../lib/perf";
+import { url } from "../../lib/library";
 
 /**
- * The two settings about the app rather than about the work: what language it speaks, and whether
- * it is light or dark.
+ * The settings about the app rather than about the work: what language it speaks, whether it is
+ * light or dark, and whether it shows what it is costing.
  */
 export function General() {
   const t = useT();
@@ -16,6 +20,65 @@ export function General() {
       <p className="text-fg-faint text-meta mb-4 leading-normal">{t("settings.general_hint")}</p>
       <LanguagePicker />
       <AppearanceSetting />
+      <PerformanceSetting />
+    </div>
+  );
+}
+
+/**
+ * Whether to draw a readout of what Summo is costing.
+ *
+ * **Off by default.** A permanent gauge in the corner of a recorder is an invitation to watch a
+ * number instead of a meeting. It is here for the person who wants to know what a background
+ * daemon is doing on their laptop, and for them it should be one switch away — not something
+ * everybody else has to look at.
+ *
+ * The switch writes to the vault *and* announces locally, which is what makes it and the × on the
+ * panel itself the same switch. Without the announcement the panel would appear on the next
+ * reload, which reads as a toggle that does not work.
+ */
+function PerformanceSetting() {
+  const { handshake } = useEngine();
+  const t = useT();
+  const [on, setOn] = useState(perfIsOn);
+
+  useEffect(() => onPerfChange(setOn), []);
+
+  // What the vault says, adopted once. The local mirror is what avoids a round trip in front of
+  // the first paint; this is what makes the choice survive a reload and reach a second window.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url(handshake, "/settings"))
+      .then((r) => r.json())
+      .then((body: { settings?: { interface?: { show_performance?: boolean } } }) => {
+        const said = body.settings?.interface?.show_performance;
+        if (!cancelled && typeof said === "boolean" && said !== perfIsOn()) showPerf(said);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [handshake]);
+
+  const set = (next: boolean) => {
+    showPerf(next);
+    // Fire-and-forget, like the theme: it is already applied, and a daemon that is not answering
+    // must not make the switch fail.
+    void fetch(url(handshake, "/settings/interface"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ show_performance: next }),
+    }).catch(() => undefined);
+  };
+
+  return (
+    <div className="mt-6">
+      <Checkbox checked={on} onChange={set} data-testid="show-performance">
+        {t("perf.setting")}
+      </Checkbox>
+      <p className="text-fg-faint text-micro mt-1.5 ml-6 leading-normal">
+        {t("perf.setting_hint")}
+      </p>
     </div>
   );
 }

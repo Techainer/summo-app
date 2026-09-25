@@ -124,7 +124,9 @@
     "subtitles_original": "話された言葉",
     "subtitles_both": "{language} + 原文",
     "imported_audio": "取り込んだ音声",
-    "source_moved": "この会議の取り込み元ファイルは {path} にありません。文字起こしは完全です。再生にのみ元のファイルが必要です。"
+    "source_moved": "この会議の取り込み元ファイルは {path} にありません。文字起こしは完全です。再生にのみ元のファイルが必要です。",
+    "voice_over": "吹き替え",
+    "voice_over_off": "原音"
   },
   "tasks": {
     "title": "タスク",
@@ -616,5 +618,23 @@
     "issue": "問題を報告"
   },
   "models.build_measured": "ビルド: {build} — 公開元が各ビルドを比較測定し、これが選ばれました。",
-  "models.build_fits": "ビルド: {build} — この端末のメモリとアクセラレータに合わせて選択。"
+  "models.build_fits": "ビルド: {build} — この端末のメモリとアクセラレータに合わせて選択。",
+  "perf": {
+    "title": "Summoの使用量",
+    "hide": "このパネルを隠す",
+    "setting": "隅にリソース表示を出す",
+    "setting_hint": "Summoが確保しているメモリ、CPUの使用率、読み込み中のモデル。既定はオフ — 裏で何が動いているか知りたいときに。",
+    "memory": "メモリ",
+    "cpu": "CPU",
+    "listening": "録音中",
+    "listening_value": "{minutes}分 · {lines}行",
+    "role_live": "リアルタイム",
+    "role_refine": "second pass",
+    "role_denoise": "ノイズ除去",
+    "role_warm": "待機中",
+    "waiting": "計測中…",
+    "busy_imports": "取り込み{count}件",
+    "busy_installs": "ダウンロード{count}件",
+    "busy_dubs": "吹き替え{count}件"
+  }
 }

@@ -17,7 +17,7 @@ import {
   pickFile,
   type Job,
 } from "../../lib/imports";
-import { Button } from "../ui";
+import { Button, Checkbox } from "../ui";
 import { useRefresh } from "../../lib/use-load";
 
 /**
@@ -48,6 +48,16 @@ export function ImportPanel() {
   const [path, setPath] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  /**
+   * Whether to copy the media into the vault.
+   *
+   * Off by default, and the daemon agrees. A two-gigabyte `.mp4` doubled inside somebody's vault
+   * without being asked is not a kindness — the path is remembered either way, and a player that
+   * cannot find the file says where it used to be. But it was reachable only from the command
+   * line, which meant the people most likely to want it (somebody importing from a USB stick, or a
+   * Downloads folder they are about to empty) were the ones who could not have it.
+   */
+  const [keepSource, setKeepSource] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -76,7 +86,7 @@ export function ImportPanel() {
     setStarting(true);
     setError(null);
     try {
-      const job = await client.start(trimmed);
+      const job = await client.start(trimmed, { keepSource });
       setJobs((current) => [job, ...current]);
       setPath("");
     } catch (e) {
@@ -133,6 +143,15 @@ export function ImportPanel() {
           {t("import.submit")}
         </Button>
       </div>
+
+      {/* Below both ways in, because it applies to both — the dialog and the pasted path produce
+          the same job, and a choice that lives beside only one of them reads as belonging to it. */}
+      <Checkbox checked={keepSource} onChange={setKeepSource} className="mt-3">
+        <span>
+          {t("import.keep_source")}
+          <span className="text-fg-faint ms-1.5">{t("import.keep_source_hint")}</span>
+        </span>
+      </Checkbox>
 
       {error && (
         <p role="alert" className="text-danger text-body mt-2">

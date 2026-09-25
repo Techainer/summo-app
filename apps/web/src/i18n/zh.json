@@ -124,7 +124,9 @@
     "subtitles_original": "原话",
     "subtitles_both": "{language} + 原文",
     "imported_audio": "导入的音频",
-    "source_moved": "这场会议的导入来源文件已不在 {path}。文字记录是完整的，只有回放需要该文件。"
+    "source_moved": "这场会议的导入来源文件已不在 {path}。文字记录是完整的，只有回放需要该文件。",
+    "voice_over": "配音",
+    "voice_over_off": "原声"
   },
   "tasks": {
     "title": "任务",
@@ -616,5 +618,23 @@
     "issue": "报告问题"
   },
   "models.build_measured": "构建：{build} — 发布方对各构建做过实测对比，此版本胜出。",
-  "models.build_fits": "构建：{build} — 依据本机内存与加速器选择。"
+  "models.build_fits": "构建：{build} — 依据本机内存与加速器选择。",
+  "perf": {
+    "title": "Summo 的占用",
+    "hide": "隐藏此面板",
+    "setting": "在角落显示资源读数",
+    "setting_hint": "Summo 占用的内存、CPU 占比，以及已加载的模型。默认关闭 — 想知道后台在做什么时再打开。",
+    "memory": "内存",
+    "cpu": "CPU",
+    "listening": "正在听",
+    "listening_value": "{minutes}分钟 · {lines}句",
+    "role_live": "实时",
+    "role_refine": "二次校正",
+    "role_denoise": "降噪",
+    "role_warm": "常驻",
+    "waiting": "测量中…",
+    "busy_imports": "{count}个导入中",
+    "busy_installs": "{count}个下载中",
+    "busy_dubs": "{count}个配音中"
+  }
 }

@@ -187,6 +187,7 @@ impl Server {
             .route("/agent/habits", get(habits))
             .route("/agent/dream", get(dream_state).post(dream_now))
             .route("/status", get(status))
+            .route("/perf", get(perf))
             .route("/shutdown", post(shutdown))
             .route("/storage", get(storage))
             .route("/storage/prune", post(prune_storage))
@@ -204,6 +205,10 @@ impl Server {
             .route("/imports", get(list_imports).post(start_import))
             .route("/imports/clear", post(clear_imports))
             .route("/imports/{id}", get(get_import))
+            .route("/dubs", get(list_dubs))
+            .route("/dubs/clear", post(clear_dubs))
+            .route("/dubs/{id}", get(get_dub))
+            .route("/meetings/{id}/dub", post(start_dub))
             .route("/meetings/{id}/draft", get(get_draft))
             .route("/meetings/{id}/draft/generate", post(generate_draft))
             .route("/meetings/{id}/draft/refine", post(refine_draft))
@@ -236,6 +241,8 @@ impl Server {
             .route("/languages", get(languages))
             .route("/settings/language", post(set_language))
             .route("/settings/storage", post(set_storage))
+            .route("/sync", get(sync_state).post(run_sync))
+            .route("/settings/sync", post(set_sync))
             .route("/settings/interface", post(set_interface))
             .route("/settings/recording", post(set_recording))
             .route("/installs", get(list_installs).post(start_install))
@@ -563,6 +570,96 @@ async fn hardware(
     let mut hw = state.engine.hardware().clone();
     hw.refresh_memory();
     Json(hw).into_response()
+}
+
+/// What Summo is costing right now, and what it is running.
+///
+/// One route rather than three, because the readout that asks this is one corner of one screen and
+/// three polls to draw it is three wakeups a second for a panel most people keep closed.
+///
+/// Every field here is a *reading*. Nothing is derived from what was configured: a model named in
+/// settings and a model actually loaded are different claims, and a readout that showed the first
+/// while saying "running" would be the most confident kind of wrong. Where a number cannot be
+/// measured it is `null`, never zero.
+async fn perf(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    let mut hw = state.engine.hardware().clone();
+    hw.refresh_memory();
+    let ours = state.engine.process_use();
+    let status = state.engine.status();
+
+    // What is *loaded*, not what is chosen. A session names the models it is decoding with, and
+    // the warm slot names the one held between recordings — which is the model that explains a
+    // few hundred megabytes of resident memory while nothing is happening, and the single most
+    // common "why is this using memory when I am not recording" question there is.
+    let mut running: Vec<serde_json::Value> = Vec::new();
+    if let crate::state::SessionStatus::Recording {
+        live_model,
+        refine_model,
+        denoise_model,
+        ..
+    } = &status
+    {
+        running.push(serde_json::json!({ "role": "live", "id": live_model }));
+        if let Some(id) = refine_model {
+            running.push(serde_json::json!({ "role": "refine", "id": id }));
+        }
+        if let Some(id) = denoise_model {
+            running.push(serde_json::json!({ "role": "denoise", "id": id }));
+        }
+    }
+    #[cfg(feature = "models")]
+    if let Some(key) = state.engine.warm().ready() {
+        // Only when it is not already listed. During a recording the warm slot holds the model the
+        // session took out of it, and naming it twice reads as two copies in memory.
+        let already = running
+            .iter()
+            .any(|each| each.get("id").and_then(|v| v.as_str()) == Some(key.model.as_str()));
+        if !already {
+            running.push(serde_json::json!({ "role": "warm", "id": key.model }));
+        }
+    }
+
+    let (audio_s, segments) = match &status {
+        crate::state::SessionStatus::Recording {
+            elapsed_s,
+            segments,
+            ..
+        } => (Some(*elapsed_s), Some(*segments)),
+        crate::state::SessionStatus::Idle => (None, None),
+    };
+
+    #[cfg(feature = "tts")]
+    let dubs = state.engine.dubs().list().iter().filter(|j| !j.state.is_finished()).count();
+    #[cfg(not(feature = "tts"))]
+    let dubs = 0usize;
+
+    Json(serde_json::json!({
+        "rss_mb": ours.map(|u| u.rss_mb),
+        "cpu_percent": ours.and_then(|u| u.cpu_percent),
+        "total_ram_mb": hw.total_ram_mb,
+        "available_ram_mb": hw.available_ram_mb,
+        "cores": hw.cores,
+        "recording": status.is_recording(),
+        "audio_s": audio_s,
+        "segments": segments,
+        "models": running,
+        // Background work, so the readout can explain a busy daemon that is not recording. These
+        // are the three things in this process that take minutes and run on their own threads.
+        "busy": {
+            "imports": state.engine.imports().list().iter().filter(|j| !j.state.is_finished()).count(),
+            "installs": state.engine.installs().list().iter().filter(|j| !j.state.is_finished()).count(),
+            "dubs": dubs,
+        },
+    }))
+    .into_response()
 }
 
 async fn status(
@@ -2763,6 +2860,294 @@ async fn clear_imports(
     ))
 }
 
+/// Where sync stands, without asking for a passphrase.
+///
+/// The folder, whether it is still there, and whether this vault has synced through one before.
+/// That last one is the question worth answering before the button is pressed: the first sync of an
+/// existing vault uploads everything, and saying so in advance is the difference between a decision
+/// and a surprise.
+async fn sync_state(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    let paths = state.engine.paths();
+    let settings = summo_core::Settings::load(&paths.settings()).unwrap_or_default();
+    let folder = settings.sync.folder.clone().unwrap_or_default();
+    let problem = summo_sync::session::folder_status(settings.sync.folder.as_deref())
+        .and_then(|checked| checked.err());
+
+    as_response(Ok::<_, summo_core::Error>(serde_json::json!({
+        "folder": folder,
+        "machine": summo_sync::session::machine_name(&settings.sync),
+        // `null` when the folder is fine or when none is chosen; the string when it is chosen and
+        // gone. A screen that had only "chosen" and "not chosen" could not tell somebody their NAS
+        // is unmounted, which is the state this is in most often.
+        "problem": problem,
+        "synced_before": summo_sync::session::has_synced_before(paths),
+    })))
+}
+
+/// Remember the folder and this machine's name. Never the passphrase — see `crate::sync`.
+#[derive(Debug, Deserialize)]
+struct SyncSettingsBody {
+    folder: String,
+    #[serde(default)]
+    machine: String,
+}
+
+async fn set_sync(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<SyncSettingsBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    as_response(save_sync_settings(&state, body))
+}
+
+fn save_sync_settings(
+    state: &AppState,
+    body: SyncSettingsBody,
+) -> summo_core::Result<serde_json::Value> {
+    let paths = state.engine.paths();
+    let trimmed = body.folder.trim().to_string();
+
+    // Clearing is allowed and is not an error: "stop syncing" has to be expressible, and it is the
+    // only way back from a folder that no longer exists.
+    if !trimmed.is_empty() {
+        summo_sync::session::check(&trimmed)?;
+    }
+
+    let mut settings = summo_core::Settings::load(&paths.settings()).unwrap_or_default();
+    settings.sync.folder = (!trimmed.is_empty()).then_some(trimmed.clone());
+    settings.sync.machine = body.machine.trim().to_string();
+    settings.save(&paths.settings())?;
+
+    Ok(serde_json::json!({
+        "folder": trimmed,
+        "machine": summo_sync::session::machine_name(&settings.sync),
+    }))
+}
+
+/// One sync, or one plan.
+///
+/// The passphrase is in the body and is dropped when this returns. It is never written to
+/// `settings.json`, never logged, and never echoed back — see the module note on `crate::sync` for
+/// why a body is not a step down from the command line's prompt.
+#[derive(Debug, Deserialize)]
+struct SyncBody {
+    passphrase: String,
+    /// Omitted uses the folder in settings, which is the ordinary case.
+    #[serde(default)]
+    folder: Option<String>,
+    /// Plan it and report, without writing anything.
+    #[serde(default)]
+    dry_run: bool,
+}
+
+async fn run_sync(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<SyncBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    let paths = state.engine.paths().clone();
+    let settings = summo_core::Settings::load(&paths.settings()).unwrap_or_default();
+    let folder = body
+        .folder
+        .clone()
+        .filter(|f| !f.trim().is_empty())
+        .or_else(|| settings.sync.folder.clone())
+        .unwrap_or_default();
+
+    let request = summo_sync::session::Request {
+        folder,
+        passphrase: body.passphrase.clone(),
+        machine: summo_sync::session::machine_name(&settings.sync),
+        dry_run: body.dry_run,
+    };
+
+    // On a blocking thread: this walks a folder of files, hashes them, and writes some back. The
+    // runtime behind this socket is also serving the screen that is watching.
+    let done = tokio::task::spawn_blocking(move || summo_sync::session::run(&paths, &request)).await;
+
+    as_response(match done {
+        Ok(result) => result,
+        Err(e) => Err(summo_core::Error::Other(format!("sync did not finish: {e}"))),
+    })
+}
+
+/// What to speak, and in whose voice.
+#[cfg_attr(not(feature = "tts"), allow(dead_code))]
+#[derive(Debug, Deserialize)]
+struct DubBody {
+    /// The language to speak, as it was translated. Must already exist as a translation.
+    lang: String,
+    /// A registry id such as `vits-vi-vais1000`. Omitted means the voice chosen on the models
+    /// screen, and then the only installed one that speaks the language.
+    #[serde(default)]
+    voice: Option<String>,
+    /// Gain for the original recording under the dub. `None` takes the default, which is audible
+    /// but well under the speech — the original is context, not competition.
+    #[serde(default)]
+    under: Option<f32>,
+}
+
+/// The default bed gain, shared with the command line's `--under`.
+#[cfg(feature = "tts")]
+const DEFAULT_UNDER: f32 = 0.18;
+
+/// Start dubbing a meeting. Returns immediately with a job to poll.
+///
+/// The refusals a caller can act on all happen *here*, before a job exists: no such meeting, no
+/// translation in that language, no voice that speaks it. A job id handed back for work that was
+/// never going to start is a progress bar that fails a second later, and the user has to go and
+/// read a job list to find out why.
+async fn start_dub(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<DubBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    as_response(spawn_dub(&state, &id, body))
+}
+
+#[cfg(feature = "tts")]
+fn spawn_dub(
+    state: &AppState,
+    meeting: &str,
+    body: DubBody,
+) -> summo_core::Result<crate::dub::Job> {
+    let paths = state.engine.paths().clone();
+    let id = summo_core::MeetingId::from(meeting.to_string());
+
+    let file = crate::summarize::find_meeting_file(&paths.vault(), &id)?;
+    let doc = summo_vault::open(&paths.vault(), &file)?;
+
+    let lang = crate::dub::normalise_lang(&body.lang);
+    if lang.is_empty() {
+        return Err(summo_core::Error::Other(
+            "a language is required to dub into".into(),
+        ));
+    }
+
+    // Asked before the job starts, so "you have not translated this yet" is an answer to the
+    // request rather than a job that dies. The translation is the prerequisite a user can fix in
+    // one click from the same screen.
+    if summo_vault::translation::load(&paths, &id, &lang)?.is_none() {
+        return Err(summo_core::Error::Other(format!(
+            "meeting {meeting} has no {lang} translation yet"
+        )));
+    }
+
+    // And the voice, for the same reason. `resolve_voice` says which voices *would* have worked,
+    // which is the sentence somebody with the wrong one installed needs.
+    crate::dub::resolve_voice(&paths, body.voice.as_deref(), &lang)
+        .map_err(|e| summo_core::Error::Other(format!("{e:#}")))?;
+
+    let opts = crate::dub::Options {
+        meeting: meeting.to_string(),
+        lang: lang.clone(),
+        voice: body.voice,
+        out: None,
+        under: body.under.unwrap_or(DEFAULT_UNDER).clamp(0.0, 1.0),
+        // Synthesis is CPU-bound and this daemon is also serving the screen watching it. Half the
+        // cores, and at least one — a machine that reports two must not end up with zero.
+        threads: (state.engine.hardware().cores / 2).max(1),
+    };
+
+    let dubs = state.engine.dubs().clone();
+    let job_id = dubs.add(meeting, doc.title.clone(), &lang);
+    let job = dubs.get(&job_id).expect("just added");
+
+    // Its own thread, not a tokio task: two synthesis passes are minutes of CPU and would otherwise
+    // starve the runtime serving this daemon's other requests.
+    std::thread::spawn(move || {
+        crate::dub::run_job(&dubs, &job_id, &paths, &opts);
+    });
+
+    Ok(job)
+}
+
+/// Without a synthesiser there is nothing to speak with, and a job id would sit at "queued"
+/// forever.
+#[cfg(not(feature = "tts"))]
+fn spawn_dub(_state: &AppState, _meeting: &str, _body: DubBody) -> summo_core::Result<()> {
+    Err(summo_core::Error::Other(
+        "bản build này không có tổng hợp giọng nói".into(),
+    ))
+}
+
+/// Every dub this daemon has run, newest first.
+async fn list_dubs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    #[cfg(feature = "tts")]
+    let jobs = state.engine.dubs().list();
+    // An empty list rather than a refusal. A screen that polls this is asking "is anything
+    // running", and "this build cannot dub" is not an error about that question — the button that
+    // starts one is where that gets said.
+    #[cfg(not(feature = "tts"))]
+    let jobs: Vec<serde_json::Value> = Vec::new();
+    as_response(Ok::<_, summo_core::Error>(jobs))
+}
+
+/// One dub's progress.
+async fn get_dub(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    #[cfg(feature = "tts")]
+    let found = state.engine.dubs().get(&id);
+    #[cfg(not(feature = "tts"))]
+    let found: Option<serde_json::Value> = None;
+    as_response(
+        found.ok_or_else(|| summo_core::Error::Other(format!("không có lần lồng tiếng nào tên {id}"))),
+    )
+}
+
+/// Forget the dubs that have finished, leaving the ones still running.
+async fn clear_dubs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    #[cfg(feature = "tts")]
+    let cleared = state.engine.dubs().clear_finished();
+    #[cfg(not(feature = "tts"))]
+    let cleared = 0usize;
+    as_response(Ok::<_, summo_core::Error>(
+        serde_json::json!({ "cleared": cleared }),
+    ))
+}
+
 /// Hand an `@agent` task to the agent and wait for it.
 ///
 /// Synchronous: the caller pressed "Run Task" and is watching the step list fill in, so a failure
@@ -3907,10 +4292,14 @@ async fn set_interface(
         if let Some(language) = body.language {
             settings.interface.language = language.trim().to_lowercase();
         }
+        if let Some(show) = body.show_performance {
+            settings.interface.show_performance = show;
+        }
         settings.save(&path)?;
         Ok(serde_json::json!({
             "theme": settings.interface.theme,
             "language": settings.interface.language,
+            "show_performance": settings.interface.show_performance,
         }))
     })())
 }
@@ -3922,6 +4311,8 @@ struct InterfaceBody {
     theme: Option<String>,
     #[serde(default)]
     language: Option<String>,
+    #[serde(default)]
+    show_performance: Option<bool>,
 }
 
 /// Build a decoder now, so the next recording does not wait for one.

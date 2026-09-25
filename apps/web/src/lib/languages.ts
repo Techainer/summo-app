@@ -70,6 +70,30 @@ export function betterFor(language: Language | undefined): Language | undefined 
   return language.accuracy - language.serving_accuracy >= 0.05 ? language : undefined;
 }
 
+/**
+ * Nothing installed can hear this language, and something in the registry can.
+ *
+ * The gap [`betterFor`] cannot see. That one asks "is there something *better* than what is
+ * serving", and it returns nothing when `serving` is null — which is precisely the case where the
+ * user is worst off: they have picked a language, the panel says "nothing here can transcribe it",
+ * and there is no button. The fix for their problem was one download away and the screen did not
+ * mention it.
+ *
+ * No accuracy threshold, unlike `betterFor`. Five points of improvement is a judgement call worth
+ * weighing against a download; the difference between "no transcript at all" and "a transcript" is
+ * not.
+ */
+export function missingFor(language: Language | undefined): Language | undefined {
+  if (!language) return undefined;
+  // Already served: that is `betterFor`'s question, and answering it here too would draw two
+  // recommendation panels for one language.
+  if (language.serving) return undefined;
+  // Nothing in the registry covers it either. A button here would promise a download that does not
+  // exist; the panel says what is true and stops.
+  if (!language.model || language.installed) return undefined;
+  return language;
+}
+
 export interface Languages {
   /** What the next recording would use. `null` when nothing has been chosen. */
   current: string | null;

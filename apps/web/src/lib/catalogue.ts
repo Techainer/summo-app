@@ -226,6 +226,17 @@ export class CatalogueClient {
   }
 
   /**
+   * What is on this machine, without asking the registry.
+   *
+   * {@link load} is the shop window and reaches the network to build it; this is the inventory. A
+   * screen that only needs to know whether a voice is installed must not go dark, or slow, because
+   * a registry is unreachable — which is the ordinary state on a plane and behind some proxies.
+   */
+  async installed(): Promise<CatalogueModel[]> {
+    return readJson<CatalogueModel[]>(await fetch(url(this.handshake, "/models")));
+  }
+
+  /**
    * Say which installed model fills a role.
    *
    * The role is named rather than inferred: `asr` fills two of them — the live model and the

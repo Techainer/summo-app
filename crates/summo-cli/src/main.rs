@@ -159,8 +159,13 @@ enum Command {
         /// screen could choose a voice a release before anything read the choice.
         #[arg(long)]
         voice: Option<String>,
-        #[arg(long, default_value = "dub.wav")]
-        out: std::path::PathBuf,
+        /// Where to write the wav. Omit it and the dub goes beside the recording, as a track the
+        /// meeting's player can switch to.
+        ///
+        /// It defaulted to `dub.wav` in the working directory, which meant a dub made here was
+        /// invisible to the app that shows the meeting — the user got a file and no way back to it.
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
         /// Gain for the original underneath. 0 removes it.
         #[arg(long, default_value_t = 0.18)]
         under: f32,

@@ -10,6 +10,7 @@
  * loading a model — which is exactly the moment they are testing whether the app works.
  */
 
+import { load as loadCapture } from "./capture";
 import { EngineClient, type ConnectionState, type Handshake } from "./engine";
 import { Microphone, explainMicrophoneError } from "./microphone";
 import type { Failure } from "./errors";
@@ -143,6 +144,11 @@ export class Session {
     this.microphone = new Microphone({
       onFrame: (samples) => this.client?.sendAudio("mic", samples),
       onLevel: this.callbacks.onLevel,
+      // Which microphone, from the same store the lanes come from. `Microphone` has accepted a
+      // `deviceId` since it was written and nothing ever passed one, so choosing a device in
+      // settings wrote a value that no recording read: somebody with a headset and a built-in
+      // microphone could name one and be recorded by the other.
+      deviceId: loadCapture().device || undefined,
     });
 
     try {

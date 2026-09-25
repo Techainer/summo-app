@@ -217,7 +217,7 @@ crates/
   summo-cli       `summo serve | setup | pull | import | ask | export | registry`
   summo-agent     the agent: aionrs core, Summo's own tools
   summo-mcp       the vault over MCP — tools, resources and prompts, on stdio or HTTP
-  summo-sync      CRDT and end-to-end-encrypted multi-device sync
+  summo-sync      end-to-end-encrypted sync between machines, through a shared folder
 apps/
   web/            the application interface — React, compiled into the binary
   desktop/        the Tauri shell: window, tray, global shortcut

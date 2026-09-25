@@ -359,3 +359,100 @@ mod tests {
         assert_eq!(hw, back);
     }
 }
+
+/// What this process is costing right now.
+///
+/// Distinct from [`HwProfile`], which describes the machine. This describes *Summo on* the machine,
+/// and it is the pair of numbers somebody worried about a background daemon actually wants: how
+/// much memory it is holding and how much of a core it is using.
+///
+/// Both are readings rather than facts, so nothing here is cached the way a profile is.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ProcessUse {
+    /// Resident set, megabytes. What a task manager shows.
+    pub rss_mb: u32,
+    /// Share of one core, as a percentage. `None` on the first reading.
+    ///
+    /// CPU use is a rate, and a rate needs two samples. Returning zero for "not measured yet"
+    /// would draw an idle daemon and a daemon nobody has looked at as the same thing.
+    pub cpu_percent: Option<f32>,
+}
+
+/// A repeated reading of this process, kept between calls.
+///
+/// The state is the whole point: `sysinfo` computes CPU use from the difference between two
+/// refreshes, so a fresh `System` per request reports nothing and a long-lived one reports the
+/// truth. Hold one and refresh it.
+pub struct ProcessMeter {
+    system: sysinfo::System,
+    pid: sysinfo::Pid,
+    /// Whether this has ever refreshed. The first reading has no interval behind it.
+    sampled: bool,
+}
+
+impl std::fmt::Debug for ProcessMeter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProcessMeter")
+            .field("pid", &self.pid)
+            .finish()
+    }
+}
+
+impl Default for ProcessMeter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ProcessMeter {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            system: sysinfo::System::new(),
+            pid: sysinfo::Pid::from_u32(std::process::id()),
+            sampled: false,
+        }
+    }
+
+    /// Read this process now.
+    ///
+    /// Refreshes only this pid, not every process on the machine — a full refresh on a workstation
+    /// with six hundred processes is milliseconds of work to answer a question about one.
+    pub fn read(&mut self) -> Option<ProcessUse> {
+        self.system.refresh_processes(
+            sysinfo::ProcessesToUpdate::Some(&[self.pid]),
+            // `true` would re-read the command line and environment of the process on every poll,
+            // neither of which can change and both of which are the expensive part.
+            false,
+        );
+        let process = self.system.process(self.pid)?;
+        let cpu = self.sampled.then(|| process.cpu_usage());
+        self.sampled = true;
+        Some(ProcessUse {
+            rss_mb: bytes_to_mb(process.memory()),
+            cpu_percent: cpu,
+        })
+    }
+}
+
+#[cfg(test)]
+mod process_tests {
+    use super::*;
+
+    /// The first reading has no interval behind it, and saying "0%" would draw a daemon nobody has
+    /// looked at and an idle one the same way.
+    #[test]
+    fn the_first_reading_has_no_cpu_figure_and_the_second_does() {
+        let mut meter = ProcessMeter::new();
+        let Some(first) = meter.read() else {
+            // A platform where `sysinfo` cannot see its own process. Nothing to assert.
+            return;
+        };
+        assert_eq!(first.cpu_percent, None);
+        // This test process is resident; a zero here means the reading is not a reading.
+        assert!(first.rss_mb > 0, "rss was {}", first.rss_mb);
+
+        let second = meter.read().expect("the process still exists");
+        assert!(second.cpu_percent.is_some());
+    }
+}

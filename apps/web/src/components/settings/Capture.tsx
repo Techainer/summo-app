@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
 import { load as loadCapture, save as saveCapture, setSystemAudio } from "../../lib/capture";
 
-import { Button, Checkbox } from "../ui";
+import { Button, Checkbox, Select } from "../ui";
 import { HINT, LABEL } from "./fields";
 import { useT } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { useErrorText } from "../../lib/errors";
 import { url } from "../../lib/library";
 import { useLoad } from "../../lib/use-load";
+import { inputDevices } from "../../lib/permissions";
 
 /**
  * The numbers a recording is actually made with.
@@ -30,6 +31,7 @@ interface RecordingSettings {
   capture_system_audio: boolean;
   device_id: string | null;
   suggest_on_meeting: boolean;
+  hotkey: string;
   vad_threshold: number;
   min_silence_ms: number;
   threads: number | null;
@@ -37,6 +39,14 @@ interface RecordingSettings {
 
 /** What the daemon ships with, drawn under each slider so a change can be undone by eye. */
 const SHIPPED = { vad_threshold: 0.5, min_silence_ms: 500 };
+
+/**
+ * The shortcut a fresh install has. Mirrors `summo_core::settings::Recording::default`.
+ *
+ * `CmdOrCtrl` is ⌘ on macOS and Ctrl everywhere else, which is why it is written that way rather
+ * than resolved here — the desktop shell parses the same string and knows which platform it is on.
+ */
+const DEFAULT_HOTKEY = "CmdOrCtrl+Shift+R";
 
 export function Capture() {
   const t = useT();
@@ -55,12 +65,31 @@ export function Capture() {
         capture_system_audio: body.settings?.recording?.capture_system_audio ?? false,
         device_id: body.settings?.recording?.device_id ?? null,
         suggest_on_meeting: body.settings?.recording?.suggest_on_meeting ?? true,
+        hotkey: body.settings?.recording?.hotkey ?? DEFAULT_HOTKEY,
         vad_threshold: body.settings?.recording?.vad_threshold ?? SHIPPED.vad_threshold,
         min_silence_ms: body.settings?.recording?.min_silence_ms ?? SHIPPED.min_silence_ms,
         threads: body.settings?.models?.threads ?? null,
       } satisfies RecordingSettings;
     }, [handshake]),
     [handshake],
+  );
+
+  /**
+   * The microphones this browser can see.
+   *
+   * Names are hidden until permission has been granted — that is the specification, not a quirk —
+   * so before the user has said yes this is a list of anonymous ids, and the picker says so rather
+   * than drawing five blank rows. A failure here costs the picker, not the screen.
+   */
+  const devices = useLoad(
+    useCallback(async () => {
+      try {
+        return await inputDevices();
+      } catch {
+        return [];
+      }
+    }, []),
+    [],
   );
 
   // The value being dragged, so a slider moves under the finger rather than after the round trip.
@@ -82,6 +111,30 @@ export function Capture() {
       settings.reload();
     } catch (e) {
       setError(say(e));
+    }
+  };
+
+  /**
+   * Save the shortcut, then make it live.
+   *
+   * Two steps because two processes own half the answer each: the daemon keeps the setting, and
+   * the desktop shell holds the operating system's registration. Saving without the second is the
+   * bug this setting had for its whole life — the file changed and the keystroke did not.
+   *
+   * The rebind is fire-and-forget and deliberately not an error here. Outside the desktop shell
+   * there is nothing to rebind and nothing is wrong; inside it, a combination the OS refuses is
+   * reported by the shell on its own terms, and a saved setting that could not be bound is still a
+   * saved setting.
+   */
+  const writeHotkey = async (value: string) => {
+    await write({ hotkey: value.trim() });
+    const tauri = (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    if (!tauri) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_hotkey");
+    } catch {
+      // The shell says so in its own log; a settings screen is not where an OS refusal belongs.
     }
   };
 
@@ -124,6 +177,69 @@ export function Capture() {
         {t("settings.suggest_on_meeting")}
       </Checkbox>
       <p className={HINT}>{t("settings.suggest_on_meeting_hint")}</p>
+
+      {/* Which microphone.
+
+          `recording.device_id` has been in the settings file since the daemon was written, and
+          `Microphone` has accepted a `deviceId` for just as long. Nothing ever connected the two:
+          the value was saved, reported back by `/settings`, and no recording ever read it — so
+          somebody with a headset and a built-in microphone could name the one they wanted and be
+          recorded by the other, with this screen showing their choice the whole time.
+
+          Written to both stores, like the system-audio switch above and for the same reason: the
+          recording reads `localStorage` because it has to open a device before any network call
+          completes, and the daemon's copy is what this screen and the settings file show. */}
+      <label className="mt-5 block">
+        <span className={LABEL}>{t("settings.microphone")}</span>
+        <Select
+          className="mt-1 w-full sm:max-w-sm"
+          value={now.device_id ?? ""}
+          aria-label={t("settings.microphone")}
+          data-testid="microphone"
+          onChange={(event) => {
+            const id = event.target.value;
+            setLive((current) => ({ ...current, device_id: id }));
+            saveCapture({ ...loadCapture(), device: id });
+            void write({ device_id: id });
+          }}
+        >
+          <option value="">{t("settings.microphone_default")}</option>
+          {(devices.data ?? []).map((device, index) => (
+            <option key={device.deviceId} value={device.deviceId}>
+              {/* Anonymous until permission is granted. Numbered rather than blank, so a list of
+                  three unnamed devices is still three things a person can choose between. */}
+              {device.label.trim() || t("settings.microphone_unnamed", { n: index + 1 })}
+            </option>
+          ))}
+        </Select>
+        <span className={HINT}>{t("settings.microphone_hint")}</span>
+      </label>
+
+      {/* The shortcut that starts a recording without the window.
+
+          `recording.hotkey` has been in the settings file since it had a schema: validated on the
+          way in, saved, reported back by `/settings` — and read by nobody. The desktop shell
+          registered a hardcoded combination, so changing this did exactly nothing, and on Windows
+          and Linux the default it *showed* was not even the one that worked. Both halves are fixed;
+          this is the half somebody can see.
+
+          Typed rather than captured by listening for a keystroke. A capture control has to grab
+          every key to work, which means it eats ⌘Q and Alt+F4 while it is focused — and it cannot
+          express `CmdOrCtrl`, which is the whole reason the default is portable. */}
+      <label className="mt-5 block">
+        <span className={LABEL}>{t("settings.hotkey")}</span>
+        <input
+          type="text"
+          value={now.hotkey ?? DEFAULT_HOTKEY}
+          aria-label={t("settings.hotkey")}
+          data-testid="hotkey"
+          spellCheck={false}
+          onChange={(event) => setLive((current) => ({ ...current, hotkey: event.target.value }))}
+          onBlur={() => void writeHotkey(now.hotkey ?? DEFAULT_HOTKEY)}
+          className="border-line bg-bg-soft text-fg rounded-card text-body mt-1 h-9 w-56 border px-2 font-mono"
+        />
+        <span className={HINT}>{t("settings.hotkey_hint")}</span>
+      </label>
 
       {/* The two that decide how a sentence is cut. */}
       <label className="mt-5 block">
