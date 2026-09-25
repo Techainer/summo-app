@@ -22,9 +22,10 @@
  */
 import { legible } from "./legible.mjs";
 import { chromium } from "playwright";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 
 import { daemon } from "./daemon.mjs";
+import { SCREENS, everyRouteIsCovered } from "./screens.mjs";
 
 const engine = await daemon(process.argv, { name: "shots" });
 const appUrl = engine.url;
@@ -34,66 +35,8 @@ const locale = process.env.SUMMO_LOCALE ?? "vi-VN";
 const OUT = "/tmp/shots";
 mkdirSync(OUT, { recursive: true });
 
-/** Routes worth a picture, with the hash the router uses. */
-const SCREENS = [
-  ["record", "/"],
-  ["library", "/library"],
-  // The one screen with a transcript on it, and the one screen this suite has never looked at.
-  //
-  // It was `null` with a note saying it is "reached by clicking, since the id is generated" — and
-  // the loop below does `if (route === null) continue`, so it was never reached at all. The id is
-  // not generated either: `seedVault` writes `01E2E0` every run. So the sideways-scroll check ran
-  // over eleven screens of short text and skipped the one where a recogniser's output lands, which
-  // is exactly where an unbreakable line comes from.
-  ["meeting", "/pages/01E2E0"],
-  ["notes", "/notes"],
-  ["tasks", "/tasks"],
-  ["agents", "/agents"],
-  ["agenda", "/agenda"],
-  ["chat", "/chat"],
-  ["analytics", "/analytics"],
-  ["people", "/people"],
-  ["models", "/models"],
-  ["settings", "/settings"],
-  ["help", "/help"],
-];
-
-/**
- * Routes left out on purpose, each with the reason.
- *
- * The check below fails when a route exists in `src/router.tsx` and appears in neither list, which
- * is the rule this suite learned the hard way: the one screen with a transcript on it was skipped
- * for months behind a `null` and a comment, and the sideways-scroll check ran over eleven screens
- * of short text while the screen where a recogniser's output lands went unlooked at.
- *
- * A screen added tomorrow cannot be quietly unmeasured. It is either photographed or it is written
- * down here with a sentence saying why.
- */
-const SKIPPED = new Map([
-  // Redirects to `/`, which is the first entry above. Photographing it twice is photographing the
-  // record screen twice.
-  ["/record", "redirects to /"],
-  // The same component as `/pages/$pageId`, reached by the older URL. Kept for links people saved.
-  ["/meetings/$meetingId", "renders the page screen, already shot as /pages/01E2E0"],
-  // Development only, and photographed by `ui-shots.mjs` against the dev server — a release build
-  // does not contain this route at all.
-  ["/__ui", "dev-only gallery, shot by ui-shots.mjs"],
-]);
-
-// Every route the app declares is either in `SCREENS` or in `SKIPPED`.
-{
-  const router = readFileSync(new URL("../src/router.tsx", import.meta.url), "utf8");
-  const declared = [...router.matchAll(/^\s*path: "([^"]+)",/gm)].map((m) => m[1]);
-  const shot = new Set(SCREENS.map(([, route]) => route.replace(/\/pages\/.*/, "/pages/$pageId")));
-  const missed = declared.filter((route) => !shot.has(route) && !SKIPPED.has(route));
-  if (missed.length > 0) {
-    console.error(
-      `these routes are declared in router.tsx and photographed by nothing: ${missed.join(", ")}\n` +
-        "add them to SCREENS, or to SKIPPED with the reason.",
-    );
-    process.exit(1);
-  }
-}
+// The list, and the rule that a route cannot be quietly unphotographed — see `screens.mjs`.
+everyRouteIsCovered("shots.mjs");
 
 const VIEWPORTS = [
   ["wide", { width: 1280, height: 860 }],

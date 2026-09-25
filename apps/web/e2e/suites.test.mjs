@@ -25,7 +25,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  */
 
 /** Imported by other suites rather than run. `_shot` is a two-line tool for looking by hand. */
-const HELPERS = new Set(["daemon", "legible", "llm", "mirror", "_shot"]);
+const HELPERS = new Set(["daemon", "legible", "llm", "mirror", "screens", "_shot"]);
 
 /**
  * Suites that are meant to be run by a person, with the reason each one is.
