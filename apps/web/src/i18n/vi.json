@@ -89,7 +89,10 @@
     "translate_add": "Thêm một ngôn ngữ nữa",
     "translate_drop": "Ngừng dịch sang {language}",
     "translate_with": "{model} sẽ dịch.",
-    "manage_models": "Quản lý mô hình"
+    "manage_models": "Quản lý mô hình",
+    "minimise": "Thu nhỏ",
+    "minimise_pinned": "Ghim trong trang này. Trình duyệt này không hỗ trợ cửa sổ nổi nên không thể nằm trên các ứng dụng khác.",
+    "restore": "Quay lại buổi họp"
   },
   "meeting": {
     "title_label": "Tên cuộc họp",

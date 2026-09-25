@@ -89,7 +89,10 @@
     "translate_add": "Add another language",
     "translate_drop": "Stop translating into {language}",
     "translate_with": "{model} does the translating.",
-    "manage_models": "Manage models"
+    "manage_models": "Manage models",
+    "minimise": "Minimise",
+    "minimise_pinned": "Pinned to this page. This browser has no floating-window support, so it cannot stay above other apps.",
+    "restore": "Back to the meeting"
   },
   "meeting": {
     "title_label": "Meeting title",

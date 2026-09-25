@@ -421,6 +421,104 @@ async function settled(what, check) {
     await page.screenshot({ path: "/tmp/shots/in-meeting-two-targets.png" });
   }
 
+  // ---- minimised: the line, its translation, and nothing else ---------------
+  //
+  // Checked here because this is the only place in the suite where a translated line is on screen,
+  // and a panel that shows the original without its translation is the failure worth catching.
+  //
+  // Either presentation is acceptable and the suite accepts whichever the browser gave. Document
+  // Picture-in-Picture opens a real window — Playwright sees it as a second page, which is how this
+  // reads it — and where the API is absent the panel pins to the corner of this one. What is *not*
+  // acceptable is a button that does neither, which is what this catches.
+  {
+    await page.getByRole("button", { name: "Thu nhỏ", exact: true }).click();
+    await page.waitForTimeout(1500);
+
+    const floating = context.pages().find((other) => other !== page);
+    const panel = floating ? floating.getByTestId("live-pip") : page.getByTestId("live-pip");
+
+    const shown = await panel
+      .first()
+      .waitFor({ timeout: 10000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!shown) {
+      problems.push("minimising a meeting showed nothing, floating or pinned");
+    } else {
+      // The newest line, which is not the one asserted on above — so assert on the shape: something
+      // was said, and a translation arrives under it.
+      //
+      // Polled, because the panel shows the line *being* said. Its translation is a round trip
+      // behind, so the newest line is briefly untranslated by design — a caption that waited for
+      // both would be a caption that always lagged. What has to be true is that one turns up.
+      const original = (await panel.getByTestId("pip-original").innerText()).trim();
+      if (original.length === 0) problems.push("the minimised panel shows no line");
+
+      let translated = 0;
+      for (let i = 0; i < 60 && translated === 0; i++) {
+        translated = await panel.getByTestId("pip-translation").count();
+        if (translated === 0) await page.waitForTimeout(500);
+      }
+      if (translated === 0) {
+        problems.push("no translation ever appeared under the line in the minimised panel");
+      }
+
+      if (floating) {
+        // A window with none of this page's CSS renders as black text on white, which is worse
+        // than not opening: the point of minimising is to be unobtrusive over somebody else's
+        // screen. The theme comes across as an attribute on `<html>`, not as a class.
+        const styled = await page.evaluate(() => {
+          const w = documentPictureInPicture.window;
+          const el = w?.document.querySelector('[data-testid="live-pip"]');
+          return {
+            sheets: w?.document.querySelectorAll('link[rel="stylesheet"], style').length ?? 0,
+            // Compared against this page rather than against a colour written down here. The
+            // question is "did it open in the same theme", and a literal would be a copy of the
+            // palette that goes stale the first time anybody edits it.
+            background: el ? w.getComputedStyle(el).backgroundColor : null,
+            page: getComputedStyle(document.body).backgroundColor,
+          };
+        });
+        if (styled.sheets === 0) problems.push("the floating window got none of the page's styles");
+        if (styled.background !== styled.page) {
+          problems.push(
+            `the floating window opened in a different theme: ${styled.background} over ${styled.page}`,
+          );
+        }
+        console.log(`floating: ${styled.sheets} stylesheet(s), ${styled.background}`);
+      } else {
+        // Pinned, and saying which rather than pretending it floats.
+        if ((await page.getByText(/không hỗ trợ cửa sổ nổi/).count()) === 0) {
+          problems.push("pinned to the page and nothing says why it is not floating");
+        }
+        console.log("pinned to the page: this browser has no floating-window support");
+      }
+
+      // Minimising is a change of view, not of state.
+      const still = await settled(
+        "still recording while minimised",
+        (s) => s.state === "recording",
+      );
+      if (still.state !== "recording") problems.push("minimising ended the recording");
+
+      console.log(
+        `minimised: ${JSON.stringify(original.slice(0, 40))} with ${translated} translation(s)`,
+      );
+      // The panel itself, which on the floating path is a different page — screenshotting the one
+      // underneath would photograph the thing the user just minimised.
+      await (floating ?? page).screenshot({ path: "/tmp/shots/in-meeting-minimised.png" });
+
+      // And back, leaving one of it rather than two.
+      await panel.getByRole("button", { name: "Quay lại buổi họp" }).click();
+      await page.waitForTimeout(1000);
+      const left = context.pages().filter((other) => other !== page).length;
+      if (left !== 0 || (await page.getByTestId("live-pip").count()) !== 0) {
+        problems.push("restoring left the minimised panel open");
+      }
+    }
+  }
+
   // Off is a state, not the absence of one. It could not be reached at all before: translation was
   // read once at session start, so a call that turned out not to need it paid for a translator on
   // every line until it ended.

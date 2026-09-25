@@ -48,7 +48,7 @@
     "start": "开始录音",
     "stop": "停止录音",
     "back": "返回正在录音的会议",
-    "listening": "正在听…",
+    "listening": "正在聆听…",
     "idle": "点击录音开始。",
     "audio_source": "音频来源",
     "microphone": "麦克风",
@@ -89,7 +89,10 @@
     "translate_add": "再加一种语言",
     "translate_drop": "不再翻译成 {language}",
     "translate_with": "由 {model} 负责翻译。",
-    "manage_models": "管理模型"
+    "manage_models": "管理模型",
+    "minimise": "最小化",
+    "minimise_pinned": "已固定在本页。此浏览器不支持浮动窗口，无法置于其他应用之上。",
+    "restore": "回到会议"
   },
   "meeting": {
     "title_label": "会议标题",

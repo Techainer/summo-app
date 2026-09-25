@@ -89,7 +89,10 @@
     "translate_add": "言語を追加",
     "translate_drop": "{language} への翻訳をやめる",
     "translate_with": "翻訳は {model} が行います。",
-    "manage_models": "モデルを管理"
+    "manage_models": "モデルを管理",
+    "minimise": "最小化",
+    "minimise_pinned": "このページに固定しています。このブラウザーはフローティングウィンドウに対応していないため、他のアプリの上には表示できません。",
+    "restore": "会議に戻る"
   },
   "meeting": {
     "title_label": "会議のタイトル",

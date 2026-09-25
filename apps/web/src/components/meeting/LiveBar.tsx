@@ -2,6 +2,7 @@ import { Square } from "lucide-react";
 import { m } from "motion/react";
 
 import { Button } from "../ui";
+import { LivePip } from "./LivePip";
 import { SessionControls } from "../record/SessionControls";
 import { useT } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
@@ -74,6 +75,10 @@ export function LiveBar() {
         >
           {clock}
         </p>
+
+        {/* Beside stopping, because they are the two things somebody reaches for from here and
+            one of them is "I want to keep listening, just not to look at this". */}
+        <LivePip />
 
         <Button size="sm" variant="danger" onClick={stop} className="shrink-0">
           <Square aria-hidden="true" className="me-1.5 size-3" />
