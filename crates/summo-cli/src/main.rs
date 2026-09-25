@@ -127,7 +127,8 @@ enum Command {
 
     /// Speak a meeting's translation over its own recording.
     ///
-    /// Needs a translation on disk — `summo translate` first — and a VITS voice directory.
+    /// Needs a translation on disk — translate the meeting in Summo first, from its export panel —
+    /// and a voice that speaks the language you are dubbing into.
     #[cfg(feature = "dub")]
     Dub {
         /// Meeting id.

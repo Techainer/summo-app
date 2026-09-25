@@ -393,7 +393,7 @@ impl Settings {
         self
     }
 
-    /// Read one value by dotted path, for `summo config get`.
+    /// Read one value by dotted path, for the daemon's settings route and the settings screen.
     #[must_use]
     pub fn get(&self, key: &str) -> Option<serde_json::Value> {
         let value = serde_json::to_value(self).ok()?;
@@ -404,7 +404,7 @@ impl Settings {
         Some(current.clone())
     }
 
-    /// Set one value by dotted path, for `summo config set`.
+    /// Set one value by dotted path, for the daemon's settings route and the settings screen.
     ///
     /// Rejects an unknown key rather than storing it. A typo that silently writes
     /// `recording.vad_treshold` would leave the user adjusting a setting nothing reads.
@@ -438,7 +438,7 @@ impl Settings {
         Ok(())
     }
 
-    /// Every settable key, for `summo config list` and the settings screen.
+    /// Every settable key, for the settings screen and the daemon's settings route.
     #[must_use]
     pub fn keys(&self) -> Vec<String> {
         let mut out = Vec::new();

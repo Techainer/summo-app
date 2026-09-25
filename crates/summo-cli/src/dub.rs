@@ -218,11 +218,16 @@ pub fn run(paths: &Paths, opts: &Options) -> Result<()> {
         .with_context(|| format!("no meeting {}", opts.meeting))?;
     let doc = summo_vault::open(&paths.vault(), &path)?;
 
+    // The way out has to be one that exists. This told the reader to run a translate subcommand,
+    // and there has never been one under any feature — translating a finished meeting is a daemon
+    // route, reached from the meeting's export panel. So the prerequisite for the one command that
+    // needs it named a command nobody could run. See `summo-core`'s errors_name_real_commands.
     let translation =
         summo_vault::translation::load(paths, &id, &opts.lang)?.with_context(|| {
             format!(
-                "meeting {} has no {} translation — run `summo translate` first",
-                opts.meeting, opts.lang
+                "meeting {} has no {} translation yet. Open it in Summo and translate it into \
+                 {} first — the language list is in the meeting's export panel.",
+                opts.meeting, opts.lang, opts.lang
             )
         })?;
 

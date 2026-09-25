@@ -22,11 +22,15 @@ pub struct Handshake {
 }
 
 /// Find the running daemon, or explain how to start one.
+///
+/// The command named here has to be one the reader has. This said `summo-engine`, which is the
+/// crate's name and the binary a checkout builds — the release ships one executable called `summo`,
+/// so the first thing `summo import` told a new user to run did not exist on their machine.
 pub fn handshake(paths: &Paths) -> Result<Handshake> {
     let path = paths.root().join("engine.json");
     let raw = std::fs::read_to_string(&path).with_context(|| {
         format!(
-            "không thấy daemon đang chạy ({}). Mở app Summo, hoặc chạy `summo-engine`.",
+            "không thấy daemon đang chạy ({}). Mở app Summo, hoặc chạy `summo serve`.",
             path.display()
         )
     })?;
