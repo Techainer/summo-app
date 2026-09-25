@@ -72,8 +72,21 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Shut down cleanly on Ctrl-C so the token file does not outlive the process it belongs to.
-    tokio::signal::ctrl_c().await.ok();
+    // Ctrl-C, or `summo stop` reaching this daemon over HTTP.
+    //
+    // This waited on Ctrl-C alone, and `Server::stop_requested`'s own documentation says it is
+    // "awaited beside Ctrl-C, so a daemon started in the background and one started in a terminal
+    // stop the same way" — true of `summo serve`, and not of this binary. So `/shutdown` answered
+    // `{"stopping": true}`, nothing was listening, and the process ran on: `summo stop` waited five
+    // seconds and reported that the daemon had taken the order and stayed. Starting it again then
+    // overwrote `engine.json`, leaving the first one serving a port no command could find.
+    //
+    // This is the binary the desktop app spawns as its sidecar, so the shutdown route existing and
+    // doing nothing was the state on every desktop install.
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => tracing::info!("interrupted"),
+        () = server.stop_requested() => tracing::info!("stop requested over HTTP"),
+    }
     tracing::info!("shutting down");
     std::fs::remove_file(paths.root().join("engine.json")).ok();
     std::fs::remove_file(summo_engine::auth::token_path(paths.root())).ok();
