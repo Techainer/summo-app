@@ -138,7 +138,7 @@ export function NotesScreen() {
             </button>
             {picking && (
               <ul
-                className="border-line bg-bg-raised rounded-card absolute end-0 z-10 mt-1 w-40 border py-1 shadow-[var(--shadow-pop)]"
+                className="border-line bg-bg-raised rounded-card absolute end-0 z-[var(--z-raised)] mt-1 w-40 border py-1 shadow-[var(--shadow-pop)]"
                 aria-label={t("notes.kind")}
                 data-testid="note-kinds"
               >

@@ -188,14 +188,54 @@
   --radius-panel: 24px;
   --radius-pill: 999px;
 
+  /* Which of two floating things is in front, decided once and named.
+   *
+   * There were four numbers across fifteen files, and `z-50` was a bucket holding six things with
+   * genuinely different claims on being in front: a sheet, the menu bar, a language menu, a
+   * shortcuts dialog, the command palette, and the minimised meeting. Six at one level means the
+   * winner is whichever React mounted last — not a decision, and it changes when a file is
+   * reordered.
+   *
+   * The gaps are tens so something can be slipped between two layers without renumbering the rest.
+   *
+   * `raised` is deliberately the smallest and is the only one that is *local*: a dropdown over its
+   * own list, a scrubber over its track. It never enters the global argument, because it lives
+   * inside a stacking context. The other five do. */
+  --z-raised: 10;
+  --z-docked: 20;
+  --z-float: 30;
+  --z-scrim: 40;
+  --z-overlay: 50;
+  --z-command: 60;
+
   /* Three steps to match the four surfaces: a resting card, a card under the pointer, and a thing
-   * floating over the page. */
+   * floating over the page.
+   *
+   * There is no fourth. `LivePip` asked for `shadow-panel` for a release and got nothing at all —
+   * Tailwind emits a utility only for a variable it can see, so a name the theme does not define
+   * is not an error, it is silence. See `depth.test.ts`. */
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.24);
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.2), 0 8px 24px -12px rgb(0 0 0 / 0.55);
   --shadow-pop: 0 4px 12px rgb(0 0 0 / 0.3), 0 16px 48px -16px rgb(0 0 0 / 0.65);
 
   /* Fast enough to feel like a response, slow enough to be followed. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* How long a CSS transition takes, named by the job it does.
+   *
+   * Four values were already in use — 150ms six times, 200ms six, 300ms six, 500ms three — and,
+   * like the spacing grid next door, they were not random. They are four distinct gestures, and
+   * nothing anywhere said so, which is how a fifth gets added by somebody typing the first number
+   * that feels right.
+   *
+   * These are deliberately *not* the same numbers as `lib/motion.ts`. That file names durations
+   * for entrances and springs, which are a different question: 180ms for something arriving is
+   * slower than 150ms for a colour changing under the pointer, and it should be. Two vocabularies
+   * are a problem only when they answer the same question differently, and these do not. */
+  --motion-hover: 150ms;
+  --motion-press: 200ms;
+  --motion-shift: 300ms;
+  --motion-fade: 500ms;
 
   /* Three details worth borrowing from HeroUI, which was evaluated as a replacement for these
    * components and rejected — themed to this palette it looked identical to what was already here,

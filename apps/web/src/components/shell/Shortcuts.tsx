@@ -45,7 +45,7 @@ export function Shortcuts({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4">
+    <div className="fixed inset-0 z-[var(--z-overlay)] grid place-items-center p-4">
       {/* A backdrop that closes it. A sheet with no way out but one small button is a sheet people
           get stuck in. */}
       {/* Hidden from the reading order, deliberately. It is a second control with the same name as

@@ -43,7 +43,7 @@ export function Sheet({
           <Dialog.Portal forceMount>
             <Dialog.Overlay asChild>
               <m.div
-                className="fixed inset-0 z-40 bg-black/50"
+                className="fixed inset-0 z-[var(--z-scrim)] bg-black/50"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -53,7 +53,7 @@ export function Sheet({
             <Dialog.Content asChild>
               <m.div
                 className={cn(
-                  "bg-bg-raised border-line fixed z-50 shadow-[var(--shadow-pop)]",
+                  "bg-bg-raised border-line fixed z-[var(--z-overlay)] shadow-[var(--shadow-pop)]",
                   side === "left" && "inset-y-0 left-0 w-[290px] border-r",
                   side === "right" && "inset-y-0 right-0 w-[360px] border-l",
                   side === "bottom" &&

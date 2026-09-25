@@ -329,7 +329,7 @@ function PersonCard({
       onDragEnd={onDragEnd}
       className={cn(
         "border-line bg-bg-raised rounded-card cursor-grab border p-2.5",
-        "transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]",
+        "transition-all duration-[var(--motion-hover)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]",
         "active:cursor-grabbing",
         // Held, not hovered: a card under the pointer lifts a little, one being dragged lifts
         // further and dims, so the gap it left reads as a gap rather than as a deleted row.

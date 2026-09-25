@@ -267,7 +267,7 @@ export function Player({
           type="button"
           onClick={toggle}
           aria-label={playing ? t("meeting.pause") : t("meeting.play")}
-          className="bg-accent text-accent-fg grid size-9 shrink-0 place-items-center rounded-full transition-all duration-150 hover:brightness-110 active:scale-95"
+          className="bg-accent text-accent-fg grid size-9 shrink-0 place-items-center rounded-full transition-all duration-[var(--motion-hover)] hover:brightness-110 active:scale-95"
         >
           {/* Filled, and the play triangle nudged right by a pixel. A triangle centred on its
               bounding box looks left of centre inside a circle, because its mass is not where its
@@ -390,7 +390,7 @@ function Scrubber({
         onChange={(e) => onSeek(Number(e.target.value))}
         aria-label={t("meeting.seek")}
         aria-valuetext={clock(time)}
-        className="peer [&::-webkit-slider-thumb]:bg-accent relative z-10 h-6 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full"
+        className="peer [&::-webkit-slider-thumb]:bg-accent relative z-[var(--z-raised)] h-6 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full"
       />
       <span
         aria-hidden="true"

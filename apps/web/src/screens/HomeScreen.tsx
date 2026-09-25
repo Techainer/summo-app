@@ -154,14 +154,14 @@ export function HomeScreen() {
         <m.div variants={listItem}>
           <Card
             className={cn(
-              "relative h-full overflow-hidden transition-shadow duration-300",
+              "relative h-full overflow-hidden transition-shadow duration-[var(--motion-shift)]",
               session.recording && "shadow-[var(--glow-rec)]",
             )}
           >
             <div
               aria-hidden="true"
               className={cn(
-                "pointer-events-none absolute inset-0 bg-[image:var(--gradient-capture)] transition-opacity duration-500",
+                "pointer-events-none absolute inset-0 bg-[image:var(--gradient-capture)] transition-opacity duration-[var(--motion-fade)]",
                 session.recording ? "opacity-100" : "opacity-40",
               )}
             />
@@ -173,7 +173,7 @@ export function HomeScreen() {
                   aria-pressed={session.recording}
                   aria-label={session.recording ? t("record.stop") : t("record.start")}
                   className={cn(
-                    "grid size-16 shrink-0 place-items-center rounded-full border-2 transition-all duration-200",
+                    "grid size-16 shrink-0 place-items-center rounded-full border-2 transition-all duration-[var(--motion-press)]",
                     "focus-visible:border-accent focus:outline-none",
                     session.recording
                       ? "border-rec bg-rec-soft"
@@ -182,7 +182,7 @@ export function HomeScreen() {
                 >
                   <span
                     className={cn(
-                      "bg-rec block transition-all duration-200",
+                      "bg-rec block transition-all duration-[var(--motion-press)]",
                       session.recording ? "rounded-control size-5" : "size-8 rounded-full",
                     )}
                   />
@@ -233,7 +233,7 @@ export function HomeScreen() {
 
               <div
                 className={cn(
-                  "transition-colors duration-300",
+                  "transition-colors duration-[var(--motion-shift)]",
                   session.recording && recent.length > 0 ? "h-10" : "min-h-16 flex-1",
                   session.recording ? "text-rec" : "text-accent/30",
                 )}

@@ -493,6 +493,48 @@ async function settled(what, check) {
           problems.push("pinned to the page and nothing says why it is not floating");
         }
         console.log("pinned to the page: this browser has no floating-window support");
+
+        // And the readout does not end up underneath it.
+        //
+        // Both were `fixed` in the bottom-right: the pinned meeting at up to 416 pixels wide, and
+        // the resource readout at 224. Two panels in one corner means the stacking order decides
+        // which one you can see, and being right about the order — the meeting wins — does not
+        // make the readout being invisible correct. It is a different corner now, and this is what
+        // stops it drifting back.
+        //
+        // Measured rather than reasoned about: `fixed` positions resolve against the viewport and
+        // no amount of reading two class strings tells you whether two boxes touch.
+        await page.evaluate(() => window.localStorage.setItem("summo.perf", "on"));
+        await page.reload({ waitUntil: "networkidle" });
+        await page.waitForTimeout(1500);
+
+        const boxes = await page.evaluate(() => {
+          const rect = (selector) => {
+            const el = document.querySelector(selector);
+            if (!el) return null;
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return { x, y, width, height };
+          };
+          return { hud: rect('[data-testid="perf-hud"]'), pip: rect('[data-testid="live-pip"]') };
+        });
+
+        if (!boxes.hud) {
+          problems.push("the readout was switched on and did not draw");
+        } else if (boxes.pip) {
+          const overlap =
+            boxes.hud.x < boxes.pip.x + boxes.pip.width &&
+            boxes.pip.x < boxes.hud.x + boxes.hud.width &&
+            boxes.hud.y < boxes.pip.y + boxes.pip.height &&
+            boxes.pip.y < boxes.hud.y + boxes.hud.height;
+          if (overlap) {
+            problems.push(
+              `the readout and the minimised meeting overlap: ` +
+                `readout ${JSON.stringify(boxes.hud)} against pip ${JSON.stringify(boxes.pip)}`,
+            );
+          } else {
+            console.log("readout and minimised meeting: different corners, no overlap");
+          }
+        }
       }
 
       // Minimising is a change of view, not of state.

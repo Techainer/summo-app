@@ -551,7 +551,10 @@ function PageRow({
           >
             <ChevronRight
               aria-hidden="true"
-              className={cn("size-3 transition-transform duration-150", expanded && "rotate-90")}
+              className={cn(
+                "size-3 transition-transform duration-[var(--motion-hover)]",
+                expanded && "rotate-90",
+              )}
             />
           </button>
         ) : (
@@ -726,7 +729,10 @@ function FolderRow({
         >
           <ChevronRight
             aria-hidden="true"
-            className={cn("size-3.5 transition-transform duration-150", expanded && "rotate-90")}
+            className={cn(
+              "size-3.5 transition-transform duration-[var(--motion-hover)]",
+              expanded && "rotate-90",
+            )}
           />
         </button>
       ) : (

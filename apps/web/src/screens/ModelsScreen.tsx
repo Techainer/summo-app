@@ -877,7 +877,7 @@ function Card({
         "border-line bg-bg-raised rounded-card border p-4 shadow-[var(--shadow-sm)]",
         // Lifts under the pointer. The whole card is a decision — read it, install it, remove it —
         // so the whole card should acknowledge the cursor rather than only the button on it.
-        "transition-[transform,box-shadow,border-color,background-color] duration-150",
+        "transition-[transform,box-shadow,border-color,background-color] duration-[var(--motion-hover)]",
         "hover:bg-bg-elevated hover:border-line-strong hover:-translate-y-0.5 hover:shadow-[var(--shadow-card)]",
         inUse && "border-accent/40",
       )}

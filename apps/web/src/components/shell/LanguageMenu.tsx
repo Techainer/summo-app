@@ -28,7 +28,7 @@ export function LanguageMenu() {
         <DropdownMenu.Content
           sideOffset={4}
           align="end"
-          className="border-line bg-bg-elevated rounded-card z-50 min-w-44 border p-1 shadow-[var(--shadow-pop)]"
+          className="border-line bg-bg-elevated rounded-card z-[var(--z-overlay)] min-w-44 border p-1 shadow-[var(--shadow-pop)]"
         >
           {languages.map((language) => (
             <DropdownMenu.Item

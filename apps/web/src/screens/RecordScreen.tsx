@@ -48,14 +48,14 @@ function Idle() {
   return (
     <Card
       className={cn(
-        "relative overflow-hidden transition-shadow duration-300",
+        "relative overflow-hidden transition-shadow duration-[var(--motion-shift)]",
         session.recording && "shadow-[var(--glow-rec)]",
       )}
     >
       <div
         aria-hidden="true"
         className={cn(
-          "pointer-events-none absolute inset-0 bg-[image:var(--gradient-capture)] transition-opacity duration-500",
+          "pointer-events-none absolute inset-0 bg-[image:var(--gradient-capture)] transition-opacity duration-[var(--motion-fade)]",
           session.recording ? "opacity-100" : "opacity-40",
         )}
       />
@@ -68,7 +68,7 @@ function Idle() {
             aria-pressed={session.recording}
             aria-label={session.recording ? t("record.stop") : t("record.start")}
             className={cn(
-              "grid size-20 shrink-0 place-items-center rounded-full border-2 transition-all duration-200",
+              "grid size-20 shrink-0 place-items-center rounded-full border-2 transition-all duration-[var(--motion-press)]",
               "focus-visible:ring-accent focus-visible:ring-2 focus-visible:ring-offset-[var(--ring-offset)]",
               "focus-visible:ring-offset-bg focus:outline-none",
               session.recording
@@ -80,7 +80,7 @@ function Idle() {
             <span
               aria-hidden="true"
               className={cn(
-                "bg-rec transition-all duration-200",
+                "bg-rec transition-all duration-[var(--motion-press)]",
                 session.recording ? "rounded-control size-6" : "size-10 rounded-full",
               )}
             />
@@ -102,7 +102,7 @@ function Idle() {
 
         <div
           className={cn(
-            "h-20 transition-[color,opacity] duration-300",
+            "h-20 transition-[color,opacity] duration-[var(--motion-shift)]",
             session.recording ? "text-rec" : "text-fg-faint/40",
           )}
           style={{ opacity: session.recording ? 1 : 0.55 + Math.min(0.45, level * 0.9) }}

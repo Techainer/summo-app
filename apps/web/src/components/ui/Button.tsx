@@ -54,7 +54,7 @@ export function Button({
         // catches this: its words are short but many, so a label that fits in English arrives
         // here as three tokens the flex container is happy to break.
         "whitespace-nowrap",
-        "transition-[background,border-color,filter,opacity,transform] duration-150",
+        "transition-[background,border-color,filter,opacity,transform] duration-[var(--motion-hover)]",
         "disabled:pointer-events-none disabled:opacity-[var(--disabled-opacity)]",
         // Pressed, not just hovered. A button that does not move under the finger is the single
         // most common reason an interface feels dead, and it costs one transform.

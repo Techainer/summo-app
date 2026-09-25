@@ -37,7 +37,7 @@ export function MenuBar({ onChoose }: { onChoose: (id: string) => void }) {
             <DropdownMenu.Content
               sideOffset={4}
               align="start"
-              className="border-line bg-bg-elevated rounded-card z-50 min-w-56 border p-1 shadow-[var(--shadow-pop)]"
+              className="border-line bg-bg-elevated rounded-card z-[var(--z-overlay)] min-w-56 border p-1 shadow-[var(--shadow-pop)]"
             >
               {group.items.map((item, at) =>
                 item === "separator" ? (

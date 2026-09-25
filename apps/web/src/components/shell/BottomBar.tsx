@@ -69,7 +69,7 @@ export function BottomBar({
         >
           <span
             className={cn(
-              "bg-rec block transition-all duration-200",
+              "bg-rec block transition-all duration-[var(--motion-press)]",
               recording ? "rounded-control size-4" : "size-6 rounded-full",
             )}
           />

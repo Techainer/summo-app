@@ -41,7 +41,7 @@ export function Progress({ install, className }: { install: Install; className?:
             "bg-accent h-full rounded-full",
             done === null
               ? "w-1/3 motion-safe:animate-[indeterminate_1.4s_ease-in-out_infinite]"
-              : "transition-[width] duration-500",
+              : "transition-[width] duration-[var(--motion-fade)]",
           )}
           {...(done === null ? {} : { style: { width: `${done}%` } })}
         />

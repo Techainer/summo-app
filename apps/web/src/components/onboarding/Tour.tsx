@@ -86,7 +86,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
         // Bottom-left on a desktop, above the bottom bar on a phone. The right-hand corner is
         // taken: the assistant panel opens down that side and the home screen's ask bar ends
         // there, so a card pinned to it covered the two controls the tour is telling you about.
-        className="border-line bg-bg-raised rounded-panel fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] left-4 z-40 border p-4 shadow-[var(--shadow-pop)] sm:right-auto sm:bottom-4 sm:left-4 sm:w-[min(22rem,calc(100vw-2rem))] lg:left-[18rem]"
+        className="border-line bg-bg-raised rounded-panel fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] left-4 z-[var(--z-float)] border p-4 shadow-[var(--shadow-pop)] sm:right-auto sm:bottom-4 sm:left-4 sm:w-[min(22rem,calc(100vw-2rem))] lg:left-[18rem]"
       >
         <div className="flex items-start gap-3">
           {/* Keyed on the step, so moving on is a new drawing rather than the same one with
@@ -118,7 +118,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
               <li
                 key={each}
                 className={cn(
-                  "h-1.5 rounded-full transition-all duration-300",
+                  "h-1.5 rounded-full transition-all duration-[var(--motion-shift)]",
                   at === index
                     ? "bg-accent w-5"
                     : at < index

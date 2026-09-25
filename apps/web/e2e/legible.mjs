@@ -165,6 +165,12 @@ export async function legible(page, label, problems) {
     problems.push(`${label}: "${hit[0]}" is on the screen — "…${around}…"`);
   }
 
+  for (const control of await crushed(page)) {
+    problems.push(
+      `${label}: a ${control.what} is ${control.width}px wide — "${control.value}" is all that fits`,
+    );
+  }
+
   for (const run of await textColours(page)) {
     // WCAG AA: 4.5 for body text, 3.0 for large text (18.66px bold, or 24px).
     const large = run.size >= 24 || (run.size >= 18.66 && run.weight >= 700);
@@ -174,4 +180,48 @@ export async function legible(page, label, problems) {
       problems.push(`${label}: contrast ${got.toFixed(2)} < ${need} — "${run.text}" ${run.css}`);
     }
   }
+}
+
+/**
+ * The floor under which a field somebody types into stops being usable.
+ *
+ * Eighty pixels shows about six characters. A path, a name or a passphrase in six characters is a
+ * field you cannot read back or correct, and the failure is not that something broke — it is that a
+ * row ran out of room and the control was the part that gave.
+ *
+ * This exists because the screenshot audit passed exactly that. The sync panel's folder row put a
+ * 150px label, a path input and a "choose folder" button on one line; on a 390px screen the button
+ * took what it needed and the input was left showing `/mnt/`. Nothing overflowed, every contrast
+ * was fine, and both suites were green. A phone screenshot showed it in a second, which is the
+ * point — a person looked and a machine had not been asked to.
+ *
+ * Measured at 96px, the narrowest deliberate field in the app (a two-digit thread count), so the
+ * floor sits below every real one with room to spare.
+ */
+const MIN_FIELD = 80;
+
+async function crushed(page) {
+  return page.evaluate((floor) => {
+    // Checkboxes and radios are `sr-only` inputs painted by a sibling, so their own box is one
+    // pixel by design and means nothing. Ranges and colour wells are dragged, not typed into.
+    const TYPED = ["text", "password", "search", "email", "url", "tel", "number", ""];
+    const found = [];
+    for (const el of document.querySelectorAll("input, select, textarea")) {
+      if (el.offsetParent === null) continue;
+      const tag = el.tagName.toLowerCase();
+      if (tag === "input" && !TYPED.includes(el.getAttribute("type") ?? "")) continue;
+      const width = Math.round(el.getBoundingClientRect().width);
+      if (width >= floor) continue;
+      found.push({
+        what: `${tag}[${el.getAttribute("type") ?? ""}]`,
+        width,
+        // What a reader would actually see in it, so the message names the field rather than
+        // describing an anonymous box.
+        value: (el.value || el.getAttribute("placeholder") || el.getAttribute("aria-label") || "")
+          .toString()
+          .slice(0, 40),
+      });
+    }
+    return found;
+  }, MIN_FIELD);
 }

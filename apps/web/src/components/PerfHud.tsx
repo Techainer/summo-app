@@ -62,9 +62,19 @@ export function PerfHud() {
     <aside
       aria-label={t("perf.title")}
       data-testid="perf-hud"
-      // Above the status bar, clear of the assistant panel, and never in front of a dialog — this
-      // is furniture, and furniture does not cover a decision somebody is being asked to make.
-      className="border-line bg-bg-raised/95 rounded-card text-micro fixed end-3 bottom-12 z-30 w-56 border p-3 shadow-lg backdrop-blur"
+      // Bottom-left, above the status bar, and clear of the sidebar on a wide screen.
+      //
+      // It was on the right, which is where everything else already is: the assistant panel opens
+      // down that side, the home screen's ask bar ends there, and — the one that actually collided
+      // — the minimised meeting pins itself to `end-4 bottom-4` at up to 416 pixels wide. Two
+      // fixed panels in one corner means the layer decides which you can see, and `docked` losing
+      // to `float` is the right answer to the wrong question: the readout should not have been
+      // under it at all. `Tour` reached the same corner for the same reason and left the note that
+      // said so.
+      //
+      // `lg:` clears the 210px sidebar; below that breakpoint the sidebar is a sheet and the
+      // corner is free.
+      className="border-line bg-bg-raised/95 rounded-card text-micro fixed start-3 bottom-12 z-[var(--z-docked)] w-56 border p-3 shadow-[var(--shadow-pop)] backdrop-blur lg:start-[calc(210px+0.75rem)]"
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-fg-dim font-medium">{t("perf.title")}</span>

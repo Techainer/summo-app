@@ -45,7 +45,7 @@ export function RecordButton({
       type="button"
       className={cn(
         "inline-flex items-center gap-2.5 rounded-full border px-4 py-2 font-medium",
-        "transition-all duration-200 active:scale-[0.97]",
+        "transition-all duration-[var(--motion-press)] active:scale-[0.97]",
         // A halo while recording, and only while recording.
         //
         // This control sits in a header the user has navigated away from — the promise is that a

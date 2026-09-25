@@ -105,22 +105,37 @@ export function Sync({ handshake }: { handshake: Handshake }) {
     <div data-testid="settings-sync">
       <p className="text-fg-faint text-meta mb-4 leading-normal">{t("sync.hint")}</p>
 
-      <label className={FIELD}>
-        <span className={LABEL}>{t("sync.folder")}</span>
-        <Input
-          className="flex-1"
-          data-testid="sync-folder"
-          value={folder}
-          placeholder={t("sync.folder_placeholder")}
-          aria-label={t("sync.folder")}
-          onChange={(e) => setFolder(e.target.value)}
-          onBlur={() => void save(folder, machine)}
-        />
-        <Button size="sm" variant="secondary" onClick={() => void browse()}>
-          {t("sync.browse")}
-        </Button>
-      </label>
-      <p className={HINT}>{t("sync.folder_hint")}</p>
+      {/* The one row with three things in it, so the one row that cannot be a `FIELD`.
+          
+          `FIELD` is a fixed 150px label beside a control, which is right for a label and a control
+          and wrong the moment a button joins them: on a 390px screen the label takes 150, the
+          button takes what it needs, and the path input is left with about seventy pixels showing
+          `/mnt/`. The screenshot audit passed it — nothing overflowed and every contrast was fine,
+          a control squeezed to uselessness is simply narrow — and a phone screenshot showed it in
+          a second.
+          
+          Label above, control below, which is what `Capture` already does for its wide rows. */}
+      <div className="mt-4">
+        <label className="text-meta text-fg-dim block" htmlFor="sync-folder">
+          {t("sync.folder")}
+        </label>
+        <div className="mt-1 flex items-center gap-2">
+          <Input
+            id="sync-folder"
+            className="min-w-0 flex-1"
+            data-testid="sync-folder"
+            value={folder}
+            placeholder={t("sync.folder_placeholder")}
+            aria-label={t("sync.folder")}
+            onChange={(e) => setFolder(e.target.value)}
+            onBlur={() => void save(folder, machine)}
+          />
+          <Button size="sm" variant="secondary" className="shrink-0" onClick={() => void browse()}>
+            {t("sync.browse")}
+          </Button>
+        </div>
+      </div>
+      <p className="text-fg-faint text-micro mt-1.5 leading-normal">{t("sync.folder_hint")}</p>
 
       {/* Chosen and unreachable. Not the same as "not set up", and the state this is in most
           often — an unmounted drive, a stick somebody pulled out. */}

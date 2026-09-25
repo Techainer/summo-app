@@ -98,7 +98,7 @@ export function Sticker({ name, size = 112, className }: Props) {
           swap is one opacity change rather than a box that pops into existence. */}
       <div
         className={cn(
-          "absolute inset-0 transition-opacity duration-300",
+          "absolute inset-0 transition-opacity duration-[var(--motion-shift)]",
           playing ? "opacity-0" : "opacity-100",
         )}
       >

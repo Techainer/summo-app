@@ -131,7 +131,7 @@ export function LivePip() {
 
       {/* Or a corner of this one, with the difference stated rather than hidden. */}
       {pinned && (
-        <div className="border-line bg-bg-raised shadow-panel rounded-card fixed end-4 bottom-4 z-50 w-[min(26rem,calc(100vw-2rem))] border">
+        <div className="border-line bg-bg-raised rounded-card fixed end-4 bottom-4 z-[var(--z-float)] w-[min(26rem,calc(100vw-2rem))] border shadow-[var(--shadow-pop)]">
           {panel}
           <p className="text-fg-faint text-micro border-line border-t px-3 py-2">
             {t("record.minimise_pinned")}

@@ -541,7 +541,7 @@ export function RichNote({
           data-testid="table-tools"
           role="toolbar"
           aria-label={t("notes.table_tools")}
-          className="border-line bg-bg-raised rounded-card sticky top-0 z-10 mb-2 flex flex-wrap items-center gap-1 border p-1 shadow-[var(--shadow-sm)]"
+          className="border-line bg-bg-raised rounded-card sticky top-0 z-[var(--z-raised)] mb-2 flex flex-wrap items-center gap-1 border p-1 shadow-[var(--shadow-sm)]"
         >
           {tableActions.map((action) => (
             <button
@@ -592,7 +592,7 @@ export function RichNote({
           highlighting and no way to ask for any. A select, in the flow, only while the caret is in
           a code block. */}
       {editor?.isActive("codeBlock") && (
-        <label className="border-line bg-bg-raised rounded-pill sticky bottom-2 z-10 mt-2 flex w-fit items-center gap-2 border px-3 py-1.5 shadow-[var(--shadow-sm)]">
+        <label className="border-line bg-bg-raised rounded-pill sticky bottom-2 z-[var(--z-raised)] mt-2 flex w-fit items-center gap-2 border px-3 py-1.5 shadow-[var(--shadow-sm)]">
           <span className="text-fg-faint text-micro">{t("notes.code_language")}</span>
           <select
             aria-label={t("notes.code_language")}
