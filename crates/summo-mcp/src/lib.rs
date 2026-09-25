@@ -917,3 +917,197 @@ mod tests {
         assert_eq!(clock(-5.0), "00:00");
     }
 }
+
+/// One JSON object per line in, one per line out — the stdio transport.
+///
+/// Every MCP stdio client speaks this framing, and it was written twice: once in this crate's own
+/// binary and once inside `summo mcp`, comment for comment. Two copies of a protocol loop agree
+/// right up until somebody fixes one of them, and this repository has been bitten by that shape
+/// four times now — the sync glue, the dub pipeline, the settings section list, the accessible-name
+/// computation. The difference here is that one of the two is shipped and the other is not, so the
+/// copy that drifts would be the one nobody runs.
+///
+/// Generic over the streams rather than reaching for `stdin`/`stdout` directly, which is the whole
+/// reason this can be tested at all. The two `main`s had no test between them: every unit test in
+/// this crate calls [`handle`] and none of them had ever seen the framing around it.
+///
+/// **Logging must go to stderr.** A stray line on stdout is a parse error at the other end, and the
+/// client reports it as the server being broken rather than as a log line. Both callers set that up
+/// before calling this; it is noted here because it is the invariant this loop depends on and
+/// cannot enforce.
+///
+/// # Errors
+///
+/// When the input cannot be read or the output cannot be written. A line that is not JSON is not an
+/// error: it is logged and skipped, because a malformed request has no id to reply against and
+/// answering with a null id would be a second protocol error on top of the first.
+pub fn serve_stdio(
+    paths: &Paths,
+    input: impl std::io::BufRead,
+    mut output: impl std::io::Write,
+) -> std::io::Result<()> {
+    for line in input.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let request: Request = match serde_json::from_str(&line) {
+            Ok(request) => request,
+            Err(e) => {
+                tracing::warn!(error = %e, "ignoring an unparseable request");
+                continue;
+            }
+        };
+
+        // `None` is a notification, which by definition has no reply. Writing one would be a
+        // response to a message that carried no id to respond to.
+        let Some(response) = handle(paths, &request) else {
+            continue;
+        };
+
+        serde_json::to_writer(&mut output, &response)?;
+        output.write_all(b"\n")?;
+        // Flushed per message: a client waiting on a reply that is sitting in a buffer looks like a
+        // server that hung.
+        output.flush()?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod stdio_tests {
+    use super::*;
+
+    fn run(paths: &Paths, input: &str) -> Vec<Value> {
+        let mut out = Vec::new();
+        serve_stdio(paths, std::io::Cursor::new(input), &mut out).expect("the loop ran");
+        String::from_utf8(out)
+            .expect("utf-8")
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| serde_json::from_str(line).expect("each line is one JSON object"))
+            .collect()
+    }
+
+    fn vault() -> (tempfile::TempDir, Paths) {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::at(dir.path());
+        paths.ensure().unwrap();
+        (dir, paths)
+    }
+
+    /// The framing, which neither `main` had a test for.
+    #[test]
+    fn one_object_per_line_in_one_per_line_out() {
+        let (_d, paths) = vault();
+        let replies = run(
+            &paths,
+            concat!(
+                r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
+                "\n",
+                r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
+                "\n",
+            ),
+        );
+
+        assert_eq!(replies.len(), 2, "{replies:?}");
+        assert_eq!(replies[0]["id"], 1);
+        assert_eq!(replies[0]["result"]["serverInfo"]["name"], "summo");
+        assert_eq!(replies[1]["id"], 2);
+        assert!(replies[1]["result"]["tools"].as_array().unwrap().len() >= 4);
+    }
+
+    /// A blank line is not a request. Clients send them; a reply to one is a protocol error.
+    #[test]
+    fn blank_lines_are_skipped_rather_than_answered() {
+        let (_d, paths) = vault();
+        let replies = run(
+            &paths,
+            concat!(
+                "\n",
+                "   \n",
+                r#"{"jsonrpc":"2.0","id":7,"method":"ping","params":{}}"#,
+                "\n",
+                "\n",
+            ),
+        );
+        assert_eq!(replies.len(), 1, "{replies:?}");
+        assert_eq!(replies[0]["id"], 7);
+    }
+
+    /// A malformed line has no id to reply against, so it is logged and skipped — and, crucially,
+    /// the loop keeps going. A transport that dies on one bad line takes the session with it.
+    #[test]
+    fn a_line_that_is_not_json_does_not_end_the_session() {
+        let (_d, paths) = vault();
+        let replies = run(
+            &paths,
+            concat!(
+                "{not json at all\n",
+                r#"{"jsonrpc":"2.0","id":1,"method":"ping","params":{}}"#,
+                "\n",
+            ),
+        );
+        assert_eq!(replies.len(), 1, "{replies:?}");
+        assert_eq!(replies[0]["id"], 1);
+    }
+
+    /// A notification carries no id and must produce no line at all. An empty object on stdout is
+    /// a reply to nothing, and the client has nowhere to put it.
+    #[test]
+    fn a_notification_produces_no_output() {
+        let (_d, paths) = vault();
+        let replies = run(
+            &paths,
+            concat!(
+                r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+                "\n",
+                r#"{"jsonrpc":"2.0","id":3,"method":"ping","params":{}}"#,
+                "\n",
+            ),
+        );
+        assert_eq!(replies.len(), 1, "{replies:?}");
+        assert_eq!(replies[0]["id"], 3);
+    }
+
+    /// An unknown method is an error *with the id*, not silence. A client waiting on a reply that
+    /// never comes reports a hang, which sends whoever is debugging it looking in the wrong place.
+    #[test]
+    fn an_unknown_method_answers_rather_than_hanging() {
+        let (_d, paths) = vault();
+        let replies = run(
+            &paths,
+            concat!(
+                r#"{"jsonrpc":"2.0","id":9,"method":"sing/aSong","params":{}}"#,
+                "\n",
+            ),
+        );
+        assert_eq!(replies.len(), 1, "{replies:?}");
+        assert_eq!(replies[0]["id"], 9);
+        assert_eq!(replies[0]["error"]["code"], -32_601);
+    }
+
+    /// Nothing but JSON reaches the stream. The whole reason logging goes to stderr.
+    #[test]
+    fn every_byte_written_is_part_of_a_reply() {
+        let (_d, paths) = vault();
+        let mut out = Vec::new();
+        serve_stdio(
+            &paths,
+            std::io::Cursor::new(concat!(
+                r#"{"jsonrpc":"2.0","id":1,"method":"resources/list","params":{}}"#,
+                "\n",
+            )),
+            &mut out,
+        )
+        .unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.ends_with('\n'), "each reply ends its own line");
+        for line in text.lines() {
+            serde_json::from_str::<Value>(line).unwrap_or_else(|e| {
+                panic!("a line on stdout that is not JSON: {line:?} ({e})");
+            });
+        }
+    }
+}

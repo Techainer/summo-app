@@ -1393,35 +1393,10 @@ fn open_browser(url: &str) {
 /// server that hung.
 #[cfg(feature = "mcp")]
 fn mcp(paths: &Paths) -> Result<()> {
-    use std::io::{BufRead, Write};
-
-    let stdin = std::io::stdin();
-    let mut stdout = std::io::stdout();
+    // The loop lives in `summo-mcp`, which is the crate that owns the protocol. It was written out
+    // here as well, comment for comment, and of the two copies this is the one that ships — so a
+    // fix applied to the other would have reached nobody.
     tracing::info!(vault = %paths.vault().display(), "serving the vault over stdio");
-
-    for line in stdin.lock().lines() {
-        let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let request: summo_mcp::Request = match serde_json::from_str(&line) {
-            Ok(request) => request,
-            Err(e) => {
-                // A malformed line has no id to reply against, so there is nobody to tell but the
-                // log. Answering with a null id would be a second protocol error on top of the
-                // first.
-                tracing::warn!(error = %e, "ignoring an unparseable request");
-                continue;
-            }
-        };
-
-        let Some(response) = summo_mcp::handle(paths, &request) else {
-            continue;
-        };
-        serde_json::to_writer(&mut stdout, &response)?;
-        stdout.write_all(b"\n")?;
-        stdout.flush()?;
-    }
+    summo_mcp::serve_stdio(paths, std::io::stdin().lock(), std::io::stdout().lock())?;
     Ok(())
 }

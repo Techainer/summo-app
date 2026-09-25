@@ -54,11 +54,19 @@ import { inShell, isMac, setShape } from "../../lib/shell";
  */
 const MenuBar = lazy(() => import("./MenuBar").then((m) => ({ default: m.MenuBar })));
 const Shortcuts = lazy(() => import("./Shortcuts").then((m) => ({ default: m.Shortcuts })));
+/**
+ * Fetched only by somebody who has switched it on, which is almost nobody.
+ *
+ * It rendered `null` for everybody else and still cost them the component, its icon and its client
+ * in the chunk parsed before the first pixel. `isOn` is three lines of `localStorage` and stays
+ * eager, because deciding *whether* to fetch cannot itself be behind the fetch.
+ */
+const PerfHud = lazy(() => import("../PerfHud").then((m) => ({ default: m.PerfHud })));
 import { same, useErrorText } from "../../lib/errors";
 import * as sidebar from "../../lib/sidebar";
 import { RecordButton } from "../RecordButton";
 import { ListeningIn } from "../record/ListeningIn";
-import { PerfHud } from "../PerfHud";
+import { isOn as perfIsOn, onChange as onPerfChange } from "../../lib/perf";
 import { StatusBar } from "../StatusBar";
 import { Waveform } from "../Waveform";
 import { m } from "motion/react";
@@ -139,6 +147,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
   // Polled here rather than inside the status bar, which is a component that draws what it is given
   // and has no business owning a timer.
   const memory = useMemory(engine.handshake);
+  // Whether the resource readout is showing, kept here so the component itself is fetched only by
+  // somebody who wants it. The switch lives in Settings and announces through `lib/perf`.
+  const [perfOn, setPerfOn] = useState(perfIsOn);
+  useEffect(() => onPerfChange(setPerfOn), []);
   const navigate = useNavigate();
   const { languages, setLocale, locale } = useI18n();
   // Only what the palette needs in order to leave out the row for the theme already on. The
@@ -877,7 +889,11 @@ export function RootLayout({ children }: { children: ReactNode }) {
       {/* Off unless asked for; see `lib/perf.ts`. Rendered here rather than inside a screen so
           the reading follows the reader from page to page — the question it answers is about the
           daemon, which does not change when the route does. */}
-      <PerfHud />
+      {perfOn && (
+        <Suspense fallback={null}>
+          <PerfHud />
+        </Suspense>
+      )}
       <StatusBar
         stat={engine.stat}
         speakers={speakersOf(engine.transcript.segments)}
