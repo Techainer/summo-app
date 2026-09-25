@@ -4190,9 +4190,23 @@ async fn start_install(
         let outcome = async {
             let downloader = summo_models::Downloader::new(downloads)?
                 .with_credentials(summo_models::credentials::Credentials::discover(&home));
+            // The size is known before a byte moves, so say it.
+            //
+            // `total` was filled in by the first progress callback, which has two costs. The
+            // progress bar has no denominator until then, so every install begins as an
+            // indeterminate bar for however long the first response takes. And an install that
+            // needs no download at all — every blob already in the store, which is what a reinstall
+            // and a shared dependency look like — finishes without a single callback, so it
+            // reported `done` with a total of zero: a completed job claiming to be about nothing.
+            //
+            // The manifest already knows. `total_bytes` is the sum of the files this machine would
+            // fetch for the chosen build, which is the number the bar is a fraction of.
             installs.set(
                 &key,
-                crate::install::State::Downloading { done: 0, total: 0 },
+                crate::install::State::Downloading {
+                    done: 0,
+                    total: manifest.total_bytes(),
+                },
             );
 
             let progress = installs.clone();

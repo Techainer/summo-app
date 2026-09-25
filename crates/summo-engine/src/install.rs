@@ -24,7 +24,15 @@ use summo_core::ModelId;
 #[serde(tag = "state", rename_all = "kebab-case")]
 pub enum State {
     Queued,
-    /// Fetching. `done`/`total` are bytes; `total` is 0 until the first response headers arrive.
+    /// Fetching. Both are bytes.
+    ///
+    /// `total` is the size of the build being installed, set when the job starts rather than
+    /// discovered from the first response header — so the progress bar has a denominator from its
+    /// first frame, and a job whose blobs were all already in the store reports the size it
+    /// represents instead of reporting `done` with a total of zero.
+    ///
+    /// It can still be 0, for a manifest that declares no file sizes. [`State::fraction`] answers
+    /// `None` there, which is how an indeterminate bar is asked for.
     Downloading {
         done: u64,
         total: u64,

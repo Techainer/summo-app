@@ -220,9 +220,12 @@ try {
     // failed outright. CI reported "the daemon fetches 0 MB" for thirty seconds of *something*,
     // and the sentence named the symptom of every possible cause.
     //
-    // So: keep the last job seen, and say what state it was in when time ran out.
+    // So: keep the last job seen, and say what state it was in when time ran out. A finished job
+    // ends the wait too — `total` used to arrive with the first response header, so an install
+    // whose blobs were already in the store completed without ever setting it and this waited the
+    // full minute for a number that was never coming.
     let job = null;
-    for (let i = 0; i < 240 && !(job?.total > 0); i++) {
+    for (let i = 0; i < 240 && !(job?.total > 0) && job?.state !== "done"; i++) {
       await page.waitForTimeout(250);
       const jobs = await (await fetch(`${engine.url}/installs?token=${engine.token}`)).json();
       job = jobs.find((j) => j.model === "sense-voice-small") ?? job;
