@@ -234,6 +234,68 @@ fn to_vtt(segments: &[Segment], options: Options) -> String {
     out
 }
 
+/// Which words a subtitle track carries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Track<'a> {
+    /// What was said.
+    Original,
+    /// A translation, by language code. Lines with no translation keep the original — a gap in a
+    /// subtitle track reads as "nobody spoke", which is a different claim from "this line was not
+    /// translated".
+    Translated(&'a str),
+    /// Both, the original under the translation.
+    ///
+    /// The order is deliberate. Somebody reading subtitles in their own language reads the top line
+    /// and glances at the second; putting the original first makes them read past it every cue.
+    Both(&'a str),
+}
+
+/// WebVTT for a meeting, in the words a viewer asked for.
+///
+/// Separate from [`Format::Vtt`], which exports the transcript and only the transcript. A player
+/// wants a track it can attach to a video, and the interesting ones are the translated and the
+/// bilingual — the whole reason to watch a recording with subtitles rather than read the transcript
+/// beside it.
+#[must_use]
+pub fn subtitles(
+    segments: &[Segment],
+    track: Track<'_>,
+    translation: Option<&crate::translation::Translation>,
+    options: Options,
+) -> String {
+    let mut out = String::from("WEBVTT\n\n");
+    for segment in segments.iter().filter(|s| !s.is_empty()) {
+        let original = segment.text.trim();
+        let translated = translation.and_then(|t| t.get(segment.seq)).map(str::trim);
+
+        let body = match track {
+            Track::Original => original.to_string(),
+            Track::Translated(_) => translated.unwrap_or(original).to_string(),
+            // Nothing to put underneath when the line was not translated, and repeating it twice
+            // would be worse than one line.
+            Track::Both(_) => match translated {
+                Some(translated) if translated != original => format!("{translated}\n{original}"),
+                _ => original.to_string(),
+            },
+        };
+        if body.is_empty() {
+            continue;
+        }
+
+        out.push_str(&format!(
+            "{} --> {}\n",
+            subtitle_time(segment.t0, '.'),
+            subtitle_time(cue_end(segment), '.')
+        ));
+        if options.speakers {
+            out.push_str(&format!("<v {}>", speaker_of(segment)));
+        }
+        out.push_str(&body);
+        out.push_str("\n\n");
+    }
+    out
+}
+
 fn to_csv(segments: &[Segment]) -> String {
     let mut out = String::from("start_s,end_s,speaker,text\n");
     for segment in segments {
@@ -296,6 +358,94 @@ mod tests {
         c.speaker = Some(SpeakerId::from("Ngọc".to_string()));
         d.transcript = vec![a, b, c];
         d
+    }
+
+    fn translated() -> crate::translation::Translation {
+        let mut t = crate::translation::Translation::new("en");
+        t.set(0, 1.0, "I think we should use Rust");
+        // Line 1 is deliberately left untranslated.
+        t.set(2, 5.0, "The problem is the API is incomplete");
+        t
+    }
+
+    /// The track worth having, and the one a subtitle file cannot be: both languages at once.
+    #[test]
+    fn a_bilingual_track_puts_the_translation_over_what_was_said() {
+        let vtt = subtitles(
+            &doc().transcript,
+            Track::Both("en"),
+            Some(&translated()),
+            Options::default(),
+        );
+        assert!(
+            vtt.contains("I think we should use Rust\nAnh nghĩ mình nên dùng Rust"),
+            "{vtt}"
+        );
+    }
+
+    /// An untranslated line keeps the original rather than leaving a gap.
+    ///
+    /// A missing cue reads as "nobody spoke", which is a different claim from "this line was not
+    /// translated" — and on a bilingual track, printing the same sentence twice would be worse
+    /// than printing it once.
+    #[test]
+    fn an_untranslated_line_is_not_a_silence() {
+        let translation = translated();
+        let segments = doc().transcript;
+
+        let translated_track = subtitles(
+            &segments,
+            Track::Translated("en"),
+            Some(&translation),
+            Options::default(),
+        );
+        assert!(
+            translated_track.contains("cho phần lõi"),
+            "{translated_track}"
+        );
+
+        let both = subtitles(
+            &segments,
+            Track::Both("en"),
+            Some(&translation),
+            Options::default(),
+        );
+        assert_eq!(
+            both.matches("cho phần lõi").count(),
+            1,
+            "the same sentence twice is worse than once: {both}"
+        );
+        // Every line still gets a cue on both tracks.
+        assert_eq!(translated_track.matches(" --> ").count(), 3);
+        assert_eq!(both.matches(" --> ").count(), 3);
+    }
+
+    /// Asking for subtitles in a language nobody has translated into is not an error — it is the
+    /// original, which is what a viewer should see rather than an empty player.
+    #[test]
+    fn a_language_with_no_translation_falls_back_to_what_was_said() {
+        let vtt = subtitles(
+            &doc().transcript,
+            Track::Translated("ja"),
+            None,
+            Options::default(),
+        );
+        assert!(vtt.contains("Anh nghĩ mình nên dùng Rust"), "{vtt}");
+        assert_eq!(vtt.matches(" --> ").count(), 3);
+    }
+
+    /// The header is mandatory; without it a player loads the file and shows nothing at all.
+    #[test]
+    fn every_track_starts_with_the_webvtt_header() {
+        for track in [Track::Original, Track::Translated("en"), Track::Both("en")] {
+            let vtt = subtitles(
+                &doc().transcript,
+                track,
+                Some(&translated()),
+                Options::default(),
+            );
+            assert!(vtt.starts_with("WEBVTT\n\n"), "{track:?}: {vtt}");
+        }
     }
 
     #[test]

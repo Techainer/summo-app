@@ -100,11 +100,26 @@ export interface Segment {
   speaker: string | null;
 }
 
+/** The media an imported meeting came from, when there is something to play back. */
+export interface MeetingSource {
+  /** Where it was imported from. A path, or a URL when it came from one. */
+  path: string;
+  /** Whether a file is there to serve right now. */
+  available: boolean;
+  /** Whether it has pictures in it, and therefore whether to draw a video element. */
+  video: boolean;
+  /** Whether the vault holds its own copy, so moving the original no longer matters. */
+  kept: boolean;
+}
+
 export interface MeetingDetail {
   summary: MeetingSummary;
   sections: { heading: string; body: string; draft: boolean }[];
   transcript: Segment[];
   audio: string[];
+  source: MeetingSource | null;
+  /** Languages this meeting has been translated into. */
+  subtitles: string[];
 }
 
 export type GroupBy = "day" | "week" | "folder" | "none";

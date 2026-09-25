@@ -117,6 +117,16 @@ impl Recorder {
         self.doc.transcript.len()
     }
 
+    /// Record the file this meeting was imported from.
+    ///
+    /// Set before the first save rather than at the end, so a crash halfway through a two-hour
+    /// import still leaves a document that says where it came from — which is the one thing that
+    /// cannot be worked out afterwards from what is on disk.
+    pub fn set_source(&mut self, origin: &str) {
+        self.doc.frontmatter.source = Some(origin.to_string());
+        self.dirty = true;
+    }
+
     /// Times the document has been written. Exposed so a test can prove autosave actually fires.
     #[must_use]
     pub fn save_count(&self) -> u64 {

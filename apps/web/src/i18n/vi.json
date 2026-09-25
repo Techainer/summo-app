@@ -115,7 +115,13 @@
     "play_from": "Nghe từ {time}",
     "no_transcript": "Chưa có ai nói gì.",
     "your_notes": "Ghi chú của bạn",
-    "open_ai_settings": "Cài đặt AI"
+    "open_ai_settings": "Cài đặt AI",
+    "subtitles": "Phụ đề",
+    "subtitles_off": "Tắt",
+    "subtitles_original": "Nguyên văn",
+    "subtitles_both": "{language} + nguyên văn",
+    "imported_audio": "Âm thanh đã nhập",
+    "source_moved": "File gốc của buổi họp này không còn ở {path} nữa. Bản ghi chữ vẫn đầy đủ; chỉ phần xem lại cần file."
   },
   "tasks": {
     "title": "Việc cần làm",

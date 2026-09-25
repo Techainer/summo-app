@@ -49,25 +49,43 @@ impl Span {
 ///
 /// Rejects anything that is not a known lane, so no caller-supplied text ever reaches a path.
 pub fn locate(paths: &Paths, meeting: &MeetingId, lane: &str) -> Result<PathBuf> {
-    let lane = match lane {
-        "mic" => Lane::Mic,
-        "system" => Lane::System,
+    // `import` is not a `Lane` — nothing was captured, a file was decoded — but it is a track the
+    // player has to be able to fetch, and it is the only one an imported meeting has.
+    //
+    // It was missing, and the consequence was quiet and total: the detail view lists the audio
+    // directory, the interface turns every name in it into a lane, and an import has exactly one
+    // file in there. So every imported meeting drew a player whose only track answered
+    // `no such lane 'import'` — recorded meetings played back, imported ones never had.
+    let file = match lane {
+        "mic" => format!("{}.opus", lane_name(Lane::Mic)),
+        "system" => format!("{}.opus", lane_name(Lane::System)),
+        "import" => "import.wav".to_string(),
         other => {
             return Err(Error::Other(format!(
-                "no such lane `{other}`: expected `mic` or `system`"
+                "no such lane `{other}`: expected `mic`, `system` or `import`"
             )));
         }
     };
 
-    let dir = paths.audio_for(meeting);
-    let path = dir.join(format!("{}.opus", lane_name(lane)));
+    let path = paths.audio_for(meeting).join(&file);
     if !path.is_file() {
         return Err(Error::Other(format!(
-            "no {} recording for meeting {meeting}",
-            lane_name(lane)
+            "no {lane} recording for meeting {meeting}"
         )));
     }
     Ok(path)
+}
+
+/// The content type for a track served by [`locate`].
+///
+/// A recorded lane is Opus in Ogg; an import is the 16 kHz wav the recogniser was fed. Sending
+/// `audio/ogg` for a wav is the kind of wrong that works in one browser and not the next.
+#[must_use]
+pub fn lane_mime(lane: &str) -> &'static str {
+    match lane {
+        "import" => "audio/wav",
+        _ => "audio/ogg",
+    }
 }
 
 fn lane_name(lane: Lane) -> &'static str {
@@ -76,6 +94,75 @@ fn lane_name(lane: Lane) -> &'static str {
         Lane::System => "system",
     }
 }
+
+/// The file name a kept copy of an imported source is stored under.
+///
+/// The extension is appended, because a browser decides what it can play from the MIME type and
+/// this is where that type comes from. The stem is fixed so nothing a user typed becomes a path.
+pub const KEPT_SOURCE_STEM: &str = "source";
+
+/// Where a kept copy of the imported media would be, extension and all.
+///
+/// A directory listing rather than a stored name: the extension is the only part that varies, and
+/// looking it up beats writing it down in two places that can disagree.
+#[must_use]
+pub fn kept_source(paths: &Paths, meeting: &MeetingId) -> Option<PathBuf> {
+    std::fs::read_dir(paths.audio_for(meeting))
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| {
+            p.file_stem()
+                .and_then(|s| s.to_str())
+                .is_some_and(|s| s == KEPT_SOURCE_STEM)
+        })
+}
+
+/// What went wrong when the media a meeting names cannot be played.
+///
+/// An enum rather than a string because the three cases want three different things on screen: one
+/// is "this meeting was recorded, there is nothing to watch", one is "the file is where it always
+/// was", and one is "the file has moved and here is where it used to be". Collapsing them into
+/// `404` is what turns a recoverable situation into a broken player.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NoSource {
+    /// Recorded here rather than imported: there is no original, and that is not a fault.
+    NotImported,
+    /// The meeting names a file, and it is not there any more.
+    Missing(String),
+}
+
+/// The media an imported meeting came from: the kept copy first, then where it came from.
+///
+/// The copy wins because it is the one that cannot move. The original is tried next rather than
+/// ignored, so somebody who imported without keeping a copy still gets their video back as long as
+/// the file is where they left it — and gets told *which* file when it is not, instead of a player
+/// that silently will not start.
+///
+/// # Errors
+///
+/// [`NoSource`] when the meeting was recorded rather than imported, or when the file it names is
+/// gone.
+pub fn locate_source(
+    paths: &Paths,
+    meeting: &MeetingId,
+    declared: Option<&str>,
+) -> std::result::Result<PathBuf, NoSource> {
+    if let Some(copy) = kept_source(paths, meeting) {
+        return Ok(copy);
+    }
+    let declared = declared.map(str::trim).filter(|s| !s.is_empty());
+    let Some(declared) = declared else {
+        return Err(NoSource::NotImported);
+    };
+    let path = PathBuf::from(declared);
+    if path.is_file() {
+        return Ok(path);
+    }
+    Err(NoSource::Missing(declared.to_string()))
+}
+
+pub use summo_core::media::{is_video, mime_for};
 
 /// Parse a `Range` header into the span to send.
 ///
@@ -141,6 +228,69 @@ pub fn read_span(path: &Path, span: Span) -> Result<Vec<u8>> {
     file.read_exact(&mut buffer)
         .map_err(|e| Error::io(path, e))?;
     Ok(buffer)
+}
+
+#[cfg(test)]
+mod import_lane_tests {
+    use super::*;
+
+    /// Every imported meeting drew a player whose only track was a 404.
+    ///
+    /// The detail view lists the meeting's audio directory and the interface makes a lane of each
+    /// name in it. An import puts exactly one file there, `import.wav`, and this function knew only
+    /// `mic` and `system` — so recorded meetings played back and imported ones never had.
+    #[test]
+    fn an_import_is_a_track_the_player_can_fetch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        let meeting = MeetingId::from("m1".to_string());
+        let dir = paths.audio_for(&meeting);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("import.wav"), b"RIFF").unwrap();
+
+        let found = locate(&paths, &meeting, "import").expect("the import lane resolves");
+        assert!(found.ends_with("import.wav"));
+        assert_eq!(lane_mime("import"), "audio/wav");
+        assert_eq!(lane_mime("mic"), "audio/ogg");
+    }
+
+    /// Adding a lane must not turn the lane name back into a path.
+    #[test]
+    fn nothing_else_resolves_to_anything() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        let meeting = MeetingId::from("m1".to_string());
+        for lane in ["../../etc/passwd", "source", "import.wav", ""] {
+            assert!(locate(&paths, &meeting, lane).is_err(), "{lane} resolved");
+        }
+    }
+
+    /// Three different situations, three different things to say.
+    #[test]
+    fn a_missing_source_says_which_kind_of_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(tmp.path());
+        let meeting = MeetingId::from("m1".to_string());
+
+        assert_eq!(
+            locate_source(&paths, &meeting, None),
+            Err(NoSource::NotImported)
+        );
+        assert_eq!(
+            locate_source(&paths, &meeting, Some("/gone/holp.mp4")),
+            Err(NoSource::Missing("/gone/holp.mp4".to_string()))
+        );
+
+        // A kept copy wins over the original, because it is the one that cannot move.
+        let dir = paths.audio_for(&meeting);
+        std::fs::create_dir_all(&dir).unwrap();
+        let kept = dir.join("source.mp4");
+        std::fs::write(&kept, b"x").unwrap();
+        assert_eq!(
+            locate_source(&paths, &meeting, Some("/gone/holp.mp4")),
+            Ok(kept)
+        );
+    }
 }
 
 #[cfg(test)]

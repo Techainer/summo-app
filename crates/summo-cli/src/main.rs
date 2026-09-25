@@ -76,6 +76,13 @@ enum Command {
         /// Queue the files and exit instead of waiting for them.
         #[arg(long)]
         detach: bool,
+        /// Copy the file into the vault, so watching it back survives the original being moved.
+        ///
+        /// Off by default: a meeting recorded as an `.mp4` runs to gigabytes, and doubling it
+        /// inside somebody's vault is not a decision to make for them. The path is remembered
+        /// either way, and a player that cannot find the file says where it used to be.
+        #[arg(long)]
+        keep_source: bool,
     },
 
     /// Run Summo: the daemon and the interface, in this process.
@@ -351,7 +358,8 @@ async fn main() -> Result<()> {
             dry_run,
             lang,
             detach,
-        } => import(&paths, &path, dry_run, lang.as_deref(), detach).await,
+            keep_source,
+        } => import(&paths, &path, dry_run, lang.as_deref(), detach, keep_source).await,
         #[cfg(feature = "serve")]
         Command::Serve {
             port,
@@ -1054,6 +1062,7 @@ async fn import(
     dry_run: bool,
     lang: Option<&str>,
     detach: bool,
+    keep_source: bool,
 ) -> Result<()> {
     let files = importer::targets(path)?;
     if files.is_empty() {
@@ -1083,7 +1092,7 @@ async fn import(
     let mut jobs = Vec::new();
     for file in &files {
         let title = summo_media::title_from(file);
-        match importer::start(&client, &handshake, file, lang).await {
+        match importer::start(&client, &handshake, file, lang, keep_source).await {
             Ok(job) => {
                 println!("  xếp hàng {title}");
                 jobs.push(job);

@@ -115,7 +115,13 @@
     "play_from": "从{time}播放",
     "no_transcript": "还没有人说话。",
     "your_notes": "你的笔记",
-    "open_ai_settings": "AI 设置"
+    "open_ai_settings": "AI 设置",
+    "subtitles": "字幕",
+    "subtitles_off": "关闭",
+    "subtitles_original": "原话",
+    "subtitles_both": "{language} + 原文",
+    "imported_audio": "导入的音频",
+    "source_moved": "这场会议的导入来源文件已不在 {path}。文字记录是完整的，只有回放需要该文件。"
   },
   "tasks": {
     "title": "任务",

@@ -10,9 +10,28 @@ export interface PlayerHandle {
   seek: (seconds: number) => void;
 }
 
+/** One subtitle track the viewer can switch to. */
+export interface SubtitleTrack {
+  key: string;
+  label: string;
+  /** BCP-47, for the element's own `srclang`. */
+  lang: string;
+  url: string;
+}
+
 interface Props {
   /** Absolute URLs, one per lane, already carrying the daemon token. */
   lanes: { key: string; label: string; url: string }[];
+  /**
+   * The video this meeting was imported from, when there is one to watch.
+   *
+   * Absent for a recorded meeting, and absent for an imported one whose file has moved — the
+   * screen above says which, because "there was never a video" and "the video is not where it was"
+   * are different things to tell somebody.
+   */
+  video?: { url: string } | null;
+  /** Subtitle tracks to offer. Empty for a meeting nobody has translated. */
+  tracks?: SubtitleTrack[];
   /** Seconds at which each utterance starts, drawn as marks on the scrubber. */
   marks?: number[];
   /** Reported as playback moves, so the transcript can follow along. */
@@ -32,9 +51,13 @@ const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
  * Speed is a control rather than a preference because the reason to use it changes within one
  * recording — 2× through a status round, 1× through the part that mattered.
  */
-export function Player({ lanes, marks = [], onTime, ref }: Props) {
+export function Player({ lanes, video, tracks = [], marks = [], onTime, ref }: Props) {
   const t = useT();
-  const audio = useRef<HTMLAudioElement>(null);
+  // `HTMLMediaElement`, not `HTMLAudioElement`: the same transport drives both, and the only
+  // difference between watching and listening is which element the browser was given.
+  const audio = useRef<HTMLMediaElement>(null);
+  /** Which subtitle track is showing, `""` for none. */
+  const [subtitle, setSubtitle] = useState("");
   const [lane, setLane] = useState(lanes[0]?.key ?? "");
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -79,6 +102,24 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
     element.playbackRate = speed;
   }, [speed, lane]);
 
+  /**
+   * Show exactly one subtitle track, or none.
+   *
+   * Through `textTracks` rather than the `default` attribute. `default` only says which track the
+   * browser should *start* with; switching has to turn the previous one off, and a second track
+   * left in `showing` draws both sets of cues on top of each other.
+   */
+  useEffect(() => {
+    const element = audio.current;
+    if (!element) return;
+    const list = element.textTracks;
+    for (let i = 0; i < list.length; i += 1) {
+      const track = list[i];
+      if (!track) continue;
+      track.mode = track.id === subtitle && subtitle !== "" ? "showing" : "disabled";
+    }
+  }, [subtitle, tracks]);
+
   const unplayable = failed?.lane === lane;
 
   const onTimeUpdate = useCallback(() => {
@@ -105,20 +146,36 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
     );
   }
 
+  const source = video?.url ?? current.url;
+  const MediaTag = video ? "video" : "audio";
+
   return (
     <div className="border-line bg-bg-raised rounded-card border p-3">
-      <audio
-        ref={audio}
-        src={current.url}
+      <MediaTag
+        ref={audio as never}
+        src={source}
         preload="metadata"
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+        // A video needs a box to draw in; an audio element has none and must not get one.
+        className={video ? "rounded-inline mb-3 aspect-video w-full bg-black" : undefined}
+        onLoadedMetadata={(e: { currentTarget: HTMLMediaElement }) =>
+          setDuration(e.currentTarget.duration || 0)
+        }
         onTimeUpdate={onTimeUpdate}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onError={() => setFailed({ lane })}
       >
-        <track kind="captions" />
-      </audio>
+        {tracks.map((track) => (
+          <track
+            key={track.key}
+            id={track.key}
+            kind="subtitles"
+            label={track.label}
+            srcLang={track.lang}
+            src={track.url}
+          />
+        ))}
+      </MediaTag>
 
       <div className="flex items-center gap-3">
         <button
@@ -162,6 +219,20 @@ export function Player({ lanes, marks = [], onTime, ref }: Props) {
             options={lanes.map((l) => ({ value: l.key, label: l.label }))}
             value={lane}
             onChange={setLane}
+          />
+        )}
+        {/* Only when there is a choice to make. One track and an off switch is still a choice —
+            somebody watching in the language being spoken wants the subtitles gone. */}
+        {tracks.length > 0 && (
+          <SegmentedControl
+            label={t("meeting.subtitles")}
+            size="sm"
+            options={[
+              { value: "", label: t("meeting.subtitles_off") },
+              ...tracks.map((track) => ({ value: track.key, label: track.label })),
+            ]}
+            value={subtitle}
+            onChange={setSubtitle}
           />
         )}
         {/* The same control as the lane picker beside it, rather than a row of loose pills that

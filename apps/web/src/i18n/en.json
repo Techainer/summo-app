@@ -115,7 +115,13 @@
     "play_from": "Play from {time}",
     "no_transcript": "Nothing was said yet.",
     "your_notes": "Your notes",
-    "open_ai_settings": "AI settings"
+    "open_ai_settings": "AI settings",
+    "subtitles": "Subtitles",
+    "subtitles_off": "Off",
+    "subtitles_original": "As spoken",
+    "subtitles_both": "{language} + original",
+    "imported_audio": "Imported audio",
+    "source_moved": "The file this meeting was imported from is no longer at {path}. The transcript is complete; only playback needs the file."
   },
   "tasks": {
     "title": "Tasks",

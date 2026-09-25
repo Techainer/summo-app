@@ -254,6 +254,8 @@ impl Server {
             .route("/people/{id}/merge", post(merge_person))
             .route("/people/{id}", axum::routing::delete(forget_person))
             .route("/meetings/{id}/audio/{lane}", get(meeting_audio))
+            .route("/meetings/{id}/source", get(meeting_source))
+            .route("/meetings/{id}/track/{track}", get(meeting_track))
             .route("/voices/unknown", get(unknown_voices_everywhere))
             .route("/meetings/{id}/voices", get(unknown_voices))
             .route("/meetings/{id}/voices/{label}", post(name_voice))
@@ -2268,7 +2270,17 @@ async fn meeting_audio(
                 .into_response();
         }
     };
-    let total = match std::fs::metadata(&path) {
+    serve_media(&path, crate::audio_stream::lane_mime(&lane), &headers)
+}
+
+/// Send a file, honouring `Range`.
+///
+/// Shared by the recording and by the media an import came from. It was written into the audio
+/// handler, and the video route would have been a second copy of range parsing, 416 handling and
+/// `Accept-Ranges` — three things that are wrong in the same invisible way when a copy drifts: the
+/// player simply refuses to seek and says nothing.
+fn serve_media(path: &std::path::Path, mime: &str, headers: &HeaderMap) -> Response {
+    let total = match std::fs::metadata(path) {
         Ok(meta) => meta.len(),
         Err(e) => {
             let message = format!("cannot read {}: {e}", path.display());
@@ -2296,14 +2308,14 @@ async fn meeting_audio(
 
     // `Accept-Ranges` is what tells the player it may seek at all.
     let common = [
-        (header::CONTENT_TYPE, "audio/ogg".to_string()),
+        (header::CONTENT_TYPE, mime.to_string()),
         (header::ACCEPT_RANGES, "bytes".to_string()),
         // The vault is the user's own machine; caching a recording that never changes is free.
         (header::CACHE_CONTROL, "private, max-age=3600".to_string()),
     ];
 
     match span {
-        Some(span) => match crate::audio_stream::read_span(&path, span) {
+        Some(span) => match crate::audio_stream::read_span(path, span) {
             Ok(bytes) => (
                 StatusCode::PARTIAL_CONTENT,
                 common,
@@ -2313,11 +2325,129 @@ async fn meeting_audio(
                 .into_response(),
             Err(e) => vault_error_response(&e),
         },
-        None => match std::fs::read(&path) {
+        None => match std::fs::read(path) {
             Ok(bytes) => (StatusCode::OK, common, bytes).into_response(),
-            Err(e) => vault_error_response(&Error::io(&path, e)),
+            Err(e) => vault_error_response(&Error::io(path, e)),
         },
     }
+}
+
+/// The media an imported meeting came from — the video, when there is one.
+///
+/// Importing an `.mp4` extracts its audio and leaves the file where it was, so until this existed
+/// the only thing a meeting could play back was a voice: the transcript of a screen share with no
+/// screen. The frontmatter records where the file came from, and a kept copy in the vault wins over
+/// it when there is one.
+async fn meeting_source(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    let meeting = summo_core::MeetingId::from(id);
+    let declared = load_meeting_doc(&state, &meeting)
+        .ok()
+        .and_then(|doc| doc.frontmatter.source);
+
+    match crate::audio_stream::locate_source(state.engine.paths(), &meeting, declared.as_deref()) {
+        Ok(path) => {
+            let mime = crate::audio_stream::mime_for(&path);
+            serve_media(&path, mime, &headers)
+        }
+        // A 404 either way, and a different sentence for each, because one of them names a file the
+        // reader can go and find.
+        Err(crate::audio_stream::NoSource::NotImported) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "this meeting was recorded rather than imported, so there is no original file",
+                "reason": "not-imported",
+            })),
+        )
+            .into_response(),
+        Err(crate::audio_stream::NoSource::Missing(was)) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": format!("the file this meeting was imported from is no longer at {was}"),
+                "reason": "moved",
+                "was": was,
+            })),
+        )
+            .into_response(),
+    }
+}
+
+/// Subtitles for a meeting, as a track a `<video>` can attach.
+///
+/// `original`, a language code for the translation, or `both.<code>` for the translation with what
+/// was actually said underneath it.
+///
+/// Beside `/subtitles` rather than part of it, because they are answers to different questions.
+/// `/subtitles` is a file somebody downloads, and refusing a language the meeting was never
+/// translated into is right there — they asked for something that does not exist. A player's track
+/// is a live view of the same meeting, and refusing it leaves an empty subtitle menu where the
+/// original should be.
+async fn meeting_track(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((id, track)): Path<(String, String)>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+
+    let meeting = summo_core::MeetingId::from(id);
+    let doc = match load_meeting_doc(&state, &meeting) {
+        Ok(doc) => doc,
+        Err(e) => return vault_error_response(&e),
+    };
+
+    // `.vtt` is allowed on the end so the URL looks like a file to anything that cares — some
+    // players sniff the extension before they read the content type.
+    let track = track.trim_end_matches(".vtt");
+    let (track, lang) = match track.strip_prefix("both.") {
+        Some(lang) => (
+            summo_vault::export::Track::Both(lang),
+            Some(lang.to_string()),
+        ),
+        None if track == "original" => (summo_vault::export::Track::Original, None),
+        None => (
+            summo_vault::export::Track::Translated(track),
+            Some(track.to_string()),
+        ),
+    };
+
+    // A language with no translation on disk is not an error: the track renders the original, which
+    // is what somebody who asked for Japanese subtitles on an untranslated meeting should see
+    // rather than an empty player and a red console message.
+    let translation = lang.as_deref().and_then(|lang| {
+        summo_vault::translation::load(state.engine.paths(), &meeting, lang)
+            .ok()
+            .flatten()
+    });
+
+    let body = summo_vault::export::subtitles(
+        &doc.transcript,
+        track,
+        translation.as_ref(),
+        summo_vault::export::Options::default(),
+    );
+
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "text/vtt; charset=utf-8"),
+            // A transcript can be corrected and a translation can be re-run, so unlike the audio
+            // this is not immutable.
+            (header::CACHE_CONTROL, "private, no-cache"),
+        ],
+        body,
+    )
+        .into_response()
 }
 
 fn vault_error_response(e: &Error) -> Response {
@@ -2443,6 +2573,13 @@ struct ImportBody {
     /// unattributed text is the thing people complain about first.
     #[serde(default = "yes")]
     diarize: bool,
+    /// Copy the file into the vault, so watching it back survives the original being moved.
+    ///
+    /// Off by default. A meeting recorded as an `.mp4` runs to gigabytes, and silently doubling it
+    /// inside somebody's vault is not a decision to make on their behalf — the path is remembered
+    /// either way, and a player that cannot find the file says where it used to be.
+    #[serde(default)]
+    keep_source: bool,
 }
 
 /// Start importing a recording. Returns immediately with a job to poll.
@@ -2487,6 +2624,7 @@ fn spawn_import(state: &AppState, body: ImportBody) -> summo_core::Result<crate:
 
     // Its own thread, not a tokio task: decoding is CPU-bound for minutes at a time and would
     // otherwise starve the runtime that is serving this daemon's other requests.
+    let source = crate::imports::Source::file(&source).keeping(body.keep_source);
     std::thread::spawn(move || {
         crate::imports::run(&imports, &id, &paths, &store, &hw, &spec, &source);
     });

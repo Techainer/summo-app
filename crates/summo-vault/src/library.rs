@@ -206,6 +206,25 @@ pub struct MeetingDetail {
     pub transcript: Vec<Segment>,
     /// Recorded audio for this meeting, if it has not been pruned by the retention setting.
     pub audio: Vec<String>,
+    /// The media it was imported from, when there is something to watch.
+    pub source: Option<SourceView>,
+    /// Languages this meeting has been translated into, for the subtitle picker.
+    pub subtitles: Vec<String>,
+}
+
+/// What an imported meeting can play back, and where it is.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SourceView {
+    /// The path the meeting was imported from, as recorded. Shown when the file has gone, which is
+    /// the only case where a reader can do anything about it.
+    pub path: String,
+    /// Whether there is a file to serve right now — a copy in the vault, or the original still
+    /// where it was.
+    pub available: bool,
+    /// Whether it has pictures in it. Decides whether the player draws a video element at all.
+    pub video: bool,
+    /// Whether the vault holds its own copy, so moving the original no longer matters.
+    pub kept: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -350,8 +369,35 @@ impl Library {
             .collect();
         audio.sort();
 
+        // Two things the player cannot work out for itself: whether there is a file to watch, and
+        // which languages there are to watch it in.
+        let kept = audio
+            .iter()
+            .find(|name| name.starts_with("source."))
+            .map(|name| audio_dir.join(name));
+        let declared = doc.frontmatter.source.clone();
+        let source = declared.map(|path| {
+            let playable = kept.clone().or_else(|| {
+                let original = std::path::PathBuf::from(&path);
+                original.is_file().then_some(original)
+            });
+            SourceView {
+                // Classified from the recorded path, not from whatever is playable: a meeting
+                // imported from an `.mp4` is a video even on a machine where that file has gone,
+                // and saying so is what lets the screen explain the absence instead of pretending
+                // there was never anything to see.
+                video: summo_core::media::is_video(std::path::Path::new(&path)),
+                available: playable.is_some(),
+                kept: kept.is_some(),
+                path,
+            }
+        });
+        let subtitles = crate::translation::languages(&self.paths, id);
+
         Ok(MeetingDetail {
             summary: MeetingSummary::new(entry, &self.root()),
+            source,
+            subtitles,
             frontmatter: doc.frontmatter,
             sections: doc
                 .sections

@@ -188,6 +188,71 @@ pub fn audio_path(paths: &Paths, meeting: &MeetingId) -> PathBuf {
     paths.audio_for(meeting).join("import.wav")
 }
 
+/// What to import, and what to do with it afterwards.
+///
+/// A struct because the alternative was an eighth positional `bool` on two functions, and because
+/// the file to decode and where it came from stopped being the same thing once a link could be
+/// imported: the bytes are in a download, the provenance is a URL, and a meeting should record the
+/// one a person would recognise.
+#[derive(Debug, Clone)]
+pub struct Source {
+    /// The file to decode.
+    pub file: PathBuf,
+    /// What to record in the meeting as where it came from: the path, or the URL it was fetched
+    /// from.
+    pub origin: String,
+    /// Copy it into the vault, so watching it back survives the original being moved.
+    pub keep: bool,
+}
+
+impl Source {
+    /// A file already on this machine, left where it is.
+    #[must_use]
+    pub fn file(path: &Path) -> Self {
+        Self {
+            file: path.to_path_buf(),
+            origin: path.display().to_string(),
+            keep: false,
+        }
+    }
+
+    #[must_use]
+    pub fn keeping(mut self, keep: bool) -> Self {
+        self.keep = keep;
+        self
+    }
+}
+
+/// Copy the imported file into the vault, so playback survives the original being moved.
+///
+/// Beside the extracted audio, under a fixed stem, so forgetting a meeting's audio takes the copy
+/// with it rather than leaving a gigabyte the storage screen cannot account for. The extension is
+/// kept because it is how a browser decides what it can play.
+///
+/// The original's own extension and nothing from its name: a file called `../../x.mp4` is a path,
+/// and this is a place where a user-supplied string would otherwise reach the filesystem.
+///
+/// Behind `models` with the rest of importing: a build with no recogniser has nothing to import
+/// from and so nothing to keep a copy of.
+#[cfg(feature = "models")]
+fn keep_a_copy(paths: &Paths, meeting: &MeetingId, source: &Path) -> Result<PathBuf> {
+    let extension = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .filter(|e| e.chars().all(|c| c.is_ascii_alphanumeric()))
+        .unwrap_or("bin")
+        .to_ascii_lowercase();
+
+    let dir = paths.audio_for(meeting);
+    std::fs::create_dir_all(&dir).map_err(|e| Error::io(&dir, e))?;
+    let target = dir.join(format!(
+        "{}.{extension}",
+        crate::audio_stream::KEPT_SOURCE_STEM
+    ));
+    std::fs::copy(source, &target).map_err(|e| Error::io(&target, e))?;
+    Ok(target)
+}
+
 /// The day a file belongs to, from when it was written rather than when it was imported.
 ///
 /// A Zoom recording from last Tuesday is *last Tuesday's* meeting. Filing it under today would put
@@ -233,7 +298,7 @@ pub fn run(
     store: &summo_models::ModelStore,
     hw: &summo_models::hw::HwProfile,
     spec: &crate::protocol::SessionSpec,
-    source: &Path,
+    source: &Source,
 ) {
     match execute(imports, job_id, paths, store, hw, spec, source) {
         Ok(state) => imports.set(job_id, state),
@@ -254,18 +319,19 @@ fn execute(
     store: &summo_models::ModelStore,
     hw: &summo_models::hw::HwProfile,
     spec: &crate::protocol::SessionSpec,
-    source: &Path,
+    source: &Source,
 ) -> Result<JobState> {
-    check(source)?;
+    let file = source.file.as_path();
+    check(file)?;
     imports.set(job_id, JobState::Extracting);
 
     // No `probe()` here any more. Requiring ffmpeg to *exist* before looking at a file meant an
     // import failed on a machine that could have decoded it perfectly well in this process.
-    let info = summo_media::info_of(source)?;
+    let info = summo_media::info_of(file)?;
     if !info.has_audio {
         return Err(Error::msg(
             "import.no_audio",
-            format!("{} không có âm thanh", source.display()),
+            format!("{} không có âm thanh", file.display()),
         ));
     }
 
@@ -273,12 +339,46 @@ fn execute(
     // stored under it — the file and the note have to agree on which meeting they belong to.
     let id = MeetingId::new();
     let wav_path = audio_path(paths, &id);
-    summo_media::to_wav16(source, &wav_path)?;
+    summo_media::to_wav16(file, &wav_path)?;
 
     let wav = crate::offline::read_wav(&wav_path)?;
     let mut runner = crate::runner::SessionRunner::new(spec, store, hw)?;
 
-    let events = crate::offline::transcribe(&wav, &mut runner, |p| {
+    let title = summo_media::title_from(file);
+    let day = day_of(file);
+    let models = vec![("live".to_string(), spec.live_model.clone())];
+
+    // The document is opened **before** decoding, the way a recording opens one the moment it
+    // starts, and for the same reasons. It used to be created after the last sample: the whole
+    // transcript of a two-hour file lived in memory until then, so nothing could be read while the
+    // import ran and a daemon that died forty minutes in had produced nothing at all.
+    //
+    // Now the meeting exists from the first second — with a title, a date, and where it came from —
+    // and fills in as the file decodes. An import can be read while it happens.
+    let meeting = id.to_string();
+    let mut recorder = crate::recorder::Recorder::start(paths, id.clone(), &title, &day, models)?;
+    recorder.set_source(&source.origin);
+
+    // The copy is made before decoding, not after, so a two-hour import does not end by discovering
+    // that the drive it came from was unplugged an hour ago. It is opt-in: an mp4 of a long meeting
+    // is measured in gigabytes, and quietly doubling it inside somebody's vault is not a default.
+    if source.keep
+        && let Err(e) = keep_a_copy(paths, &id, file)
+    {
+        tracing::warn!(error = %e, "could not keep a copy of the imported file");
+    }
+
+    crate::offline::transcribe(&wav, &mut runner, |p, events| {
+        for event in events {
+            recorder.apply(event);
+        }
+        // Autosave decides how often this actually reaches the disk; offering it the chance per
+        // block is what makes the file track the decode rather than appear at the end of it. A
+        // failed write is logged and the decode continues — losing the rest of a two-hour import
+        // because one save failed is the wrong trade.
+        if let Err(e) = recorder.maybe_save() {
+            tracing::warn!(error = %e, "could not write the import's progress");
+        }
         imports.set(
             job_id,
             JobState::Running {
@@ -291,15 +391,6 @@ fn execute(
         true
     })?;
 
-    let title = summo_media::title_from(source);
-    let day = day_of(source);
-    let models = vec![("live".to_string(), spec.live_model.clone())];
-
-    let meeting = id.to_string();
-    let mut recorder = crate::recorder::Recorder::start(paths, id, &title, &day, models)?;
-    for event in &events {
-        recorder.apply(event);
-    }
     let segments = recorder.segment_count();
     let duration_s = wav.duration_s();
     let path = recorder.finish(duration_s)?;

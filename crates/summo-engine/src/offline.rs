@@ -142,19 +142,24 @@ fn decode(mut reader: hound::WavReader<std::io::BufReader<std::fs::File>>) -> Re
     }
 }
 
-/// Push a whole file through the pipeline, reporting progress as it goes.
+/// Push a whole file through the pipeline, handing each block's events over as they are produced.
 ///
-/// The callback returning `false` stops the run and returns what has been produced so far — an
-/// import of a two-hour file has to be cancellable, and abandoning the events would punish the user
-/// for changing their mind.
+/// The callback returning `false` stops the run. What has already been handed over stays handed
+/// over — an import of a two-hour file has to be cancellable, and throwing away an hour of finished
+/// transcript would punish the user for changing their mind.
+///
+/// Events go to the caller *per block* rather than in one list at the end. They were accumulated
+/// and returned, which meant the whole transcript of a long file existed only in memory until the
+/// last sample had been decoded: nothing was written, nothing could be read, and a daemon that died
+/// forty minutes in had produced nothing. Handing them over as they appear is also what lets a
+/// person read an import while it runs instead of watching a percentage.
 pub fn transcribe(
     wav: &Wav,
     runner: &mut SessionRunner,
-    mut on_progress: impl FnMut(Progress) -> bool,
-) -> Result<Vec<Event>> {
+    mut on_block: impl FnMut(Progress, &[Event]) -> bool,
+) -> Result<()> {
     let total_s = wav.duration_s();
     let rate = f64::from(wav.rate.max(1));
-    let mut events = Vec::new();
     let mut segments = 0usize;
 
     for (block, chunk) in wav.samples.chunks(BLOCK).enumerate() {
@@ -163,22 +168,33 @@ pub fn transcribe(
             .iter()
             .filter(|e| matches!(e, Event::Final(_)))
             .count();
-        events.extend(produced);
 
         let done_s = ((block + 1) * BLOCK).min(wav.samples.len()) as f64 / rate;
-        if !on_progress(Progress {
-            done_s,
-            total_s,
-            segments,
-        }) {
-            return Ok(events);
+        if !on_block(
+            Progress {
+                done_s,
+                total_s,
+                segments,
+            },
+            &produced,
+        ) {
+            return Ok(());
         }
     }
 
     // The last utterance is still open when the samples run out; without this the final sentence of
     // every imported file would be missing.
-    events.extend(runner.flush()?);
-    Ok(events)
+    let last = runner.flush()?;
+    segments += last.iter().filter(|e| matches!(e, Event::Final(_))).count();
+    on_block(
+        Progress {
+            done_s: total_s,
+            total_s,
+            segments,
+        },
+        &last,
+    );
+    Ok(())
 }
 
 #[cfg(test)]

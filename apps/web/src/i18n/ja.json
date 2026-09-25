@@ -115,7 +115,13 @@
     "play_from": "{time}から再生",
     "no_transcript": "まだ何も話されていません。",
     "your_notes": "あなたのメモ",
-    "open_ai_settings": "AI 設定"
+    "open_ai_settings": "AI 設定",
+    "subtitles": "字幕",
+    "subtitles_off": "オフ",
+    "subtitles_original": "話された言葉",
+    "subtitles_both": "{language} + 原文",
+    "imported_audio": "取り込んだ音声",
+    "source_moved": "この会議の取り込み元ファイルは {path} にありません。文字起こしは完全です。再生にのみ元のファイルが必要です。"
   },
   "tasks": {
     "title": "タスク",

@@ -140,20 +140,76 @@ export function PageScreen() {
     [applyDraft, say],
   );
 
-  // The daemon reports file names (`mic.opus`); the route takes lane names. Strip the extension
-  // here rather than teaching the player about container formats.
+  /**
+   * The tracks the player may ask for, from the files the daemon reports.
+   *
+   * Filtered to the names the audio route actually serves. It used to map *every* file in the
+   * meeting's directory to a lane, which was fine while the only files were `mic.opus` and
+   * `system.opus` — and wrong the moment there were others. An imported meeting has one file,
+   * `import.wav`, so it drew a player whose only lane answered `no such lane 'import'`: every
+   * imported meeting had a dead transport, and a kept copy of the original would have added a
+   * second dead one.
+   */
   const lanes = useMemo(
     () =>
-      (detail?.audio ?? []).map((file) => {
-        const key = file.replace(/\.[^.]+$/, "");
-        return {
+      (detail?.audio ?? [])
+        .map((file) => file.replace(/\.[^.]+$/, ""))
+        .filter((key) => key === "mic" || key === "system" || key === "import")
+        .map((key) => ({
           key,
-          label: key === "mic" ? t("record.microphone") : t("record.system"),
+          label:
+            key === "mic"
+              ? t("record.microphone")
+              : key === "import"
+                ? t("meeting.imported_audio")
+                : t("record.system"),
           url: url(handshake, `/meetings/${encodeURIComponent(pageId)}/audio/${key}`),
-        };
-      }),
+        })),
     [detail?.audio, handshake, pageId, t],
   );
+
+  /** The video to watch, when the meeting came from one and the file can still be found. */
+  const video = useMemo(
+    () =>
+      detail?.source?.video && detail.source.available
+        ? { url: url(handshake, `/meetings/${encodeURIComponent(pageId)}/source`) }
+        : null,
+    [detail?.source, handshake, pageId],
+  );
+
+  /**
+   * Subtitles: what was said, each translation, and each translation with the original under it.
+   *
+   * The bilingual track is the one worth having and the one a subtitle file cannot be. Somebody
+   * watching a meeting held in a language they half-follow wants both — the translation to
+   * understand and the original to check it against — and a player shows one track at a time, so
+   * "both" has to be a track of its own rather than two switched on together.
+   */
+  const tracks = useMemo(() => {
+    const at = (track: string) =>
+      url(handshake, `/meetings/${encodeURIComponent(pageId)}/track/${track}.vtt`);
+    const languages = detail?.subtitles ?? [];
+    const names = new Intl.DisplayNames([locale], { type: "language" });
+    const nameOf = (code: string) => {
+      try {
+        return names.of(code) ?? code;
+      } catch {
+        return code;
+      }
+    };
+    return [
+      { key: "original", label: t("meeting.subtitles_original"), lang: "", url: at("original") },
+      ...languages.flatMap((code) => [
+        { key: code, label: nameOf(code), lang: code, url: at(code) },
+        {
+          key: `both.${code}`,
+          label: t("meeting.subtitles_both", { language: nameOf(code) }),
+          lang: code,
+          url: at(`both.${code}`),
+        },
+      ]),
+    ];
+  }, [detail?.subtitles, handshake, pageId, locale, t]);
 
   const marks = useMemo(
     () => (detail?.transcript ?? []).map((segment) => segment.t0),
@@ -556,7 +612,24 @@ export function PageScreen() {
           {/* Below the words. Listening back is the rarer visit — the transcript is searchable and
               the summary is already written — and a transport at the top of the column put the one
               control nobody uses where the eye lands first. */}
-          <Player lanes={lanes} marks={marks} onTime={setAt} ref={player} />
+          <Player
+            lanes={lanes}
+            video={video}
+            tracks={tracks}
+            marks={marks}
+            onTime={setAt}
+            ref={player}
+          />
+
+          {/* A meeting that names a file nobody can find. Said once, quietly, with the path in it:
+              the path is the only part a reader can act on, and without it "the video is missing"
+              is a fact they can do nothing with. Not an alarm — the transcript is complete, and
+              only playing the original back needs the file. */}
+          {detail?.source && !detail.source.available && (
+            <p className="text-fg-dim text-micro">
+              {t("meeting.source_moved", { path: detail.source.path })}
+            </p>
+          )}
 
           {/* Asked *about* what the meeting concluded, so it sits under the conclusion. Writing the
               follow-up email is not a feature of its own — it is one of the things people ask for,

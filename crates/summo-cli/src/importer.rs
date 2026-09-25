@@ -110,6 +110,7 @@ pub async fn start(
     handshake: &Handshake,
     file: &Path,
     language: Option<&str>,
+    keep_source: bool,
 ) -> Result<Job> {
     // An absolute path, because the daemon's working directory is not the shell's and a relative
     // one would silently resolve somewhere else.
@@ -119,6 +120,9 @@ pub async fn start(
     let mut body = serde_json::json!({ "path": absolute.to_string_lossy() });
     if let Some(language) = language {
         body["language"] = serde_json::Value::String(language.to_string());
+    }
+    if keep_source {
+        body["keep_source"] = serde_json::Value::Bool(true);
     }
 
     let response = client

@@ -76,6 +76,18 @@ pub struct Frontmatter {
     /// Which models produced this transcript, for reproducing or re-running it later.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub models: BTreeMap<String, String>,
+    /// The file this meeting was imported from, when it was imported rather than recorded.
+    ///
+    /// Provenance first: six months later, "which of the forty files in that folder produced this
+    /// transcript" is a question the transcript should be able to answer about itself.
+    ///
+    /// It is also what makes a video watchable. Importing an `.mp4` extracts the audio and leaves
+    /// the video where it was, so without this there is nothing to play back but a voice — the
+    /// transcript of a screen share with no screen. A path is not a guarantee: the file can be
+    /// renamed, moved, or live on a drive that is not plugged in, and `keep_source` is the answer
+    /// for somebody who would rather spend the disk than find out later.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
     /// The page this one lives inside, when it is a sub-page.
     ///
     /// An id rather than a path, and stored on the *child* rather than as a list on the parent, for
@@ -119,6 +131,7 @@ impl Frontmatter {
             tags: Vec::new(),
             color: None,
             models: BTreeMap::new(),
+            source: None,
             parent: None,
             schema: 1,
         }
