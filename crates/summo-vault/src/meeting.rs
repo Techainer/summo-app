@@ -527,7 +527,11 @@ fn render_segment(segment: &Segment) -> String {
 
 /// `fallback_seq` is the line's position, used only for a file written before segments carried
 /// their own id — or hand-written by someone who did not add one.
-fn parse_segment(line: &str, fallback_seq: u64) -> Option<Segment> {
+///
+/// `pub(crate)` because search reads transcript lines too, and had its own copy of half of this —
+/// which is how a search result came to show `<!-- seq:10 start:40.88 end:43.34 lang:vi -->` to the
+/// person who typed the query. One parser, every reader.
+pub(crate) fn parse_segment(line: &str, fallback_seq: u64) -> Option<Segment> {
     let line = line.trim();
     let rest = line.strip_prefix("**[")?;
     let (timestamp, rest) = rest.split_once("] ")?;

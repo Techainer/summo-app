@@ -837,15 +837,21 @@ fn find_lines(text: &str, needle: &str) -> (usize, Vec<Excerpt>) {
 }
 
 /// Turn a matching line into an excerpt, recovering the timestamp when it is a transcript line.
+///
+/// Through the transcript parser rather than beside it. This had its own reading of the same line
+/// shape — heading, speaker, rest — and the rest is not the text: a transcript line ends in
+/// `<!-- seq:10 start:40.88 end:43.34 lang:vi -->`, which `parse_segment` strips and this kept. So
+/// searching the vault printed the machine state back at the person who typed the query, on the
+/// command line and in the app's search results.
+///
+/// `meeting.rs` has carried a test since long before this saying the comment "must never end up in
+/// the text a person or a model reads". It held, for the one reader it was written about.
 fn excerpt(line: &str) -> Excerpt {
-    if let Some(rest) = line.strip_prefix("**[")
-        && let Some((timestamp, rest)) = rest.split_once("] ")
-        && let Some((speaker, text)) = rest.split_once("** — ")
-    {
+    if let Some(segment) = crate::meeting::parse_segment(line, 0) {
         return Excerpt {
-            text: text.trim().to_string(),
-            t0: crate::meeting::parse_timestamp(timestamp),
-            speaker: Some(speaker.trim().to_string()),
+            text: segment.text,
+            t0: Some(segment.t0),
+            speaker: segment.speaker.map(|s| s.as_str().to_string()),
         };
     }
     Excerpt {
@@ -1397,6 +1403,32 @@ mod tests {
         assert_eq!(hits[0].excerpts[0].text, "Mình họp về ngân sách nhé");
         assert_eq!(hits[0].excerpts[0].t0, Some(724.0));
         assert_eq!(hits[0].excerpts[0].speaker.as_deref(), Some("Bạn"));
+    }
+
+    /// The machine state at the end of a transcript line is not part of the line.
+    ///
+    /// Every real transcript line ends in `<!-- seq:… start:… end:… lang:… -->`; this fixture's do
+    /// not, which is why the test above passed while `summo meetings search` printed the comment
+    /// back at whoever typed the query, and the app's search results did the same.
+    #[test]
+    fn an_excerpt_never_shows_the_comment_a_real_line_carries() {
+        let dir = TempDir::new().unwrap();
+        write(
+            dir.path(),
+            "2026-08-09-real.md",
+            "---\nid: 01A\ndate: 2026-08-09T10:00:00+07:00\n---\n\n# Họp\n\n## Transcript\n             **[00:00:40] S1** — Châu Âu là lục địa tương đối nhỏ <!-- seq:10 start:40.88 end:43.34 lang:vi -->\n",
+        );
+
+        let index = MeetingIndex::scan(dir.path()).unwrap();
+        let hits = index.search("lục địa", 10).unwrap();
+        let excerpt = &hits[0].excerpts[0];
+
+        assert_eq!(excerpt.text, "Châu Âu là lục địa tương đối nhỏ");
+        assert!(!excerpt.text.contains("<!--"), "{}", excerpt.text);
+        assert_eq!(excerpt.speaker.as_deref(), Some("S1"));
+        // And the precise start the comment carries, not the whole second in the heading — this is
+        // the moment a result jumps the player to.
+        assert_eq!(excerpt.t0, Some(40.88));
     }
 
     #[test]
