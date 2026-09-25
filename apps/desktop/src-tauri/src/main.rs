@@ -14,12 +14,12 @@
 mod engine;
 mod window;
 
+use std::str::FromStr;
 use tauri::{
     Emitter, Manager,
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::TrayIconBuilder,
 };
-use std::str::FromStr;
 
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -48,8 +48,9 @@ const DEFAULT_HOTKEY: &str = "CmdOrCtrl+Shift+R";
 fn record_shortcut(home: Option<&std::path::Path>) -> Shortcut {
     let wanted = home.and_then(stored_hotkey);
     let fallback = || {
-        Shortcut::from_str(DEFAULT_HOTKEY)
-            .unwrap_or_else(|_| Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyR))
+        Shortcut::from_str(DEFAULT_HOTKEY).unwrap_or_else(|_| {
+            Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyR)
+        })
     };
     match wanted {
         Some(text) => Shortcut::from_str(&text).unwrap_or_else(|e| {
