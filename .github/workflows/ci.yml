@@ -1016,6 +1016,17 @@ jobs:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
           GITHUB_TOKEN: ${{ github.token }}
 
+      # A meeting spoken in another language, end to end.
+      #
+      # Here rather than in `pnpm e2e` because it downloads a 67 MB voice and runs two synthesis
+      # passes — the same reason `full-flow` and `bilingual` are separate. What it covers is a
+      # feature that worked for releases and could not be reached: `summo dub` had tests and two
+      # published voices, and the app had no route, no screen and not one string for it.
+      - run: pnpm -C apps/web e2e:dub
+        env:
+          SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+          GITHUB_TOKEN: ${{ github.token }}
+
       # Every primitive in every state, which no other suite can photograph.
       #
       # This was written, shipped, and never wired to anything — the one assertion suite in `e2e/`

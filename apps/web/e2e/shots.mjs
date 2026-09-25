@@ -22,10 +22,21 @@
  */
 import { legible } from "./legible.mjs";
 import { chromium } from "playwright";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 
 import { daemon } from "./daemon.mjs";
 import { SCREENS, everyRouteIsCovered } from "./screens.mjs";
+
+/**
+ * The namespaces the catalogue actually has, both halves.
+ *
+ * What makes a dotted word a *key* rather than text. Without this the check flagged `llama.cpp`
+ * and `techainer.com` — a runtime and a domain, both written on purpose — and satisfying it would
+ * have meant changing a correct screen to please a regex.
+ */
+const NAMESPACES = ["vi.json", "vi.more.json"].flatMap((file) =>
+  Object.keys(JSON.parse(readFileSync(new URL(`../src/i18n/${file}`, import.meta.url), "utf8"))),
+);
 
 const engine = await daemon(process.argv, { name: "shots" });
 const appUrl = engine.url;
@@ -77,18 +88,23 @@ for (const scheme of ["light", "dark"]) {
       // guard the catalogue's *contents*; this guards its *delivery*, which became a separate thing
       // the moment the catalogue was split into an eager half and a lazy one. A namespace filed in
       // the wrong half renders exactly this, on exactly these screens, and only on a cold load.
-      const keyNames = await page.evaluate(() => {
+      const keyNames = await page.evaluate((namespaces) => {
         const shape = /^[a-z][a-z_]*\.[a-z_][a-z_0-9]*$/;
+        const known = new Set(namespaces);
         const found = new Set();
         for (const element of document.querySelectorAll("body *")) {
           for (const node of element.childNodes) {
             if (node.nodeType !== Node.TEXT_NODE) continue;
             const text = (node.textContent ?? "").trim();
-            if (shape.test(text)) found.add(text);
+            // The shape alone is not enough. `llama.cpp` is a runtime's name and `techainer.com`
+            // is a domain, and both are text somebody wrote on purpose — flagging them would have
+            // had the fix be a worse screen. A key is a key only if the catalogue has that
+            // namespace, which is what `t()` would have been looking in when it gave up.
+            if (shape.test(text) && known.has(text.split(".")[0])) found.add(text);
           }
         }
         return [...found];
-      });
+      }, NAMESPACES);
       for (const key of keyNames) {
         problems.push(`${scheme}/${width}/${name}: untranslated key on screen — ${key}`);
       }

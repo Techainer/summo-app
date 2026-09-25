@@ -1,6 +1,6 @@
 import { describe as group, expect, it } from "vitest";
 
-import { baseName, describe, isFinished, percent, type Job } from "./imports";
+import { ImportClient, baseName, describe, isFinished, percent, type Job } from "./imports";
 
 const job = (over: Partial<Job> = {}): Job => ({
   id: "j1",
@@ -92,5 +92,38 @@ group("baseName", () => {
 
   it("survives a trailing separator instead of returning empty", () => {
     expect(baseName("/home/a/")).toBe("a");
+  });
+});
+
+group("what the daemon is actually sent", () => {
+  /**
+   * `keepSource` is this codebase's spelling and `keep_source` is the daemon's. Serde drops a field
+   * it does not know without complaining, so sending the wrong one is accepted, ignored, and looks
+   * from the outside exactly like it worked — the import runs, and the copy the user asked for is
+   * simply never made. That failure is invisible until the original file moves, months later.
+   */
+  it("renames keepSource to the field the daemon reads", async () => {
+    const sent: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = ((_url: string, init?: RequestInit) => {
+      sent.push(typeof init?.body === "string" ? init.body : "");
+      return Promise.resolve(
+        new Response("{}", { status: 200, headers: { "content-type": "application/json" } }),
+      );
+    }) as typeof fetch;
+
+    try {
+      const client = new ImportClient({ port: 1, token: "t" });
+      await client.start("/a/b.mp4", { keepSource: true });
+      await client.start("/a/b.mp4");
+
+      expect(JSON.parse(sent[0]!)).toMatchObject({ path: "/a/b.mp4", keep_source: true });
+      // Explicitly false rather than absent: the daemon's default is false either way, and a field
+      // that is present says what this client believes rather than leaving it to be inferred.
+      expect(JSON.parse(sent[1]!)).toMatchObject({ keep_source: false });
+      expect(JSON.parse(sent[0]!)).not.toHaveProperty("keepSource");
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 });

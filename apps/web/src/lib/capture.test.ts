@@ -69,8 +69,13 @@ describe("normalize", () => {
 
 describe("storage", () => {
   it("round-trips a choice", () => {
-    save({ lanes: ["system"], translateInto: ["en", "ja"], spoken: "vi" });
-    expect(load()).toEqual({ lanes: ["system"], translateInto: ["en", "ja"], spoken: "vi" });
+    save({ lanes: ["system"], translateInto: ["en", "ja"], spoken: "vi", device: "mic-7" });
+    expect(load()).toEqual({
+      lanes: ["system"],
+      translateInto: ["en", "ja"],
+      spoken: "vi",
+      device: "mic-7",
+    });
   });
 
   it("falls back to the default when nothing was saved", () => {
@@ -91,15 +96,21 @@ describe("storage", () => {
 
 describe("what the capture means", () => {
   it("knows when live translation is on", () => {
-    expect(translating({ lanes: ["mic"], translateInto: [], spoken: "" })).toBe(false);
-    expect(translating({ lanes: ["mic"], translateInto: ["en"], spoken: "" })).toBe(true);
+    expect(translating({ lanes: ["mic"], translateInto: [], spoken: "", device: "" })).toBe(false);
+    expect(translating({ lanes: ["mic"], translateInto: ["en"], spoken: "", device: "" })).toBe(
+      true,
+    );
   });
 
   // Translating the microphone lane translates *you*. It is what happens when the system-audio
   // switch is forgotten, and it looks like the feature is broken.
   it("knows when nothing but the local user will be heard", () => {
-    expect(hearsOthers({ lanes: ["mic"], translateInto: ["en"], spoken: "" })).toBe(false);
-    expect(hearsOthers({ lanes: ["mic", "system"], translateInto: ["en"], spoken: "" })).toBe(true);
+    expect(hearsOthers({ lanes: ["mic"], translateInto: ["en"], spoken: "", device: "" })).toBe(
+      false,
+    );
+    expect(
+      hearsOthers({ lanes: ["mic", "system"], translateInto: ["en"], spoken: "", device: "" }),
+    ).toBe(true);
   });
 });
 
@@ -145,5 +156,37 @@ describe("system audio has one home", () => {
   it("never leaves a capture with nothing to hear", () => {
     const only = { ...DEFAULT, lanes: ["system"] as Lane[] };
     expect(setSystemAudio(only, false).lanes).toEqual(["mic"]);
+  });
+});
+
+describe("which microphone", () => {
+  /**
+   * `Microphone` has accepted a `deviceId` since it was written and nothing ever passed one, while
+   * `recording.device_id` sat in the settings file being saved and read by nobody. Somebody with a
+   * headset and a built-in microphone could name the one they wanted and be recorded by the other,
+   * with a settings screen showing their choice the whole time.
+   */
+  it("is kept beside the lanes, because the recording needs it before any network call", () => {
+    save({ ...DEFAULT, device: "abc123" });
+    expect(load().device).toBe("abc123");
+  });
+
+  it("is empty for whatever the system calls default", () => {
+    expect(DEFAULT.device).toBe("");
+    expect(normalize({ device: "   " }).device).toBe("");
+    expect(normalize({}).device).toBe("");
+  });
+
+  /**
+   * Not lower-cased, unlike `spoken`. A `deviceId` is an opaque token the browser minted; changing
+   * its case names a different device, or none.
+   */
+  it("keeps the exact token the browser gave, case and all", () => {
+    expect(normalize({ device: "  AbC-123  " }).device).toBe("AbC-123");
+  });
+
+  it("survives a stored value from a build that had no such field", () => {
+    store.set("summo.capture", JSON.stringify({ lanes: ["mic"], spoken: "vi" }));
+    expect(load().device).toBe("");
   });
 });

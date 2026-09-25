@@ -108,10 +108,32 @@ const at = (route) => `${appUrl}?port=${port}&token=${token}#${route}`;
  */
 async function controls(page) {
   return page.evaluate(() => {
-    const name = (el) =>
-      (el.getAttribute("aria-label") ?? el.textContent ?? el.getAttribute("title") ?? "")
+    /**
+     * The accessible name, near enough.
+     *
+     * `img[alt]` is in here because a link whose only content is a logo is *named* — a screen
+     * reader builds the name from the link's contents, and an image contributes its alternative
+     * text. Leaving it out made this suite report the "built by" logo in Settings → About as
+     * nameless, which would have been fixed by adding an `aria-label` that duplicates the alt and
+     * makes the link announce twice. A check that produces a worse app when you satisfy it is a
+     * broken check.
+     *
+     * Still an approximation — the real algorithm walks `aria-labelledby`, `<label>` and several
+     * more — and deliberately so: the failure this is aimed at is a control with *nothing*, and
+     * anything more faithful would be a second implementation of a specification to catch the
+     * cases a browser already gets right.
+     */
+    const name = (el) => {
+      const alt = [...el.querySelectorAll("img[alt]")].map((img) => img.getAttribute("alt") ?? "");
+      return (
+        el.getAttribute("aria-label") ??
+        [el.textContent ?? "", ...alt].join(" ").trim() ??
+        el.getAttribute("title") ??
+        ""
+      )
         .replace(/\s+/g, " ")
         .trim();
+    };
 
     const visible = (el) => {
       const box = el.getBoundingClientRect();

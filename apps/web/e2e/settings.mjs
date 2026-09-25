@@ -9,7 +9,7 @@
  * The storage panel is the one with something irreversible in it, so the check that matters most
  * here is that pressing "see what can go" does not delete anything.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { chromium } from "playwright";
@@ -41,8 +41,28 @@ page.on("console", (m) => m.type() === "error" && problems.push(`console: ${m.te
 await page.goto(`${appUrl}?port=${port}&token=${token}#/settings`, { waitUntil: "networkidle" });
 await page.getByTestId("settings-nav").waitFor({ timeout: 10_000 });
 
-// Every section is reachable, and each one draws something.
-const sections = ["general", "recording", "ai", "translation", "storage", "about"];
+/**
+ * Every section, read out of the source rather than written down here.
+ *
+ * A copied list is a list that goes one item out of date the first time somebody adds a section and
+ * updates the other one — which is exactly what happened: `sync` landed in `SECTION_IDS`, got a
+ * rail entry and a panel, and this suite walked six sections and never looked at it. The same
+ * lesson `e2e/screens.mjs` exists for, in a file that had not learned it.
+ */
+const sections = (() => {
+  const source = readFileSync(new URL("../src/lib/settings.ts", import.meta.url), "utf8");
+  const block = /SECTION_IDS = \[([\s\S]*?)\] as const/.exec(source);
+  if (!block) {
+    console.error("cannot find SECTION_IDS in src/lib/settings.ts — has it moved?");
+    process.exit(1);
+  }
+  const found = [...block[1].matchAll(/"([a-z-]+)"/g)].map((m) => m[1]);
+  if (found.length < 5) {
+    console.error(`only ${found.length} section(s) parsed out of SECTION_IDS — the shape changed.`);
+    process.exit(1);
+  }
+  return found;
+})();
 for (const id of sections) {
   await page.getByTestId(`settings-tab-${id}`).click();
   await page.waitForTimeout(250);
