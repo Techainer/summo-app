@@ -2,8 +2,8 @@
   "import": {
     "title": "Nhập bản ghi có sẵn",
     "hint": "File ghi âm hoặc video. Âm thanh được tách ra rồi nhận dạng.",
-    "path_label": "Đường dẫn file",
-    "path_placeholder": "/duong/dan/toi/file.mp4",
+    "path_label": "Đường dẫn file hoặc link",
+    "path_placeholder": "/duong/dan/toi/file.mp4 hoặc https://…",
     "browse": "Chọn file",
     "submit": "Nhập",
     "no_dialog": "Không mở được hộp thoại chọn file. Dán đường dẫn vào ô nhập.",
@@ -17,7 +17,7 @@
     "state_done": "Xong — {count} câu",
     "state_failed": "Lỗi",
     "formats": "mp3 · m4a · wav · mp4 · mkv · webm",
-    "or_path": "hoặc dán đường dẫn"
+    "or_path": "hoặc dán đường dẫn / link"
   },
   "export": {
     "title": "Xuất & dịch",

@@ -65,7 +65,11 @@ enum Command {
     ///
     /// Takes a file or a folder. Video is fine — the audio is extracted and the video left alone.
     Import {
-        /// A media file, or a folder of them.
+        /// A media file, a folder of them, or an `http(s)` link to one.
+        ///
+        /// A link to a file is downloaded and imported. A link to a *page* — a video somewhere
+        /// with a player around it — needs `yt-dlp` on this machine, the same way an unusual
+        /// container needs ffmpeg; without it the error says so rather than failing vaguely.
         path: std::path::PathBuf,
         /// Report what would be imported without queueing anything.
         #[arg(long)]
@@ -1064,7 +1068,19 @@ async fn import(
     detach: bool,
     keep_source: bool,
 ) -> Result<()> {
-    let files = importer::targets(path)?;
+    // A link is one target and cannot be looked at from here — there is nothing on this disk to
+    // probe. The daemon fetches it, and reports what it found the way it reports any other import.
+    let link = summo_core::media::looks_like_link(&path.to_string_lossy());
+    if link && dry_run {
+        println!("  {} — sẽ tải về rồi nhập", path.display());
+        return Ok(());
+    }
+
+    let files = if link {
+        vec![path.to_path_buf()]
+    } else {
+        importer::targets(path)?
+    };
     if files.is_empty() {
         println!("Không có file nào để nhập trong {}", path.display());
         return Ok(());

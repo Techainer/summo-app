@@ -203,6 +203,12 @@ pub struct Source {
     pub origin: String,
     /// Copy it into the vault, so watching it back survives the original being moved.
     pub keep: bool,
+    /// Delete `file` when the job ends, however it ends.
+    ///
+    /// True for a download, which is staging and not the user's file. Without it a link import
+    /// leaves two copies of the same recording on disk — one in the vault where it belongs and one
+    /// in `~/.summo/downloads` that nothing will ever look at again.
+    pub cleanup: bool,
 }
 
 impl Source {
@@ -213,6 +219,7 @@ impl Source {
             file: path.to_path_buf(),
             origin: path.display().to_string(),
             keep: false,
+            cleanup: false,
         }
     }
 
@@ -300,7 +307,17 @@ pub fn run(
     spec: &crate::protocol::SessionSpec,
     source: &Source,
 ) {
-    match execute(imports, job_id, paths, store, hw, spec, source) {
+    let outcome = execute(imports, job_id, paths, store, hw, spec, source);
+
+    // However it went. A download that failed halfway is still a download, and leaving it behind
+    // means the one thing a user cannot see — `~/.summo/downloads` — is the one that grows.
+    if source.cleanup
+        && let Err(e) = std::fs::remove_file(&source.file)
+    {
+        tracing::warn!(error = %e, path = %source.file.display(), "could not remove the download");
+    }
+
+    match outcome {
         Ok(state) => imports.set(job_id, state),
         Err(e) => imports.set(
             job_id,

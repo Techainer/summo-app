@@ -2,8 +2,8 @@
   "import": {
     "title": "録音ファイルを取り込む",
     "hint": "録音または動画ファイル。音声を取り出して文字にします。",
-    "path_label": "ファイルのパス",
-    "path_placeholder": "/path/to/file.mp4",
+    "path_label": "ファイルのパスまたはリンク",
+    "path_placeholder": "/path/to/file.mp4 または https://…",
     "browse": "ファイルを選ぶ",
     "submit": "取り込む",
     "no_dialog": "ファイル選択を開けませんでした。パスを入力欄に貼り付けてください。",
@@ -17,7 +17,7 @@
     "state_done": "完了 — {count}行",
     "state_failed": "失敗",
     "formats": "mp3 · m4a · wav · mp4 · mkv · webm",
-    "or_path": "またはパスを貼り付け"
+    "or_path": "パスかリンクを貼り付け"
   },
   "export": {
     "title": "書き出しと翻訳",

@@ -112,12 +112,21 @@ pub async fn start(
     language: Option<&str>,
     keep_source: bool,
 ) -> Result<Job> {
-    // An absolute path, because the daemon's working directory is not the shell's and a relative
-    // one would silently resolve somewhere else.
-    let absolute =
-        std::fs::canonicalize(file).with_context(|| format!("không thấy {}", file.display()))?;
+    // A link goes through untouched; a path is made absolute, because the daemon's working
+    // directory is not the shell's and a relative one would silently resolve somewhere else.
+    // `canonicalize` on a URL fails with "no such file", which is a confusing thing to be told
+    // about an address that is perfectly reachable.
+    let target = file.to_string_lossy().to_string();
+    let target = if summo_core::media::looks_like_link(&target) {
+        target
+    } else {
+        std::fs::canonicalize(file)
+            .with_context(|| format!("không thấy {}", file.display()))?
+            .to_string_lossy()
+            .to_string()
+    };
 
-    let mut body = serde_json::json!({ "path": absolute.to_string_lossy() });
+    let mut body = serde_json::json!({ "path": target });
     if let Some(language) = language {
         body["language"] = serde_json::Value::String(language.to_string());
     }

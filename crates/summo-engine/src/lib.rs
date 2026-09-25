@@ -26,6 +26,7 @@ pub mod draft;
 pub mod dream;
 pub mod embedded;
 pub mod errand;
+pub mod fetch;
 pub mod imports;
 pub mod install;
 pub mod live;

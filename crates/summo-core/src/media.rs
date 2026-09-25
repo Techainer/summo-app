@@ -39,6 +39,17 @@ pub fn mime_for(path: &Path) -> &'static str {
     }
 }
 
+/// Whether a string is an `http(s)` link rather than a path.
+///
+/// Here rather than beside the fetching, because the command line has to make the same distinction
+/// before it can decide whether to make a path absolute — and a second spelling of this predicate
+/// is a second chance for the two halves to disagree about what a link is.
+#[must_use]
+pub fn looks_like_link(value: &str) -> bool {
+    let value = value.trim();
+    value.starts_with("http://") || value.starts_with("https://")
+}
+
 /// Whether this is something with pictures in it.
 #[must_use]
 pub fn is_video(path: &Path) -> bool {
@@ -54,6 +65,18 @@ mod tests {
     fn a_container_is_recognised_whatever_case_it_is_written_in() {
         assert_eq!(mime_for(Path::new("a.MP4")), "video/mp4");
         assert_eq!(mime_for(Path::new("a.Mp3")), "audio/mpeg");
+    }
+
+    #[test]
+    fn only_http_and_https_are_links() {
+        assert!(looks_like_link("https://example.com/a.mp4"));
+        assert!(looks_like_link("  http://example.com/a.mp4 "));
+        // A path with extra steps, and a path is already handled.
+        assert!(!looks_like_link("file:///home/me/a.mp4"));
+        assert!(!looks_like_link("/home/me/a.mp4"));
+        assert!(!looks_like_link("C:\\Users\\me\\a.mp4"));
+        assert!(!looks_like_link("javascript:alert(1)"));
+        assert!(!looks_like_link(""));
     }
 
     #[test]

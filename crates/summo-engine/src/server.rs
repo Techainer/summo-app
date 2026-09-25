@@ -2562,7 +2562,7 @@ async fn ask(
 #[cfg_attr(not(feature = "models"), allow(dead_code))]
 #[derive(Debug, Deserialize)]
 struct ImportBody {
-    /// Absolute path to a media file on this machine.
+    /// An absolute path to a media file on this machine, or an `http(s)` link to one.
     path: String,
     /// Model to decode with. Omitted means "whatever the app is configured to record with".
     #[serde(default)]
@@ -2592,15 +2592,38 @@ async fn start_import(
     if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
-    as_response(spawn_import(&state, body))
+    as_response(spawn_import(&state, body).await)
 }
 
 #[cfg(feature = "models")]
-fn spawn_import(state: &AppState, body: ImportBody) -> summo_core::Result<crate::imports::Job> {
+async fn spawn_import(
+    state: &AppState,
+    body: ImportBody,
+) -> summo_core::Result<crate::imports::Job> {
     use summo_core::segment::Lane;
 
-    let source = std::path::PathBuf::from(&body.path);
-    crate::imports::check(&source)?;
+    // A link is fetched before the job exists, so a bad URL is an error on the request rather than
+    // a job that fails a second later — the same reason `check` runs here for a path.
+    //
+    // A downloaded file has no "original where the user left it" to fall back to, so it is kept:
+    // the alternative is a meeting that can never be watched again the moment the temporary file
+    // goes. What is recorded as the source is the URL, because that is what a person would
+    // recognise six months later, not a hashed name under `~/.summo`.
+    let source = if crate::fetch::is_link(&body.path) {
+        let dir = state.engine.paths().root().join("downloads");
+        let file = crate::fetch::fetch(&body.path, &dir).await?;
+        crate::imports::check(&file)?;
+        crate::imports::Source {
+            file,
+            origin: body.path.clone(),
+            keep: true,
+            cleanup: true,
+        }
+    } else {
+        let file = std::path::PathBuf::from(&body.path);
+        crate::imports::check(&file)?;
+        crate::imports::Source::file(&file).keeping(body.keep_source)
+    };
 
     let model = match body.model {
         Some(model) => model,
@@ -2613,9 +2636,9 @@ fn spawn_import(state: &AppState, body: ImportBody) -> summo_core::Result<crate:
     spec.diarize = body.diarize;
     spec.validate()?;
 
-    let title = summo_media::title_from(&source);
+    let title = summo_media::title_from(&source.file);
     let imports = state.engine.imports().clone();
-    let id = imports.add(title, &source);
+    let id = imports.add(title, &source.file);
     let job = imports.get(&id).expect("just added");
 
     let paths = state.engine.paths().clone();
@@ -2624,7 +2647,6 @@ fn spawn_import(state: &AppState, body: ImportBody) -> summo_core::Result<crate:
 
     // Its own thread, not a tokio task: decoding is CPU-bound for minutes at a time and would
     // otherwise starve the runtime that is serving this daemon's other requests.
-    let source = crate::imports::Source::file(&source).keeping(body.keep_source);
     std::thread::spawn(move || {
         crate::imports::run(&imports, &id, &paths, &store, &hw, &spec, &source);
     });
@@ -2635,7 +2657,11 @@ fn spawn_import(state: &AppState, body: ImportBody) -> summo_core::Result<crate:
 /// Without recognition compiled in there is nothing to decode with, and pretending otherwise would
 /// leave a job that sits at "queued" forever.
 #[cfg(not(feature = "models"))]
-fn spawn_import(_state: &AppState, _body: ImportBody) -> summo_core::Result<crate::imports::Job> {
+#[allow(clippy::unused_async)]
+async fn spawn_import(
+    _state: &AppState,
+    _body: ImportBody,
+) -> summo_core::Result<crate::imports::Job> {
     Err(summo_core::Error::Other(
         "bản build này không có nhận dạng giọng nói".into(),
     ))

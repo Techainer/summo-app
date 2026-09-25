@@ -2,8 +2,8 @@
   "import": {
     "title": "Import a recording",
     "hint": "A recording or a video. The audio is extracted and transcribed.",
-    "path_label": "File path",
-    "path_placeholder": "/path/to/file.mp4",
+    "path_label": "File path or link",
+    "path_placeholder": "/path/to/file.mp4 or https://…",
     "browse": "Choose file",
     "submit": "Import",
     "no_dialog": "The file dialog could not open. Paste a path into the field instead.",
@@ -17,7 +17,7 @@
     "state_done": "Done — {count} lines",
     "state_failed": "Failed",
     "formats": "mp3 · m4a · wav · mp4 · mkv · webm",
-    "or_path": "or paste a path"
+    "or_path": "or paste a path or a link"
   },
   "export": {
     "title": "Export & translate",

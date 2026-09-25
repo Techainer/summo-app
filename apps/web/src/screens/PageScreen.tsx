@@ -169,12 +169,13 @@ export function PageScreen() {
   );
 
   /** The video to watch, when the meeting came from one and the file can still be found. */
+  const media = detail?.source ?? null;
   const video = useMemo(
     () =>
-      detail?.source?.video && detail.source.available
+      media?.video && media.available
         ? { url: url(handshake, `/meetings/${encodeURIComponent(pageId)}/source`) }
         : null,
-    [detail?.source, handshake, pageId],
+    [media, handshake, pageId],
   );
 
   /**

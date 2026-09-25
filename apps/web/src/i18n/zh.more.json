@@ -2,8 +2,8 @@
   "import": {
     "title": "导入录音",
     "hint": "录音或视频文件。音频会被提取并转写。",
-    "path_label": "文件路径",
-    "path_placeholder": "/path/to/file.mp4",
+    "path_label": "文件路径或链接",
+    "path_placeholder": "/path/to/file.mp4 或 https://…",
     "browse": "选择文件",
     "submit": "导入",
     "no_dialog": "无法打开文件对话框。请将路径粘贴到输入框。",
@@ -17,7 +17,7 @@
     "state_done": "完成 — {count}行",
     "state_failed": "失败",
     "formats": "mp3 · m4a · wav · mp4 · mkv · webm",
-    "or_path": "或粘贴路径"
+    "or_path": "或粘贴路径 / 链接"
   },
   "export": {
     "title": "导出与翻译",
