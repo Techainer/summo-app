@@ -94,7 +94,25 @@ pub fn sync(
 
     // What the two sides agree on once this run finishes. Built as we go and written only at the
     // end, so a crash leaves the last complete sync recorded rather than a half-finished one.
-    let mut agreed = base.clone();
+    //
+    // It starts from **what the remote holds**, not from what this machine last agreed to, and the
+    // difference is a vault.
+    //
+    // `base` is empty on a machine's first sync. Point a second machine at a folder when it
+    // already has the same files — restored from a backup, copied across, or synced by something
+    // else — and every path matches, so `plan` produces no steps, so nothing is inserted below.
+    // Publishing `base` then wrote an **empty manifest** over the one the first machine had just
+    // written. That machine's next run saw a remote holding nothing against a base holding
+    // everything, read it as "they deleted the vault", and planned `DeleteLocal` for every file in
+    // it. One press.
+    //
+    // Ninety-nine unit tests and none of them had a second machine that already held the files,
+    // which is the ordinary way somebody sets up the second machine.
+    //
+    // Starting from `their_snapshot` says the true thing: the remote keeps everything it already
+    // had, and the loop below overwrites the entries this run changed and removes the ones it
+    // deleted.
+    let mut agreed = their_snapshot.clone();
 
     for step in &plan.steps {
         let path = &step.path;
@@ -202,8 +220,9 @@ pub fn sync(
         }
     }
 
-    // The manifest describes what the remote holds *now*, which is the base plus whatever this run
-    // could not settle — those files keep whatever the remote already had.
+    // The manifest describes what the remote holds *now*: everything it already had, with this
+    // run's changes applied over it, plus — for a file this run could not settle — whatever the
+    // remote already had, which is what a conflict leaves untouched.
     let mut published = agreed.clone();
     for conflict in &outcome.conflicts {
         if let Some(theirs) = their_snapshot.get(&conflict.path) {
@@ -409,6 +428,79 @@ mod tests {
             desktop.read("meetings/a.md").as_deref(),
             Some("# Họp\n\nnội dung\n")
         );
+    }
+
+    /// The bug that made this whole crate unsafe to ship, and the shape no earlier test had.
+    ///
+    /// Setting up the second machine almost never means an empty vault. It means a laptop restored
+    /// from a backup, a folder copied across, or a vault another tool already synced — so both
+    /// sides hold the same files and the plan is correctly empty.
+    ///
+    /// An empty plan wrote an empty manifest, because the manifest was built from *this machine's*
+    /// base and a first sync has no base. That erased the remote's record of every file. The first
+    /// machine's next run then read "the remote holds nothing" against "we agreed on everything"
+    /// — which is a deletion — and planned `DeleteLocal` for the entire vault.
+    ///
+    /// Every existing test had a second machine that started empty, which is the one arrangement
+    /// where the bug cannot happen.
+    #[test]
+    fn a_second_machine_that_already_has_the_files_does_not_erase_the_remote() {
+        let (_r, mut remote) = relay();
+        let laptop = Machine::new("laptop");
+        let desktop = Machine::new("desktop");
+
+        // The same contents on both, before either has ever synced.
+        for machine in [&laptop, &desktop] {
+            machine.write("meetings/a.md", "# Họp\n\nnội dung\n");
+            machine.write("notes/b.md", "ghi chú\n");
+        }
+
+        laptop.sync(&mut remote);
+        let second = desktop.sync(&mut remote);
+        // Nothing to do, correctly: the files already match.
+        assert_eq!(second.summary, crate::plan::Summary::default(), "{second:?}");
+
+        // And now the part that was catastrophic. The laptop must see a remote that still holds
+        // both files, not an empty one.
+        let third = laptop.sync(&mut remote);
+        assert_eq!(
+            third.summary,
+            crate::plan::Summary::default(),
+            "the laptop planned work after a no-op sync elsewhere: {third:?}"
+        );
+        assert_eq!(
+            laptop.read("meetings/a.md").as_deref(),
+            Some("# Họp\n\nnội dung\n"),
+            "the laptop deleted its own vault"
+        );
+        assert_eq!(laptop.read("notes/b.md").as_deref(), Some("ghi chú\n"));
+        assert_eq!(desktop.read("meetings/a.md").is_some(), true);
+    }
+
+    /// The same failure with one file, reached from the other direction: a machine whose run
+    /// touches *one* path must not drop the rest of the manifest.
+    #[test]
+    fn a_run_that_changes_one_file_keeps_the_remotes_record_of_the_others() {
+        let (_r, mut remote) = relay();
+        let laptop = Machine::new("laptop");
+        let desktop = Machine::new("desktop");
+
+        laptop.write("a.md", "one\n");
+        laptop.write("b.md", "two\n");
+        laptop.write("c.md", "three\n");
+        laptop.sync(&mut remote);
+        desktop.sync(&mut remote);
+
+        // One edit, on the machine that has everything.
+        desktop.write("b.md", "two, revised\n");
+        desktop.sync(&mut remote);
+
+        let back = laptop.sync(&mut remote);
+        assert_eq!(back.summary.downloaded, 1, "{back:?}");
+        assert_eq!(back.summary.deleted, 0, "a and c were dropped: {back:?}");
+        assert_eq!(laptop.read("a.md").as_deref(), Some("one\n"));
+        assert_eq!(laptop.read("b.md").as_deref(), Some("two, revised\n"));
+        assert_eq!(laptop.read("c.md").as_deref(), Some("three\n"));
     }
 
     #[test]
