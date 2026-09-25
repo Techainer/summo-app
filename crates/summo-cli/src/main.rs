@@ -874,6 +874,18 @@ async fn show_recommendation(paths: &Paths, lang: &str, registry: Option<&str>) 
     Ok(())
 }
 
+/// The first model for a task that is not tied to a language.
+///
+/// A detector and an embedder are chosen this way rather than through `recommend`, which ranks by
+/// language and accuracy: neither of these reads words, so there is nothing about Vietnamese or
+/// English for it to rank on.
+fn supporting(manifests: &[summo_models::Manifest], task: summo_models::Task) -> Option<String> {
+    manifests
+        .iter()
+        .find(|m| m.task == task)
+        .map(|m| m.id.to_string())
+}
+
 async fn setup(paths: &Paths, lang: &str, registry: Option<&str>, dry_run: bool) -> Result<()> {
     paths.ensure()?;
     let hw = HwProfile::detect();
@@ -899,10 +911,13 @@ async fn setup(paths: &Paths, lang: &str, registry: Option<&str>, dry_run: bool)
 
     // A voice detector is needed regardless of which speech model is chosen; without one there are
     // no utterance boundaries and nothing to decode.
-    let vad = manifests
-        .iter()
-        .find(|m| m.task == summo_models::Task::Vad)
-        .map(|m| m.id.to_string());
+    let vad = supporting(&manifests, summo_models::Task::Vad);
+    // And a speaker embedder, for the same reason it is on the onboarding screen: this command's
+    // own help says it leaves you "ready to record", and the first thing the product claims is a
+    // transcript with the speakers named. Without one the recording works and every line is
+    // anonymous — and the GUI path already pulled it, so following the documented one-command path
+    // was the way to end up with less than clicking through.
+    let speaker = supporting(&manifests, summo_models::Task::SpeakerEmbed);
 
     let mut plan: Vec<String> = Vec::new();
     if let Some(vad) = &vad {
@@ -911,6 +926,9 @@ async fn setup(paths: &Paths, lang: &str, registry: Option<&str>, dry_run: bool)
     plan.push(live.id.clone());
     if let Some(refine) = refine {
         plan.push(refine.id.clone());
+    }
+    if let Some(speaker) = &speaker {
+        plan.push(speaker.clone());
     }
 
     println!("\nplan for {lang}:");
@@ -935,10 +953,19 @@ async fn setup(paths: &Paths, lang: &str, registry: Option<&str>, dry_run: bool)
         pull(paths, id, registry).await?;
     }
 
+    // Two different warnings, because they are two different states. Without a detector nothing
+    // records at all; without an embedder it records fine and nobody has a name. Saying "something
+    // is missing" for both would understate the first and alarm about the second.
     if vad.is_none() {
         println!(
             "\nWarning: no voice detector is available. Recording will not start without one — \
              try `summo pull silero-vad-v5`."
+        );
+    }
+    if speaker.is_none() {
+        println!(
+            "\nNote: no speaker embedder is available, so lines will be transcribed without a \
+             speaker. Everything else works — try `summo pull campplus-sv` to name them."
         );
     }
 
