@@ -208,10 +208,7 @@ pub fn run(paths: &Paths, request: &Request) -> Result<Report> {
     })
 }
 
-fn remote_snapshot(
-    remote: &dyn Remote,
-    key: &Key,
-) -> Result<Snapshot> {
+fn remote_snapshot(remote: &dyn Remote, key: &Key) -> Result<Snapshot> {
     let Some(bytes) = remote
         .manifest()
         .map_err(|e| Error::Other(format!("cannot read the remote manifest: {e}")))?
@@ -506,7 +503,10 @@ mod tests {
         let Some(home) = home.filter(|h| !h.is_empty()) else {
             return;
         };
-        assert_eq!(shorten(Path::new(&format!("{home}/Sync/vault"))), "~/Sync/vault");
+        assert_eq!(
+            shorten(Path::new(&format!("{home}/Sync/vault"))),
+            "~/Sync/vault"
+        );
         assert_eq!(shorten(Path::new("/mnt/nas/vault")), "/mnt/nas/vault");
     }
 }

@@ -153,7 +153,9 @@ fn every_group_of_settings_has_somewhere_to_change_it() {
             continue;
         };
         if !listed.contains(&format!("\"{section}\"")) {
-            unreachable.push(format!("{group} → section `{section}`, which the screen does not have"));
+            unreachable.push(format!(
+                "{group} → section `{section}`, which the screen does not have"
+            ));
         }
     }
 

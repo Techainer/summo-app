@@ -637,7 +637,13 @@ async fn perf(
     };
 
     #[cfg(feature = "tts")]
-    let dubs = state.engine.dubs().list().iter().filter(|j| !j.state.is_finished()).count();
+    let dubs = state
+        .engine
+        .dubs()
+        .list()
+        .iter()
+        .filter(|j| !j.state.is_finished())
+        .count();
     #[cfg(not(feature = "tts"))]
     let dubs = 0usize;
 
@@ -2979,11 +2985,14 @@ async fn run_sync(
 
     // On a blocking thread: this walks a folder of files, hashes them, and writes some back. The
     // runtime behind this socket is also serving the screen that is watching.
-    let done = tokio::task::spawn_blocking(move || summo_sync::session::run(&paths, &request)).await;
+    let done =
+        tokio::task::spawn_blocking(move || summo_sync::session::run(&paths, &request)).await;
 
     as_response(match done {
         Ok(result) => result,
-        Err(e) => Err(summo_core::Error::Other(format!("sync did not finish: {e}"))),
+        Err(e) => Err(summo_core::Error::Other(format!(
+            "sync did not finish: {e}"
+        ))),
     })
 }
 
@@ -3126,7 +3135,9 @@ async fn get_dub(
     #[cfg(not(feature = "tts"))]
     let found: Option<serde_json::Value> = None;
     as_response(
-        found.ok_or_else(|| summo_core::Error::Other(format!("không có lần lồng tiếng nào tên {id}"))),
+        found.ok_or_else(|| {
+            summo_core::Error::Other(format!("không có lần lồng tiếng nào tên {id}"))
+        }),
     )
 }
 

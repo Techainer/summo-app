@@ -458,7 +458,11 @@ mod tests {
         laptop.sync(&mut remote);
         let second = desktop.sync(&mut remote);
         // Nothing to do, correctly: the files already match.
-        assert_eq!(second.summary, crate::plan::Summary::default(), "{second:?}");
+        assert_eq!(
+            second.summary,
+            crate::plan::Summary::default(),
+            "{second:?}"
+        );
 
         // And now the part that was catastrophic. The laptop must see a remote that still holds
         // both files, not an empty one.

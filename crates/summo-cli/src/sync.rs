@@ -52,7 +52,11 @@ pub fn run(
 
     if dry_run {
         for step in &report.steps {
-            println!("{:<12} {}", summo_sync::session::label(&step.action), step.path);
+            println!(
+                "{:<12} {}",
+                summo_sync::session::label(&step.action),
+                step.path
+            );
         }
     }
     for refused in &report.refused {

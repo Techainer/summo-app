@@ -826,7 +826,10 @@ mod tests {
             // one, and a player handed this would ask for a lane that does not resolve.
             "dub-ja.wav.part".to_string(),
         ];
-        assert_eq!(dubbed(&audio), vec!["vi".to_string(), "zh-hans".to_string()]);
+        assert_eq!(
+            dubbed(&audio),
+            vec!["vi".to_string(), "zh-hans".to_string()]
+        );
     }
 
     #[test]

@@ -879,13 +879,7 @@ mod tests {
     fn a_queued_job_has_no_honest_fraction() {
         assert_eq!(JobState::Queued.fraction(), None);
         assert_eq!(JobState::Loading.fraction(), None);
-        assert_eq!(
-            JobState::Failed {
-                error: "x".into()
-            }
-            .fraction(),
-            None
-        );
+        assert_eq!(JobState::Failed { error: "x".into() }.fraction(), None);
     }
 
     #[test]

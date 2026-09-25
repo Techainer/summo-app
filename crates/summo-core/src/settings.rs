@@ -656,7 +656,12 @@ mod tests {
         let settings = Settings::default();
         let json = serde_json::to_string(&settings).unwrap();
         for forbidden in [
-            "passphrase", "password", "secret", "token", "credential", "private_key",
+            "passphrase",
+            "password",
+            "secret",
+            "token",
+            "credential",
+            "private_key",
         ] {
             assert!(
                 !json.contains(forbidden),
