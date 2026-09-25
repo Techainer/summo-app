@@ -96,6 +96,14 @@ enum Command {
         lang: Option<String>,
         #[arg(long, default_value_t = 4)]
         threads: usize,
+        /// Write what each model actually said, per clip, as JSON.
+        ///
+        /// A rate is a summary. On Mandarin the summary hides the difference between a model that
+        /// misheard and one that heard correctly and answered in traditional characters where the
+        /// reference is simplified — every one of which scores as a substitution. The only way to
+        /// tell those apart is to read the transcripts.
+        #[arg(long)]
+        hypotheses: Option<std::path::PathBuf>,
         #[arg(long)]
         json: Option<std::path::PathBuf>,
         #[arg(long)]
@@ -156,6 +164,7 @@ fn main() -> Result<()> {
             models,
             lang,
             threads,
+            hypotheses,
             json,
             markdown,
         } => run_asr(
@@ -163,6 +172,7 @@ fn main() -> Result<()> {
             &models,
             lang.as_deref(),
             threads,
+            hypotheses.as_deref(),
             json.as_deref(),
             markdown.as_deref(),
         ),
@@ -275,12 +285,15 @@ fn run_asr(
     models: &[String],
     language: Option<&str>,
     threads: usize,
+    hypotheses: Option<&std::path::Path>,
     json: Option<&std::path::Path>,
     markdown: Option<&std::path::Path>,
 ) -> Result<()> {
-    use summo_bench::asr::{AsrReport, evaluate, load_items};
+    use summo_bench::asr::{AsrReport, evaluate_recording, load_items};
 
     let items = load_items(dataset)?;
+    let mut transcripts: std::collections::BTreeMap<String, Vec<summo_bench::asr::Hypothesis>> =
+        std::collections::BTreeMap::new();
     let total_secs: f64 = items.iter().map(|i| i.duration_s).sum();
     tracing::info!(
         items = items.len(),
@@ -320,7 +333,16 @@ fn run_asr(
             )?),
             _ => Box::new(summo_asr::sherpa::ZipformerDecoder::from_dir(dir, threads)?),
         };
-        let metrics = evaluate(decoder.as_mut(), dataset, &items)?;
+        let mut kept = Vec::new();
+        let metrics = evaluate_recording(
+            decoder.as_mut(),
+            dataset,
+            &items,
+            hypotheses.map(|_| &mut kept),
+        )?;
+        if hypotheses.is_some() {
+            transcripts.insert(name.clone(), kept);
+        }
         tracing::info!(
             wer = format!("{:.1}%", metrics.wer * 100.0),
             cer = format!("{:.1}%", metrics.cer * 100.0),
@@ -341,6 +363,10 @@ fn run_asr(
 
     if let Some(path) = json {
         std::fs::write(path, serde_json::to_vec_pretty(&reports)?)
+            .with_context(|| format!("cannot write {}", path.display()))?;
+    }
+    if let Some(path) = hypotheses {
+        std::fs::write(path, serde_json::to_vec_pretty(&transcripts)?)
             .with_context(|| format!("cannot write {}", path.display()))?;
     }
     if let Some(path) = markdown {

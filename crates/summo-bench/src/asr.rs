@@ -97,6 +97,31 @@ pub fn load_items(dir: &Path) -> Result<Vec<AsrItem>> {
 /// Decoding is one pass per utterance, not the pseudo-streaming loop: this measures the model, and
 /// mixing in the session's re-decode multiplier would measure the cadence setting instead.
 pub fn evaluate(decoder: &mut dyn Decoder, dir: &Path, items: &[AsrItem]) -> Result<AsrMetrics> {
+    evaluate_recording(decoder, dir, items, None)
+}
+
+/// One line per clip: what it was, what the model said.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Hypothesis {
+    pub wav: String,
+    pub reference: String,
+    pub hypothesis: String,
+}
+
+/// As [`evaluate`], and keeping what the model actually said.
+///
+/// A rate is a summary, and a summary hides the difference between a model that misheard and a
+/// model that heard correctly and wrote the answer in a script the reference does not use. On
+/// Mandarin that is not hypothetical: Whisper flips between simplified and traditional mid-file,
+/// and every traditional character scores as a substitution. Without the transcripts there is no
+/// way to tell that apart from mishearing, and a number published without knowing which is a
+/// number that might be describing a conversion problem.
+pub fn evaluate_recording(
+    decoder: &mut dyn Decoder,
+    dir: &Path,
+    items: &[AsrItem],
+    mut keep: Option<&mut Vec<Hypothesis>>,
+) -> Result<AsrMetrics> {
     let (mut word_errors, mut words) = (0_usize, 0_usize);
     let (mut char_errors, mut chars) = (0_usize, 0_usize);
     let mut audio_secs = 0.0;
@@ -120,6 +145,14 @@ pub fn evaluate(decoder: &mut dyn Decoder, dir: &Path, items: &[AsrItem]) -> Res
 
         let reference = normalize(&item.text);
         let hypothesis = normalize(&hypothesis.text);
+
+        if let Some(kept) = keep.as_deref_mut() {
+            kept.push(Hypothesis {
+                wav: item.wav.clone(),
+                reference: reference.clone(),
+                hypothesis: hypothesis.clone(),
+            });
+        }
 
         let ref_words: Vec<&str> = reference.split_whitespace().collect();
         let hyp_words: Vec<&str> = hypothesis.split_whitespace().collect();

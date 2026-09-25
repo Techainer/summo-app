@@ -45,7 +45,14 @@ pub struct Scored {
     pub expected_rtf: Option<f32>,
     /// Whether it can plausibly keep up with live audio here.
     pub live_capable: bool,
-    /// Measured accuracy in `0.0..=1.0`, or `0.0` when nothing has been measured.
+    /// Measured accuracy in `0.0..=1.0`, or `0.0` when nothing has been measured **on this
+    /// language**.
+    ///
+    /// Deliberately not another language's number. An English benchmark is evidence about a
+    /// multilingual model and it is reported in [`Scored::reason`] with the language named, but a
+    /// field called `accuracy` on a list ranked for Chinese has to mean accuracy in Chinese, or the
+    /// thing reading it will sort by it — which is exactly how a model with 43 % character error on
+    /// Mandarin came to be listed second for Mandarin.
     pub accuracy: f32,
     /// Human-readable justification, shown next to the recommendation.
     pub reason: String,
@@ -290,24 +297,87 @@ fn required_ram_mb(manifest: &Manifest) -> u32 {
 ///
 /// Falls back to any quality metric present, because a model measured only on another language is
 /// still better evidence than none — but a language-specific number always wins.
-fn accuracy_for(manifest: &Manifest, language: &str) -> Option<f32> {
+/// A measured accuracy, and whether it was measured on the language being asked about.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Accuracy {
+    /// `0.0..=1.0`, one minus the error rate.
+    pub value: f32,
+    /// The benchmark's language code.
+    pub language: String,
+    /// Whether that is the language the caller asked about.
+    pub for_this_language: bool,
+}
+
+/// What has been measured about a model's accuracy on a language.
+///
+/// Two things this used to get wrong, and both of them showed on the same screen.
+///
+/// **It read only `wer_*`.** A word error rate needs words, and a word needs a space between it and
+/// the next one. Mandarin has none, so every reference is one "word" and the rate it produces is
+/// noise — measured: 65.8 % for a model whose character error rate on the same hundred clips is
+/// 7.4 %. Character error rate is *the* accuracy measure for a language written without spaces, and
+/// refusing to read it meant the one language where it is correct had no number at all.
+///
+/// **It fell back to another language's number without saying so.** `summo recommend --lang zh`
+/// printed "sense-voice-small 93% accurate, whisper-tiny 87% accurate" — both from English
+/// benchmarks, both presented as Chinese. On Chinese, measured here: sense-voice 7.4 % character
+/// error, whisper-tiny **43.1 %** after neutralising its habit of answering in traditional
+/// characters, 51.8 % as written. The list ranked a model that gets two characters in five wrong
+/// second, on the strength of how it does in English, and nothing on screen said which language the
+/// number came from.
+///
+/// So the language comes back with the number, the caller says so, and [`score`] ranks on a
+/// measurement of the language actually asked about.
+#[must_use]
+pub fn accuracy_for(manifest: &Manifest, language: &str) -> Option<Accuracy> {
     let language = language
         .split('-')
         .next()
         .unwrap_or(language)
         .to_lowercase();
-    let specific = manifest
-        .profile
-        .quality
-        .iter()
-        .find(|(key, _)| key.starts_with("wer") && key.ends_with(&language));
-    let any = manifest
-        .profile
-        .quality
-        .iter()
-        .find(|(key, _)| key.starts_with("wer"));
 
-    specific.or(any).map(|(_, wer)| 1.0 - wer)
+    // `wer_fleurs_vi` and `cer_fleurs_vi` both end in the code. Word error first where both exist:
+    // it is the stricter measure and the one every other number in this project is quoted in.
+    let rate = |key: &str| {
+        manifest
+            .profile
+            .quality
+            .iter()
+            .find(|(k, _)| k.starts_with(key) && k.ends_with(&language))
+    };
+    if let Some((key, error)) = rate("wer").or_else(|| rate("cer")) {
+        return Some(Accuracy {
+            value: 1.0 - error,
+            language: benchmark_language(key).to_string(),
+            for_this_language: true,
+        });
+    }
+
+    // Nothing for this language. Another language's measurement is still evidence about a
+    // multilingual model — returned so it can be shown, labelled, and not used to rank.
+    //
+    // Word error first here too. The quality map is sorted, so looking for either at once returns
+    // `cer_fleurs_en` before `wer_fleurs_en` and quotes the kinder of the two numbers — 97% where
+    // every other figure in this project would say 93%.
+    let any = |key: &str| {
+        manifest
+            .profile
+            .quality
+            .iter()
+            .find(|(k, _)| k.starts_with(key))
+    };
+    any("wer")
+        .or_else(|| any("cer"))
+        .map(|(key, error)| Accuracy {
+            value: 1.0 - error,
+            language: benchmark_language(key).to_string(),
+            for_this_language: false,
+        })
+}
+
+/// `wer_fleurs_vi` names `vi`.
+fn benchmark_language(key: &str) -> &str {
+    key.rsplit('_').next().unwrap_or(key)
 }
 
 fn score(manifest: &Manifest, hw_key: &str, language: &str) -> Scored {
@@ -323,23 +393,42 @@ fn score(manifest: &Manifest, hw_key: &str, language: &str) -> Scored {
         // optimistically would recommend a model that then cannot keep up.
         Some(_) | None => 0.0,
     };
-    let accuracy_score = accuracy.unwrap_or(0.5) * 200.0;
+    // Only a measurement of the language asked about ranks. A model measured in English is not
+    // thereby a good Chinese model, and treating it as one is how `whisper-tiny` — 43 % character
+    // error on Mandarin — came to be listed above models measured on Mandarin itself. Borrowed
+    // numbers count as unmeasured here and are shown, labelled, in the reason.
+    let ranked_accuracy = accuracy
+        .as_ref()
+        .filter(|a| a.for_this_language)
+        .map(|a| a.value);
+    let accuracy_score = ranked_accuracy.unwrap_or(0.5) * 200.0;
     let live_bonus = if live_capable { 150.0 } else { 0.0 };
 
-    let reason = match (rtf, accuracy) {
+    // The language is named whenever it is not the one asked about. "93% accurate" is a different
+    // claim from "93% accurate on en", and only one of them is true here.
+    let accurate = |a: &Accuracy| {
+        if a.for_this_language {
+            format!("{:.0}% accurate", a.value * 100.0)
+        } else {
+            format!(
+                "{:.0}% accurate on {} — never measured on {language}",
+                a.value * 100.0,
+                a.language
+            )
+        }
+    };
+
+    let reason = match (rtf, accuracy.as_ref()) {
         (Some(r), Some(a)) if live_capable => format!(
-            "{:.0}% accurate, {:.0}× faster than real time on this machine",
-            a * 100.0,
+            "{}, {:.0}× faster than real time on this machine",
+            accurate(a),
             1.0 / r.max(f32::EPSILON)
         ),
         (Some(r), _) if !live_capable => format!(
             "too slow for live text here (real-time factor {r:.2}); usable for re-transcribing a \
              recording afterwards"
         ),
-        (None, Some(a)) => format!(
-            "{:.0}% accurate, but never measured on hardware like this",
-            a * 100.0
-        ),
+        (None, Some(a)) => format!("{}, but never measured on hardware like this", accurate(a)),
         _ => "no measurements available for this machine".into(),
     };
 
@@ -350,7 +439,7 @@ fn score(manifest: &Manifest, hw_key: &str, language: &str) -> Scored {
         expected_rtf: rtf,
         live_capable,
         reason,
-        accuracy: accuracy.unwrap_or(0.0),
+        accuracy: ranked_accuracy.unwrap_or(0.0),
         caution: None,
     }
 }
@@ -366,6 +455,94 @@ mod tests {
     use super::*;
     use crate::manifest::{FileEntry, Profile, RssProfile};
     use summo_core::ModelId;
+
+    /// A word error rate needs words, and Mandarin is written without spaces.
+    ///
+    /// A `cer_*` for the language asked about is the accuracy measure for that language, and this
+    /// read only `wer_*` — so the one language where character error is correct had no number at
+    /// all, and fell through to another language's.
+    #[test]
+    fn a_character_error_rate_is_the_measure_for_a_language_written_without_spaces() {
+        let m = manifest(
+            "sense-voice-small",
+            &["zh"],
+            0.02,
+            "cer_fleurs_zh",
+            0.074,
+            512,
+        );
+        let found = accuracy_for(&m, "zh").expect("a zh measurement");
+        assert!(found.for_this_language);
+        assert_eq!(found.language, "zh");
+        assert!((found.value - 0.926).abs() < 1e-5, "{found:?}");
+    }
+
+    /// The bug this whole distinction exists for.
+    ///
+    /// `summo recommend --lang zh` printed "whisper-tiny 87% accurate" from an English benchmark.
+    /// Measured on a hundred FLEURS zh clips, whisper-tiny is 51.8 % character error — it gets
+    /// half the characters wrong, and the screen ranked it second on how it does in English.
+    #[test]
+    fn another_language_s_measurement_is_labelled_and_does_not_rank() {
+        let english = manifest("whisper-tiny", &["*"], 0.07, "wer_fleurs_en", 0.132, 512);
+        let found = accuracy_for(&english, "zh").expect("something was measured");
+        assert!(!found.for_this_language);
+        assert_eq!(found.language, "en");
+
+        let scored = score(&english, "cpu_x86_avx512vnni_8t", "zh");
+        assert!(
+            scored.reason.contains("on en") && scored.reason.contains("never measured on zh"),
+            "{}",
+            scored.reason
+        );
+        // Not carried in the field a caller would sort by.
+        assert_eq!(scored.accuracy, 0.0);
+    }
+
+    /// And a measurement of the language asked about is used, unlabelled, and does rank.
+    #[test]
+    fn a_measurement_of_the_language_asked_about_needs_no_caveat() {
+        let m = manifest(
+            "sense-voice-small",
+            &["zh"],
+            0.02,
+            "cer_fleurs_zh",
+            0.074,
+            512,
+        );
+        let scored = score(&m, "cpu_x86_avx512vnni_8t", "zh");
+        assert!(scored.reason.contains("93% accurate"), "{}", scored.reason);
+        assert!(
+            !scored.reason.contains("never measured"),
+            "{}",
+            scored.reason
+        );
+        assert!((scored.accuracy - 0.926).abs() < 1e-5);
+    }
+
+    /// Word error where both exist, so a model is quoted the way every other figure here is.
+    ///
+    /// The quality map is sorted, so "either" returns `cer_` first and would quote the kinder of
+    /// the two numbers — 97 % where the rest of this project says 93 %.
+    #[test]
+    fn word_error_is_preferred_where_both_were_measured() {
+        let mut m = manifest(
+            "sense-voice-small",
+            &["en"],
+            0.03,
+            "wer_fleurs_en",
+            0.074,
+            512,
+        );
+        m.profile.quality.insert("cer_fleurs_en".into(), 0.034);
+        let found = accuracy_for(&m, "en").expect("measured");
+        assert!((found.value - 0.926).abs() < 1e-5, "{found:?}");
+
+        // And in the fallback, where the language does not match either.
+        let borrowed = accuracy_for(&m, "ko").expect("measured on something");
+        assert!(!borrowed.for_this_language);
+        assert!((borrowed.value - 0.926).abs() < 1e-5, "{borrowed:?}");
+    }
 
     fn manifest(id: &str, langs: &[&str], rtf: f32, wer_key: &str, wer: f32, ram: u32) -> Manifest {
         let mut profile = Profile {
