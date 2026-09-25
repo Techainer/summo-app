@@ -4227,7 +4227,12 @@ async fn start_install(
         .await;
 
         match outcome {
-            Ok(()) => installs.set(&key, crate::install::State::Done),
+            Ok(()) => installs.set(
+                &key,
+                crate::install::State::Done {
+                    total: manifest.total_bytes(),
+                },
+            ),
             Err(e) => installs.set(
                 &key,
                 crate::install::State::Failed {

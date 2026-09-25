@@ -39,7 +39,17 @@ pub enum State {
     },
     /// Downloaded, now being verified and moved into the blob store.
     Installing,
-    Done,
+    /// Installed, and how big it was.
+    ///
+    /// `Done` carried nothing, which made a finished job unable to answer the one question asked
+    /// about it afterwards: how much did this take. A caller polling for a size raced the install —
+    /// see it mid-download and the size was there; see it a moment later and the job had succeeded
+    /// into a state that had forgotten. The faster the install, the more likely the second, so the
+    /// case where everything went right was the case that reported nothing.
+    Done {
+        #[serde(default)]
+        total: u64,
+    },
     Failed {
         error: String,
     },
@@ -48,7 +58,7 @@ pub enum State {
 impl State {
     #[must_use]
     pub fn is_finished(&self) -> bool {
-        matches!(self, State::Done | State::Failed { .. })
+        matches!(self, State::Done { .. } | State::Failed { .. })
     }
 
     /// A fraction for a bar, or `None` when the size is not yet known.
@@ -61,7 +71,7 @@ impl State {
             State::Downloading { done, total } if *total > 0 => {
                 Some((*done as f64 / *total as f64).clamp(0.0, 1.0))
             }
-            State::Done => Some(1.0),
+            State::Done { .. } => Some(1.0),
             _ => None,
         }
     }
@@ -210,7 +220,7 @@ mod tests {
         installs.claim(&id("b-model"), "b");
         assert!(installs.busy());
 
-        installs.set("a-model", State::Done);
+        installs.set("a-model", State::Done { total: 42 });
         assert!(installs.busy());
         installs.set("b-model", State::Failed { error: "x".into() });
         assert!(!installs.busy());
