@@ -449,12 +449,24 @@ impl Library {
         if target == entry.path {
             return Ok(target);
         }
-        if target.exists() {
-            return Err(Error::Vault(format!(
-                "a file named {} already exists in that folder",
-                name.to_string_lossy()
-            )));
-        }
+
+        // A name already taken is filed beside the other one, not refused.
+        //
+        // This answered *"a file named 2026-09-25-ghi-chu-moi-3.md already exists in that folder"*
+        // and stopped. Refusing was half right — overwriting would destroy somebody's note, and
+        // that must never happen. But the user did not choose this file name: the app generates it
+        // from a date and a title, so two notes written the same day about the same thing collide,
+        // and the person filing one of them is told about a conflict they did not create and
+        // cannot resolve without renaming a file they may not know they have.
+        //
+        // Creating a document already solves this. Moving one should not be the operation with the
+        // worse answer.
+        let target = if target.exists() {
+            free_name(&dir, name)
+        } else {
+            target
+        };
+
         std::fs::rename(&entry.path, &target).map_err(|e| Error::io(&target, e))?;
         Ok(target)
     }
@@ -712,6 +724,30 @@ fn grouped(
 ///
 /// A folder name arrives from the app, and the app takes it from a text field. `..` in that field
 /// must not become a write outside the vault.
+/// A free name in `dir`, derived from one already taken.
+///
+/// `notes.md` → `notes-2.md` → `notes-3.md`. The same shape as the one creating a document uses, so
+/// a file that moves into a folder is named the way a file created there would have been.
+///
+fn free_name(dir: &Path, name: &std::ffi::OsStr) -> PathBuf {
+    let name = name.to_string_lossy();
+    let (stem, extension) = match name.rsplit_once('.') {
+        Some((stem, extension)) => (stem, format!(".{extension}")),
+        None => (name.as_ref(), String::new()),
+    };
+    for suffix in 2..1000 {
+        let candidate = dir.join(format!("{stem}-{suffix}{extension}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    // Nanoseconds since the epoch. A thousand files of one name in one folder is not a situation
+    // to keep counting through, and not one to fail in either — the point of this function is that
+    // filing something always works.
+    let stamp = OffsetDateTime::now_utc().unix_timestamp_nanos();
+    dir.join(format!("{stem}-{stamp}{extension}"))
+}
+
 fn safe_folder(folder: &str) -> Result<PathBuf> {
     let mut out = PathBuf::new();
     for part in folder.split(['/', '\\']) {
@@ -1030,6 +1066,41 @@ mod tests {
         let home = lib.move_to_folder(&id, "").unwrap();
         assert_eq!(home, before);
         assert_eq!(crate::note::list(&paths).unwrap().len(), 1);
+    }
+
+    /// Two documents whose generated file names collide, filed into the same folder.
+    ///
+    /// The second used to be refused: *"a file named … already exists in that folder"*. The user
+    /// did not choose that name — it is a date and a title, so two notes written the same day about
+    /// the same thing collide — and they were told about a conflict they had not created and could
+    /// not resolve without renaming a file they may not know they have. Found by a suite that
+    /// presses every button on every screen; pressing "new page" twice and filing both is all it
+    /// takes.
+    ///
+    /// Never overwritten, which is the half the refusal had right: the first note is still there,
+    /// with its own content, after the second arrives beside it.
+    #[test]
+    fn filing_two_documents_of_the_same_name_keeps_both() {
+        let (dir, lib) = library();
+        let paths = Paths::at(dir.path());
+
+        let (first, _) = crate::note::create(&paths, "Ghi chú mới", "2026-08-10", "một").unwrap();
+        let (second, _) = crate::note::create(&paths, "Ghi chú mới", "2026-08-10", "hai").unwrap();
+
+        let a = lib.move_to_folder(&first, "khach-hang").unwrap();
+        let b = lib
+            .move_to_folder(&second, "khach-hang")
+            .expect("filing the second one is not an error");
+
+        assert_ne!(a, b, "two documents cannot be one file");
+        assert!(a.exists() && b.exists(), "both are on disk");
+        assert!(std::fs::read_to_string(&a).unwrap().contains("một"));
+        assert!(std::fs::read_to_string(&b).unwrap().contains("hai"));
+
+        // And both are in the folder, findable by the ids they kept.
+        let index = lib.scan().unwrap();
+        assert_eq!(index.get(&first).unwrap().folder, "khach-hang");
+        assert_eq!(index.get(&second).unwrap().folder, "khach-hang");
     }
 
     #[test]
