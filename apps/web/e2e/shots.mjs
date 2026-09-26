@@ -54,6 +54,26 @@ const VIEWPORTS = [
   ["narrow", { width: 390, height: 844 }],
 ];
 
+/**
+ * Widths that are measured but not photographed.
+ *
+ * Two widths was two answers to a question with a range of them, and a user reported layouts
+ * breaking in places neither of them covers. The gaps are the ordinary ones: 320 is the narrowest
+ * phone still in use, 768 is a tablet held upright and the width just under every `sm:` and `md:`
+ * branch in this app, and 1024 is a laptop beside another window — the width a person running a
+ * call on one half of the screen actually has.
+ *
+ * Measured rather than photographed, and in one theme. The checks are what find the bugs; the PNGs
+ * are for a person to look at afterwards, and nobody is going to look through a hundred and ninety
+ * of them. This keeps the suite a few minutes rather than a quarter of an hour, which is the
+ * difference between a check that runs on every push and one somebody turns off.
+ */
+const WIDTHS = [
+  ["320", { width: 320, height: 720 }],
+  ["768", { width: 768, height: 1024 }],
+  ["1024", { width: 1024, height: 768 }],
+];
+
 const problems = [];
 const browser = await chromium.launch();
 
@@ -112,6 +132,27 @@ for (const scheme of ["light", "dark"]) {
 
     await context.close();
   }
+}
+
+// The widths nobody photographs. See `WIDTHS`: same checks, one theme, no PNGs.
+for (const [width, viewport] of WIDTHS) {
+  const context = await browser.newContext({ locale, viewport, colorScheme: "dark" });
+  await context.addInitScript(() => window.localStorage.setItem("summo.tour", "done"));
+  const page = await context.newPage();
+  page.on("console", (m) => {
+    if (m.type() === "error") problems.push(`console ${width}px: ${m.text()}`);
+  });
+  page.on("pageerror", (e) => problems.push(`pageerror ${width}px: ${e.message}`));
+
+  for (const [name, route] of SCREENS) {
+    if (route === null) continue;
+    await page.goto(`${appUrl}/?token=${token}#${route}`, { waitUntil: "networkidle" });
+    await page.locator("header, main").first().waitFor({ timeout: 10000 });
+    await page.waitForTimeout(500);
+    await legible(page, `${width}px/${name}`, problems);
+  }
+
+  await context.close();
 }
 
 await browser.close();

@@ -7,13 +7,30 @@
  * about how wide a label is.
  */
 
-/** One row of a form: a fixed-width label beside its control. */
-export const FIELD = "mt-4 flex items-center gap-[var(--settings-field-gap)] text-meta text-fg-dim";
+/**
+ * One row of a form: a label beside its control, until there is not room for both.
+ *
+ * The label is a fixed 150px, which is what makes every panel line up. On a wide screen that is
+ * most of the point; below one it is most of the width. At 768 pixels — a tablet held upright, a
+ * laptop with another window beside it — the app sidebar takes 210, the settings rail takes
+ * another 210, and what was left gave the control 78 pixels: `vi`, `auto`, `30`, `this-machine`.
+ * Enough to see that something is set and not enough to read it or change it.
+ *
+ * So the row stacks before it squeezes. The alignment that the fixed label buys is worth having
+ * exactly while there is room for it.
+ */
+export const FIELD =
+  "mt-4 flex flex-col items-start gap-1 text-meta text-fg-dim lg:flex-row lg:items-center lg:gap-[var(--settings-field-gap)]";
 
-export const LABEL = "w-[var(--settings-label)] shrink-0";
+export const LABEL = "shrink-0 lg:w-[var(--settings-label)]";
 
-/** Controls are `Input`s and `Select`s that stretch; the field owns everything else about them. */
-export const CONTROL = "flex-1";
+/**
+ * Controls are `Input`s and `Select`s that stretch; the field owns everything else about them.
+ *
+ * `w-full` below `lg`, because the row is a column there and `flex-1` in a column grows the wrong
+ * axis — it would stretch a text field's *height* and leave it as narrow as its content.
+ */
+export const CONTROL = "w-full lg:w-auto lg:flex-1";
 
 /**
  * Anything that sits under a control rather than under its label.
@@ -31,4 +48,4 @@ export const INDENT = "ms-[var(--settings-indent)]";
 // draws both, and this constant is gone rather than left as a second way to do it.
 
 /** The note under a field. Indented to line up with the control it explains. */
-export const HINT = `mt-1.5 ${INDENT} text-micro leading-normal text-fg-faint`;
+export const HINT = `mt-1.5 text-micro leading-normal text-fg-faint lg:${INDENT}`;

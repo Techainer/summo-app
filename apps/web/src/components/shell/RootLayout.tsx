@@ -685,13 +685,16 @@ export function RootLayout({ children }: { children: ReactNode }) {
         >
           <Menu aria-hidden="true" className="size-[18px] stroke-[1.75]" />
         </button>
-        <div className="flex items-center gap-2 font-semibold tracking-tight">
+        <div className="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
           <span className="flex h-4 items-end gap-0.5" aria-hidden="true">
             <i className="bg-accent rounded-control h-2 w-[3px]" />
             <i className="bg-accent rounded-control h-4 w-[3px]" />
             <i className="bg-accent rounded-control h-1.5 w-[3px]" />
           </span>
-          Summo
+          {/* The mark stays; the word is what costs room. Between a tablet held upright and a
+              laptop beside another window there was not enough of it — see the note on the search
+              pill below. */}
+          <span className="hidden lg:inline">Summo</span>
         </div>
 
         {/* Search where a search bar goes, and the shortcut written on it. Eleven destinations and
@@ -700,16 +703,27 @@ export function RootLayout({ children }: { children: ReactNode }) {
           type="button"
           onClick={() => setPaletteOpen(true)}
           aria-label={t("palette.title")}
-          className="border-line bg-bg-soft text-fg-faint hover:border-line-strong hover:text-fg-dim text-meta rounded-pill ms-1 hidden items-center gap-2 border px-3 py-1.5 transition-colors sm:flex"
+          className="border-line bg-bg-soft text-fg-faint hover:border-line-strong hover:text-fg-dim text-meta rounded-pill ms-1 hidden min-w-0 shrink items-center gap-2 border px-3 py-1.5 transition-colors sm:flex"
         >
-          <Search aria-hidden="true" className="size-3.5" />
-          {t("palette.placeholder")}
-          <kbd className="text-micro border-line rounded-inline ms-4 border px-1.5 py-0.5">⌘K</kbd>
+          <Search aria-hidden="true" className="size-3.5 shrink-0" />
+          {/* The prompt and the shortcut are the first things to go.
+              
+              This header was a row of fixed-width things that never gave any of them up, so
+              between 768 and about 1010 pixels it simply did not fit — every screen in the app
+              scrolled sideways by up to 156px. That is a tablet held upright and a laptop with
+              another window beside it, which is not an edge case. The icon alone still reads as
+              search, and ⌘K still opens it. */}
+          <span className="hidden truncate lg:inline">{t("palette.placeholder")}</span>
+          <kbd className="text-micro border-line rounded-inline ms-4 hidden border px-1.5 py-0.5 lg:inline">
+            ⌘K
+          </kbd>
         </button>
-        <div className="ml-auto flex min-w-0 items-center gap-2.5">
+        <div className="ml-auto flex shrink-0 items-center gap-2.5">
           {/* The meter is the first thing to go when there is no room: the record button says the
               same thing, and a two-pixel-wide waveform says nothing. */}
-          <span className="hidden sm:flex">
+          {/* `lg`, not `sm`. The comment below was already right about why this is the first thing
+              to go; it was simply set to go too late to save the row. */}
+          <span className="hidden lg:flex">
             <Waveform level={engine.level} active={engine.session.recording} />
           </span>
           {/* Language and light-or-dark. Two clicks away in Settings until now, which is two clicks
