@@ -92,6 +92,18 @@ struct Inner {
     hw: HwProfile,
     status: RwLock<SessionStatus>,
     imports: crate::imports::Imports,
+    /// Held across a read-modify-write of `settings.json`.
+    ///
+    /// `Settings::save` is atomic — temporary file, then rename — so nobody ever reads half a
+    /// file. What is *not* atomic is the pattern every handler uses around it: load, change one
+    /// field, save. Two requests in flight together both load the same starting state and the
+    /// second save discards the first change entirely.
+    ///
+    /// Found by CI on a loaded runner. Dragging the silence slider and pressing "back to defaults"
+    /// sends two writes a few milliseconds apart — the slider's blur and the button — and on a
+    /// fast machine they land in the order they were sent. On a slow one they do not, and the
+    /// reset silently did nothing. A user would read that as a button that does not work.
+    settings_write: parking_lot::Mutex<()>,
     /// A repeated reading of this process. Stateful on purpose — CPU use is a rate, and a rate
     /// needs two samples, so a fresh meter per request would report nothing forever.
     meter: parking_lot::Mutex<summo_models::hw::ProcessMeter>,
@@ -131,6 +143,7 @@ impl EngineState {
                 hw: HwProfile::detect(),
                 status: RwLock::new(SessionStatus::Idle),
                 imports: crate::imports::Imports::new(),
+                settings_write: parking_lot::Mutex::new(()),
                 meter: parking_lot::Mutex::new(summo_models::hw::ProcessMeter::new()),
                 #[cfg(feature = "tts")]
                 dubs: crate::dub::Dubs::new(),
@@ -159,6 +172,27 @@ impl EngineState {
     #[must_use]
     pub fn process_use(&self) -> Option<summo_models::hw::ProcessUse> {
         self.inner.meter.lock().read()
+    }
+
+    /// Change `settings.json` without racing another request that is doing the same.
+    ///
+    /// The lock covers the whole load-change-save, which is the only way to make it one operation:
+    /// see `settings_write`. Handlers that merely *read* the settings do not take it — a reader
+    /// cannot observe a torn file, because `save` renames one into place.
+    ///
+    /// # Errors
+    ///
+    /// Whatever `change` returns, and whatever loading or saving returns.
+    pub fn update_settings<T>(
+        &self,
+        change: impl FnOnce(&mut summo_core::Settings) -> Result<T>,
+    ) -> Result<T> {
+        let _held = self.inner.settings_write.lock();
+        let path = self.inner.paths.settings();
+        let mut settings = summo_core::Settings::load(&path)?;
+        let out = change(&mut settings)?;
+        settings.save(&path)?;
+        Ok(out)
     }
 
     /// Imports running in this daemon. Shared, so a job started from one window is visible in

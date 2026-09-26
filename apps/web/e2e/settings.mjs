@@ -37,6 +37,18 @@ const page = await context.newPage();
 const problems = [];
 page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 page.on("console", (m) => m.type() === "error" && problems.push(`console: ${m.text()}`));
+// The console says "the server responded with a status of 400" and neither which server nor what
+// for. A failure a reader cannot act on is half a failure — and this one cost a CI run and a
+// reproduction attempt before anybody could say which request it was. `controls.mjs` has recorded
+// the request and the daemon's own answer since it was written; this is the same three lines.
+page.on("response", (response) => {
+  if (response.status() < 400) return;
+  const { pathname } = new URL(response.url());
+  void response
+    .text()
+    .then((body) => problems.push(`${response.status()} ${pathname} → ${body.slice(0, 200)}`))
+    .catch(() => problems.push(`${response.status()} ${pathname}`));
+});
 
 await page.goto(`${appUrl}?port=${port}&token=${token}#/settings`, { waitUntil: "networkidle" });
 await page.getByTestId("settings-nav").waitFor({ timeout: 10_000 });

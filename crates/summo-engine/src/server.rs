@@ -1123,9 +1123,7 @@ async fn set_models(
         return rejection.into_response();
     }
 
-    as_response((|| {
-        let path = state.engine.paths().settings();
-        let mut settings = summo_core::Settings::load(&path)?;
+    as_response(state.engine.update_settings(|settings| {
         let id = body.model.trim();
 
         // An empty id un-pins the role, rather than being a malformed one.
@@ -1159,8 +1157,7 @@ async fn set_models(
                 // language starts. Removed rather than emptied: an empty string here would be a
                 // choice of nothing, and there is no such model.
                 settings.models.by_language.remove(&code);
-                settings.save(&path)?;
-                return Ok(chosen_roles(&settings));
+                return Ok(chosen_roles(settings));
             }
             let model_id = summo_core::ModelId::parse(id).map_err(Error::Config)?;
             let manifest = state.engine.store().installed(&model_id)?;
@@ -1178,8 +1175,7 @@ async fn set_models(
                 )));
             }
             settings.models.by_language.insert(code, id.to_string());
-            settings.save(&path)?;
-            return Ok(chosen_roles(&settings));
+            return Ok(chosen_roles(settings));
         }
 
         if id.is_empty() {
@@ -1196,8 +1192,7 @@ async fn set_models(
                 "translator" => settings.llm.translator = None,
                 other => return Err(Error::Config(format!("no such model role: `{other}`"))),
             }
-            settings.save(&path)?;
-            return Ok(chosen_roles(&settings));
+            return Ok(chosen_roles(settings));
         }
 
         // Only something that is here. A setting naming a model that was never installed fails at
@@ -1244,14 +1239,12 @@ async fn set_models(
             }
             _ => unreachable!("the role was checked above"),
         }
-
-        settings.save(&path)?;
         // The `chosen` map, not the whole `Settings`. See `chosen_roles`: the client reads the
         // roles out of this reply, and `translator` is not a field of `Models` — so replying with
         // the settings file left the one role that lives under `llm` invisible to the screen that
         // had just set it.
-        Ok(chosen_roles(&settings))
-    })())
+        Ok(chosen_roles(settings))
+    }))
 }
 
 #[derive(Deserialize)]
@@ -1317,9 +1310,11 @@ async fn set_recording(
         return rejection.into_response();
     }
 
-    as_response((|| {
-        let path = state.engine.paths().settings();
-        let mut settings = summo_core::Settings::load(&path)?;
+    // Under the write lock, whole. The slider's blur and the "back to defaults" button send two
+    // of these a few milliseconds apart, and without it the second load saw the state before the
+    // first save — so the reset landed and was then overwritten by the value it had just undone.
+    // See `EngineState::update_settings`.
+    as_response(state.engine.update_settings(|settings| {
         if let Some(on) = body.capture_system_audio {
             settings.recording.capture_system_audio = on;
         }
@@ -1349,7 +1344,6 @@ async fn set_recording(
         if let Some(threads) = body.threads {
             settings.models.threads = (threads > 0).then_some(threads);
         }
-        settings.save(&path)?;
         Ok(serde_json::json!({
             "capture_system_audio": settings.recording.capture_system_audio,
             "device_id": settings.recording.device_id,
@@ -1359,7 +1353,7 @@ async fn set_recording(
             "min_silence_ms": settings.recording.min_silence_ms,
             "threads": settings.models.threads,
         }))
-    })())
+    }))
 }
 
 /// Fill in the models a session did not name.
@@ -3893,9 +3887,7 @@ async fn set_language(
         return rejection.into_response();
     }
 
-    as_response((|| {
-        let path = state.engine.paths().settings();
-        let mut settings = summo_core::Settings::load(&path)?;
+    as_response(state.engine.update_settings(|settings| {
         let code = body.language.trim().to_lowercase();
         settings.models.language = (!code.is_empty()).then_some(code);
 
@@ -3907,9 +3899,7 @@ async fn set_language(
         // pinned, a model measured on Vietnamese and nothing else, and the meeting is decoded by a
         // model that cannot serve it. Nothing said so, because the setting that decides was not the
         // setting the user changed.
-        let switched = repoint_live_model(&state, &mut settings);
-
-        settings.save(&path)?;
+        let switched = repoint_live_model(&state, settings);
         Ok(serde_json::json!({
             "language": settings.models.language,
             "live": settings.models.live,
@@ -3918,7 +3908,7 @@ async fn set_language(
             // the case where the interface should be offering a download.
             "switched": switched,
         }))
-    })())
+    }))
 }
 
 /// Point `models.live` at something that can serve the chosen language.
@@ -4283,21 +4273,18 @@ async fn set_storage(
         return rejection.into_response();
     }
 
-    as_response((|| {
-        let path = state.engine.paths().settings();
-        let mut settings = summo_core::Settings::load(&path)?;
+    as_response(state.engine.update_settings(|settings| {
         if let Some(days) = body.keep_days {
             settings.storage.audio_retention_days = days;
         }
         if let Some(keep) = body.keep_audio {
             settings.storage.keep_audio = keep;
         }
-        settings.save(&path)?;
         Ok(serde_json::json!({
             "keep_days": settings.storage.audio_retention_days,
             "keep_audio": settings.storage.keep_audio,
         }))
-    })())
+    }))
 }
 
 /// What the app looks like, and in which language.
@@ -4321,9 +4308,7 @@ async fn set_interface(
         return rejection.into_response();
     }
 
-    as_response((|| {
-        let path = state.engine.paths().settings();
-        let mut settings = summo_core::Settings::load(&path)?;
+    as_response(state.engine.update_settings(|settings| {
         if let Some(theme) = body.theme {
             // Refused rather than repaired. `Settings::validate` quietly rewrites a bad theme to
             // `system` when it reads the file, which is right for a file somebody hand-edited and
@@ -4342,13 +4327,12 @@ async fn set_interface(
         if let Some(show) = body.show_performance {
             settings.interface.show_performance = show;
         }
-        settings.save(&path)?;
         Ok(serde_json::json!({
             "theme": settings.interface.theme,
             "language": settings.interface.language,
             "show_performance": settings.interface.show_performance,
         }))
-    })())
+    }))
 }
 
 /// The interface preferences a client is changing. Absent means "leave it".
@@ -5612,18 +5596,20 @@ async fn set_llm(
         return rejection.into_response();
     }
 
-    let path = state.engine.paths().settings();
-    as_response((|| {
-        // Refuse a provider that cannot be resolved rather than writing it and failing later, when
-        // the user has moved on and the error has nothing to do with what they are doing.
-        summo_llm::Provider::resolve_in(
-            &summo_llm::provider::catalogue(&state.engine.paths().providers()),
-            &body.provider,
-            body.model.as_deref(),
-            Some("probe"),
-        )?;
+    // The probe is outside the write lock: it can reach the network, and holding a lock across a
+    // request would make every other settings write wait on somebody else's endpoint.
+    if let Err(e) = summo_llm::Provider::resolve_in(
+        &summo_llm::provider::catalogue(&state.engine.paths().providers()),
+        &body.provider,
+        body.model.as_deref(),
+        Some("probe"),
+    ) {
+        // Refused rather than written and failed later, when the user has moved on and the error
+        // has nothing to do with what they are doing.
+        return as_response(Err::<summo_core::Settings, _>(e));
+    }
 
-        let mut settings = summo_core::Settings::load(&path)?;
+    as_response(state.engine.update_settings(|settings| {
         settings.llm.provider = body.provider.trim().to_string();
         settings.llm.model = body.model.filter(|m| !m.trim().is_empty());
         if let Some(language) = body.language.filter(|l| !l.trim().is_empty()) {
@@ -5641,9 +5627,8 @@ async fn set_llm(
                         model: t.model.filter(|m| !m.trim().is_empty()),
                     });
         }
-        settings.save(&path)?;
-        Ok(settings)
-    })())
+        Ok(settings.clone())
+    }))
 }
 
 async fn test_llm(
@@ -7156,6 +7141,58 @@ mod roles {
             missing.is_empty(),
             "these roles can be set and never come back, so the screen that set one cannot see it: \
              {missing:?}"
+        );
+    }
+
+    /// Two requests changing two settings at once, and both survive.
+    ///
+    /// Every handler here does load, change one field, save. `Settings::save` is atomic, so nobody
+    /// ever reads half a file — and that is a different guarantee from the one this needs. Two
+    /// handlers in flight together both load the same starting state, and the second save discards
+    /// whatever the first changed.
+    ///
+    /// CI found it on a loaded runner: dragging the silence slider and pressing "back to defaults"
+    /// sends two writes a few milliseconds apart, and on a slow machine they landed out of order,
+    /// so the reset was overwritten by the value it had just undone. A button that does nothing,
+    /// on one machine in ten.
+    ///
+    /// Fails without the lock — reliably, because the sleep holds the window open.
+    #[test]
+    fn two_settings_written_at_once_do_not_lose_one_of_them() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = EngineState::new(summo_core::paths::Paths::at(tmp.path())).unwrap();
+
+        let a = engine.clone();
+        let first = std::thread::spawn(move || {
+            a.update_settings(|settings| {
+                // Long enough that the other thread is certainly inside its own load-change-save.
+                std::thread::sleep(std::time::Duration::from_millis(120));
+                settings.recording.min_silence_ms = 900;
+                Ok(())
+            })
+        });
+
+        let b = engine.clone();
+        let second = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            b.update_settings(|settings| {
+                settings.llm.summarize_on_stop = false;
+                Ok(())
+            })
+        });
+
+        first.join().unwrap().unwrap();
+        second.join().unwrap().unwrap();
+
+        let settled =
+            summo_core::Settings::load(&engine.paths().settings()).expect("the file is whole");
+        assert_eq!(
+            settled.recording.min_silence_ms, 900,
+            "the slower write was discarded by the faster one"
+        );
+        assert!(
+            !settled.llm.summarize_on_stop,
+            "the faster write was discarded by the slower one"
         );
     }
 
