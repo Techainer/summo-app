@@ -112,6 +112,20 @@ pub struct SessionSpec {
     /// ISO language code, or `None` to let the model detect.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+    /// Every language this meeting is expected to be in, when the user named more than one.
+    ///
+    /// A *list*, because "what is this meeting in" has no direction — it is not `from → to`, which
+    /// is the translation question next door. A standup with a customer on the call is Vietnamese
+    /// and English at the same time, and there was no way to say so: the app asked for one spoken
+    /// language and offered a model roster, which is answering with the thing a user does not know
+    /// in order to describe the thing they do.
+    ///
+    /// Beside `language` rather than replacing it. One language means "decode as this", which is
+    /// what a specialist wants and what every existing client sends. Several means "detect, and
+    /// have a specialist ready for each" — a different arrangement, and the one
+    /// `e2e/bilingual.mjs` proves works.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub languages: Vec<String>,
     /// Attribute speakers within the remote lane.
     #[serde(default)]
     pub diarize: bool,
@@ -199,6 +213,7 @@ impl SessionSpec {
             refine_model: None,
             lanes: default_lanes(),
             language: None,
+            languages: Vec::new(),
             diarize: false,
             vad_model: None,
             speaker_model: None,

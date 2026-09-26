@@ -69,11 +69,11 @@ describe("normalize", () => {
 
 describe("storage", () => {
   it("round-trips a choice", () => {
-    save({ lanes: ["system"], translateInto: ["en", "ja"], spoken: "vi", device: "mic-7" });
+    save({ lanes: ["system"], translateInto: ["en", "ja"], spoken: ["vi"], device: "mic-7" });
     expect(load()).toEqual({
       lanes: ["system"],
       translateInto: ["en", "ja"],
-      spoken: "vi",
+      spoken: ["vi"],
       device: "mic-7",
     });
   });
@@ -96,8 +96,8 @@ describe("storage", () => {
 
 describe("what the capture means", () => {
   it("knows when live translation is on", () => {
-    expect(translating({ lanes: ["mic"], translateInto: [], spoken: "", device: "" })).toBe(false);
-    expect(translating({ lanes: ["mic"], translateInto: ["en"], spoken: "", device: "" })).toBe(
+    expect(translating({ lanes: ["mic"], translateInto: [], spoken: [], device: "" })).toBe(false);
+    expect(translating({ lanes: ["mic"], translateInto: ["en"], spoken: [], device: "" })).toBe(
       true,
     );
   });
@@ -105,11 +105,11 @@ describe("what the capture means", () => {
   // Translating the microphone lane translates *you*. It is what happens when the system-audio
   // switch is forgotten, and it looks like the feature is broken.
   it("knows when nothing but the local user will be heard", () => {
-    expect(hearsOthers({ lanes: ["mic"], translateInto: ["en"], spoken: "", device: "" })).toBe(
+    expect(hearsOthers({ lanes: ["mic"], translateInto: ["en"], spoken: [], device: "" })).toBe(
       false,
     );
     expect(
-      hearsOthers({ lanes: ["mic", "system"], translateInto: ["en"], spoken: "", device: "" }),
+      hearsOthers({ lanes: ["mic", "system"], translateInto: ["en"], spoken: [], device: "" }),
     ).toBe(true);
   });
 });
@@ -118,14 +118,33 @@ describe("the spoken language", () => {
   /// An older build wrote no `spoken` at all, and a capture read back without one must record in
   /// whatever the daemon's settings say rather than refusing or guessing a language.
   it("defaults to empty, which the daemon reads as its own setting", () => {
-    expect(normalize({ lanes: ["mic"], translateInto: [] }).spoken).toBe("");
-    expect(DEFAULT.spoken).toBe("");
+    expect(normalize({ lanes: ["mic"], translateInto: [] }).spoken).toEqual([]);
+    expect(DEFAULT.spoken).toEqual([]);
+  });
+
+  /**
+   * A bare string is what every browser that has ever run this has in storage. Dropping it would
+   * silently reset the spoken language for all of them, at the start of their next meeting, with
+   * nothing on screen to say why — the same reason `translateTo` is still read.
+   */
+  it("reads the single string this used to be", () => {
+    expect(normalize({ spoken: "vi" as never }).spoken).toEqual(["vi"]);
+    store.set("summo.capture", JSON.stringify({ lanes: ["mic"], spoken: "en" }));
+    expect(load().spoken).toEqual(["en"]);
+  });
+
+  /**
+   * Order is the answer to "which is it mostly in", and the daemon pairs the specialist for the
+   * first. Losing it would make a bilingual meeting pick its second model at random.
+   */
+  it("keeps the order and drops duplicates and blanks", () => {
+    expect(normalize({ spoken: ["vi", "EN", " ", "vi"] }).spoken).toEqual(["vi", "en"]);
   });
 
   /// Codes are compared against the manifests' own spelling, where they are lower case.
   it("is normalised, so `VI ` from an older build still matches a model", () => {
-    expect(normalize({ spoken: " VI " }).spoken).toBe("vi");
-    expect(normalize({ spoken: 7 as never }).spoken).toBe("");
+    expect(normalize({ spoken: " VI " as never }).spoken).toEqual(["vi"]);
+    expect(normalize({ spoken: 7 as never }).spoken).toEqual([]);
   });
 });
 
@@ -186,7 +205,7 @@ describe("which microphone", () => {
   });
 
   it("survives a stored value from a build that had no such field", () => {
-    store.set("summo.capture", JSON.stringify({ lanes: ["mic"], spoken: "vi" }));
+    store.set("summo.capture", JSON.stringify({ lanes: ["mic"], spoken: ["vi"] }));
     expect(load().device).toBe("");
   });
 });

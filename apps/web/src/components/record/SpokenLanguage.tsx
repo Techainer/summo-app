@@ -54,9 +54,16 @@ export function SpokenLanguage({
   onChange,
   compact = false,
 }: {
-  /** Language code, or `AUTO` for detection. */
-  value: string;
-  onChange: (code: string) => void;
+  /**
+   * The languages this meeting is in, most-spoken first. Empty means detect.
+   *
+   * A list, because "what is this meeting in" has no direction — that is the translation question,
+   * which really is `from → to`. A standup with a customer on the call is Vietnamese *and*
+   * English, and the only way to say so used to be assigning model roles on another screen: being
+   * asked to answer with the thing you do not know in order to describe the thing you do.
+   */
+  value: string[];
+  onChange: (codes: string[]) => void;
   /** Drop the explanation line — for the record bar, where space is a row. */
   compact?: boolean;
 }) {
@@ -70,7 +77,11 @@ export function SpokenLanguage({
     [handshake],
   );
   const languages = probe.data?.languages ?? [];
-  const chosen = languages.find((language) => language.code === value);
+  /** The one the meeting is mostly in, which is the one the controls below are about. */
+  const primary = value[0] ?? AUTO;
+  /** The rest, which decide whether a specialist is kept ready for them. */
+  const extras = value.slice(1);
+  const chosen = languages.find((language) => language.code === primary);
 
   // The download, watched until it finishes. `OnboardingClient` already knows how to start one and
   // how to report it; this only has to keep asking, because the alternative is a spinner that never
@@ -124,7 +135,7 @@ export function SpokenLanguage({
         {t("record.spoken")}
         <Select
           size="sm"
-          value={value}
+          value={primary}
           aria-label={t("record.spoken")}
           onChange={(event) => {
             const raw = event.target.value;
@@ -133,7 +144,8 @@ export function SpokenLanguage({
             const code = raw === MULTI ? AUTO : raw;
             if (raw === MULTI && multilingual && !multilingual.installed)
               void install(multilingual);
-            onChange(code);
+            // Detection is not a language, so it replaces the whole list rather than heading it.
+            onChange(code === AUTO ? [] : [code, ...extras.filter((each) => each !== code)]);
             // Written through to the daemon so the choice survives this browser. A failure here is
             // deliberately swallowed: the recording still has the language, and a preference that
             // could not be saved must not stop it.
@@ -151,7 +163,7 @@ export function SpokenLanguage({
           {auto ? (
             <option value={AUTO}>{t("record.spoken_auto")}</option>
           ) : (
-            value === AUTO && <option value={AUTO}>{t("record.spoken_default")}</option>
+            primary === AUTO && <option value={AUTO}>{t("record.spoken_default")}</option>
           )}
 
           {/* Then the multilingual entry: one model that hears everything, detecting per utterance.
@@ -171,6 +183,59 @@ export function SpokenLanguage({
           ))}
         </Select>
       </label>
+      {/* And the other languages in the same meeting.
+          
+          Offered only once a primary is chosen: "detect everything" and "and also English" are the
+          same request, and showing both would be two ways to say one thing. Naming a second
+          language is what makes the app keep a specialist ready for it rather than letting one
+          model guess at both — see `SessionSpec::languages`. */}
+      {primary !== AUTO && (
+        <div
+          className={
+            compact
+              ? "flex flex-wrap items-center gap-1.5"
+              : "mt-2 flex flex-wrap items-center gap-1.5"
+          }
+        >
+          {extras.map((code) => (
+            <span
+              key={code}
+              className="border-line text-micro rounded-pill inline-flex items-center gap-1 border px-2 py-0.5"
+            >
+              {languageName(code, locale)}
+              <button
+                type="button"
+                onClick={() => onChange([primary, ...extras.filter((each) => each !== code)])}
+                aria-label={t("record.spoken_remove", { language: languageName(code, locale) })}
+                className="text-fg-faint hover:text-fg"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <Select
+            size="sm"
+            value=""
+            aria-label={t("record.spoken_add")}
+            onChange={(event) => {
+              const code = event.target.value;
+              if (code) onChange([primary, ...extras, code]);
+            }}
+            className="max-w-44"
+          >
+            <option value="">{t("record.spoken_add")}</option>
+            {options
+              .filter((language) => language.code !== primary && !extras.includes(language.code))
+              .map((language) => (
+                <option key={language.code} value={language.code}>
+                  {languageName(language.code, locale)}
+                  {language.installed ? "" : ` · ${megabytes(language.size_bytes)}`}
+                </option>
+              ))}
+          </Select>
+        </div>
+      )}
+
       {/* The way out of a list that does not have what somebody wants: the catalogue, filtered to
           the language they just chose. Every model that serves it, with its size, its measured
           accuracy and its page — rather than a picker that can only offer what it already knows. */}
@@ -179,7 +244,7 @@ export function SpokenLanguage({
         onClick={() =>
           void navigate({
             to: "/models",
-            search: value && value !== AUTO ? { lang: value } : {},
+            search: primary && primary !== AUTO ? { lang: primary } : {},
           })
         }
         className="text-fg-faint hover:text-fg text-micro underline"

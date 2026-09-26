@@ -92,7 +92,9 @@
     "manage_models": "モデルを管理",
     "minimise": "最小化",
     "minimise_pinned": "このページに固定しています。このブラウザーはフローティングウィンドウに対応していないため、他のアプリの上には表示できません。",
-    "restore": "会議に戻る"
+    "restore": "会議に戻る",
+    "spoken_add": "言語を追加",
+    "spoken_remove": "{language}を外す"
   },
   "meeting": {
     "title_label": "会議のタイトル",

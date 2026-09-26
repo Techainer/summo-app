@@ -141,10 +141,16 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       // only installed speech model when there is one.
       live_model: "",
       lanes: chosen.lanes,
-      // The spoken language, when the user chose one. Empty is not "unset" here — it is Whisper's
-      // own detection — so it is only sent when it has a value, and the daemon falls back to
-      // `models.language` from the settings file otherwise.
-      ...(chosen.spoken ? { language: chosen.spoken } : {}),
+      // The spoken languages, when the user named any. An empty list is not "unset" here — it is
+      // Whisper's own detection — so nothing is sent and the daemon falls back to
+      // `models.language` from the settings file.
+      //
+      // One language is still `language`, which means "decode as this" and is what every
+      // specialist wants. Several is `languages`, which means "detect, and keep a specialist ready
+      // for each" — a different arrangement, and the daemon picks the pair. Sending both would be
+      // asking for detection and forbidding it in the same request.
+      ...(chosen.spoken.length === 1 ? { language: chosen.spoken[0] } : {}),
+      ...(chosen.spoken.length > 1 ? { languages: chosen.spoken } : {}),
       // Diarization needs the system lane; asking for it on the microphone alone is refused.
       diarize: chosen.lanes.includes("system"),
       ...(chosen.translateInto.length > 0 ? { translate_into: chosen.translateInto } : {}),
@@ -160,7 +166,14 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     (change: { language?: string; model?: string }) => {
       if (change.language !== undefined) {
         const current = loadCapture();
-        saveCapture({ ...current, spoken: change.language });
+        // Mid-meeting the user is naming *the* language, so it becomes the primary and the rest
+        // stay — correcting "this is Vietnamese actually" should not forget that English is also
+        // in the room.
+        const rest = current.spoken.filter((code) => code !== change.language);
+        saveCapture({
+          ...current,
+          spoken: change.language ? [change.language, ...rest] : [],
+        });
       }
       controller?.retune(change);
     },

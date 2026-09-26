@@ -92,7 +92,9 @@
     "manage_models": "管理模型",
     "minimise": "最小化",
     "minimise_pinned": "已固定在本页。此浏览器不支持浮动窗口，无法置于其他应用之上。",
-    "restore": "回到会议"
+    "restore": "回到会议",
+    "spoken_add": "添加语言",
+    "spoken_remove": "移除{language}"
   },
   "meeting": {
     "title_label": "会议标题",

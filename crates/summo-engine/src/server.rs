@@ -1400,6 +1400,76 @@ fn resolve_models(
     resolved
 }
 
+/// A listener that hears every language, and a specialist to revise what it is for.
+///
+/// Returns `(live, refine)`. `refine` is `None` when nothing installed specialises in any of the
+/// named languages, which is not a failure: a multilingual model alone still transcribes all of
+/// them, just less well than a specialist would.
+///
+/// `None` overall when nothing installed hears every language — there is no multilingual model to
+/// do the detecting, so the caller falls back to the single-language path and the user gets the
+/// best answer available rather than a refusal.
+///
+/// The order matters and is the whole lesson of the release before this one. A specialist cannot
+/// label an utterance it was not built for, so it cannot tell "this sentence is not mine" from
+/// "this sentence is mine"; a general model can, which is why it goes first.
+#[cfg(feature = "models")]
+fn bilingual_pair(engine: &EngineState, languages: &[String]) -> Option<(String, Option<String>)> {
+    let installed: Vec<_> = engine
+        .store()
+        .list()
+        .into_iter()
+        .filter(|m| m.task == summo_models::Task::Asr)
+        .collect();
+    pick_pair(&installed, engine.hardware(), languages)
+}
+
+/// The decision inside [`bilingual_pair`], with the disk taken out of it.
+///
+/// Separated so it can be tested. The rule is three sentences and the part worth pinning down, and
+/// a test that has to install two speech models to exercise it is a test nobody writes — which is
+/// how the pairing that shipped backwards went unexamined in the first place.
+#[cfg(feature = "models")]
+fn pick_pair(
+    installed: &[summo_models::Manifest],
+    hw: &summo_models::hw::HwProfile,
+    languages: &[String],
+) -> Option<(String, Option<String>)> {
+    let general = installed
+        .iter()
+        .filter(|m| m.task == summo_models::Task::Asr)
+        .find(|m| m.langs.iter().any(|l| l == "*"))?
+        .clone();
+
+    // The specialist for the language named *first*, which is the decision the user already made
+    // by putting it first — their meeting is mostly in that one.
+    //
+    // Deliberately not "the best specialist across all of them". `Scored::score` says of itself
+    // that it is only comparable within one call, and ranking each language separately and then
+    // comparing the winners is exactly the comparison it rules out. An ordering the user gave is
+    // better than a number that does not mean what it looks like it means.
+    let specialist = languages
+        .iter()
+        .find_map(|code| {
+            summo_models::recommend(installed, hw, code)
+                .ranked
+                .into_iter()
+                .find(|s| s.id != general.id.as_str() && !claims_everything(installed, &s.id))
+        })
+        .map(|s| s.id);
+
+    Some((general.id.to_string(), specialist))
+}
+
+/// Whether an installed manifest claims every language.
+#[cfg(feature = "models")]
+fn claims_everything(installed: &[summo_models::Manifest], id: &str) -> bool {
+    installed
+        .iter()
+        .find(|m| m.id.as_str() == id)
+        .is_some_and(|m| m.langs.iter().any(|l| l == "*"))
+}
+
 /// The second model to run underneath a live one nobody paired.
 ///
 /// Only under a **specialist**. Gipformer declares `vi` and returns Vietnamese-shaped noise for an
@@ -1511,6 +1581,35 @@ fn choose_models(
 
     if !spec.live_model.trim().is_empty() {
         return spec;
+    }
+
+    // A meeting somebody said is in more than one language.
+    //
+    // A different arrangement from "decode as Vietnamese", and the one `e2e/bilingual.mjs` drives
+    // with real bilingual audio: a model that hears every language listens and labels each
+    // utterance, and a specialist revises the ones it is for. The reverse — a specialist listening
+    // and a general model second-guessing it — is what shipped by accident and what made a
+    // Vietnamese meeting come back as English fragments.
+    //
+    // `language` is deliberately left unset. Naming one would tell the live model to stop
+    // detecting, which is the single thing this arrangement needs it to do.
+    if spec.language.is_none()
+        && spec.languages.len() > 1
+        && let Some(pair) = bilingual_pair(engine, &spec.languages)
+    {
+        spec.live_model = pair.0;
+        if spec.refine_model.is_none() {
+            spec.refine_model = pair.1;
+        }
+        return spec;
+    }
+
+    // One language named in a list is the ordinary case wearing a different hat.
+    if spec.language.is_none()
+        && let [only] = spec.languages.as_slice()
+        && !only.trim().is_empty()
+    {
+        spec.language = Some(only.clone());
     }
 
     if spec.language.is_none() {
@@ -6567,6 +6666,111 @@ mod resolve_tests {
 
     fn engine(home: &std::path::Path) -> EngineState {
         EngineState::new(Paths::at(home)).unwrap()
+    }
+
+    fn speech(id: &str, langs: &[&str]) -> summo_models::Manifest {
+        let json = serde_json::json!({
+            "schema": 1,
+            "id": id,
+            "name": id,
+            "task": "asr",
+            "mode": "live",
+            "runtime": "sherpa-onnx/whisper",
+            "langs": langs,
+            "license": "MIT",
+            "attribution": "nobody",
+            "files": [{
+                "name": "m.onnx",
+                "sha256": "a".repeat(64),
+                "size": 1,
+                "url": "https://example.invalid/m.onnx"
+            }]
+        });
+        summo_models::Manifest::parse(&json.to_string()).unwrap()
+    }
+
+    /// A meeting somebody said is in two languages gets the arrangement that works.
+    ///
+    /// The general model listens, because it is the only one that can *label* an utterance — a
+    /// specialist cannot tell "this sentence is not mine" from "this sentence is mine". The
+    /// specialist revises what it is for. Backwards is what shipped, and it made a Vietnamese
+    /// meeting come back as English fragments.
+    #[test]
+    fn two_languages_put_the_listener_that_can_tell_them_apart_first() {
+        let installed = [speech("whisper-base", &["*"]), speech("gipformer", &["vi"])];
+        let hw = summo_models::hw::HwProfile::detect();
+
+        let (live, refine) =
+            pick_pair(&installed, &hw, &["vi".into(), "en".into()]).expect("a pair");
+        assert_eq!(live, "whisper-base");
+        assert_eq!(refine.as_deref(), Some("gipformer"));
+    }
+
+    /// The order the user gave is the answer to "which is it mostly in".
+    #[test]
+    fn the_specialist_is_for_the_language_named_first() {
+        let installed = [
+            speech("whisper-base", &["*"]),
+            speech("gipformer", &["vi"]),
+            speech("zipformer-en", &["en"]),
+        ];
+        let hw = summo_models::hw::HwProfile::detect();
+
+        assert_eq!(
+            pick_pair(&installed, &hw, &["en".into(), "vi".into()])
+                .expect("a pair")
+                .1
+                .as_deref(),
+            Some("zipformer-en")
+        );
+        assert_eq!(
+            pick_pair(&installed, &hw, &["vi".into(), "en".into()])
+                .expect("a pair")
+                .1
+                .as_deref(),
+            Some("gipformer")
+        );
+    }
+
+    /// No specialist is not a failure. One multilingual model still transcribes both languages —
+    /// less well than a specialist would, which is a reason to offer a download and not a reason
+    /// to refuse the recording.
+    #[test]
+    fn a_general_model_alone_is_still_a_pair_with_no_second() {
+        let installed = [speech("whisper-base", &["*"])];
+        let hw = summo_models::hw::HwProfile::detect();
+        let (live, refine) =
+            pick_pair(&installed, &hw, &["vi".into(), "en".into()]).expect("a pair");
+        assert_eq!(live, "whisper-base");
+        assert_eq!(refine, None);
+    }
+
+    /// Nothing that hears every language means nothing can do the detecting, so this arrangement
+    /// is not available — and the caller falls back to the single-language path rather than
+    /// refusing. Two specialists cannot route between themselves.
+    #[test]
+    fn two_specialists_and_no_listener_is_not_a_pair() {
+        let installed = [
+            speech("gipformer", &["vi"]),
+            speech("zipformer-en", &["en"]),
+        ];
+        let hw = summo_models::hw::HwProfile::detect();
+        assert!(pick_pair(&installed, &hw, &["vi".into(), "en".into()]).is_none());
+    }
+
+    /// One language in a list is the ordinary single-language case wearing a different hat, and
+    /// must not quietly become "detect".
+    #[test]
+    fn one_language_in_the_list_still_names_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = engine(tmp.path());
+        let mut spec = crate::protocol::SessionSpec::new("");
+        spec.languages = vec!["vi".into()];
+
+        assert_eq!(
+            resolve_models(&spec, &engine).language.as_deref(),
+            Some("vi")
+        );
     }
 
     /// The bug this exists for: the interface sent a hardcoded `gipformer-65m`, so installing a

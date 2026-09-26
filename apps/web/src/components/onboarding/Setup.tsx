@@ -135,10 +135,12 @@ export function Setup({ onDone }: { onDone: () => void }) {
   // matched the interface. It starts from the interface locale — a reasonable first guess — and is
   // asked out loud, because the cost of the guess being wrong is a download that cannot transcribe
   // the meeting it was installed for.
-  const [spoken, setSpoken] = useState(() => loadCapture().spoken || locale);
+  // One language, on the first run. Naming a second is a per-meeting decision and belongs on the
+  // record bar; a setup screen that asked for a list would be asking a question nobody has yet.
+  const [spoken, setSpoken] = useState(() => loadCapture().spoken[0] ?? locale);
   // Whether the answer above is the user's or the interface's. Only the user's survives a change of
   // reading language.
-  const [touchedSpoken, setTouchedSpoken] = useState(() => Boolean(loadCapture().spoken));
+  const [touchedSpoken, setTouchedSpoken] = useState(() => loadCapture().spoken.length > 0);
   const [status, setStatus] = useState<Status | null>(null);
   const [models, setModels] = useState<Recommended[]>([]);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -234,7 +236,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
   };
 
   const finish = async () => {
-    saveCapture({ ...loadCapture(), spoken });
+    saveCapture({ ...loadCapture(), spoken: spoken ? [spoken] : [] });
     // The daemon's copy, for every client that is not this browser: the tray, the CLI, a second
     // profile. Ignored on failure — a preference that would not save must not block the app.
     await rememberLanguage(handshake, spoken).catch(() => undefined);

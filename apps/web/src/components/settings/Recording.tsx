@@ -18,7 +18,7 @@ import { Capture } from "./Capture";
  */
 export function Recording() {
   const t = useT();
-  const [spoken, setSpoken] = useState(() => loadCapture().spoken);
+  const [spoken, setSpoken] = useState<string[]>(() => loadCapture().spoken);
 
   return (
     <div data-testid="settings-recording">
@@ -51,9 +51,9 @@ export function Recording() {
         <p className="text-fg-dim text-meta mt-1 mb-3">{t("settings.spoken_hint")}</p>
         <SpokenLanguage
           value={spoken}
-          onChange={(code) => {
-            setSpoken(code);
-            saveCapture({ ...loadCapture(), spoken: code });
+          onChange={(codes) => {
+            setSpoken(codes);
+            saveCapture({ ...loadCapture(), spoken: codes });
           }}
         />
       </section>

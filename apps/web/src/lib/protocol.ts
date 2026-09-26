@@ -68,7 +68,15 @@ export interface SessionSpec {
   live_model: string;
   refine_model?: string;
   lanes?: Lane[];
+  /** One language, meaning "decode as this". Mirrors `SessionSpec::language`. */
   language?: string;
+  /**
+   * Several, meaning "detect per utterance and keep a specialist ready for each".
+   *
+   * A list without direction, unlike `translate_into` — "what is this meeting in" is not
+   * `from → to`. Most-spoken first: the daemon pairs the specialist for the first one.
+   */
+  languages?: string[];
   diarize?: boolean;
   /** Translate finished lines into these languages as they land. */
   translate_into?: string[];

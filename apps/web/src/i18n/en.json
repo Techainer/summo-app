@@ -92,7 +92,9 @@
     "manage_models": "Manage models",
     "minimise": "Minimise",
     "minimise_pinned": "Pinned to this page. This browser has no floating-window support, so it cannot stay above other apps.",
-    "restore": "Back to the meeting"
+    "restore": "Back to the meeting",
+    "spoken_add": "Add a language",
+    "spoken_remove": "Remove {language}"
   },
   "meeting": {
     "title_label": "Meeting title",

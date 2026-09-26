@@ -20,14 +20,26 @@ export interface Capture {
   /** Microphone, system audio, or both. */
   lanes: Lane[];
   /**
-   * The language being spoken. Empty means "let the model detect it".
+   * The languages being spoken. Empty means "let the model detect it".
+   *
+   * A **list**, because "what is this meeting in" has no direction — that is the translation
+   * question next door, which really is `from → to`. A standup with a customer on the call is
+   * Vietnamese *and* English at the same time, and there was no way to say so: the app asked for
+   * one spoken language, and the only way to arrange two models was to assign them roles on the
+   * models screen. That asks the user to answer with the thing they do not know in order to
+   * describe the thing they do.
+   *
+   * One entry behaves exactly as the single value it replaces: decode as this. Two or more means
+   * detect per utterance and keep a specialist ready — see `SessionSpec::languages`.
+   *
+   * Order matters. The first is the language the meeting is mostly in, and it decides which
+   * specialist is paired.
    *
    * Here rather than only in the daemon's settings because it is a per-meeting decision as often as
-   * it is a preference — the standup is in Vietnamese and the customer call is in English — and the
-   * record bar has to be able to change it without writing to the vault's settings file. The
-   * daemon's `models.language` remains the default this starts from.
+   * it is a preference, and the record bar has to be able to change it without writing to the
+   * vault's settings file. The daemon's `models.language` remains the default this starts from.
    */
-  spoken: string;
+  spoken: string[];
   /**
    * Languages to translate finished lines into as they land. Empty means off.
    *
@@ -51,7 +63,7 @@ export interface Capture {
   device: string;
 }
 
-export const DEFAULT: Capture = { lanes: ["mic"], translateInto: [], spoken: "", device: "" };
+export const DEFAULT: Capture = { lanes: ["mic"], translateInto: [], spoken: [], device: "" };
 
 /**
  * Read the saved choice.
@@ -95,11 +107,35 @@ export function normalize(input: Partial<Capture> | null | undefined): Capture {
     translateInto: targets(input),
     // Lower-cased, because a language code is compared against the manifests' own spelling and
     // `VI` from an older build must not read as a language nothing covers.
-    spoken: typeof input?.spoken === "string" ? input.spoken.trim().toLowerCase() : "",
+    //
+    // A bare string is what every browser that has ever run this has in storage, and dropping it
+    // would silently reset the spoken language for all of them — at the start of their next
+    // meeting, with nothing on screen to say why. The same reason `translateTo` is still read
+    // below.
+    spoken: spokenList(input),
     // Not lower-cased: a `deviceId` is an opaque token the browser minted, and changing its case
     // changes which device it names — or names none at all.
     device: typeof input?.device === "string" ? input.device.trim() : "",
   };
+}
+
+/**
+ * The languages spoken, accepting the single string this used to be.
+ *
+ * Deduplicated and emptied of blanks, so "auto" cannot arrive as `[""]` — which would read as one
+ * language named nothing, and a session asked to decode as nothing is a session that fails.
+ */
+function spokenList(input: (Partial<Capture> & { spoken?: unknown }) | null | undefined): string[] {
+  const raw = Array.isArray(input?.spoken)
+    ? input.spoken
+    : typeof input?.spoken === "string"
+      ? [input.spoken]
+      : [];
+  const clean = raw
+    .filter((code): code is string => typeof code === "string")
+    .map((code) => code.trim().toLowerCase())
+    .filter((code) => code.length > 0);
+  return [...new Set(clean)];
 }
 
 /**
