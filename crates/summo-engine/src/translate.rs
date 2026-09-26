@@ -261,6 +261,37 @@ impl Translator {
         }
     }
 
+    /// Whether handing this translator several lines at once buys anything over one call each.
+    ///
+    /// There are exactly two things grouping can buy, and which of them apply is a fact about the
+    /// backend rather than a constant somebody picks:
+    ///
+    /// * **Context.** [`Style::Chat`] puts the whole run in one prompt, so the model sees who is
+    ///   talking to whom. This is the reason the live path batches, and it is real — for that style.
+    /// * **Throughput.** The other HTTP styles send one request per line but *concurrently*, so a
+    ///   run of eight finishes in about the time of one.
+    ///
+    /// The in-process model buys **neither**. [`summo_mt::Seq2Seq::translate`] takes one line and a
+    /// target language and has no parameter a neighbouring sentence could arrive through, and
+    /// [`Self::run_local`] walks the slice in a plain sequential loop. So a run of eight there is
+    /// eight decodes back to back, with the answer to the first held until the eighth finishes.
+    ///
+    /// That is what this exists to stop. `live.rs` grouped eight lines per request on the strength
+    /// of the context argument, and the shipped build — `mt-onnx`, SMALL100 — is the one backend the
+    /// argument is false for: at 241 ms a line, two subtitle languages, the first subtitle waited
+    /// about 3.9 seconds for a translation that was finished at 241 ms. Reported as "phần dịch chậm
+    /// quá, phải mấy s sau khi nói", and not found earlier because the fixture had three-second
+    /// gaps in it, so the batch never filled.
+    #[must_use]
+    pub fn batching_helps(&self) -> bool {
+        match &self.backend {
+            // Chat buys context, the rest buy concurrency; both are worth the grouping.
+            Backend::Http(_) => true,
+            #[cfg(feature = "mt-any")]
+            Backend::Local(_) => false,
+        }
+    }
+
     /// Translate one run of lines, returning one slot per input line and the requests it cost.
     ///
     /// A `None` slot means the model did not answer for that line. It is never filled in from a

@@ -187,6 +187,110 @@ pub async fn translate_batch(
     Ok(pair(batch, &parsed, lang))
 }
 
+/// Where a run of finished translations goes.
+///
+/// A channel rather than a return value, because the two shapes below differ in *when* they answer
+/// and a function that returns once cannot express "the first line, now".
+pub type Sink = tokio::sync::mpsc::UnboundedSender<Vec<Event>>;
+
+/// One request per target, the whole run in it.
+///
+/// The right shape when grouping buys context or concurrency — see [`Translator::batching_helps`].
+/// Everything is sent together at the end because it all finishes together anyway.
+///
+/// Public for the same reason [`translate_batch`] and [`pair`] are: the two shapes differ in *when*
+/// they answer, which is the whole point of them, and a test that cannot drive each one separately
+/// cannot tell them apart.
+pub async fn grouped(
+    translator: &Translator,
+    batch: &[Pending],
+    langs: &[String],
+    glossary: &prompt::Glossary,
+    tx: &Sink,
+) {
+    let mut events = Vec::new();
+    for lang in langs {
+        // Per target, because the answer differs per target: on a Vietnamese-and-English meeting
+        // with both chosen, the Vietnamese lines of this batch belong to the English pass and none
+        // of the Vietnamese one. Filtering the batch before it is queued would need one queue per
+        // language for the same lines.
+        let mine = for_target(batch, lang);
+        if mine.is_empty() {
+            // Nothing said, deliberately. This is the batch where everybody was already speaking
+            // the language somebody asked for — the "nothing happened" that the note under the
+            // control exists to explain, and a per-batch notice for it would fire on every sentence
+            // of a monolingual meeting.
+            continue;
+        }
+        match translate_batch(translator, &mine, lang, glossary).await {
+            Ok(mut translated) => events.append(&mut translated),
+            Err(e) => events.push(failure(lang, &e)),
+        }
+    }
+    let _ = tx.send(events);
+}
+
+/// One request per line, answered as each line comes back.
+///
+/// For a backend that gains nothing from grouping, holding the first answer until the last line is
+/// decoded is a wait bought with nothing. Eight lines at 241 ms is 1.9 seconds of it per target.
+///
+/// **Lines outside, languages inside.** The other nesting finishes every subtitle in the first
+/// language before starting the second, which makes the second reader wait out the whole batch for
+/// their first line. This way each line is finished in every language before the next line starts,
+/// so both readers get line one at about the same moment.
+///
+/// One send per line rather than per (line, target): the difference is one decode, and a reader
+/// seeing their two subtitles appear together is worth more than saving it.
+pub async fn line_by_line(
+    translator: &Translator,
+    batch: &[Pending],
+    langs: &[String],
+    glossary: &prompt::Glossary,
+    tx: &Sink,
+) {
+    // A target whose model has no token for it fails on every line. Reported once for the run, the
+    // same as `grouped` reports it once for the request — eight identical errors for one broken
+    // target is the interface shouting a fault it already stated.
+    let mut reported: Vec<&str> = Vec::new();
+
+    for pending in batch {
+        let one = std::slice::from_ref(pending);
+        let mut events = Vec::new();
+        for lang in langs {
+            if for_target(one, lang).is_empty() {
+                continue;
+            }
+            match translate_batch(translator, one, lang, glossary).await {
+                Ok(mut translated) => events.append(&mut translated),
+                Err(e) => {
+                    if !reported.contains(&lang.as_str()) {
+                        reported.push(lang.as_str());
+                        events.push(failure(lang, &e));
+                    }
+                }
+            }
+        }
+        // Nothing for this line in any target — every one of them was already in the language
+        // asked for. Sending an empty vector would wake the socket loop to deliver nothing.
+        if !events.is_empty() {
+            let _ = tx.send(events);
+        }
+    }
+}
+
+/// One failed target costs its subtitles, not the other targets and not the recording.
+///
+/// Transient, so the interface can say so without stopping anything — and so a language whose model
+/// has no token for it does not take the working one down with it.
+fn failure(lang: &str, error: &summo_core::Error) -> Event {
+    Event::Error {
+        message: format!("không dịch được sang {lang}: {error}"),
+        transient: true,
+        code: None,
+    }
+}
+
 /// The lines of a batch that `lang` is actually a translation for.
 ///
 /// Two languages has not meant "into two languages" since the offline pass learned to skip a line
@@ -417,35 +521,14 @@ impl LiveTranslator {
         // the air the moment somebody added a second subtitle.
         in_flight.fetch_add(1, Ordering::Relaxed);
         tokio::spawn(async move {
-            let mut events = Vec::new();
-            for lang in &langs {
-                // Per target, because the answer differs per target: on a Vietnamese-and-English
-                // meeting with both chosen, the Vietnamese lines of this batch belong to the
-                // English pass and none of the Vietnamese one. Filtering the batch before it is
-                // queued would need one queue per language for the same lines.
-                let mine = for_target(&batch, lang);
-                if mine.is_empty() {
-                    // Nothing said, deliberately. This is the batch where everybody was already
-                    // speaking the language somebody asked for — the "nothing happened" that the
-                    // note under the control exists to explain, and a per-batch notice for it
-                    // would fire on every sentence of a monolingual meeting.
-                    continue;
-                }
-                match translate_batch(&translator, &mine, lang, &glossary).await {
-                    Ok(mut translated) => events.append(&mut translated),
-                    // One failed target costs its subtitles, not the other targets and not the
-                    // recording. Reported once per target, as a transient error, so the interface
-                    // can say so without stopping anything — and so a language whose model has no
-                    // token for it does not take the working one down with it.
-                    Err(e) => events.push(Event::Error {
-                        message: format!("không dịch được sang {lang}: {e}"),
-                        transient: true,
-                        code: None,
-                    }),
-                }
+            // Which shape depends on what grouping is worth here, which is a fact about the
+            // backend. See `Translator::batching_helps`.
+            if translator.batching_helps() {
+                grouped(&translator, &batch, &langs, &glossary, &tx).await;
+            } else {
+                line_by_line(&translator, &batch, &langs, &glossary, &tx).await;
             }
             in_flight.fetch_sub(1, Ordering::Relaxed);
-            let _ = tx.send(events);
         });
     }
 
