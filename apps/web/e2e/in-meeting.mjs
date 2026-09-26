@@ -24,7 +24,18 @@ import { daemon as boot } from "./daemon.mjs";
 import { mirror } from "./mirror.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const wav = join(HERE, "fixtures/vi-fleurs.wav");
+/**
+ * The same speech three times, with three seconds of silence between.
+ *
+ * A conversation, not a broadcast. `vi-fleurs.wav` is continuous, so utterances arrive in a burst
+ * and fill a translation batch — which is exactly the case batching was designed for and exactly
+ * *not* the case a user is in. Measured against the continuous clip, the subtitle lag printed 0.0s
+ * before and after a change that removed a four-second wait: the suite was reporting a number from
+ * a condition it could not produce, which reads as "latency is zero" and is worse than silence.
+ *
+ * The pauses are what make the deadline visible: a lone line with no company coming.
+ */
+const wav = join(HERE, "fixtures/vi-paced.wav");
 const problems = [];
 
 // Two speech models, because switching between them is the point: Gipformer hears Vietnamese and
@@ -308,11 +319,45 @@ async function settled(what, check) {
   // of the line, not a child, and that selector silently matched nothing — reporting translation
   // as broken while it was rendering correctly on screen.
   const translated = page.getByTestId("transcript-translation");
-  const arrived = await translated
-    .first()
-    .waitFor({ timeout: 90000 })
-    .then(() => true)
-    .catch(() => false);
+
+  // How long a subtitle takes to appear after the line it belongs to, measured rather than
+  // assumed. A user reported translation arriving "mấy giây" after they spoke, and the number is
+  // the difference between a tuning question and a bug — it went in the release notes either way.
+  //
+  // Timed from the *next* line to land, not from the first: the first one on screen may have been
+  // sitting in the backlog since before translation was switched on, and the backlog is
+  // deliberately slower than the live path.
+  const lineCount = async () => page.locator('[data-testid="transcript-line"]').count();
+  const subtitleCount = async () => translated.count();
+
+  // Counted, not `first()`. A subtitle for an *earlier* line is usually already on screen — the
+  // backlog fills in from the top the moment translation is switched on — so waiting for "a
+  // translation to exist" returns instantly and measures nothing. What this needs is the next one.
+  const sinceLines = await lineCount();
+  const subsBefore = await subtitleCount();
+  let lineAt = null;
+  for (let i = 0; i < 600 && lineAt === null; i++) {
+    if ((await lineCount()) > sinceLines) lineAt = Date.now();
+    else await page.waitForTimeout(100);
+  }
+
+  let lag = null;
+  for (let i = 0; i < 900 && lag === null; i++) {
+    if ((await subtitleCount()) > subsBefore) lag = Date.now();
+    else await page.waitForTimeout(100);
+  }
+
+  const arrived = lag !== null || (await subtitleCount()) > 0;
+
+  if (lag !== null && lineAt !== null) {
+    console.log(
+      `subtitle lag: ${((lag - lineAt) / 1000).toFixed(1)}s after the line it belongs to`,
+    );
+  } else {
+    // Said rather than silently skipped. A number that does not appear is worth more than a number
+    // measured under the wrong conditions.
+    console.log("subtitle lag: not measured — no second line landed while translation was on");
+  }
   if (!arrived) {
     console.log("--- daemon log ---\n" + engine.log().slice(-3000));
     problems.push("translation was accepted but no translated line ever reached the transcript");

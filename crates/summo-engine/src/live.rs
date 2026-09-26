@@ -109,10 +109,28 @@ impl Batcher {
         true
     }
 
-    /// Whether to send now, given how long the oldest queued line has been waiting.
+    /// Whether to send now, given how long the oldest queued line has been waiting and whether
+    /// anything is already out.
+    ///
+    /// `idle` is the case this was missing, and it is the common one. Batching trades latency for
+    /// context, and the trade is worth making *while a request is in flight*: those lines are
+    /// waiting on the model anyway, so grouping them costs nothing and buys the model a view of
+    /// who is talking to whom.
+    ///
+    /// With nothing in flight it buys the same context and costs the wait outright. In an ordinary
+    /// conversation — one sentence, a pause, another sentence — a batch never fills, so every line
+    /// sat here for the full [`MAX_WAIT_MS`] before the request was even sent, and then waited for
+    /// the model on top. Four seconds plus a round trip, for a subtitle, every time.
+    ///
+    /// Reported as "phần dịch chậm quá, phải mấy s sau khi nói". The comment on `MAX_WAIT_MS` said
+    /// four seconds was "under the point where a viewer starts looking for the subtitle that is not
+    /// there". That was a guess about somebody else's patience, and it was wrong.
+    ///
+    /// So: first line goes at once, and anything that arrives while it is out rides the next batch.
+    /// Latency when idle is the model alone; throughput under load is unchanged.
     #[must_use]
-    pub fn ready(&self, waited_ms: u64) -> bool {
-        !self.queue.is_empty() && (self.queue.len() >= BATCH || waited_ms >= MAX_WAIT_MS)
+    pub fn ready(&self, waited_ms: u64, idle: bool) -> bool {
+        !self.queue.is_empty() && (idle || self.queue.len() >= BATCH || waited_ms >= MAX_WAIT_MS)
     }
 
     /// Take up to one batch.
@@ -308,7 +326,8 @@ impl LiveTranslator {
         }
 
         let waited = self.since.map_or(0, |t| t.elapsed().as_millis() as u64);
-        if self.batcher.ready(waited) && self.in_flight.load(Ordering::Relaxed) < MAX_IN_FLIGHT {
+        let out = self.in_flight.load(Ordering::Relaxed);
+        if self.batcher.ready(waited, out == 0) && out < MAX_IN_FLIGHT {
             self.dispatch();
         }
 
@@ -316,7 +335,14 @@ impl LiveTranslator {
         // speech from a minute ago every time: a subtitle that arrives after the speaker has moved
         // on is the failure this module already refuses to accept for live lines, and filling in
         // the past must not cause it.
-        if self.batcher.is_empty() && self.in_flight.load(Ordering::Relaxed) < MAX_IN_FLIGHT {
+        // `== 0`, not `< MAX_IN_FLIGHT`. A slot is kept free for speech that has not happened yet.
+        //
+        // The live queue emptying used to mean nothing was being translated; now it means the line
+        // was sent *immediately*, which is the whole point of the change above. Letting the backlog
+        // take the remaining slot on the strength of an empty queue would put a minute-old sentence
+        // in front of the one being spoken — the exact failure this module refuses, arriving by a
+        // new route.
+        if self.batcher.is_empty() && self.in_flight.load(Ordering::Relaxed) == 0 {
             let take = self.backlog.len().min(BATCH);
             if take > 0 {
                 let batch: Vec<Pending> = self.backlog.drain(..take).collect();
@@ -483,20 +509,42 @@ mod tests {
             1.0,
         ));
         live.offer(&[partial]);
-        assert!(live.batcher.is_empty());
+        assert!(
+            live.batcher.is_empty(),
+            "a partial must not become a request"
+        );
+        assert_eq!(live.in_flight.load(std::sync::atomic::Ordering::Relaxed), 0);
 
+        // The final does. It leaves the queue immediately now rather than waiting for company —
+        // see `Batcher::ready` — so what proves it was taken is the request, not the backlog.
         live.offer(&[final_of(2, "xong rồi")]);
-        assert_eq!(live.batcher.len(), 1);
+        assert_eq!(live.in_flight.load(std::sync::atomic::Ordering::Relaxed), 1);
     }
 
-    /// A few lines must not each cost a request; the batch waits for company.
+    /// The first line goes at once; the rest ride behind it.
+    ///
+    /// Waiting for company is free while a request is already out — those lines are waiting on the
+    /// model anyway — and costs the wait outright when nothing is. An ordinary conversation never
+    /// fills a batch, so the old unconditional deadline charged every line four seconds before the
+    /// request was even sent. Reported as "phần dịch chậm quá, phải mấy s sau khi nói".
     #[tokio::test]
-    async fn a_short_run_of_lines_does_not_dispatch_yet() {
+    async fn the_first_line_is_sent_at_once_and_the_rest_wait_behind_it() {
+        use std::sync::atomic::Ordering;
         let mut live = translator(&["en"]);
-        for i in 0..3 {
-            live.offer(&[final_of(i, "câu")]);
-        }
-        assert_eq!(live.batcher.len(), 3, "still queued, nothing sent");
+
+        live.offer(&[final_of(0, "câu")]);
+        assert_eq!(
+            live.in_flight.load(Ordering::Relaxed),
+            1,
+            "sent immediately"
+        );
+        assert!(live.batcher.is_empty());
+
+        // Two more while that one is out. `MAX_IN_FLIGHT` is 2, so the second batch goes and the
+        // third line waits — which is the trade working as intended rather than a deadline.
+        live.offer(&[final_of(1, "câu")]);
+        live.offer(&[final_of(2, "câu")]);
+        assert!(live.in_flight.load(Ordering::Relaxed) <= MAX_IN_FLIGHT);
     }
 
     /// The wiring test: a full batch dispatches, the request fails against a dead port, and the
@@ -504,9 +552,11 @@ mod tests {
     #[tokio::test]
     async fn a_full_batch_dispatches_and_a_failure_is_reported_as_transient() {
         let mut live = translator(&["en"]);
-        for i in 0..BATCH {
-            live.offer(&[final_of(i as u64, "câu")]);
-        }
+        // Handed over together, the way the pipeline delivers a burst. One at a time would now
+        // dispatch the first line on its own — see `the_first_line_is_sent_at_once…` — and this
+        // test is about what happens to a *full* batch.
+        let burst: Vec<Event> = (0..BATCH).map(|i| final_of(i as u64, "câu")).collect();
+        live.offer(&burst);
         assert!(live.batcher.is_empty(), "the batch left the queue");
 
         // Poll until the spawned request has failed and posted its result.
@@ -535,8 +585,11 @@ mod tests {
     #[tokio::test]
     async fn finishing_sends_whatever_is_left() {
         let mut live = translator(&["en"]);
-        live.offer(&[final_of(1, "câu cuối")]);
-        assert_eq!(live.batcher.len(), 1);
+        // Filled past what can be in flight, so something is genuinely left behind to finish.
+        for i in 0..(BATCH * MAX_IN_FLIGHT + 2) {
+            live.offer(&[final_of(i as u64, "câu cuối")]);
+        }
+        assert!(!live.batcher.is_empty(), "something is waiting to be sent");
 
         live.finish();
         assert!(live.batcher.is_empty());
@@ -571,24 +624,44 @@ mod tests {
         for i in 0..BATCH {
             b.push(i as u64, "câu", None);
         }
-        assert!(b.ready(0), "full: send without waiting");
+        assert!(b.ready(0, false), "full: send without waiting");
         assert_eq!(b.take().len(), BATCH);
     }
 
-    /// A pause in the conversation must not strand the sentence before it.
+    /// A pause in the conversation must not strand the sentence before it — and while a request is
+    /// already out, waiting for company is free, because those lines are waiting on the model
+    /// anyway.
     #[test]
-    fn a_lone_line_goes_once_it_has_waited_long_enough() {
+    fn a_lone_line_waits_for_company_only_while_something_is_in_flight() {
         let mut b = Batcher::new();
         b.push(1, "xin chào", None);
-        assert!(!b.ready(MAX_WAIT_MS - 1));
-        assert!(b.ready(MAX_WAIT_MS));
+        assert!(!b.ready(MAX_WAIT_MS - 1, false));
+        assert!(b.ready(MAX_WAIT_MS, false));
+    }
+
+    /// The case the deadline was costing four seconds for nothing.
+    ///
+    /// One sentence, a pause, another sentence — an ordinary conversation — never fills a batch,
+    /// so every line sat for the full `MAX_WAIT_MS` before the request was even sent, and then
+    /// waited for the model on top. With nothing in flight there is no company coming and nothing
+    /// to gain by waiting for it.
+    #[test]
+    fn the_first_line_after_a_pause_goes_immediately() {
+        let mut b = Batcher::new();
+        b.push(1, "xin chào", None);
+        assert!(
+            b.ready(0, true),
+            "nothing is in flight, so this line is waiting for company that is not coming"
+        );
     }
 
     #[test]
     fn an_empty_queue_never_sends_a_request() {
         let b = Batcher::new();
-        assert!(!b.ready(0));
-        assert!(!b.ready(MAX_WAIT_MS * 10));
+        assert!(!b.ready(0, false));
+        assert!(!b.ready(MAX_WAIT_MS * 10, false));
+        // Not even when idle: there is nothing to send.
+        assert!(!b.ready(0, true));
     }
 
     /// The recogniser emits blank finals on a cough. Paying for a request to render an empty
@@ -804,14 +877,17 @@ mod backfilling {
     /// A subtitle arriving after the speaker has moved on is the failure this module refuses for
     /// live lines; filling in the past must not cause it. So the backlog drains only when the live
     /// batcher is empty — with a line waiting to go, the backlog stays exactly where it is.
-    #[test]
-    fn live_speech_is_never_held_up_by_the_backlog() {
+    // `tokio::test`, because a live line is now *dispatched* rather than queued and dispatching
+    // spawns.
+    #[tokio::test]
+    async fn live_speech_is_never_held_up_by_the_backlog() {
         let mut translator = live(&["en"]);
         translator.backfill((0..20).map(|seq| (seq, format!("câu {seq}"), None)));
         let before = translator.backlog_len();
         assert_eq!(before, 20);
 
-        // One final arrives: it goes to the batcher, and the batcher is now not empty.
+        // One final arrives. It is dispatched at once rather than queued — see `Batcher::ready` —
+        // so what holds the backlog back is the request in flight, not a non-empty queue.
         let segment = summo_core::segment::Segment::new(
             99,
             summo_core::segment::Lane::Mic,
@@ -824,7 +900,7 @@ mod backfilling {
         assert_eq!(
             translator.backlog_len(),
             before,
-            "the backlog waited for the live line"
+            "the backlog went ahead of the sentence being spoken"
         );
     }
 }
