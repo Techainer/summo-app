@@ -10,12 +10,12 @@ Every default in Summo should trace back to a number in this file. Results are p
 **Method:** each backend at its own best-F1 threshold, since they do not share a probability
 calibration. `--sweep` tries 0.15 … 0.90.
 
-| Backend | Frame | Threshold | F1 | Precision | Recall | False trigger | Onset p50 | Release p50 | Release p95 | RTF | Licence | Shippable |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|:-:|
-| **silero v5** | 512 (32 ms) | 0.50 | **0.940** | 0.925 | **0.956** | 23.5 % | **17 ms** | 91 ms | 982 ms | 0.0063 | MIT | yes |
-| silero v4 | 512 (32 ms) | 0.40 | 0.898 | 0.904 | 0.892 | 28.7 % | 21 ms | 65 ms | 442 ms | 0.0055 | MIT | yes |
-| ten-vad | 256 (16 ms) | 0.50 | 0.931 | **0.942** | 0.921 | **17.4 %** | 32 ms | **38 ms** | **362 ms** | 0.0096 | Apache-2.0 + conditions | **no** |
-| ten-vad | 160 (10 ms) | 0.35 | 0.909 | 0.857 | 0.968 | 49.0 % | 10 ms | 109 ms | 857 ms | 0.0098 | Apache-2.0 + conditions | **no** |
+| Backend       |       Frame | Threshold |        F1 | Precision |    Recall | False trigger | Onset p50 | Release p50 | Release p95 |    RTF | Licence                 | Shippable |
+| ------------- | ----------: | --------: | --------: | --------: | --------: | ------------: | --------: | ----------: | ----------: | -----: | ----------------------- | :-------: |
+| **silero v5** | 512 (32 ms) |      0.50 | **0.940** |     0.925 | **0.956** |        23.5 % | **17 ms** |       91 ms |      982 ms | 0.0063 | MIT                     |    yes    |
+| silero v4     | 512 (32 ms) |      0.40 |     0.898 |     0.904 |     0.892 |        28.7 % |     21 ms |       65 ms |      442 ms | 0.0055 | MIT                     |    yes    |
+| ten-vad       | 256 (16 ms) |      0.50 |     0.931 | **0.942** |     0.921 |    **17.4 %** |     32 ms |   **38 ms** |  **362 ms** | 0.0096 | Apache-2.0 + conditions |  **no**   |
+| ten-vad       | 160 (10 ms) |      0.35 |     0.909 |     0.857 |     0.968 |        49.0 % |     10 ms |      109 ms |      857 ms | 0.0098 | Apache-2.0 + conditions |  **no**   |
 
 **Decision:** ship Silero v5. It is both the most accurate option and the only permissively licensed
 one. See [ADR 0001](adr/0001-vad-backend-licensing.md) for the licence analysis and for the
@@ -23,14 +23,14 @@ one. See [ADR 0001](adr/0001-vad-backend-licensing.md) for the licence analysis 
 
 ### What the columns mean
 
-* **Release p50/p95** — delay between speech genuinely stopping and the detector going quiet. The
+- **Release p50/p95** — delay between speech genuinely stopping and the detector going quiet. The
   gate cannot close a segment until this happens, so it is added directly to the delay before final
   text appears. It is the number most worth optimising.
-* **Onset p50** — delay before the detector reacts to speech starting. Largely hidden by the gate's
+- **Onset p50** — delay before the detector reacts to speech starting. Largely hidden by the gate's
   400 ms pre-roll buffer.
-* **False trigger** — frames called speech during labelled silence, as a fraction of all silence
+- **False trigger** — frames called speech during labelled silence, as a fraction of all silence
   frames. This is the "air conditioning keeps opening a segment" number.
-* **RTF** — detector compute per second of audio. All candidates are effectively free at ~0.01.
+- **RTF** — detector compute per second of audio. All candidates are effectively free at ~0.01.
 
 ### Reproduce
 
@@ -47,9 +47,9 @@ cargo run --release -p summo-bench --features silero -- vad \
 
 ### Caveats
 
-* The dataset is TEN's own published testset — home turf for TEN-VAD. Repeat on our meeting captures
+- The dataset is TEN's own published testset — home turf for TEN-VAD. Repeat on our meeting captures
   before treating the ranking as general.
-* Single machine, single thread. Numbers are for ranking backends, not for predicting a user's
+- Single machine, single thread. Numbers are for ranking backends, not for predicting a user's
   laptop; per-machine figures come from the autotune pass at install time.
 
 ## Speech recognition — accuracy
@@ -61,20 +61,20 @@ the session's re-decode multiplier is measured separately below.
 the selection is reproducible and not chosen after seeing a score. 16 kHz mono, converted from
 FLEURS' float WAVs. Two runs per row, median reported. Xeon Gold 6226R, sherpa-onnx.
 
-| Model | Dataset | Threads | WER | CER | RTF |
-|---|---|---:|---:|---:|---:|
-| gipformer-1.5-68M (int8) | fleurs_vi | 4 | **8.3 %** | **6.2 %** | 0.020 |
-| gipformer-1.5-68M (int8) | fleurs_vi | 8 | **8.3 %** | **6.2 %** | 0.017 |
-| gipformer-65M (int8) | fleurs_vi | 4 | 8.5 % | 6.7 % | 0.023 |
-| gipformer-65M (int8) | fleurs_vi | 8 | 8.6 % | 6.8 % | 0.019 |
-| whisper-tiny (fp32) | fleurs_vi | 4 | 67.6 % | 45.1 % | 0.137 |
-| whisper-tiny (int8) | fleurs_vi | 4 | 81.3 % | 60.0 % | 0.138 |
-| whisper-tiny (fp32) | fleurs_vi | 8 | 67.6 % | 45.1 % | 0.116 |
-| whisper-tiny (int8) | fleurs_vi | 8 | 81.0 % | 59.7 % | 0.120 |
-| whisper-tiny (fp32) | whisper test set (English) | 4 | **4.5 %** | 0.3 % | 0.107 |
+| Model                    | Dataset                    | Threads |       WER |       CER |   RTF |
+| ------------------------ | -------------------------- | ------: | --------: | --------: | ----: |
+| gipformer-1.5-68M (int8) | fleurs_vi                  |       4 | **8.3 %** | **6.2 %** | 0.020 |
+| gipformer-1.5-68M (int8) | fleurs_vi                  |       8 | **8.3 %** | **6.2 %** | 0.017 |
+| gipformer-65M (int8)     | fleurs_vi                  |       4 |     8.5 % |     6.7 % | 0.023 |
+| gipformer-65M (int8)     | fleurs_vi                  |       8 |     8.6 % |     6.8 % | 0.019 |
+| whisper-tiny (fp32)      | fleurs_vi                  |       4 |    67.6 % |    45.1 % | 0.137 |
+| whisper-tiny (int8)      | fleurs_vi                  |       4 |    81.3 % |    60.0 % | 0.138 |
+| whisper-tiny (fp32)      | fleurs_vi                  |       8 |    67.6 % |    45.1 % | 0.116 |
+| whisper-tiny (int8)      | fleurs_vi                  |       8 |    81.0 % |    59.7 % | 0.120 |
+| whisper-tiny (fp32)      | whisper test set (English) |       4 | **4.5 %** |     0.3 % | 0.107 |
 
 Those rows are the argument for a flat registry rather than a "basic / better / best" ladder.
-Whisper-tiny is not a bad model — it scores 4.5 % on English. It is a bad model *for Vietnamese*,
+Whisper-tiny is not a bad model — it scores 4.5 % on English. It is a bad model _for Vietnamese_,
 where it is eight times worse than a 73 MB transducer that also runs six times faster. No single
 ordering of models is correct across languages, so Summo does not impose one: each manifest states
 which languages it was measured on, and the app recommends from that.
@@ -124,7 +124,7 @@ for f in $(ls fleurs/test | sort | head -100); do sox "fleurs/test/$f" -r 16000 
 
 ### Gipformer 1.5 against the 65M it replaces
 
-Better on every axis measured, and the interesting part is the last column: it is *faster* at both
+Better on every axis measured, and the interesting part is the last column: it is _faster_ at both
 thread counts despite being the larger model. The accuracy gain is mostly in CER — 6.2 % against
 6.8 % — which is the shape of a model that has stopped mangling syllables rather than one that has
 learned new words.
@@ -143,15 +143,15 @@ belong rather than averaged into one claim.
 set above — first 100 by filename, digits left in.
 
 Every figure below is taken with the harness **levelling each clip the way the recorder levels each
-utterance**. That is the whole of the correction in this section; see *The level* below.
+utterance**. That is the whole of the correction in this section; see _The level_ below.
 
-| Model | Threads | WER | CER | RTF | Empty | Size |
-|---|---:|---:|---:|---:|---:|---:|
-| parakeet-tdt-110m-en (int8) | 8 | **8.4 %** | **5.7 %** | 0.025 | 0 | 108 MB |
-| zipformer-gigaspeech-en (int8) | 8 | 8.9 % | 5.7 % | **0.020** | 0 | **73 MB** |
-| whisper-base (int8) | 8 | 10.7 % | **4.9 %** | 0.145 | 0 | 160 MB |
-| whisper-tiny (fp32) | 8 | 13.2 % | 6.0 % | 0.076 | 0 | 75 MB |
-| zipformer-en (int8) | 8 | 15.9 % | 8.5 % | 0.020 | 0 | 67 MB |
+| Model                          | Threads |       WER |       CER |       RTF | Empty |      Size |
+| ------------------------------ | ------: | --------: | --------: | --------: | ----: | --------: |
+| parakeet-tdt-110m-en (int8)    |       8 | **8.4 %** | **5.7 %** |     0.025 |     0 |    108 MB |
+| zipformer-gigaspeech-en (int8) |       8 |     8.9 % |     5.7 % | **0.020** |     0 | **73 MB** |
+| whisper-base (int8)            |       8 |    10.7 % | **4.9 %** |     0.145 |     0 |    160 MB |
+| whisper-tiny (fp32)            |       8 |    13.2 % |     6.0 % |     0.076 |     0 |     75 MB |
+| zipformer-en (int8)            |       8 |    15.9 % |     8.5 % |     0.020 |     0 |     67 MB |
 
 `whisper-tiny` ranked first for English for a long time on `wer_whisper_testset_en: 0.045` — 4.5 %,
 published by OpenAI on OpenAI's own test set, and the one number in this file that could not be
@@ -162,7 +162,7 @@ compared to any other. It is 13.2 % here.
 This file previously said that two English transducers **did not work**: `zipformer-en` at 59.7 %
 with 22 of the hundred clips producing no text at all, and `parakeet-tdt-110m-en` at 51.8 % with 44.
 It called the shape of those numbers — a word error rate almost equal to the character error rate —
-*"the shape of output that is absent rather than wrong"*, and that reading was right. The cause was
+_"the shape of output that is absent rather than wrong"_, and that reading was right. The cause was
 not.
 
 Both models are fine. Summo was handing them audio at whatever level it was recorded at.
@@ -179,15 +179,15 @@ amplifies noise rather than speech.
 
 Levelling each utterance before it reaches a model, with nothing else changed:
 
-| Model | as recorded | levelled |
-|---|---:|---:|
-| parakeet-tdt-110m-en | 51.8 %, **44 clips empty** | **8.4 %**, none |
-| zipformer-en | 59.7 %, **22 clips empty** | **15.9 %**, none |
-| zipformer-gigaspeech-en | 10.1 % | **8.9 %** |
-| whisper-tiny (fp32) | 13.8 % | **13.2 %** |
-| gipformer-65m (vi) | 8.6 % | **8.3 %** |
-| whisper-base | 10.2 % | 10.7 % |
-| gipformer-1.5-68m (vi) | 8.3 % | 8.3 % |
+| Model                   |                as recorded |         levelled |
+| ----------------------- | -------------------------: | ---------------: |
+| parakeet-tdt-110m-en    | 51.8 %, **44 clips empty** |  **8.4 %**, none |
+| zipformer-en            | 59.7 %, **22 clips empty** | **15.9 %**, none |
+| zipformer-gigaspeech-en |                     10.1 % |        **8.9 %** |
+| whisper-tiny (fp32)     |                     13.8 % |       **13.2 %** |
+| gipformer-65m (vi)      |                      8.6 % |        **8.3 %** |
+| whisper-base            |                     10.2 % |           10.7 % |
+| gipformer-1.5-68m (vi)  |                      8.3 % |            8.3 % |
 
 Every model that changed, improved; the two Whispers are flat, which is what a model that normalises
 its own input looks like. **Twenty-six of the hundred Vietnamese clips peak below a tenth of full
@@ -200,7 +200,7 @@ opened on a cough is not brought up to full scale; and do nothing at all to digi
 
 ### What this file was wrong about
 
-The claim that a LibriSpeech model *"collapses on anything that is not an audiobook"* was written
+The claim that a LibriSpeech model _"collapses on anything that is not an audiobook"_ was written
 here about `zipformer-en` and is not what the numbers showed. LibriSpeech is still the reason it
 ends up last of the five — 15.9 % against 8.9 % for the GigaSpeech model at a similar size — but
 that is a gap, not a collapse, and the collapse was ours.
@@ -218,21 +218,21 @@ tensor cores?
 **On the whole model, no — and for Vietnamese it costs a lot of accuracy.** Same 100-clip FLEURS
 set, same runtime, the two builds whisper-tiny publishes:
 
-| | WER | RTF @4t | RTF @8t | Size |
-|---|---:|---:|---:|---:|
+|      |        WER |   RTF @4t |   RTF @8t |   Size |
+| ---- | ---------: | --------: | --------: | -----: |
 | fp32 | **67.6 %** | **0.137** | **0.116** | 146 MB |
-| int8 | 81.3 % | 0.138 | 0.120 | 99 MB |
+| int8 |     81.3 % |     0.138 |     0.120 |  99 MB |
 
 Identical speed, **13.7 points worse**. Everything int8 buys here is on disk.
 
 That is not because quantisation does nothing. It is because whisper is an encoder plus an
-*autoregressive* decoder, and the two react in opposite directions. Encoder only, one 30 s window,
+_autoregressive_ decoder, and the two react in opposite directions. Encoder only, one 30 s window,
 pinned to four cores, 15 runs, median:
 
-| Runtime | fp32 | int8 | |
-|---|---:|---:|---|
-| ONNX Runtime 1.28 | 155 ms | **126 ms** | int8 **1.24× faster** |
-| OpenVINO 2026.3 | **115 ms** | 182 ms | int8 1.59× *slower* |
+| Runtime           |       fp32 |       int8 |                       |
+| ----------------- | ---------: | ---------: | --------------------- |
+| ONNX Runtime 1.28 |     155 ms | **126 ms** | int8 **1.24× faster** |
+| OpenVINO 2026.3   | **115 ms** |     182 ms | int8 1.59× _slower_   |
 
 So int8 does win where the matrices are large and the pass happens once — the encoder, in the
 runtime we ship. It loses in the decoder, which runs a few hundred times per clip on matrices small
@@ -245,13 +245,13 @@ are pinned to four hardware threads — so read the ratios, not the absolute mil
 **And the opposite result, on the model Summo actually defaults to.** `gipformer-65m` publishes an
 fp32 build upstream as well; the same 100 clips, four threads:
 
-| gipformer-65m | WER | CER | RTF | Size |
-|---|---:|---:|---:|---:|
-| int8 | **8.50 %** | 6.73 % | **0.021** | 73 MB |
-| fp32 | 8.56 % | **6.43 %** | 0.026 | 250 MB |
+| gipformer-65m |        WER |        CER |       RTF |   Size |
+| ------------- | ---------: | ---------: | --------: | -----: |
+| int8          | **8.50 %** |     6.73 % | **0.021** |  73 MB |
+| fp32          |     8.56 % | **6.43 %** |     0.026 | 250 MB |
 
 Here int8 is **25 % faster**, a third of the size, and its word error rate is the same — the fp32
-build's advantage is a quarter of a point of *character* error, which is a slightly better guess at
+build's advantage is a quarter of a point of _character_ error, which is a slightly better guess at
 a wrong word. So the registry ships int8 alone for this model, and there is no fp32 variant to
 choose between.
 
@@ -261,7 +261,7 @@ pay; its decoder is a single small layer. Whisper spends most of a clip in an au
 that runs hundreds of times on small matrices. Which is why "is int8 faster" has no general answer
 and every model gets measured.
 
-The OpenVINO column answers the other suspicion — *maybe this CPU is bad at int8*. This is a
+The OpenVINO column answers the other suspicion — _maybe this CPU is bad at int8_. This is a
 Cascade Lake Xeon with AVX-512 VNNI, the instruction set built for exactly this, and a second
 runtime tuned by Intel for Intel reaches the same conclusion by a different route: it is fastest of
 all on fp32 and worst of all on this int8 graph. The limit is the shape of the model, not the chip.
@@ -309,10 +309,10 @@ First real run of the whole chain: WAV → Silero VAD → `PseudoSession` re-dec
 hallucination filter → transcript. Model is `gipformer-65M` (Zipformer RNN-T, INT8 ONNX, 73 MB) via
 sherpa-onnx, 4 threads, on the same Xeon.
 
-| Recording | Length | Segments | Decodes | Suppressed | Wall | RTF | Headroom |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| meeting capture (raw mic) | 34.0 s | 9 | 87 | 0 | 3.62 s | 0.107 | 9× |
-| meeting capture (denoised) | 21.7 s | 5 | 79 | 1 | 3.87 s | 0.178 | 6× |
+| Recording                  | Length | Segments | Decodes | Suppressed |   Wall |   RTF | Headroom |
+| -------------------------- | -----: | -------: | ------: | ---------: | -----: | ----: | -------: |
+| meeting capture (raw mic)  | 34.0 s |        9 |      87 |          0 | 3.62 s | 0.107 |       9× |
+| meeting capture (denoised) | 21.7 s |        5 |      79 |          1 | 3.87 s | 0.178 |       6× |
 
 Read the decode counts: 87 decodes for 9 utterances is the pseudo-streaming multiplier — each open
 utterance is re-decoded roughly ten times so partial text keeps up with the speaker. **That entire
@@ -343,14 +343,14 @@ Add `--partials` to watch text grow inside an utterance rather than only seeing 
 
 ### Caveats
 
-* Two short captures from one microphone. These numbers say the pipeline works and roughly what it
+- Two short captures from one microphone. These numbers say the pipeline works and roughly what it
   costs, not what the accuracy is — no reference transcript was scored, so there is no WER here yet.
-* The denoised capture shows a higher RTF because it is shorter, so the fixed cost of the first
+- The denoised capture shows a higher RTF because it is shorter, so the fixed cost of the first
   decodes weighs more; per-utterance cost is the same.
-* Only one model has been scored so far. The comparison across candidates — Whisper turbo,
+- Only one model has been scored so far. The comparison across candidates — Whisper turbo,
   PhoWhisper, SenseVoice, Parakeet — is what decides the shipped default, and needs their runtimes
   wired up first.
-* Fleurs is read speech. Meeting audio is harder, and the accuracy gap between the two is the number
+- Fleurs is read speech. Meeting audio is harder, and the accuracy gap between the two is the number
   that actually predicts how the app feels.
 
 ## Storage: does an index earn its complexity?
@@ -359,10 +359,10 @@ Synthetic vault, ~9,000 words per meeting (about an hour of speech). Parallel sc
 threads so the comparison reflects a laptop rather than this 64-core machine.
 
 | Meetings | Corpus | Scan 1 thread | Scan 8 threads | List (frontmatter) | Index build | Index query | Index size |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 100 | 7 MB | 21 ms | **4 ms** | 1 ms | 156 ms | 0.1 ms | 8 MB |
-| 1,000 | 65 MB | 209 ms | **30 ms** | 5 ms | 1,600 ms | 0.1 ms | 80 MB |
-| 5,000 | 327 MB | 1,033 ms | **140 ms** | 26 ms | 9,310 ms | 0.2 ms | 402 MB |
+| -------: | -----: | ------------: | -------------: | -----------------: | ----------: | ----------: | ---------: |
+|      100 |   7 MB |         21 ms |       **4 ms** |               1 ms |      156 ms |      0.1 ms |       8 MB |
+|    1,000 |  65 MB |        209 ms |      **30 ms** |               5 ms |    1,600 ms |      0.1 ms |      80 MB |
+|    5,000 | 327 MB |      1,033 ms |     **140 ms** |              26 ms |    9,310 ms |      0.2 ms |     402 MB |
 
 **Decision: no database.** 30 ms at 1,000 meetings is fast enough to search per keystroke, listing
 the library costs 5 ms, and the SQLite index is larger than the corpus it indexes. See
@@ -372,6 +372,60 @@ index arrives with Q&A and nothing sooner.
 ```bash
 cargo run --release -p summo-bench -- vault --sizes 100,1000,5000
 ```
+
+## SenseVoice on the three languages it claimed and nobody had measured
+
+The card said Chinese, Cantonese, Japanese, Korean and English. Two of those had figures. Three were
+assertions, and an unmeasured language is not neutral here — `recommend` scores a model with no
+number for a language as if it got every word wrong, so a claim nobody checked made the model _less_
+likely to be chosen for exactly the language it claimed.
+
+100 FLEURS clips each, 8 threads, same harness as everything above.
+
+| Language  | Clips |  Audio |     WER |       CER |   RTF |
+| --------- | ----: | -----: | ------: | --------: | ----: |
+| Japanese  |   100 | 1302 s | 127.0 % | **8.4 %** | 0.026 |
+| Korean    |   100 | 1219 s |  28.7 % | **8.5 %** | 0.031 |
+| Cantonese |   100 | 1116 s |  94.5 % | **8.4 %** | 0.028 |
+
+**Read the character rate.** Japanese and Cantonese are written without spaces, so a word error rate
+scores the whole line as one token and can only ever report about 100 %. Korean is spaced and its
+28.7 % is a real number. All three claims stand.
+
+### The trap this nearly published
+
+Cantonese first measured at **36.4 % CER**, which would have gone into the manifest as "this model is
+bad at Cantonese" — worse than the Vietnamese figure that got Whisper demoted.
+
+It is not bad at Cantonese. FLEURS ships Cantonese as `yue_hant_hk`, in **traditional** characters;
+SenseVoice answers in **simplified**. The model had the sentence exactly right and the scorer was
+comparing scripts:
+
+```
+reference    在短短兩週內 美軍和自由法國軍就解放了南法 並轉向德國
+hypothesis   在短短两周内 美军和自由法国军就解放了南法 并转向德国
+```
+
+Converted to one script, the same audio and the same model score **8.4 %**. Twenty-eight points of
+that error rate were an encoding difference.
+
+Nothing in the harness could have caught it — a character error rate has no idea two characters mean
+the same word — so the dataset is prepared in the script the model answers in, and that is now part
+of preparing it:
+
+```bash
+python -c "
+import json
+from opencc import OpenCC
+cc = OpenCC('t2s')
+d = json.load(open('fleurs-yue/transcripts.json'))
+for e in d: e['text'] = cc.convert(e['text'])
+json.dump(d, open('fleurs-yue/transcripts.json','w'), ensure_ascii=False)"
+```
+
+The general lesson is the one this file keeps relearning: a number from the wrong conditions is worse
+than no number, because it gets published. The Whisper Vietnamese figure was misread off the wrong
+row; this one would have been right about the arithmetic and wrong about the question.
 
 ## Speech synthesis: can Kokoro say Japanese?
 
@@ -386,13 +440,13 @@ tree already links. So it looked like a manifest away.
 16 kHz, transcribe it back with SenseVoice — which claims Japanese. A voice cannot be judged by
 eye, and "it produced 4.3 seconds of non-silence" is not the same question as "it said the words".
 
-| Given to the synthesiser | What SenseVoice heard back |
-|---|---|
+| Given to the synthesiser                           | What SenseVoice heard back                                 |
+| -------------------------------------------------- | ---------------------------------------------------------- |
 | こんにちは、**今日は会議の予算**について話します。 | こんにちは**チーニハフェイイのイさん二数**いてファします。 |
-| こんにちは、**きょうはかいぎのよさん**について… | こんにちは**共右派会議の予算**んにつりて話します。 |
+| こんにちは、**きょうはかいぎのよさん**について…    | こんにちは**共右派会議の予算**んにつりて話します。         |
 
 Kana comes back right. Kanji comes back as mush — and the second row is the proof that this is
-phonemisation and not the recogniser, because the *same sentence* spelled in kana is understood.
+phonemisation and not the recogniser, because the _same sentence_ spelled in kana is understood.
 (`共右派` versus `きょうは` is SenseVoice choosing homophone kanji, which is correct behaviour.)
 
 **Why.** The archive ships lexicons for Chinese and English only; Japanese falls through to
