@@ -223,6 +223,15 @@ export async function boot({
   registry = REGISTRY,
   onboarded = true,
   dev = false,
+  /**
+   * `RUST_LOG` for the daemon, for a suite whose evidence is a log line rather than a pixel.
+   *
+   * Left alone by default: the daemon's own `info` is what a user would see, and a suite that
+   * silently ran it at a different level would be measuring a build nobody ships. A caller asking
+   * for `debug` is asking on purpose — `in-meeting.mjs` wants the per-utterance decode timings,
+   * which are far too chatty to be `info` on a real meeting.
+   */
+  log: level = null,
 } = {}) {
   const home = join("/tmp", `summo-${name}-${process.pid}`);
   rmSync(home, { recursive: true, force: true });
@@ -245,7 +254,12 @@ export async function boot({
     // tests a real registry without depending on a deployed CDN — and so it keeps passing when the
     // network is not there. A caller can substitute one: `models.mjs` builds a registry whose file
     // URLs point at a local server, so installing does not reach the public internet either.
-    env: { ...process.env, SUMMO_REGISTRY: registry, ...libraries() },
+    env: {
+      ...process.env,
+      SUMMO_REGISTRY: registry,
+      ...(level ? { RUST_LOG: level } : {}),
+      ...libraries(),
+    },
   });
   // Detached from Node's own exit accounting. A suite that forgets `stop()` should end with a
   // failed assertion, not hang until whatever is running it gives up — which is how a passing

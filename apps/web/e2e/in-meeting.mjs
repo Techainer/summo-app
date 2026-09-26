@@ -49,7 +49,13 @@ if (local.unreachable.length > 0) {
   process.exit(1);
 }
 
-const engine = await boot(process.argv, { name: "in-meeting", registry: local.registry });
+const engine = await boot(process.argv, {
+  name: "in-meeting",
+  registry: local.registry,
+  // The per-utterance decode timings, which are `debug` because one line per sentence is far too
+  // chatty for a real meeting and exactly what this suite needs.
+  log: "summo_asr=debug,info",
+});
 const { url: appUrl, port, token } = engine;
 const at = (path) => `${appUrl}${path}${path.includes("?") ? "&" : "?"}token=${token}`;
 const status = async () => (await fetch(at("/status"))).json();
@@ -357,6 +363,37 @@ async function settled(what, check) {
     // Said rather than silently skipped. A number that does not appear is worth more than a number
     // measured under the wrong conditions.
     console.log("subtitle lag: not measured — no second line landed while translation was on");
+  }
+
+  // And the other half of the delay, which is the half nothing instrumented.
+  //
+  // A user feels one number: the time between finishing a sentence and reading it. Two things make
+  // it up — the gate waits for trailing silence before calling the utterance finished, then the
+  // decode runs — and until this line existed, every explanation for "the subtitle is seconds
+  // late" was a guess about which of the two, or whether it was translation at all.
+  {
+    // Stripped of colour first. `tracing` writes the field name, an escape, then `=` — so a
+    // literal `decode_ms=` matches nothing, and the check reported "the daemon logged no decode"
+    // while five of them sat in the buffer. A search that cannot fail to find is the useful kind.
+    const plain = engine.log().replace(/\u001b\[[0-9;]*m/g, "");
+    const decodes = [...plain.matchAll(/decode_ms=(\d+)/g)].map((m) => Number(m[1]));
+    const silence = /silence_ms=(\d+)/.exec(plain)?.[1];
+    if (decodes.length > 0) {
+      const worst = Math.max(...decodes);
+      const median = decodes.slice().sort((a, b) => a - b)[Math.floor(decodes.length / 2)];
+      console.log(
+        `speech to text: ${silence}ms of trailing silence + ${median}ms to decode ` +
+          `(worst ${worst}ms, ${decodes.length} utterances)`,
+      );
+    } else {
+      console.log("speech to text: not measured — the daemon logged no decode");
+      const debugs = engine
+        .log()
+        .split("\n")
+        .filter((l) => l.includes("DEBUG"));
+      console.log(`  (DEBUG lines seen: ${debugs.length})`);
+      console.log("  " + debugs.slice(0, 3).join("\n  ").slice(0, 400));
+    }
   }
   if (!arrived) {
     console.log("--- daemon log ---\n" + engine.log().slice(-3000));

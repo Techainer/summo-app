@@ -468,8 +468,25 @@ impl<D: Decoder> PseudoSession<D> {
             self.last_final_pcm = Some(pcm.to_vec());
         }
         self.decodes += 1;
+        // How long the text takes to arrive after the speaker stops.
+        //
+        // Two things make up that gap and only one of them was ever visible. The gate waits
+        // `min_silence_s` before it will call an utterance finished — deliberately, or a sentence
+        // gets cut at its first comma — and then this decode runs. A user reporting "the subtitle
+        // is seconds late" is feeling their sum, and nothing measured either half, so every
+        // explanation for it was a guess.
+        let started = std::time::Instant::now();
         let transcript = self.decoder.decode(pcm)?;
+        let decode = started.elapsed();
         self.decoder.reset();
+        tracing::debug!(
+            seq,
+            lane = self.cfg.lane.as_str(),
+            audio_s = samples_to_secs(pcm.len()),
+            decode_ms = decode.as_millis() as u64,
+            silence_ms = (self.cfg.gate.min_silence_s * 1000.0) as u64,
+            "utterance decoded"
+        );
         if self.cfg.keep_final_pcm {
             self.last_final_language = transcript.language.clone();
         }
