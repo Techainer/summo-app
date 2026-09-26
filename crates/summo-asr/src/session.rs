@@ -31,7 +31,7 @@ use summo_vad::gate::{GateConfig, SpeechEvent, VadGate};
 use crate::{
     decoder::Decoder,
     denoise::Denoiser,
-    hallucination::{HallucinationFilter, Verdict},
+    hallucination::{HallucinationFilter, Streak, Verdict},
 };
 
 /// How a session drives its decoder.
@@ -142,6 +142,10 @@ pub struct PseudoSession<D: Decoder> {
     gate: VadGate,
     cfg: SessionConfig,
     filter: HallucinationFilter,
+    /// The same line arriving over and over, which no single transcript can show. See
+    /// [`summo_asr::Streak`]: a stuck decoder that emits one short word per utterance passes every
+    /// per-utterance rule there is, sixty times in a row.
+    streak: Streak,
     /// Samples in the open utterance at the last partial decode.
     last_partial_len: usize,
     /// Text of the part of the open utterance that is no longer being re-decoded.
@@ -202,6 +206,7 @@ impl<D: Decoder> PseudoSession<D> {
             decoder,
             cfg,
             filter: HallucinationFilter::default(),
+            streak: Streak::default(),
             last_partial_len: 0,
             committed_text: String::new(),
             committed_len: 0,
@@ -470,13 +475,19 @@ impl<D: Decoder> PseudoSession<D> {
         }
 
         let verdict = self.filter.judge(&transcript);
-        if !verdict.is_keep() {
+        // The run, judged before the verdict is acted on so a suppressed line does not silently
+        // keep a run alive. A decoder that has said the same word five times running is stuck, and
+        // the sixth is not news.
+        let stuck = self.streak.stuck(&transcript.text);
+        if !verdict.is_keep() || stuck {
             self.suppressed += 1;
             tracing::debug!(
                 seq,
                 lane = self.cfg.lane.as_str(),
                 dur_s = samples_to_secs(pcm.len()),
                 ?verdict,
+                stuck,
+                run = self.streak.run(),
                 text = %transcript.text,
                 "suppressed likely hallucination"
             );

@@ -173,3 +173,23 @@ export function covers(langs: string[], language: string): boolean {
 export function voicesFor(installed: CatalogueModel[], language: string): CatalogueModel[] {
   return installed.filter((model) => model.task === "tts" && covers(model.langs, language));
 }
+
+/**
+ * A voice worth offering for a language nothing installed can speak.
+ *
+ * The sibling of `missingFor` in `languages.ts`, and here for the same reason. The panel said
+ * *"no installed voice speaks Vietnamese. Pull one from the Models screen"* and stopped — in the
+ * one place somebody had already decided they wanted a dub, with the fix a click away and
+ * unnamed. A registry entry exists for Vietnamese, English and Chinese.
+ *
+ * The smallest that can do the job, because a voice is a download and every one of them can say
+ * the words. Size is the only axis a person can weigh without listening to both.
+ */
+export function voiceToPull(
+  catalogue: CatalogueModel[],
+  language: string,
+): CatalogueModel | undefined {
+  return catalogue
+    .filter((model) => model.task === "tts" && !model.installed && covers(model.langs, language))
+    .sort((a, b) => a.size_bytes - b.size_bytes)[0];
+}

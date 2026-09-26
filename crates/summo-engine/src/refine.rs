@@ -56,6 +56,13 @@ pub struct Refiner {
     decoder: Arc<Mutex<Box<dyn Decoder>>>,
     /// The languages the refine model's manifest claims. Empty means "no claim on record".
     claims: Vec<String>,
+    /// The languages the **live** model claims, which is the other half of the decision.
+    ///
+    /// Without it this could only ask "may the second model attempt this language", and the
+    /// answer for a Whisper is always yes — it claims `*`. What it has to ask is "is the second
+    /// model *better placed* than the one that already heard it", and that is a question about
+    /// both. See [`Refiner::wants`].
+    live_claims: Vec<String>,
     filter: HallucinationFilter,
     tx: tokio::sync::mpsc::UnboundedSender<Event>,
     rx: tokio::sync::mpsc::UnboundedReceiver<Event>,
@@ -75,12 +82,14 @@ impl Refiner {
     pub fn new(
         decoder: Box<dyn Decoder>,
         claims: Vec<String>,
+        live_claims: Vec<String>,
         filter: HallucinationFilter,
     ) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         Self {
             decoder: Arc::new(Mutex::new(decoder)),
             claims: claims.into_iter().map(|l| l.to_lowercase()).collect(),
+            live_claims: live_claims.into_iter().map(|l| l.to_lowercase()).collect(),
             filter,
             tx,
             rx,
@@ -91,20 +100,51 @@ impl Refiner {
 
     /// Whether this model is the right one for what was just heard.
     ///
-    /// See the module note: an unclaimed language is skipped, an unreported one is not. A manifest
-    /// with no languages at all is treated as a claim on everything, because that is a gap in the
-    /// registry entry rather than a statement that the model is good for nothing — and here the gap
-    /// is usually not even in the file: [`Refiner::new`]'s callers read the langs through
-    /// `store.installed(…)` and fall back to an empty list when that read fails, so "empty" means
-    /// "nobody told us", which is not grounds for refusing to run.
+    /// Two rules, because a pairing has two directions and only one of them was ever expressed.
     ///
-    /// The comparison itself is [`summo_models::langs_cover`], not a copy of it. This method used
-    /// to spell it `self.claims.contains(&language)`, which reads every list as literal codes and
-    /// so answered "no" to every utterance for the two models that publish `langs: ["*"]` — the
-    /// Whispers, which are precisely the models worth pairing as a second opinion over a
-    /// specialised live one.
+    /// ## A specialist heard it, and the second model hears everything
+    ///
+    /// Gipformer live, Whisper second. The pairing exists for one reason, and
+    /// `summo_models::second_opinion` states it: *"covers the rest, so a sentence in another
+    /// language is still words."* The rest. Not the Vietnamese the specialist was chosen for.
+    ///
+    /// The old rule could not express that. It asked only whether the *second* model claims the
+    /// language, and Whisper claims `*`, so the answer was always yes — Whisper re-decoded every
+    /// Vietnamese utterance and **replaced** text from a model that hears Vietnamese far better.
+    /// Measured on FLEURS: whisper-base is 44.2 % CER on Vietnamese. What a user saw was their own
+    /// language coming back as English fragments and repeated single words.
+    ///
+    /// Worse, the case that silently did the most damage is the one with *no* reported language.
+    /// A single-language model never reports one — there is nothing to report — so "an unreported
+    /// language is refined" handed Whisper the entire meeting.
+    ///
+    /// So when the live model is a specialist and this one is general: refine only what the
+    /// specialist does not cover, and treat an unreported language as the specialist's own,
+    /// because for a model that hears one language that is what it is.
+    ///
+    /// ## Everything else
+    ///
+    /// Unchanged, and deliberately so: Whisper live with Gipformer second is the arrangement
+    /// `e2e/bilingual.mjs` drives, where the specialist's own claim is already the right gate —
+    /// it revises the Vietnamese and leaves the English alone.
+    ///
+    /// A manifest with no languages at all is a claim on everything: that is a gap in the registry
+    /// entry rather than a statement that the model is good for nothing, and here the gap is
+    /// usually not even in the file — [`Refiner::new`]'s callers fall back to an empty list when
+    /// the store cannot be read, so "empty" means "nobody told us".
+    ///
+    /// The comparison is [`summo_models::langs_cover`], not a copy of it. This once spelled it
+    /// `self.claims.contains(&language)`, which reads every list as literal codes and so answered
+    /// "no" to every utterance for the models that publish `langs: ["*"]`.
     #[must_use]
     pub fn wants(&self, language: Option<&str>) -> bool {
+        if self.second_opinion_only() {
+            // The specialist already heard this one better, and an utterance it did not label is
+            // in the only language it speaks.
+            return language
+                .is_some_and(|code| !summo_models::langs_cover(&self.live_claims, code));
+        }
+
         let Some(language) = language else {
             return true;
         };
@@ -112,6 +152,17 @@ impl Refiner {
             return true;
         }
         summo_models::langs_cover(&self.claims, language)
+    }
+
+    /// Whether this pairing is "catch what the live model cannot hear" rather than "hear it again
+    /// more carefully".
+    ///
+    /// A general model under a specialist can only be the first. It knows nothing the specialist
+    /// does not about the specialist's own language, and it is measurably worse at it.
+    fn second_opinion_only(&self) -> bool {
+        let general = self.claims.is_empty() || self.claims.iter().any(|l| l == "*");
+        let specialist = !self.live_claims.is_empty() && !self.live_claims.iter().any(|l| l == "*");
+        general && specialist
     }
 
     /// Start whichever of these jobs are worth starting.
@@ -214,12 +265,86 @@ mod tests {
         }
     }
 
+    /// A refiner whose live model is unknown, which is how every test below the new ones reads.
+    ///
+    /// An empty live claim is "nobody told us", and the second-opinion rule needs a *specialist*
+    /// live model to apply — so these keep describing the behaviour they always described.
     fn refiner(claims: &[&str]) -> Refiner {
+        paired(claims, &[])
+    }
+
+    /// A refiner with both halves named: what the second model claims, and what the live one does.
+    fn paired(claims: &[&str], live: &[&str]) -> Refiner {
         Refiner::new(
             Box::new(Nothing),
             claims.iter().map(|c| (*c).to_string()).collect(),
+            live.iter().map(|c| (*c).to_string()).collect(),
             HallucinationFilter::default(),
         )
+    }
+
+    /// The bug a user found by speaking Vietnamese into the app.
+    ///
+    /// Gipformer live, Whisper second — which is what `automatic_second` pairs when nobody has
+    /// chosen, and Whisper claims `*`. Under the old rule every Vietnamese utterance was handed to
+    /// Whisper and its text *replaced* Gipformer's. Whisper-base is 44.2 % CER on Vietnamese
+    /// against a model picked for the language; what came back was English fragments and a single
+    /// word repeated down the transcript.
+    #[test]
+    fn a_general_second_model_does_not_re_hear_the_specialists_own_language() {
+        let whisper_under_gipformer = paired(&["*"], &["vi"]);
+        assert!(
+            !whisper_under_gipformer.wants(Some("vi")),
+            "the specialist already heard this one, and heard it better"
+        );
+    }
+
+    /// And the case that did the most damage, because it is the common one.
+    ///
+    /// A single-language decoder reports no language — there is nothing to report. "An unreported
+    /// language is still refined" therefore handed a general model the entire meeting, every
+    /// utterance of it, rather than the occasional foreign sentence the pairing exists for.
+    #[test]
+    fn an_unreported_language_under_a_specialist_is_the_specialists_own() {
+        assert!(!paired(&["*"], &["vi"]).wants(None));
+    }
+
+    /// What the pairing is actually for, still working.
+    ///
+    /// `second_opinion` states it: "covers the rest, so a sentence in another language is still
+    /// words". An English sentence in a Vietnamese meeting is exactly that sentence.
+    #[test]
+    fn a_general_second_model_still_catches_what_the_specialist_cannot_hear() {
+        let whisper_under_gipformer = paired(&["*"], &["vi"]);
+        assert!(whisper_under_gipformer.wants(Some("en")));
+        assert!(whisper_under_gipformer.wants(Some("ja")));
+    }
+
+    /// The other direction is untouched, and deliberately.
+    ///
+    /// Whisper live with Gipformer second is the arrangement `e2e/bilingual.mjs` drives with real
+    /// audio: the specialist revises the Vietnamese and leaves the English alone. There the second
+    /// model's own claim is already the right gate, and narrowing it would delete the feature.
+    #[test]
+    fn a_specialist_under_a_general_live_model_still_revises_its_own_language() {
+        let gipformer_under_whisper = paired(&["vi"], &["*"]);
+        assert!(gipformer_under_whisper.wants(Some("vi")));
+        assert!(!gipformer_under_whisper.wants(Some("en")));
+    }
+
+    /// Two specialists is not a second opinion either way, so the old rule stands.
+    #[test]
+    fn two_specialists_are_gated_by_the_second_models_own_claim() {
+        let english_under_vietnamese = paired(&["en"], &["vi"]);
+        assert!(english_under_vietnamese.wants(Some("en")));
+        assert!(!english_under_vietnamese.wants(Some("vi")));
+    }
+
+    /// A regional tag asks for its base language, here as everywhere else.
+    #[test]
+    fn a_regional_tag_counts_as_the_specialists_language() {
+        assert!(!paired(&["*"], &["en"]).wants(Some("en-US")));
+        assert!(paired(&["*"], &["en"]).wants(Some("vi")));
     }
 
     /// The whole point of the feature: an English sentence in a Vietnamese meeting is left alone by

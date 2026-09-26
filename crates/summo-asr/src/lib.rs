@@ -28,6 +28,6 @@ pub mod sherpa;
 
 pub use decoder::{Decoder, Transcript};
 pub use denoise::Denoiser;
-pub use hallucination::{HallucinationFilter, Verdict};
+pub use hallucination::{HallucinationFilter, Streak, Verdict};
 pub use hybrid::{HybridOutput, HybridSession, RefineJob};
 pub use session::{PseudoSession, SessionConfig};

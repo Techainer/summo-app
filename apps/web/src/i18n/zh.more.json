@@ -359,7 +359,9 @@
     "state_speaking_pct": "第{pass}遍，共2遍 — {percent}%",
     "state_mixing": "正在叠加到录音上",
     "state_done": "完成 — {of}句中的{count}句",
-    "state_failed": "失败"
+    "state_failed": "失败",
+    "needs_voice": "没有能说{language}的语音。{voice}（{size}）可以。",
+    "install_voice": "获取该语音"
   },
   "sync": {
     "hint": "让这个库与一个共享文件夹保持一致 — NAS、同步盘或U盘。不经过任何人的服务器。文件夹里的内容是加密的。",

@@ -910,20 +910,7 @@ async fn catalogue(
     // Which model each role points at. Installed and *chosen* are different states, and a screen
     // that cannot tell them apart is one where installing a Japanese model appears to do nothing.
     let settings = summo_core::Settings::load(&state.engine.paths().settings()).unwrap_or_default();
-    let chosen = serde_json::json!({
-        "live": settings.models.live,
-        "refine": settings.models.refine,
-        "vad": settings.models.vad,
-        "speaker": settings.models.speaker,
-        "denoise": settings.models.denoise,
-        "tts": settings.models.tts,
-        "translator": settings
-            .llm
-            .translator
-            .as_ref()
-            .filter(|mt| mt.is_local())
-            .and_then(|mt| mt.model.clone()),
-    });
+    let chosen = chosen_roles(&settings);
 
     Json(serde_json::json!({
         "models": models,
@@ -1081,6 +1068,51 @@ struct ErrandBody {
 /// one" made the whole screen decorative. Roles are named rather than inferred from the task,
 /// because `asr` fills two of them — the live model and the slower one that re-decodes after it —
 /// and which is wanted is the user's decision, not a property of the model.
+/// The languages a model's manifest claims, or an empty list when the store cannot say.
+///
+/// Empty means "nobody told us" rather than "good for nothing" — see `Refiner::wants`, which is
+/// the one caller that has to tell those apart.
+#[cfg(feature = "models")]
+fn claimed_langs(store: &summo_models::ModelStore, id: &str) -> Vec<String> {
+    summo_core::ModelId::parse(id)
+        .ok()
+        .and_then(|parsed| store.installed(&parsed).ok())
+        .map(|manifest| manifest.langs.clone())
+        .unwrap_or_default()
+}
+
+/// Which model fills each role, as the interface reads it.
+///
+/// One function, because two callers need the identical answer and one of them was building its
+/// own: `/settings/models` replied with the whole `Settings`, and the client read `settings.models`
+/// out of it — the `Models` struct, which holds `live`, `refine`, `vad`, `speaker`, `denoise` and
+/// `tts`.
+///
+/// **`translator` is not in that struct.** It lives under `llm.translator`, because a translator
+/// can be a remote endpoint as easily as a local model. So choosing SMALL100 saved correctly to
+/// disk, the reply came back without the one key the screen was waiting for, and the card never
+/// left the "not in use" state. Pressing the button looked like it did nothing — and it was the
+/// only role with that symptom, because it is the only role that is not a field of `Models`.
+///
+/// A remote translator is reported as `null` rather than as its endpoint name. This map answers
+/// "which *installed model* holds this role", and a hosted provider holds no model here.
+fn chosen_roles(settings: &summo_core::Settings) -> serde_json::Value {
+    serde_json::json!({
+        "live": settings.models.live,
+        "refine": settings.models.refine,
+        "vad": settings.models.vad,
+        "speaker": settings.models.speaker,
+        "denoise": settings.models.denoise,
+        "tts": settings.models.tts,
+        "translator": settings
+            .llm
+            .translator
+            .as_ref()
+            .filter(|mt| mt.is_local())
+            .and_then(|mt| mt.model.clone()),
+    })
+}
+
 async fn set_models(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1128,7 +1160,7 @@ async fn set_models(
                 // choice of nothing, and there is no such model.
                 settings.models.by_language.remove(&code);
                 settings.save(&path)?;
-                return Ok(settings);
+                return Ok(chosen_roles(&settings));
             }
             let model_id = summo_core::ModelId::parse(id).map_err(Error::Config)?;
             let manifest = state.engine.store().installed(&model_id)?;
@@ -1147,7 +1179,7 @@ async fn set_models(
             }
             settings.models.by_language.insert(code, id.to_string());
             settings.save(&path)?;
-            return Ok(settings);
+            return Ok(chosen_roles(&settings));
         }
 
         if id.is_empty() {
@@ -1165,7 +1197,7 @@ async fn set_models(
                 other => return Err(Error::Config(format!("no such model role: `{other}`"))),
             }
             settings.save(&path)?;
-            return Ok(settings);
+            return Ok(chosen_roles(&settings));
         }
 
         // Only something that is here. A setting naming a model that was never installed fails at
@@ -1214,7 +1246,11 @@ async fn set_models(
         }
 
         settings.save(&path)?;
-        Ok(settings)
+        // The `chosen` map, not the whole `Settings`. See `chosen_roles`: the client reads the
+        // roles out of this reply, and `translator` is not a field of `Models` — so replying with
+        // the settings file left the one role that lives under `llm` invisible to the screen that
+        // had just set it.
+        Ok(chosen_roles(&settings))
     })())
 }
 
@@ -5835,23 +5871,24 @@ async fn set_refine_model(
     let threads = engine.hardware().recommended_threads();
     let language = active.spec.language.clone();
     let named = wanted.clone();
+    // Both models' languages. The refiner needs the live one to tell "hear it again more
+    // carefully" from "catch what the live model cannot hear at all" — see `Refiner::wants`.
+    let live_named = active.spec.live_model.clone();
     let built = tokio::task::spawn_blocking(move || {
         let _ = &paths;
-        let claims = summo_core::ModelId::parse(&named)
-            .ok()
-            .and_then(|parsed| store.installed(&parsed).ok())
-            .map(|manifest| manifest.langs.clone())
-            .unwrap_or_default();
+        let claims = claimed_langs(&store, &named);
+        let live_claims = claimed_langs(&store, &live_named);
         crate::runner::load_decoder(&named, language.as_deref(), &store, threads)
-            .map(|decoder| (decoder, claims))
+            .map(|decoder| (decoder, claims, live_claims))
     })
     .await;
 
     match built {
-        Ok(Ok((decoder, claims))) => {
+        Ok(Ok((decoder, claims, live_claims))) => {
             active.refiner = Some(crate::refine::Refiner::new(
                 decoder,
                 claims,
+                live_claims,
                 summo_asr::HallucinationFilter::default(),
             ));
             active.spec.refine_model = Some(wanted.clone());
@@ -6417,11 +6454,11 @@ fn start_session(
         Some(id) if !id.trim().is_empty() => {
             let threads = engine.hardware().recommended_threads();
             let store = engine.store();
-            let claims = summo_core::ModelId::parse(id)
-                .ok()
-                .and_then(|parsed| store.installed(&parsed).ok())
-                .map(|manifest| manifest.langs.clone())
-                .unwrap_or_default();
+            let claims = claimed_langs(&store, id);
+            // And the live model's, which is half the decision: a general model under a specialist
+            // is there to catch the sentences the specialist cannot hear, not to re-hear the ones
+            // it hears better. See `Refiner::wants`.
+            let live_claims = claimed_langs(&store, &spec.live_model);
             // The refine model decodes whole utterances and is never asked to detect: the language
             // question was already answered by the live model, and this one is being run precisely
             // because it is the specialist for that answer.
@@ -6429,6 +6466,7 @@ fn start_session(
                 Ok(decoder) => Some(crate::refine::Refiner::new(
                     decoder,
                     claims,
+                    live_claims,
                     summo_asr::HallucinationFilter::default(),
                 )),
                 Err(e) => {
@@ -7076,6 +7114,75 @@ mod resolve_tests {
             resolve_models(&crate::protocol::SessionSpec::new(""), &engine)
                 .live_model
                 .is_empty()
+        );
+    }
+}
+
+#[cfg(test)]
+mod roles {
+    use super::*;
+
+    /// Every role `/settings/models` accepts comes back in the map it replies with.
+    ///
+    /// The bug this is here for: the reply used to be the whole `Settings`, and the interface read
+    /// the roles out of `settings.models` — the `Models` struct. `translator` is not a field of
+    /// that struct; it lives under `llm.translator`, because a translator can be a remote endpoint
+    /// as easily as a local model. So choosing SMALL100 wrote the right thing to disk, replied
+    /// without the key the screen was waiting on, and the card never left "not in use". From the
+    /// user's side the button did nothing, and only that one button.
+    ///
+    /// The two lists are compared against each other rather than against a third copy written
+    /// here, so adding a role to one and forgetting the other fails rather than drifting.
+    #[test]
+    fn every_role_that_can_be_set_can_be_read_back() {
+        let accepted = [
+            "live",
+            "refine",
+            "vad",
+            "speaker",
+            "denoise",
+            "tts",
+            "translator",
+        ];
+        let map = chosen_roles(&summo_core::Settings::default());
+        let reported = map.as_object().expect("an object");
+
+        let missing: Vec<&str> = accepted
+            .iter()
+            .copied()
+            .filter(|role| !reported.contains_key(*role))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "these roles can be set and never come back, so the screen that set one cannot see it: \
+             {missing:?}"
+        );
+    }
+
+    /// A local translator is a model this map can name; a remote one is not.
+    #[test]
+    fn the_translator_role_reports_the_model_and_not_the_endpoint() {
+        let mut settings = summo_core::Settings::default();
+        assert_eq!(
+            chosen_roles(&settings)["translator"],
+            serde_json::Value::Null
+        );
+
+        settings.llm.translator = Some(summo_core::settings::Translator {
+            provider: summo_core::settings::LOCAL.to_string(),
+            model: Some("small100".into()),
+        });
+        assert_eq!(chosen_roles(&settings)["translator"], "small100");
+
+        // A hosted provider holds no *model* here, and naming its endpoint would put a string in
+        // the one place the screen compares against an installed model's id.
+        settings.llm.translator = Some(summo_core::settings::Translator {
+            provider: "openai".to_string(),
+            model: Some("gpt-4o-mini".into()),
+        });
+        assert_eq!(
+            chosen_roles(&settings)["translator"],
+            serde_json::Value::Null
         );
     }
 }

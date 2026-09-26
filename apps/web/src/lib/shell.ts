@@ -168,3 +168,28 @@ export async function bridgeShellEvents(): Promise<(() => void) | null> {
   ]);
   return () => stops.forEach((stop) => stop());
 }
+
+/**
+ * Ask the shell to shrink to the strip, from anywhere in the app.
+ *
+ * `RootLayout` owns the shape, and the control that most wants it is several components deep — the
+ * "minimise" button inside a running meeting. That button opened a floating *panel* instead, which
+ * on a desktop is the wrong answer twice over: the app has a real strip that is always on top and
+ * can be dragged anywhere, and the panel is a fallback written for browsers that have no such
+ * thing. Two features called the same word, and the one people reached for was the lesser.
+ *
+ * An event rather than a context, matching `summo:menu` and `summo:perf`: the shape is one
+ * boolean owned by one component, and threading a setter through six layers of props to reach it
+ * would be a lot of plumbing for one press.
+ */
+export const COMPACT_EVENT = "summo:compact";
+
+export function askCompact(): void {
+  window.dispatchEvent(new CustomEvent(COMPACT_EVENT));
+}
+
+export function onCompactAsked(listener: () => void): () => void {
+  const handle = () => listener();
+  window.addEventListener(COMPACT_EVENT, handle);
+  return () => window.removeEventListener(COMPACT_EVENT, handle);
+}

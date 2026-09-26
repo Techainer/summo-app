@@ -359,7 +359,9 @@
     "state_speaking_pct": "{pass}回目/2 — {percent}%",
     "state_mixing": "録音に重ねています",
     "state_done": "完了 — {of}行中{count}行",
-    "state_failed": "失敗"
+    "state_failed": "失敗",
+    "needs_voice": "{language}を話せる音声がありません。{voice}（{size}）なら可能です。",
+    "install_voice": "この音声を入れる"
   },
   "sync": {
     "hint": "共有フォルダ（NAS、同期ドライブ、USB）とこの保管庫を同じ状態に保ちます。中継サーバーは使いません。フォルダの中身は暗号化されています。",

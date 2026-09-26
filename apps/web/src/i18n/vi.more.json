@@ -359,7 +359,9 @@
     "state_speaking_pct": "Lượt {pass}/2 — {percent}%",
     "state_mixing": "Đang trộn lên bản ghi",
     "state_done": "Xong — {count}/{of} câu",
-    "state_failed": "Lỗi"
+    "state_failed": "Lỗi",
+    "needs_voice": "Chưa có giọng đọc {language}. {voice} ({size}) đọc được.",
+    "install_voice": "Tải giọng này"
   },
   "sync": {
     "hint": "Giữ kho này khớp với một thư mục dùng chung — ổ mạng, thư mục đồng bộ, USB. Không qua máy chủ của ai. Nội dung trong thư mục đã được mã hoá.",

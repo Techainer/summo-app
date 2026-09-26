@@ -43,7 +43,7 @@ import { useIsNarrow } from "../../lib/breakpoint";
 import { useEngine } from "../../lib/engine-context";
 import { deviceWarning } from "../../lib/session";
 import { ISSUES } from "../../lib/menu";
-import { inShell, isMac, setShape } from "../../lib/shell";
+import { inShell, isMac, onCompactAsked, setShape } from "../../lib/shell";
 
 /**
  * Both are fetched when they are first needed, and neither ever is on the web build.
@@ -332,6 +332,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
    * it rather than a subtitle bar.
    */
   const [overlay, setOverlay] = useState(false);
+
+  // "Minimise", pressed from inside a running meeting. See `askCompact`: that button used to open
+  // a floating panel, which is the fallback for browsers with no window to shrink.
+  useEffect(() => onCompactAsked(() => setCompact(true)), []);
 
   // The window follows the layout. In a browser this does nothing and the layout still changes —
   // see `setShape`.

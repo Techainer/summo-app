@@ -243,14 +243,21 @@ export class CatalogueClient {
    * slower one that re-decodes after it — and which is wanted is the user's decision.
    */
   async use(role: Role, model: string): Promise<Chosen> {
-    const settings = await readJson<{ models?: Record<string, string | null> }>(
+    // The daemon's `chosen` map, which is the same shape `/catalogue` sends.
+    //
+    // It used to reply with the whole settings file and this read `settings.models` out of it —
+    // the `Models` struct. `translator` is not in that struct; it lives under `llm.translator`,
+    // because a translator can be a remote endpoint as easily as a local model. So choosing
+    // SMALL100 saved to disk correctly, came back without the one key this screen waits on, and
+    // the card stayed on "not in use". Pressing the button looked like it did nothing — and only
+    // for that one role, because it is the only role that is not a field of `Models`.
+    return readJson<Chosen>(
       await fetch(url(this.handshake, "/settings/models"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ role, model }),
       }),
     );
-    return settings.models ?? {};
   }
 
   /**

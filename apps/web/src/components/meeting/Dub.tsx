@@ -5,12 +5,22 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { useErrorText } from "../../lib/errors";
-import { DubClient, POLL_MS, describe, isFinished, percent, voicesFor } from "../../lib/dub";
+import {
+  DubClient,
+  POLL_MS,
+  describe,
+  isFinished,
+  percent,
+  voiceToPull,
+  voicesFor,
+} from "../../lib/dub";
 import { CatalogueClient } from "../../lib/catalogue";
 import { ExportClient } from "../../lib/export";
 import { GENTLE, METER, listItem } from "../../lib/motion";
+import { size } from "../../lib/catalogue";
+import { useInstall } from "../../lib/use-install";
 import { useLoad, useRefresh } from "../../lib/use-load";
-import { Button, Card, CardBody, CardHeader } from "../ui";
+import { Button, Card, CardBody, CardHeader, Progress } from "../ui";
 
 /**
  * The meeting, spoken in another language, over its own recording.
@@ -65,6 +75,26 @@ export function Dub({ meeting, recorded, onDone }: Props) {
     useCallback(async () => (recorded ? await catalogue.installed() : []), [catalogue, recorded]),
     [catalogue, recorded],
   );
+
+  /**
+   * And what the registry has, so a missing voice can be named and fetched from here.
+   *
+   * Failing quietly is right: a registry nobody can reach costs the offer below, not the panel.
+   */
+  const shop = useLoad(
+    useCallback(async () => {
+      if (!recorded) return [];
+      try {
+        return (await catalogue.load()).models;
+      } catch {
+        return [];
+      }
+    }, [catalogue, recorded]),
+    [catalogue, recorded],
+  );
+
+  /** A download started from this panel. */
+  const install = useInstall(handshake);
 
   const refresh = useCallback(async () => {
     try {
@@ -174,11 +204,49 @@ export function Dub({ meeting, recorded, onDone }: Props) {
         {/* Translated, and nothing installed can say it. Named rather than silently dropped: the
             difference between "Summo cannot do this" and "you need a voice for this" is the whole
             of whether the reader knows what to press next, and the models screen is where. */}
-        {noVoice.length > 0 && (
-          <p className="text-fg-dim text-meta">
-            {t("dub.no_voice", { languages: noVoice.map(nameOf).join(", ") })}
-          </p>
-        )}
+        {/* Translated, and nothing installed can say it.
+
+            This named the languages and then sent the reader to another screen — in the one place
+            somebody has already decided they want a dub, with the fix a click away and unnamed.
+            The registry has a voice for Vietnamese, English and Chinese; the panel says which,
+            how big, and fetches it here. Same shape as the recognition panel's offer, and the
+            same reason: a dead end in a feature's own screen is the feature not existing. */}
+        {noVoice.map((lang) => {
+          const voice = voiceToPull(shop.data ?? [], lang);
+          return (
+            <div
+              key={lang}
+              className="border-accent/30 bg-accent-soft text-meta rounded-control border px-3 py-2"
+              data-testid="dub-needs-voice"
+            >
+              <p className="text-fg-dim">
+                {voice
+                  ? t("dub.needs_voice", {
+                      language: nameOf(lang),
+                      voice: voice.name,
+                      size: size(voice.size_bytes),
+                    })
+                  : t("dub.no_voice", { languages: nameOf(lang) })}
+              </p>
+              {voice && (
+                <div className="mt-2">
+                  <Button
+                    size="sm"
+                    busy={install.running}
+                    onClick={() => {
+                      void install.start(voice.id).then((ok) => {
+                        if (ok) models.reload();
+                      });
+                    }}
+                  >
+                    {t("dub.install_voice")}
+                  </Button>
+                </div>
+              )}
+              {install.job && <Progress install={install.job} />}
+            </div>
+          );
+        })}
 
         <ul className="space-y-2">
           <AnimatePresence initial={false}>

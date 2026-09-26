@@ -438,3 +438,132 @@ mod tests {
         assert_eq!(filter.judge(&Transcript::new("dạ dạ dạ")), Verdict::Keep);
     }
 }
+
+/// A decoder saying the same thing over and over, across utterances rather than inside one.
+///
+/// [`HallucinationFilter`] judges one transcript at a time, and that is the right shape for the
+/// failures it was written for: boilerplate over silence, a phrase repeating until the window
+/// fills. It cannot see the other shape, and a user found it by speaking Vietnamese into a
+/// mispaired model — sixty consecutive utterances, each one the single word `Đang`.
+///
+/// Every one of those passed every rule. One token is not four repeats; the repeat ratio of a
+/// one-word line is meaningless; `no_speech_prob` was low because there *was* speech. The
+/// repetition was entirely between the lines, where nothing was looking.
+///
+/// Stateful, so it lives beside the session rather than inside the filter — a `judge` that
+/// remembered things would change meaning depending on who had called it before, and the filter is
+/// cloned into other threads.
+#[derive(Debug, Clone)]
+pub struct Streak {
+    last: Option<String>,
+    run: usize,
+    limit: usize,
+}
+
+impl Default for Streak {
+    fn default() -> Self {
+        // Three in a row is a person agreeing; four is a machine stuck.
+        //
+        // Deliberately not lower. "Vâng. Vâng. Vâng." is a real thing said in a real meeting, and
+        // the cost of being wrong here is deleting speech somebody actually produced — the one
+        // outcome worse than letting a repetition through.
+        Self::new(4)
+    }
+}
+
+impl Streak {
+    #[must_use]
+    pub fn new(limit: usize) -> Self {
+        Self {
+            last: None,
+            run: 0,
+            limit: limit.max(1),
+        }
+    }
+
+    /// Whether this utterance continues a run long enough to be a stuck decoder.
+    ///
+    /// Call once per final utterance, in order. Returns `true` when the line should be dropped.
+    pub fn stuck(&mut self, text: &str) -> bool {
+        let normalized = normalize(text);
+        if normalized.is_empty() {
+            return false;
+        }
+        if self.last.as_deref() == Some(normalized.as_str()) {
+            self.run += 1;
+        } else {
+            self.last = Some(normalized);
+            self.run = 1;
+        }
+        self.run > self.limit
+    }
+
+    /// Forget the run. For a new recording, or after the model changes underneath.
+    pub fn reset(&mut self) {
+        self.last = None;
+        self.run = 0;
+    }
+
+    /// How many in a row, including the one just judged.
+    #[must_use]
+    pub fn run(&self) -> usize {
+        self.run
+    }
+}
+
+#[cfg(test)]
+mod streak_tests {
+    use super::*;
+
+    /// The shape the per-utterance filter cannot see, and the one a user actually hit.
+    #[test]
+    fn sixty_utterances_of_one_word_stop_being_emitted() {
+        let mut streak = Streak::default();
+        let kept = (0..60).filter(|_| !streak.stuck("Đang")).count();
+        assert_eq!(kept, 4, "only the run limit should survive");
+    }
+
+    /// Three is a person agreeing. Deleting real speech is worse than letting a repetition through.
+    #[test]
+    fn a_few_in_a_row_are_left_alone() {
+        let mut streak = Streak::default();
+        for _ in 0..4 {
+            assert!(!streak.stuck("vâng"));
+        }
+        assert!(streak.stuck("vâng"), "the fifth is a machine");
+    }
+
+    /// Anything different ends the run, so a conversation that comes back to a word later is not
+    /// punished for it.
+    #[test]
+    fn a_different_line_clears_the_run() {
+        let mut streak = Streak::default();
+        for _ in 0..4 {
+            streak.stuck("vâng");
+        }
+        assert!(!streak.stuck("còn việc kia thì sao"));
+        for _ in 0..4 {
+            assert!(!streak.stuck("vâng"));
+        }
+    }
+
+    /// Compared after the same normalisation the rest of this file uses, so punctuation and case
+    /// do not hide a run from it.
+    #[test]
+    fn punctuation_and_case_do_not_break_a_run() {
+        let mut streak = Streak::default();
+        for text in ["Đang", "đang.", "ĐANG!", "  Đang  "] {
+            assert!(!streak.stuck(text));
+        }
+        assert!(streak.stuck("Đang…"));
+    }
+
+    #[test]
+    fn an_empty_line_is_not_part_of_any_run() {
+        let mut streak = Streak::default();
+        for _ in 0..10 {
+            assert!(!streak.stuck("   "));
+        }
+        assert_eq!(streak.run(), 0);
+    }
+}

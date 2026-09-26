@@ -15,8 +15,9 @@ import {
   rememberLanguage,
 } from "../../lib/languages";
 import { url } from "../../lib/library";
+import { useInstall } from "../../lib/use-install";
 import { useLoad } from "../../lib/use-load";
-import { Alert, Button, SegmentedControl, Select } from "../ui";
+import { Alert, Button, Progress, SegmentedControl, Select } from "../ui";
 
 /**
  * Which model does the listening, and in which language.
@@ -64,6 +65,8 @@ export function Recognition() {
   const [busy, setBusy] = useState(false);
   /** Bumped after a write, so both lists are re-read rather than assumed. */
   const [generation, setGeneration] = useState(0);
+  /** A download started from this panel, so the offer below can show it moving. */
+  const install = useInstall(handshake);
 
   const catalogue = useLoad(
     useCallback(
@@ -146,12 +149,11 @@ export function Recognition() {
     setBusy(true);
     setError(null);
     try {
-      const started = await fetch(url(handshake, "/installs"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id }),
-      });
-      if (!started.ok) throw new Error(await started.text());
+      // Watched, not fired and forgotten. This posted and returned, so a 600 MB model downloaded
+      // in silence behind a button that had stopped looking busy — and the only conclusion left to
+      // the person who pressed it was that the button did nothing. `install.job` feeds the bar
+      // below, which is the same one the models screen draws.
+      if (!(await install.start(id))) throw new Error(install.error ?? "install failed");
       // Pinned now rather than after the download: the daemon honours the setting when the files
       // arrive, and a user who pressed "use this one" has said what they want regardless of how
       // long the bytes take.
@@ -312,6 +314,7 @@ export function Recognition() {
                   {t("settings.see_models")}
                 </button>
               </div>
+              {install.job && <Progress install={install.job} />}
             </div>
           )}
 
@@ -347,6 +350,7 @@ export function Recognition() {
                   {t("settings.keep_current")}
                 </button>
               </div>
+              {install.job && <Progress install={install.job} />}
             </div>
           )}
         </div>

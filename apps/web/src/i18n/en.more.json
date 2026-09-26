@@ -359,7 +359,9 @@
     "state_speaking_pct": "Pass {pass} of 2 — {percent}%",
     "state_mixing": "Mixing over the recording",
     "state_done": "Done — {count} of {of} lines",
-    "state_failed": "Failed"
+    "state_failed": "Failed",
+    "needs_voice": "No voice here speaks {language}. {voice} ({size}) can.",
+    "install_voice": "Get this voice"
   },
   "sync": {
     "hint": "Keep this vault in step with a shared folder — a NAS mount, a synced drive, a USB stick. No relay and nobody's server. What the folder holds is encrypted.",

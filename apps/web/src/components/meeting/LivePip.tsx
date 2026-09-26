@@ -2,6 +2,8 @@ import { Minimize2, Square } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { askCompact, inShell } from "../../lib/shell";
+
 import { Button } from "../ui";
 import { useT } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
@@ -121,7 +123,25 @@ export function LivePip() {
 
   return (
     <>
-      <Button size="sm" variant="ghost" onClick={() => void open()} className="shrink-0">
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          // In the desktop app, minimising means the *window* shrinks: a strip that floats over
+          // whatever you are actually doing, draggable anywhere, with a transparent mode for
+          // putting the line over a film. That has existed since the shell did.
+          //
+          // This button opened a panel in the corner of the app instead — which is the fallback
+          // written for browsers, where there is no window to shrink. Two features answering to
+          // one word, and the button people press reached the lesser one.
+          if (inShell()) {
+            askCompact();
+            return;
+          }
+          void open();
+        }}
+        className="shrink-0"
+      >
         <Minimize2 aria-hidden="true" className="me-1.5 size-3" />
         {t("record.minimise")}
       </Button>
