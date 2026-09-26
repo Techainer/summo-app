@@ -18,6 +18,7 @@
     "e2e:full-flow": "node e2e/full-flow.mjs",
     "e2e:in-meeting": "node e2e/in-meeting.mjs",
     "e2e:latency": "node e2e/subtitle-latency.mjs",
+    "e2e:listen": "node e2e/listen.mjs",
     "e2e:bilingual": "node e2e/bilingual.mjs",
     "e2e:denoise": "node e2e/denoise.mjs",
     "e2e:dub": "node e2e/dub.mjs",

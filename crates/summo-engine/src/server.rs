@@ -6683,6 +6683,19 @@ fn start_session(
 #[cfg(all(feature = "tts", feature = "models"))]
 fn build_live_dub(engine: &EngineState, lang: &str) -> Option<crate::livedub::LiveDub> {
     let threads = engine.hardware().recommended_threads();
+
+    // Its own translator handle, for the reason `livedub` gives: a clause is translated as soon as
+    // it settles, which is before the line the subtitle path will translate exists.
+    let translator = match summo_core::settings::Settings::load(&engine.paths().settings())
+        .and_then(|settings| crate::translate::Translator::from_settings(engine.paths(), &settings))
+    {
+        Ok(translator) => std::sync::Arc::new(translator),
+        Err(e) => {
+            tracing::warn!(error = %e, lang, "no translator to speak with");
+            return None;
+        }
+    };
+
     let dir = match crate::dub::resolve_voice(engine.paths(), None, lang) {
         Ok(dir) => dir,
         Err(e) => {
@@ -6705,7 +6718,7 @@ fn build_live_dub(engine: &EngineState, lang: &str) -> Option<crate::livedub::Li
         },
     };
 
-    Some(crate::livedub::LiveDub::new(lang, voice))
+    Some(crate::livedub::LiveDub::new(lang, voice, translator))
 }
 
 /// Audio handling when recognition is compiled in.

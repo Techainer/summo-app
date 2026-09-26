@@ -34,15 +34,54 @@
 //! the same reason: a line spoken a minute after it was said is worse than a line not spoken, and
 //! a queue that only grows never recovers. The count is reported so the interface can say so.
 //!
-//! ## What is not here yet
+//! ## Clauses, not sentences
 //!
-//! This speaks **finished translations** — it watches for [`Event::Translation`] and synthesises
-//! it. That makes a live dub arrive about half a second after the line settles, which is the
-//! subtitle's own latency plus synthesis.
+//! This does not wait for a finished line. [`crate::commit`] hands over a clause as soon as two
+//! consecutive partials agree on it, which is before the speaker has stopped — so the 400 ms the
+//! gate spends waiting for trailing silence is not in the path, and a long sentence starts being
+//! spoken while its second half is still being said.
 //!
-//! It does not yet speak *clauses*, which is what [`crate::commit`] was built for and what would
-//! remove the 400 ms the gate spends waiting for trailing silence. That module is tested and
-//! unwired; joining the two is the next step, not something this one quietly half-does.
+//! What it cannot do is take a word back. A final that contradicts a clause already spoken is
+//! counted by [`crate::commit::Committer::revisions`] and nothing else; the alternative is waiting
+//! for the sentence, which is the thing being removed.
+//!
+//! ## Its own translation, deliberately
+//!
+//! A clause is translated here rather than reusing the subtitle's translation of the whole line,
+//! and that is a second call for the same words. It is affordable and it is isolated: SMALL100
+//! answers a line in 241 ms while a speaker produces one every two or three seconds, so doubling
+//! that is still five times more headroom than the pipeline needs — and the alternative, feeding
+//! clause translations into the subtitle stream, would put a half-sentence on screen under a line
+//! that is about to be replaced, in a path that currently works and is measured.
+//!
+//! The visible cost: with subtitles and a dub both on, the two are translated from different
+//! amounts of context and can word the same sentence differently. Both are right; they are not
+//! identical.
+//!
+//! ## What is measured, and what is still open
+//!
+//! `apps/web/e2e/listen.mjs` records Vietnamese, asks to hear English and times the socket. On this
+//! machine, continuous speech, one voice:
+//!
+//! ```text
+//! after the line settled      median 0.6 s
+//! after the words appeared    median 3.8 s
+//! about one chunk per utterance
+//! ```
+//!
+//! "One chunk per utterance" is the open problem and it is stated rather than hidden. The committer
+//! settles several clauses in a long sentence, and all but one of them arrive while the single voice
+//! session is busy and are dropped. So the clause machinery is doing its job and the dub is not yet
+//! getting the benefit — it behaves about as a sentence-shaped dub would, at a latency that is good.
+//!
+//! Queueing them instead was the obvious fix and it was measured: the median went from 0.6 s to
+//! **4.6 s**, because each clause then waited out the translation *and* synthesis of the one before
+//! it and the lag compounded. A dub four seconds behind the room is worse than an incomplete one.
+//!
+//! The fix that would actually work is more than one voice session, so clauses are spoken in
+//! parallel rather than in sequence — a second ONNX session is memory rather than a rewrite. That is
+//! the next thing to try, and until somebody tries it this module speaks about one piece per
+//! sentence and says so.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -52,12 +91,25 @@ use parking_lot::Mutex;
 use summo_core::event::Event;
 use summo_tts::Synthesizer;
 
-/// Requests allowed to be outstanding at once.
+use crate::commit::Committer;
+use crate::translate::Translator;
+
+/// Pieces being translated and spoken at once.
 ///
-/// One. Synthesis is CPU-bound and the voice is a single ONNX session behind a lock, so a second
-/// concurrent request would wait for the first and then contend for the same cores — the mistake
-/// [`crate::live`] documents for its own spawn shape. With a real-time factor of 0.065 there is no
-/// throughput to win here anyway.
+/// One. The voice is a single ONNX session behind a lock, so a second concurrent piece would wait
+/// for the first and then contend for the same cores — the mistake [`crate::live`] documents for
+/// its own spawn shape.
+///
+/// A piece arriving while one is in flight is dropped rather than queued, and that is measured
+/// rather than assumed. Queueing them was tried: on continuous Vietnamese with an English voice it
+/// moved the median from **0.6 s to 4.6 s** behind the line, because every clause then had to wait
+/// out the translation and synthesis of the one before it, and the lag compounded down the meeting.
+/// Dropping degrades to about one chunk per utterance — the clause path stops buying anything and
+/// the dub behaves as though it were sentence-shaped — which is a worse feature and a much better
+/// experience than a voice that is five seconds behind the room.
+///
+/// See the open question at the end of these docs: the useful fix is a second voice session, not a
+/// queue in front of the one there is.
 const MAX_IN_FLIGHT: usize = 1;
 
 /// Backlog below which nothing is hurried.
@@ -201,6 +253,10 @@ pub struct LiveDub {
     lang: String,
     /// The voice, behind a lock because it crosses into a blocking thread and back.
     voice: Arc<Mutex<Box<dyn Synthesizer>>>,
+    /// Decides which words are settled enough to say. See the module docs.
+    committer: Committer,
+    translator: Arc<Translator>,
+    glossary: summo_llm::prompt::Glossary,
     tx: tokio::sync::mpsc::UnboundedSender<Chunk>,
     rx: tokio::sync::mpsc::UnboundedReceiver<Chunk>,
     in_flight: Arc<AtomicUsize>,
@@ -216,11 +272,18 @@ pub struct LiveDub {
 
 impl LiveDub {
     #[must_use]
-    pub fn new(lang: impl Into<String>, voice: Box<dyn Synthesizer>) -> Self {
+    pub fn new(
+        lang: impl Into<String>,
+        voice: Box<dyn Synthesizer>,
+        translator: Arc<Translator>,
+    ) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         Self {
             lang: lang.into(),
             voice: Arc::new(Mutex::new(voice)),
+            committer: Committer::new(),
+            translator,
+            glossary: summo_llm::prompt::Glossary::default(),
             tx,
             rx,
             in_flight: Arc::new(AtomicUsize::new(0)),
@@ -256,9 +319,6 @@ impl LiveDub {
     }
 
     /// Feed the pipeline's events in; get audio out.
-    ///
-    /// Only translations into this dub's language are spoken. A meeting with two subtitle languages
-    /// produces two `Translation` events per line and the listener chose one of them.
     pub fn offer(&mut self, events: &[Event]) -> Vec<Chunk> {
         self.offer_at(events, Instant::now())
     }
@@ -266,25 +326,57 @@ impl LiveDub {
     /// The same, with the clock supplied — so the pacing has tests that do not sleep.
     pub fn offer_at(&mut self, events: &[Event], now: Instant) -> Vec<Chunk> {
         for event in events {
-            let Event::Translation { seq, lang, text } = event else {
+            // Partials as well as finals, which is the whole point: a clause settled out of two
+            // agreeing partials is spoken before the gate has decided the sentence is over.
+            let piece = match event {
+                Event::Partial(segment) => {
+                    if self.skip(segment) {
+                        continue;
+                    }
+                    self.committer.partial(segment.seq, &segment.text)
+                }
+                Event::Final(segment) => {
+                    if self.skip(segment) {
+                        continue;
+                    }
+                    self.committer.settle(segment.seq, &segment.text)
+                }
+                _ => continue,
+            };
+
+            let Some(piece) = piece.filter(|p| !p.text.trim().is_empty()) else {
                 continue;
             };
-            if lang != &self.lang || text.trim().is_empty() {
-                continue;
-            }
+
             if self.in_flight.load(Ordering::Relaxed) >= MAX_IN_FLIGHT {
-                // Nothing is gained by queueing here. The voice is one session behind one lock, so
-                // a queued line would wait exactly as long and arrive exactly as late — and by the
-                // time it was said the backlog rule below would have skipped it anyway.
+                // Dropped, not queued. See `MAX_IN_FLIGHT` — queueing was measured and it made the
+                // dub four seconds later rather than more complete.
                 self.skipped += 1;
                 continue;
             }
             match pace(self.backlog_at(now)) {
                 Pace::Skip => self.skipped += 1,
-                Pace::Speak(speed) => self.say(*seq, text, speed),
+                Pace::Speak(speed) => self.say(piece.seq, &piece.text, speed),
             }
         }
         self.collect(now)
+    }
+
+    /// Whether this utterance is already in the language the listener chose to hear.
+    ///
+    /// Speaking a Vietnamese line to somebody listening in Vietnamese is the room, louder. The same
+    /// rule the subtitle path applies per target — see `live::for_target`.
+    fn skip(&self, segment: &summo_core::segment::Segment) -> bool {
+        crate::translate::same_language(segment.language.as_deref(), &self.lang)
+    }
+
+    /// How often a final contradicted a clause that had already been spoken.
+    ///
+    /// The price of not waiting for the sentence, counted. Speech cannot be redrawn, so this is the
+    /// one number that says whether committing early was worth it.
+    #[must_use]
+    pub fn revisions(&self) -> usize {
+        self.committer.revisions()
     }
 
     /// Everything finished since the last call, and the backlog updated by it.
@@ -304,25 +396,44 @@ impl LiveDub {
         out
     }
 
-    fn say(&self, seq: u64, text: &str, speed: f64) {
+    fn say(&self, seq: u64, source: &str, speed: f64) {
         let voice = self.voice.clone();
         let lang = self.lang.clone();
-        let text = text.to_string();
+        let source = source.to_string();
         let tx = self.tx.clone();
         let in_flight = self.in_flight.clone();
+        let translator = self.translator.clone();
+        let glossary = self.glossary.clone();
 
         in_flight.fetch_add(1, Ordering::Relaxed);
-        // `spawn_blocking`, because synthesis is unbroken CPU. On the async runtime it would stall
-        // every other request the daemon is serving, including the socket carrying the transcript
-        // of the meeting being dubbed.
-        tokio::task::spawn_blocking(move || {
-            let spoken = {
+        tokio::spawn(async move {
+            let translated = match translator.run(&[source.as_str()], &lang, &glossary).await {
+                Ok((mut lines, _)) => lines.pop().flatten(),
+                // One clause costs its own audio, not the dub and not the recording. A translator
+                // that fails on one line will usually answer the next, and stopping the feature
+                // over it is the larger failure.
+                Err(e) => {
+                    tracing::warn!(error = %e, seq, "a clause could not be translated to speak");
+                    None
+                }
+            };
+            let Some(text) = translated.filter(|t| !t.trim().is_empty()) else {
+                in_flight.fetch_sub(1, Ordering::Relaxed);
+                return;
+            };
+
+            // `spawn_blocking`, because synthesis is unbroken CPU. On the async runtime it would
+            // stall every other request the daemon is serving, including the socket carrying the
+            // transcript of the meeting being dubbed.
+            let spoken = tokio::task::spawn_blocking(move || {
                 let mut voice = voice.lock();
                 voice.say_at(&text, &summo_tts::Voice::default(), speed as f32)
-            };
+            })
+            .await;
             in_flight.fetch_sub(1, Ordering::Relaxed);
+
             match spoken {
-                Ok(speech) if !speech.samples.is_empty() => {
+                Ok(Ok(speech)) if !speech.samples.is_empty() => {
                     let _ = tx.send(Chunk {
                         seq,
                         lang,
@@ -331,11 +442,9 @@ impl LiveDub {
                     });
                 }
                 // Silence is not worth a frame, and the client would have to special-case it.
-                Ok(_) => {}
-                // One line costs its own audio, not the dub and not the recording. Logged rather
-                // than raised: a voice that cannot say one line will usually say the next, and
-                // stopping the whole feature over it is the larger failure.
-                Err(e) => tracing::warn!(error = %e, seq, "a line could not be spoken"),
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => tracing::warn!(error = %e, seq, "a clause could not be spoken"),
+                Err(e) => tracing::warn!(error = %e, seq, "the synthesis thread failed"),
             }
         });
     }
@@ -381,16 +490,31 @@ mod tests {
         }
     }
 
-    fn translation(seq: u64, lang: &str, text: &str) -> Event {
-        Event::Translation {
-            seq,
-            lang: lang.to_string(),
-            text: text.to_string(),
-        }
+    fn segment(seq: u64, text: &str, lang: Option<&str>) -> summo_core::segment::Segment {
+        let mut s =
+            summo_core::segment::Segment::new(seq, summo_core::segment::Lane::Mic, text, 0.0, 1.0);
+        s.language = lang.map(str::to_string);
+        s
+    }
+
+    fn said(seq: u64, text: &str) -> Event {
+        Event::Final(segment(seq, text, Some("vi")))
+    }
+
+    /// Nothing listens on port 1, so a request fails fast and the dub says nothing — which is what
+    /// the tests about pacing and counting need, and none of them need real words.
+    fn translator() -> Arc<Translator> {
+        Arc::new(
+            Translator::mt(
+                summo_llm::Provider::custom("x", "http://127.0.0.1:1", "m"),
+                Some("vi".into()),
+            )
+            .unwrap(),
+        )
     }
 
     fn dub(seconds: f64) -> LiveDub {
-        LiveDub::new("en", Box::new(Metronome { seconds }))
+        LiveDub::new("en", Box::new(Metronome { seconds }), translator())
     }
 
     /// Nothing in hand: say it at the pace the voice was trained at.
@@ -433,35 +557,57 @@ mod tests {
         assert_eq!(pace(-5.0), Pace::Speak(1.0));
     }
 
-    /// The listener chose one language. The other one's subtitles are not theirs to hear.
+    /// Speaking a line to somebody already listening in the language it was said in is the room,
+    /// louder.
     #[tokio::test]
-    async fn only_the_chosen_language_is_spoken() {
+    async fn a_line_already_in_the_listeners_language_is_not_spoken() {
         let mut dub = dub(1.0);
-        dub.offer(&[translation(1, "ja", "こんにちは")]);
+        dub.offer(&[Event::Final(segment(1, "hello there", Some("en")))]);
         tokio::task::yield_now().await;
-        assert!(
-            dub.offer(&[]).is_empty(),
-            "it spoke somebody else's subtitle"
+        assert!(dub.offer(&[]).is_empty());
+        assert_eq!(dub.take_skipped(), 0, "it was counted as falling behind");
+    }
+
+    /// The whole point of the clause path: a sentence starts being spoken before it has finished.
+    ///
+    /// Asserted on work being started rather than on audio, because the translator here is
+    /// deliberately unreachable. What is being checked is that a *partial* produced any work at
+    /// all — the sentence-shaped version this replaced could not.
+    #[tokio::test]
+    async fn two_agreeing_partials_start_a_clause_before_the_sentence_ends() {
+        let mut dub = dub(1.0);
+        let text = "Chúng ta cần bàn về ngân sách,";
+        dub.offer(&[Event::Partial(segment(1, text, Some("vi")))]);
+        dub.offer(&[Event::Partial(segment(1, text, Some("vi")))]);
+        assert_eq!(
+            dub.in_flight.load(Ordering::Relaxed),
+            1,
+            "nothing was committed from two agreeing partials"
         );
     }
 
-    /// The ordinary path, end to end through the blocking thread.
+    /// And one partial is a guess, not a clause.
     #[tokio::test]
-    async fn a_translation_in_the_chosen_language_comes_back_as_audio() {
+    async fn one_partial_commits_nothing() {
         let mut dub = dub(1.0);
-        assert!(dub.offer(&[translation(7, "en", "hello there")]).is_empty());
+        dub.offer(&[Event::Partial(segment(
+            1,
+            "Chúng ta cần bàn về ngân sách,",
+            Some("vi"),
+        ))]);
+        assert_eq!(dub.in_flight.load(Ordering::Relaxed), 0);
+    }
 
-        // Synthesis happens on a blocking thread, so the chunk arrives on a later call — which is
-        // the whole reason `offer` returns what finished rather than what it started.
-        let chunk = loop {
-            if let Some(chunk) = dub.offer(&[]).into_iter().next() {
-                break chunk;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        };
-        assert_eq!(chunk.seq, 7);
-        assert_eq!(chunk.lang, "en");
-        assert!((chunk.duration_s() - 1.0).abs() < 0.01);
+    /// Hand a finished chunk to the queue the way the synthesis task does.
+    fn finished(dub: &LiveDub, seq: u64, seconds: f64) {
+        dub.tx
+            .send(Chunk {
+                seq,
+                lang: "en".into(),
+                rate: 16_000,
+                samples: vec![0.1; (16_000.0 * seconds) as usize],
+            })
+            .unwrap();
     }
 
     /// The backlog is what has been handed over and not yet finished playing, and it accumulates
@@ -471,24 +617,16 @@ mod tests {
         let mut dub = dub(2.0);
         let start = Instant::now();
 
-        dub.offer_at(&[translation(1, "en", "one")], start);
-        let mut sent = Vec::new();
-        while sent.is_empty() {
-            sent = dub.offer_at(&[], start);
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        finished(&dub, 1, 2.0);
+        assert_eq!(dub.offer_at(&[], start).len(), 1);
         assert!((dub.backlog_at(start) - 2.0).abs() < 0.01);
 
-        // A second line, still at `start`, stacks on the end of the first rather than replacing it.
-        dub.offer_at(&[translation(2, "en", "two")], start);
-        let mut second = Vec::new();
-        while second.is_empty() {
-            second = dub.offer_at(&[], start);
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        // A second chunk, still at `start`, stacks on the end of the first rather than replacing it.
+        finished(&dub, 2, 2.0);
+        assert_eq!(dub.offer_at(&[], start).len(), 1);
         assert!(
             dub.backlog_at(start) > 3.0,
-            "the second line did not stack: {}",
+            "the second chunk did not stack: {}",
             dub.backlog_at(start)
         );
     }
@@ -499,20 +637,41 @@ mod tests {
     async fn a_pause_lets_the_dub_catch_up() {
         let mut dub = dub(1.0);
         let start = Instant::now();
-        dub.offer_at(&[translation(1, "en", "one")], start);
-        while dub.offer_at(&[], start).is_empty() {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        finished(&dub, 1, 1.0);
+        dub.offer_at(&[], start);
         assert!(dub.backlog_at(start) > 0.5);
         assert_eq!(dub.backlog_at(start + Duration::from_secs(30)), 0.0);
     }
 
+    /// Queueing was tried and measured worse; this pins the shape that ships.
+    ///
+    /// A clause arriving while the voice is busy is dropped, which costs completeness and keeps the
+    /// dub near the room. The number behind that choice is in the `MAX_IN_FLIGHT` docs.
+    #[tokio::test]
+    async fn a_clause_arriving_while_the_voice_is_busy_is_dropped_and_counted() {
+        let mut dub = dub(1.0);
+        let first = "Chúng ta cần bàn về ngân sách,";
+        dub.offer(&[Event::Partial(segment(1, first, Some("vi")))]);
+        dub.offer(&[Event::Partial(segment(1, first, Some("vi")))]);
+        assert_eq!(dub.in_flight.load(Ordering::Relaxed), 1);
+
+        let second = format!("{first} và tôi nghĩ con số sai,");
+        dub.offer(&[Event::Partial(segment(1, &second, Some("vi")))]);
+        dub.offer(&[Event::Partial(segment(1, &second, Some("vi")))]);
+
+        assert_eq!(
+            dub.take_skipped(),
+            1,
+            "a dropped clause has to be counted, or the gap reads as nobody speaking"
+        );
+    }
+
     /// Skipped lines are counted, because a gap nobody is told about reads as "nothing was said".
-    #[test]
-    fn lines_that_were_not_spoken_are_counted() {
+    #[tokio::test]
+    async fn lines_that_were_not_spoken_are_counted() {
         let mut dub = dub(1.0);
         dub.speaks_until = Some(Instant::now() + Duration::from_secs_f64(DROP_S + 1.0));
-        dub.offer(&[translation(1, "en", "too far behind")]);
+        dub.offer(&[said(1, "quá trễ rồi, không nói nữa.")]);
         assert_eq!(dub.take_skipped(), 1);
         assert_eq!(dub.take_skipped(), 0, "the count was not cleared");
     }
