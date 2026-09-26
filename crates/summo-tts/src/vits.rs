@@ -165,8 +165,8 @@ impl Synthesizer for Vits {
         if self.rate == 0 { 22_050 } else { self.rate }
     }
 
-    fn say(&mut self, text: &str, _voice: &Voice) -> Result<Speech> {
-        self.say_at(text, 1.0)
+    fn say_at(&mut self, text: &str, _voice: &Voice, speed: f32) -> Result<Speech> {
+        Vits::say_at(self, text, speed)
     }
 }
 

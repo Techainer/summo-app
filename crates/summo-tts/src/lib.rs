@@ -79,8 +79,22 @@ pub trait Synthesizer: Send {
     /// Sample rate of everything this produces.
     fn rate(&self) -> u32;
 
-    /// Speak one line.
-    fn say(&mut self, text: &str, voice: &Voice) -> Result<Speech>;
+    /// Speak one line at a chosen pace. `1.0` is the voice's own.
+    ///
+    /// Speed is on the primitive rather than bolted onto [`Voice`], and it is required rather than
+    /// defaulted, because fitting a line into less time than it naturally takes is what both dubs
+    /// do — the offline one to fit a slot, the live one to catch up — and a backend that quietly
+    /// ignored the argument would produce a dub that never catches up and never says why.
+    ///
+    /// This is also what the trait was missing: [`crate::dub`] reached past it to `Vits` directly
+    /// for exactly this, so the seam the crate was written around had a hole in the one place the
+    /// feature needed it.
+    fn say_at(&mut self, text: &str, voice: &Voice, speed: f32) -> Result<Speech>;
+
+    /// Speak one line at the voice's own pace.
+    fn say(&mut self, text: &str, voice: &Voice) -> Result<Speech> {
+        self.say_at(text, voice, 1.0)
+    }
 }
 
 #[cfg(test)]

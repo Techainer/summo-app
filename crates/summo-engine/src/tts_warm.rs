@@ -152,7 +152,12 @@ mod tests {
         fn rate(&self) -> u32 {
             22_050
         }
-        fn say(&mut self, _text: &str, _voice: &Voice) -> summo_core::Result<Speech> {
+        fn say_at(
+            &mut self,
+            _text: &str,
+            _voice: &Voice,
+            _speed: f32,
+        ) -> summo_core::Result<Speech> {
             Ok(Speech {
                 samples: Vec::new(),
                 rate: 22_050,

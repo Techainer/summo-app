@@ -35,6 +35,10 @@ pub mod fetch;
 pub mod imports;
 pub mod install;
 pub mod live;
+/// Speaking the translation while the meeting is still happening. Needs a synthesiser and a voice
+/// to load, the same pair as `tts_warm`.
+#[cfg(all(feature = "tts", feature = "models"))]
+pub mod livedub;
 pub mod locales;
 pub mod nudge;
 pub mod onboarding;
