@@ -169,18 +169,6 @@ fn fit_into(spoken_s: f64, room_s: f64) -> (f64, Fit) {
     }
 }
 
-/// How much a line would have to be slowed to fill its slot, for a caller that wants to.
-///
-/// Exposed rather than applied, because filling silence is a taste decision — a documentary dub
-/// wants it, a meeting recording does not.
-#[must_use]
-pub fn stretch_to_fill(spoken_s: f64, room_s: f64) -> f64 {
-    if spoken_s <= 0.0 || room_s <= 0.0 {
-        return 1.0;
-    }
-    (spoken_s / room_s).clamp(MIN_SPEED, 1.0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,16 +278,5 @@ mod tests {
         let plan = plan(&[], 0.0);
         assert!(plan.slots.is_empty());
         assert!(plan.is_clean());
-    }
-
-    #[test]
-    fn stretching_to_fill_never_goes_slower_than_is_listenable() {
-        // Half a second of speech in ten seconds of room would be 0.05×; clamped.
-        assert_eq!(stretch_to_fill(0.5, 10.0), MIN_SPEED);
-    }
-
-    #[test]
-    fn stretching_never_speeds_a_line_up() {
-        assert_eq!(stretch_to_fill(5.0, 2.0), 1.0);
     }
 }

@@ -525,18 +525,6 @@ fn installed_voices(store: &summo_models::ModelStore) -> Vec<summo_models::Manif
         .collect()
 }
 
-/// Whether any installed voice could dub into `lang`.
-///
-/// Asked by the meeting screen before it offers the button. A control that is offered and then
-/// refuses is worse than one that explains why it is disabled.
-#[must_use]
-pub fn can_speak(paths: &Paths, lang: &str) -> bool {
-    let store = summo_models::ModelStore::new(paths.clone());
-    installed_voices(&store)
-        .iter()
-        .any(|m| summo_models::langs_cover(&m.langs, lang))
-}
-
 /// The voice to use when none was named on the command line.
 ///
 /// Only voices that speak `lang` are candidates. A voice that cannot say the line is not a choice

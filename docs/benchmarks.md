@@ -372,3 +372,40 @@ index arrives with Q&A and nothing sooner.
 ```bash
 cargo run --release -p summo-bench -- vault --sizes 100,1000,5000
 ```
+
+## Speech synthesis: can Kokoro say Japanese?
+
+The dubbing feature offers whatever language a voice exists for, and the registry has Vietnamese,
+English and Chinese. Japanese is the obvious next one, and sherpa-onnx publishes
+`kokoro-multi-lang-v1_0` — 54 voices including five Japanese speakers, driven through a binding this
+tree already links. So it looked like a manifest away.
+
+**It is not.** Measured before building anything, which is the only reason that is known cheaply.
+
+**Method:** synthesise a line with `KokoroTts` (`lang: "ja"`, speaker 37 = `jf_alpha`), resample to
+16 kHz, transcribe it back with SenseVoice — which claims Japanese. A voice cannot be judged by
+eye, and "it produced 4.3 seconds of non-silence" is not the same question as "it said the words".
+
+| Given to the synthesiser | What SenseVoice heard back |
+|---|---|
+| こんにちは、**今日は会議の予算**について話します。 | こんにちは**チーニハフェイイのイさん二数**いてファします。 |
+| こんにちは、**きょうはかいぎのよさん**について… | こんにちは**共右派会議の予算**んにつりて話します。 |
+
+Kana comes back right. Kanji comes back as mush — and the second row is the proof that this is
+phonemisation and not the recogniser, because the *same sentence* spelled in kana is understood.
+(`共右派` versus `きょうは` is SenseVoice choosing homophone kanji, which is correct behaviour.)
+
+**Why.** The archive ships lexicons for Chinese and English only; Japanese falls through to
+espeak-ng, which spells kanji out wrong and emits phonemes Kokoro has no token for — the synthesiser
+logs `Skip unknown phonemes` while it does it. Meeting text is mostly kanji.
+
+**Decision: no Japanese voice.** Getting one means a morphological analyser to convert kanji to
+readings before synthesis — `lindera` plus a dictionary, distributed as a registry blob the way
+every other model is. That is its own piece of work, not a manifest. Until it exists the dub panel
+should keep saying no voice speaks Japanese, because none does.
+
+```bash
+# The probe was deliberately throwaway. To re-run it, synthesise with sherpa-rs's KokoroTts and
+# transcribe the result — never judge a voice by its waveform:
+summo transcribe out.wav --model-dir <sense-voice> --vad <silero> --engine sense-voice --lang ja
+```

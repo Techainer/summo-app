@@ -58,19 +58,6 @@ fn probe() -> Vec<f32> {
         .collect()
 }
 
-/// Check every installed model.
-///
-/// Sequential on purpose. These load hundreds of megabytes into ONNX sessions, and running them
-/// concurrently on a laptop is how a check turns into a swap storm on the machine it was meant to
-/// reassure.
-pub fn check_all(store: &ModelStore, threads: usize) -> Vec<Check> {
-    store
-        .list()
-        .iter()
-        .map(|manifest| check(store, manifest, threads))
-        .collect()
-}
-
 /// Check one.
 ///
 /// Never returns an error: a model that fails is the *result*, not a failure of the checking. A
@@ -436,13 +423,6 @@ mod tests {
         assert!(clipped.chars().count() <= 61, "{clipped}");
         assert!(clipped.ends_with('…'));
         assert_eq!(clip("  short  "), "short");
-    }
-
-    /// An empty store checks nothing and does not fail doing it.
-    #[test]
-    fn nothing_installed_is_an_empty_list() {
-        let (_tmp, store) = store();
-        assert!(check_all(&store, 1).is_empty());
     }
 
     /// The line a voice is checked with has to be one it can pronounce.

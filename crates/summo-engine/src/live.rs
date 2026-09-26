@@ -521,6 +521,19 @@ impl LiveTranslator {
         // the air the moment somebody added a second subtitle.
         in_flight.fetch_add(1, Ordering::Relaxed);
         tokio::spawn(async move {
+            // How many lines actually travelled together, and which shape carried them.
+            //
+            // The whole argument about batching turns on this number and nothing reported it. The
+            // batch size a user really gets depends on whether the model is losing to the speaker,
+            // which is a property of their machine and their meeting — so reasoning about it from
+            // the constants is guessing, and this is the line that ends the guess.
+            tracing::debug!(
+                lines = batch.len(),
+                targets = langs.len(),
+                grouped = translator.batching_helps(),
+                "translating a run"
+            );
+
             // Which shape depends on what grouping is worth here, which is a fact about the
             // backend. See `Translator::batching_helps`.
             if translator.batching_helps() {

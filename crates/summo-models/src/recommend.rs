@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     hw::HwProfile,
-    manifest::{Manifest, Mode, Task},
+    manifest::{Manifest, Task},
 };
 
 /// Real-time factor above which a model cannot drive live transcription.
@@ -444,16 +444,10 @@ fn score(manifest: &Manifest, hw_key: &str, language: &str) -> Scored {
     }
 }
 
-/// Whether a manifest can drive live text at all, regardless of hardware.
-#[must_use]
-pub fn is_live_mode(manifest: &Manifest) -> bool {
-    manifest.mode == Mode::Live
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::manifest::{FileEntry, Profile, RssProfile};
+    use crate::manifest::{FileEntry, Mode, Profile, RssProfile};
     use summo_core::ModelId;
 
     /// A word error rate needs words, and Mandarin is written without spaces.

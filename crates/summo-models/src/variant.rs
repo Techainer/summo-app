@@ -99,15 +99,6 @@ pub struct Variant {
     pub preferred: bool,
 }
 
-/// Which variant a file belongs to.
-///
-/// Read off the entry rather than parsed from its name. A rule that reads `int8` out of a filename
-/// works right up until somebody publishes `model-int8-calibration-fp32.onnx`.
-#[must_use]
-pub fn variant_of(file: &FileEntry) -> Option<&str> {
-    file.variant.as_deref()
-}
-
 /// Every variant a manifest offers, in the order it declared them.
 #[must_use]
 pub fn variants(manifest: &Manifest) -> &[Variant] {
@@ -676,6 +667,6 @@ mod tests {
     #[test]
     fn the_variant_comes_from_the_manifest_not_the_filename() {
         let entry = file("model-int8-calibration-fp32.onnx", Some("fp32"), None);
-        assert_eq!(variant_of(&entry), Some("fp32"));
+        assert_eq!(entry.variant.as_deref(), Some("fp32"));
     }
 }
