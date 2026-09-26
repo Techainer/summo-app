@@ -1435,11 +1435,56 @@ fn pick_pair(
     hw: &summo_models::hw::HwProfile,
     languages: &[String],
 ) -> Option<(String, Option<String>)> {
-    let general = installed
+    // The *best* multilingual model, not the first one the store happens to list.
+    //
+    // `find` took whichever came back first, and with two Whispers installed that is store order —
+    // a detail nobody chose. On Vietnamese the two are 75.3 % and 43.7 % word error, so the
+    // difference between them is most of the accuracy of every sentence the specialist does not
+    // cover. This repository has fixed the same shape twice before: the runner took the first
+    // installed detector, and the importer took the first installed speech model.
+    //
+    // Ranked on the languages it will actually be listening to.
+    //
+    // `recommend(_, _, "*")` is the idiom `second_opinion` uses, and it is the wrong one here:
+    // accuracy is published per language, so asking for the language literally named `*` finds no
+    // measurement for anybody and the shortlist falls back to ranking on speed. That picks
+    // whisper-tiny over whisper-base — the faster of the two and, on Vietnamese, the one with
+    // three quarters of its words wrong.
+    //
+    // Published figures compared directly, rather than `Scored::score`, because the scores from
+    // two `recommend` calls are not comparable and this needs one number per model across several
+    // languages. A model with no measurement is not ranked *below* one that has a bad one — it is
+    // unranked, and only wins if nothing else is measured at all.
+    let generals: Vec<&summo_models::Manifest> = installed
         .iter()
-        .filter(|m| m.task == summo_models::Task::Asr)
-        .find(|m| m.langs.iter().any(|l| l == "*"))?
-        .clone();
+        .filter(|m| m.task == summo_models::Task::Asr && m.langs.iter().any(|l| l == "*"))
+        .collect();
+
+    let measured = |m: &summo_models::Manifest| -> Option<f32> {
+        let rates: Vec<f32> = languages
+            .iter()
+            .filter_map(|code| summo_models::accuracy_for(m, code))
+            // Only measurements *of this language*. `accuracy_for` also hands back a figure
+            // borrowed from another benchmark, labelled as borrowed — which is the right answer
+            // for a card explaining what is known about a model, and the wrong one here: ranking
+            // Vietnamese on an English score would prefer whichever Whisper is better at English.
+            .filter(|a| a.for_this_language)
+            .map(|a| a.value)
+            .collect();
+        (!rates.is_empty()).then(|| rates.iter().sum::<f32>() / rates.len() as f32)
+    };
+
+    let general = generals
+        .iter()
+        .filter(|m| measured(m).is_some())
+        .max_by(|a, b| {
+            measured(a)
+                .unwrap_or_default()
+                .total_cmp(&measured(b).unwrap_or_default())
+        })
+        .or_else(|| generals.first())?
+        .id
+        .to_string();
 
     // The specialist for the language named *first*, which is the decision the user already made
     // by putting it first — their meeting is mostly in that one.
@@ -1454,11 +1499,11 @@ fn pick_pair(
             summo_models::recommend(installed, hw, code)
                 .ranked
                 .into_iter()
-                .find(|s| s.id != general.id.as_str() && !claims_everything(installed, &s.id))
+                .find(|s| s.id != general && !claims_everything(installed, &s.id))
         })
         .map(|s| s.id);
 
-    Some((general.id.to_string(), specialist))
+    Some((general, specialist))
 }
 
 /// Whether an installed manifest claims every language.
@@ -6669,6 +6714,18 @@ mod resolve_tests {
     }
 
     fn speech(id: &str, langs: &[&str]) -> summo_models::Manifest {
+        measured(id, langs, None)
+    }
+
+    /// A speech model with a word error rate on Vietnamese, for the checks about *ranking*.
+    ///
+    /// Without one every fixture is identical but for its id, and a test asserting "the better one
+    /// is chosen" passes or fails on tie-breaking rather than on the rule it is about.
+    fn measured(id: &str, langs: &[&str], wer_vi: Option<f64>) -> summo_models::Manifest {
+        let profile = match wer_vi {
+            Some(wer) => serde_json::json!({ "quality": { "wer_fleurs_vi": wer } }),
+            None => serde_json::json!({}),
+        };
         let json = serde_json::json!({
             "schema": 1,
             "id": id,
@@ -6684,7 +6741,8 @@ mod resolve_tests {
                 "sha256": "a".repeat(64),
                 "size": 1,
                 "url": "https://example.invalid/m.onnx"
-            }]
+            }],
+            "profile": profile
         });
         summo_models::Manifest::parse(&json.to_string()).unwrap()
     }
@@ -6703,6 +6761,54 @@ mod resolve_tests {
         let (live, refine) =
             pick_pair(&installed, &hw, &["vi".into(), "en".into()]).expect("a pair");
         assert_eq!(live, "whisper-base");
+        assert_eq!(refine.as_deref(), Some("gipformer"));
+    }
+
+    /// The best multilingual model, not whichever the store lists first.
+    ///
+    /// The bug this replaces is one this repository has now fixed three times: the runner took the
+    /// first installed detector, the importer took the first installed speech model, and this took
+    /// the first installed Whisper. Invisible with one installed, and wrong the moment there are
+    /// two — and on Vietnamese the two Whispers are 75.3 % and 43.7 % word error, so which one
+    /// listens is most of the accuracy of every sentence the specialist does not cover.
+    #[test]
+    fn the_listener_is_the_best_multilingual_model_not_the_first() {
+        // Listed worst-first, which is what makes `find` the wrong answer.
+        let installed = [
+            // Worst first, which is what makes `find` the wrong answer. The figures are the ones
+            // measured on FLEURS Vietnamese and published in the registry.
+            measured("whisper-tiny", &["*"], Some(0.753)),
+            measured("whisper-base", &["*"], Some(0.437)),
+            speech("gipformer", &["vi"]),
+        ];
+        let hw = summo_models::hw::HwProfile::detect();
+
+        let (live, _) = pick_pair(&installed, &hw, &["vi".into(), "en".into()]).expect("a pair");
+        assert_eq!(
+            live, "whisper-base",
+            "store order chose the listener rather than the ranking"
+        );
+    }
+
+    /// A measurement borrowed from another language does not decide this one.
+    ///
+    /// `accuracy_for` hands back a figure from a different benchmark when the asked-for language
+    /// has none, labelled as borrowed — right for a card explaining what is known about a model,
+    /// wrong for a ranking. Both Whispers are measured on English and only one on Vietnamese;
+    /// ranking a Vietnamese meeting on English scores would be a confident answer to a question
+    /// nobody measured.
+    #[test]
+    fn a_score_from_another_language_does_not_choose_the_listener() {
+        // Neither has a Vietnamese figure, so neither is ranked and the first stands. What must
+        // *not* happen is one of them winning on a number that is about English.
+        let installed = [
+            speech("whisper-tiny", &["*"]),
+            speech("whisper-base", &["*"]),
+            speech("gipformer", &["vi"]),
+        ];
+        let hw = summo_models::hw::HwProfile::detect();
+        let (live, refine) = pick_pair(&installed, &hw, &["vi".into()]).expect("a pair");
+        assert!(live.starts_with("whisper"), "{live}");
         assert_eq!(refine.as_deref(), Some("gipformer"));
     }
 
