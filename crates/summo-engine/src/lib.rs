@@ -22,6 +22,7 @@ pub mod auth;
 pub mod board;
 pub mod calsync;
 pub mod collaborate;
+pub mod commit;
 pub mod draft;
 pub mod dream;
 /// Speaking a translation over the recording it came from. Needs a synthesiser, so it is gated on
@@ -54,6 +55,13 @@ pub mod stages;
 pub mod state;
 pub mod summarize;
 pub mod translate;
+/// Keeping a synthesis voice loaded.
+///
+/// Both features, and neither is incidental: `tts` is what puts a synthesiser in the tree at all,
+/// and `models` is where a voice comes from — the slot holds a directory the store resolved. It
+/// also shares `warm`'s idle deadline rather than choosing a second one.
+#[cfg(all(feature = "tts", feature = "models"))]
+pub mod tts_warm;
 pub mod verify;
 pub mod voicebook;
 #[cfg(feature = "models")]

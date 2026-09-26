@@ -999,4 +999,30 @@ mod backfilling {
             "the backlog went ahead of the sentence being spoken"
         );
     }
+
+    /// Where a run of more than one line actually happens.
+    ///
+    /// Measured on continuous Vietnamese with two subtitle languages, every live run is a single
+    /// line: SMALL100 answers in about 241 ms and a speaker produces a sentence every two or three
+    /// seconds, so the queue never has company to offer. That is worth knowing, because it means
+    /// the shape of a *live* run is the same either way.
+    ///
+    /// The backlog is the exception, and it is not a small one. Switching translation on over a
+    /// meeting already in progress hands over everything said so far, and it goes eight lines at a
+    /// time — which is where answering per line is the difference between the first old subtitle
+    /// appearing after one translation or after eight.
+    #[tokio::test]
+    async fn the_backlog_is_where_a_run_is_still_eight_lines_long() {
+        let mut translator = live(&["en"]);
+        translator.backfill((0..20).map(|seq| (seq, format!("câu {seq}"), None)));
+
+        // Nothing being said, nothing in flight: the backlog is allowed to move.
+        translator.offer(&[]);
+
+        assert_eq!(
+            translator.backlog_len(),
+            12,
+            "a backlog run should take a full batch, not one line"
+        );
+    }
 }

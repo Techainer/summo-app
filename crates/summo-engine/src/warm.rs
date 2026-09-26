@@ -38,7 +38,10 @@ use summo_asr::Decoder;
 /// minutes is longer than the pause between two meetings in a morning and far shorter than a
 /// working day, which is the distinction that matters: the tax this module exists to avoid is paid
 /// again only by somebody who has already stopped.
-const IDLE: Duration = Duration::from_secs(20 * 60);
+/// Public so [`crate::tts_warm`] can hold its voice to the same deadline rather than pick a second
+/// number. Two answers to "how long is a warm thing worth its memory" would be two constants with
+/// nothing keeping them in step.
+pub const IDLE: Duration = Duration::from_secs(20 * 60);
 
 /// What a warm decoder was built for. A slot for the wrong language is a miss.
 #[derive(Debug, Clone, PartialEq, Eq)]
