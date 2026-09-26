@@ -12,6 +12,7 @@
 
 import { load as loadCapture } from "./capture";
 import { EngineClient, type ConnectionState, type Handshake } from "./engine";
+import { DubPlayer } from "./listen";
 import { Microphone, explainMicrophoneError } from "./microphone";
 import type { Failure } from "./errors";
 import type { Event, SessionSpec } from "./protocol";
@@ -62,6 +63,13 @@ const MICROPHONE_TIMEOUT_MS = 8000;
 export class Session {
   private client: EngineClient | null = null;
   private microphone: Microphone | null = null;
+  /**
+   * Where dubbed audio comes out.
+   *
+   * Always constructed, started only when somebody asked to hear a language — it holds no device
+   * until then, and an `AudioContext` nobody opened costs nothing.
+   */
+  private readonly player = new DubPlayer();
   /** A refusal from the daemon, whenever it arrived. Cleared when a session starts. */
   private refused: { code: string; error: string } | null = null;
   /** True from the first press until the daemon is recording or has refused. */
@@ -120,6 +128,11 @@ export class Session {
         this.callbacks.onEvent(event);
       },
       onState: (connection) => this.update({ connection }),
+      // Dubbed audio, straight to the output device. Never through `onEvent`: the transcript is
+      // the record of what was said, and a dub is a translation of it spoken for one listener.
+      onDub: (chunk) => {
+        void this.player.play(chunk);
+      },
     });
     this.client.connect();
 
@@ -140,6 +153,17 @@ export class Session {
     }
 
     this.client.send({ cmd: "session_start", ...spec });
+
+    // Open the output before the first chunk can arrive. Opening it on arrival would mean the
+    // first dubbed line waits for a device to be acquired, which is the one line that decides
+    // whether the feature feels instant.
+    const capture = loadCapture();
+    if (capture.listenIn) {
+      this.player.setVolume(capture.listenVolume);
+      // Not awaited and not fatal. A browser that refuses an `AudioContext` costs the dub, not the
+      // recording — and the recording is the thing that cannot be done again.
+      void this.player.start().catch(() => undefined);
+    }
 
     this.microphone = new Microphone({
       onFrame: (samples) => this.client?.sendAudio("mic", samples),
@@ -207,6 +231,9 @@ export class Session {
     this.microphone = null;
     this.client?.close();
     this.client = null;
+    // Releases the output device. Left open it holds the speakers, which on a laptop is the
+    // difference between the fans stopping and not.
+    void this.player.stop();
     this.update({ recording: false, error: refusal });
   }
 
@@ -283,9 +310,28 @@ export class Session {
     this.client?.send({ cmd: "refine_swap", id });
   }
 
+  /**
+   * How loud the dub is, while it is playing.
+   *
+   * Not a command to the daemon: the audio is already here and the volume is this listener's, not
+   * the meeting's. Two people on one recording can be at two volumes for the same reason they can
+   * be in two languages.
+   */
+  setListenVolume(volume: number): void {
+    this.player.setVolume(volume);
+  }
+
+  /** Seconds of dubbed speech queued and not yet heard, for the interface to show. */
+  get listenBacklog(): number {
+    return this.player.backlogSeconds;
+  }
+
   stop(): void {
     this.microphone?.stop();
     this.microphone = null;
+    // Whatever is still queued is a translation of a meeting that has ended. Playing it out would
+    // be the app talking to itself after the recording light went off.
+    void this.player.stop();
 
     // Stop the daemon's session before closing the socket, so it flushes the open utterance and
     // writes the file rather than treating the disconnect as an abandoned recording.

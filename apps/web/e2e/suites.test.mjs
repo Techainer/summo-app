@@ -36,10 +36,16 @@ const HELPERS = new Set(["daemon", "legible", "llm", "mirror", "screens", "_shot
  *   through. `shots.mjs` already makes the judgements a machine can make.
  * - `site-shots` — regenerates the marketing site's images into the *other* repository. It writes
  *   outside this one, which is not something CI should do on a pull request.
+ * - `subtitle-latency` — prints numbers rather than asserting them. A latency threshold on a shared
+ *   runner is a test people re-run until it passes, which is worse than no test; and the run costs
+ *   a 610 MB model and 75 seconds of deliberately real-time audio. Run it when touching anything
+ *   between a finished utterance and a subtitle — it is what found that a live translation run is
+ *   always a single line, after a commit message had claimed otherwise.
  */
 const BY_HAND = {
   review: "a walkthrough for a person to look at",
   "site-shots": "writes to the site repo",
+  "subtitle-latency": "measures rather than asserts; a threshold here would be re-run until green",
 };
 
 function suites() {

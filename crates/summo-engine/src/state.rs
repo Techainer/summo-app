@@ -113,6 +113,9 @@ struct Inner {
     /// One speech model kept loaded, so pressing record does not wait 3.4 seconds for one.
     #[cfg(feature = "models")]
     warm: crate::warm::Warm,
+    /// One synthesis voice kept loaded, so the first dubbed line does not wait 1.7 seconds for one.
+    #[cfg(all(feature = "tts", feature = "models"))]
+    warm_voice: crate::tts_warm::WarmVoice,
 }
 
 impl EngineState {
@@ -150,6 +153,8 @@ impl EngineState {
                 installs: crate::install::Installs::new(),
                 #[cfg(feature = "models")]
                 warm: crate::warm::Warm::default(),
+                #[cfg(all(feature = "tts", feature = "models"))]
+                warm_voice: crate::tts_warm::WarmVoice::default(),
             }),
         })
     }
@@ -163,6 +168,17 @@ impl EngineState {
     #[must_use]
     pub fn warm(&self) -> &crate::warm::Warm {
         &self.inner.warm
+    }
+
+    /// The synthesis voice kept loaded, for the same reason and on the same terms.
+    ///
+    /// Filled when a listener chooses a language rather than when the first line arrives, which is
+    /// the difference between the load landing in dead time and landing in the one place somebody
+    /// is waiting.
+    #[cfg(all(feature = "tts", feature = "models"))]
+    #[must_use]
+    pub fn warm_voice(&self) -> &crate::tts_warm::WarmVoice {
+        &self.inner.warm_voice
     }
 
     /// What this process is costing right now: resident memory, and share of a core.

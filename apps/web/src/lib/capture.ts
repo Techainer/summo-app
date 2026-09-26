@@ -61,9 +61,26 @@ export interface Capture {
    * name the one they wanted and be recorded by the other.
    */
   device: string;
+  /**
+   * Speak the translation into this language, for somebody wearing headphones. Empty is off.
+   *
+   * One language, and not a shorter `translateInto`. Two subtitles can share a screen; two voices
+   * over each other is nobody's dub. It only means anything for a language `translateInto` already
+   * covers, because a dub speaks translations.
+   */
+  listenIn: string;
+  /** How loud, `0..=1`. */
+  listenVolume: number;
 }
 
-export const DEFAULT: Capture = { lanes: ["mic"], translateInto: [], spoken: [], device: "" };
+export const DEFAULT: Capture = {
+  lanes: ["mic"],
+  translateInto: [],
+  spoken: [],
+  device: "",
+  listenIn: "",
+  listenVolume: 1,
+};
 
 /**
  * Read the saved choice.
@@ -102,9 +119,15 @@ export function normalize(input: Partial<Capture> | null | undefined): Capture {
     (lane): lane is Lane => lane === "mic" || lane === "system",
   );
   const unique = [...new Set(lanes)];
+  const into = targets(input);
+  // Asking to hear a language nothing is translating into is a dead state: the daemon loads a voice
+  // and it says nothing, for an hour, with a control showing it is on. Dropping the target drops
+  // this with it — which is what somebody turning translation off means, and the alternative is a
+  // dub of a language that is no longer being produced.
+  const listen = typeof input?.listenIn === "string" ? input.listenIn.trim().toLowerCase() : "";
   return {
     lanes: unique.length > 0 ? unique : DEFAULT.lanes,
-    translateInto: targets(input),
+    translateInto: into,
     // Lower-cased, because a language code is compared against the manifests' own spelling and
     // `VI` from an older build must not read as a language nothing covers.
     //
@@ -116,6 +139,13 @@ export function normalize(input: Partial<Capture> | null | undefined): Capture {
     // Not lower-cased: a `deviceId` is an opaque token the browser minted, and changing its case
     // changes which device it names — or names none at all.
     device: typeof input?.device === "string" ? input.device.trim() : "",
+    listenIn: into.some((code) => code.toLowerCase() === listen) ? listen : "",
+    // Clamped rather than trusted. A volume above one is distortion and a volume below zero
+    // inverts the waveform, and both come from a storage value nobody validated on the way in.
+    listenVolume:
+      typeof input?.listenVolume === "number" && Number.isFinite(input.listenVolume)
+        ? Math.min(1, Math.max(0, input.listenVolume))
+        : 1,
   };
 }
 

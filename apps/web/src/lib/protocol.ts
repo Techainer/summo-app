@@ -80,6 +80,13 @@ export interface SessionSpec {
   diarize?: boolean;
   /** Translate finished lines into these languages as they land. */
   translate_into?: string[];
+  /**
+   * Speak the translation into this language, for a listener wearing headphones.
+   *
+   * One, not a list. Two subtitles can share a screen; two voices over each other is nobody's dub.
+   * It has to be a language `translate_into` already covers, because a dub speaks translations.
+   */
+  listen_in?: string;
   device_id?: string;
 }
 

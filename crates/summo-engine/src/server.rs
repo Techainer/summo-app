@@ -5897,8 +5897,30 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
             Message::Ping(_) | Message::Pong(_) => continue,
         };
 
+        // The dub is a consumer of these events on their way out, exactly like the client is: it
+        // watches for translations in the language somebody chose to hear and hands back audio.
+        //
+        // Here rather than inside the audio handler because it has to see *everything* the client
+        // sees — and translations are produced by `live.offer` above, so a dub wired into the audio
+        // path would be looking at the events from before the ones it needs existed.
+        #[cfg(all(feature = "models", feature = "tts"))]
+        let dubbed: Vec<Vec<u8>> = session
+            .as_mut()
+            .and_then(|active| active.dub.as_mut())
+            .map(|dub| dub.offer(&reply).iter().map(|c| c.encode()).collect())
+            .unwrap_or_default();
+
         for event in reply {
             if socket.send(to_frame(&event)).await.is_err() {
+                break;
+            }
+        }
+
+        // After the text, never instead of it. A transcript must not wait behind a dub: synthesis
+        // is the part that can fall behind, and the reader is not the one who asked for audio.
+        #[cfg(all(feature = "models", feature = "tts"))]
+        for frame in dubbed {
+            if socket.send(Message::Binary(frame.into())).await.is_err() {
                 break;
             }
         }
@@ -6239,6 +6261,12 @@ struct ActiveSession {
     started: std::time::Instant,
     /// Set when the session asked for live translation.
     live: Option<crate::live::LiveTranslator>,
+    /// Set when somebody asked to *hear* one of those translations rather than read it.
+    ///
+    /// Downstream of `live` and not a peer of it: a dub speaks the translation events that one
+    /// produces, so it can only ever offer a language `live` is already producing.
+    #[cfg(feature = "tts")]
+    dub: Option<crate::livedub::LiveDub>,
     /// Set when the session named a second, slower model to check the first one's work.
     ///
     /// `None` for everybody who has not asked for it, and the pipeline behind it is then exactly
@@ -6607,15 +6635,77 @@ fn start_session(
         _ => None,
     };
 
+    // Hearing one of those translations instead of reading it.
+    //
+    // Built after `live` and conditional on it, because a dub speaks translation events: asking to
+    // hear a language nothing is translating into would load a voice to say nothing. Reported once
+    // here rather than producing an hour of silence somebody has to diagnose.
+    #[cfg(feature = "tts")]
+    let dub = match spec
+        .listen_in
+        .as_deref()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+    {
+        None => None,
+        Some(lang)
+            if !live
+                .as_ref()
+                .is_some_and(|l| l.languages().iter().any(|t| t == lang)) =>
+        {
+            tracing::warn!(
+                lang,
+                "asked to hear a language nothing is being translated into"
+            );
+            None
+        }
+        Some(lang) => build_live_dub(engine, lang),
+    };
+
     Ok(ActiveSession {
         spec: spec.clone(),
         runner,
         recorder,
         archive,
         live,
+        #[cfg(feature = "tts")]
+        dub,
         refiner,
         started: std::time::Instant::now(),
     })
+}
+
+/// Resolve a voice for `lang` and load it, taking the warm one if it is the right one.
+///
+/// A voice that will not load costs the dub, not the meeting — the same bargain the refine model
+/// gets above, and for the same reason: a nice-to-have must not take down the thing it is nice to
+/// have on top of.
+#[cfg(all(feature = "tts", feature = "models"))]
+fn build_live_dub(engine: &EngineState, lang: &str) -> Option<crate::livedub::LiveDub> {
+    let threads = engine.hardware().recommended_threads();
+    let dir = match crate::dub::resolve_voice(engine.paths(), None, lang) {
+        Ok(dir) => dir,
+        Err(e) => {
+            tracing::warn!(error = %e, lang, "no voice to speak the translation with");
+            return None;
+        }
+    };
+
+    let key = crate::tts_warm::Key::new(&dir, threads);
+    // The whole point of `tts_warm`: loading is 1.7-1.9 s and this is the path a listener is
+    // waiting on. A miss here is not a fault, only a slower first line.
+    let voice = match engine.warm_voice().take(&key) {
+        Some(voice) => voice,
+        None => match crate::tts_warm::build(&dir, threads) {
+            Ok((_, voice)) => voice,
+            Err(e) => {
+                tracing::warn!(error = %e, lang, "the voice would not load");
+                return None;
+            }
+        },
+    };
+
+    Some(crate::livedub::LiveDub::new(lang, voice))
 }
 
 /// Audio handling when recognition is compiled in.

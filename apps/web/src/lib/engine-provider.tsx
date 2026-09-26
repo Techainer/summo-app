@@ -154,6 +154,9 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       // Diarization needs the system lane; asking for it on the microphone alone is refused.
       diarize: chosen.lanes.includes("system"),
       ...(chosen.translateInto.length > 0 ? { translate_into: chosen.translateInto } : {}),
+      // `normalize` has already dropped this if nothing is translating into it, so a language
+      // reaching here is one the daemon can actually speak translations of.
+      ...(chosen.listenIn ? { listen_in: chosen.listenIn } : {}),
     });
   }, [controller]);
 
@@ -186,6 +189,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   const translate = useCallback(
     (into: string[]) => {
       const current = loadCapture();
+      // `normalize` clears `listenIn` when its target goes, so turning off the language somebody
+      // was listening to turns the dub off rather than leaving it pointing at nothing.
       saveCapture({ ...current, translateInto: into });
       controller?.translate(into);
     },

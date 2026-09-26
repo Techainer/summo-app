@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Checkbox } from "../ui";
+import { CatalogueClient } from "../../lib/catalogue";
+import { voicesFor } from "../../lib/dub";
+import { useLoad } from "../../lib/use-load";
+import { ListenIn } from "./ListenIn";
 import { useI18n } from "../../i18n/context";
 import { useEngine } from "../../lib/engine-context";
 import { TARGETS, hearsOthers, load, save, translating, type Capture } from "../../lib/capture";
@@ -25,6 +29,38 @@ export function CaptureControls() {
   const { session, handshake } = useEngine();
   const { t } = useI18n();
   const [capture, setCapture] = useState<Capture>(() => load());
+
+  /**
+   * Which of the chosen target languages this machine can actually say.
+   *
+   * Two facts, both required: something is being translated into it, and a voice is installed that
+   * speaks it. Offering a language on one of them produces the dead end this feature already had —
+   * a control reporting it is on, over an hour of silence.
+   *
+   * Failing quietly is right. A catalogue that cannot be read costs the dub control, not the
+   * recording, and the recording is the thing that cannot be done again.
+   */
+  const catalogue = useMemo(() => new CatalogueClient(handshake), [handshake]);
+  const voices = useLoad(
+    useCallback(async () => {
+      try {
+        return await catalogue.installed();
+      } catch {
+        return [];
+      }
+    }, [catalogue]),
+    [catalogue],
+  );
+  const speakable = useMemo(
+    () =>
+      capture.translateInto
+        .filter((code) => voicesFor(voices.data ?? [], code).length > 0)
+        .map((code) => ({
+          code,
+          label: TARGETS.find((target) => target.code === code)?.label ?? code,
+        })),
+    [capture.translateInto, voices.data],
+  );
 
   const update = (next: Capture) => {
     setCapture(next);
@@ -109,6 +145,25 @@ export function CaptureControls() {
               onChange={(translateInto) => update({ ...capture, translateInto })}
             />
           </span>
+        </div>
+
+        {/* Hearing it, on its own row under reading it.
+            Under rather than beside: it depends on the row above — there is nothing to speak until
+            something is being translated — and a control that appears and disappears inside a line
+            of other controls moves everything next to it every time somebody changes a language. */}
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+          {speakable.length > 0 && (
+            <span className="text-fg-faint text-body flex items-center gap-2">
+              {t("record.listen_in")}
+              <ListenIn
+                value={capture.listenIn}
+                volume={capture.listenVolume}
+                options={speakable}
+                onChange={(listenIn) => update({ ...capture, listenIn })}
+                onVolume={(listenVolume) => update({ ...capture, listenVolume })}
+              />
+            </span>
+          )}
         </div>
       </fieldset>
 

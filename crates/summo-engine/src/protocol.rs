@@ -165,6 +165,16 @@ pub struct SessionSpec {
         skip_serializing_if = "Vec::is_empty"
     )]
     pub translate_into: Vec<String>,
+    /// Speak the translation into this language, for a listener wearing headphones.
+    ///
+    /// One language, and that is not a smaller version of [`Self::translate_into`]. A meeting can
+    /// carry several subtitles at once because two people can read the same screen; a person has
+    /// one pair of ears, and two voices over each other is nobody's dub.
+    ///
+    /// It has to be a language `translate_into` already covers, because a dub speaks translations
+    /// and there is nothing to speak otherwise. Absent or empty means no live dub.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub listen_in: Option<String>,
     /// Capture device id, or `None` to pick the best one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_id: Option<String>,
@@ -219,6 +229,7 @@ impl SessionSpec {
             speaker_model: None,
             denoise_model: None,
             translate_into: Vec::new(),
+            listen_in: None,
             device_id: None,
         }
     }

@@ -11,6 +11,7 @@
  * a bound. Dropping them silently would leave a gap in the recording that nothing later can recover.
  */
 
+import { decodeDub, type DubChunk } from "./listen";
 import { encodeFrame, type Command, type Event, type Lane } from "./protocol";
 
 /** How long to buffer audio while reconnecting, in frames of 100 ms. */
@@ -29,6 +30,13 @@ export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed";
 export interface EngineOptions {
   onEvent: (event: Event) => void;
   onState?: (state: ConnectionState) => void;
+  /**
+   * A piece of dubbed audio, when somebody asked to hear the translation.
+   *
+   * Separate from `onEvent` because it is not one: an event is JSON that ends up in the transcript,
+   * and this is sound that must never go near it. The recording is what was said.
+   */
+  onDub?: (chunk: DubChunk) => void;
 }
 
 export class EngineClient {
@@ -75,6 +83,13 @@ export class EngineClient {
     };
 
     socket.onmessage = (message) => {
+      // Binary is dubbed audio. This branch used to be a bare `return` — everything non-string on
+      // the floor — which was right while nothing sent any, and is the hook the live dub plugs into.
+      if (message.data instanceof ArrayBuffer) {
+        const chunk = decodeDub(message.data);
+        if (chunk) this.options.onDub?.(chunk);
+        return;
+      }
       if (typeof message.data !== "string") return;
       try {
         this.options.onEvent(JSON.parse(message.data) as Event);

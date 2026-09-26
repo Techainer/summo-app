@@ -69,13 +69,16 @@ describe("normalize", () => {
 
 describe("storage", () => {
   it("round-trips a choice", () => {
-    save({ lanes: ["system"], translateInto: ["en", "ja"], spoken: ["vi"], device: "mic-7" });
-    expect(load()).toEqual({
-      lanes: ["system"],
+    const choice = {
+      lanes: ["system"] as const,
       translateInto: ["en", "ja"],
       spoken: ["vi"],
       device: "mic-7",
-    });
+      listenIn: "ja",
+      listenVolume: 0.4,
+    };
+    save({ ...choice, lanes: [...choice.lanes] });
+    expect(load()).toEqual({ ...choice, lanes: [...choice.lanes] });
   });
 
   it("falls back to the default when nothing was saved", () => {
@@ -96,20 +99,50 @@ describe("storage", () => {
 
 describe("what the capture means", () => {
   it("knows when live translation is on", () => {
-    expect(translating({ lanes: ["mic"], translateInto: [], spoken: [], device: "" })).toBe(false);
-    expect(translating({ lanes: ["mic"], translateInto: ["en"], spoken: [], device: "" })).toBe(
-      true,
-    );
+    expect(
+      translating({
+        lanes: ["mic"],
+        translateInto: [],
+        spoken: [],
+        device: "",
+        listenIn: "",
+        listenVolume: 1,
+      }),
+    ).toBe(false);
+    expect(
+      translating({
+        lanes: ["mic"],
+        translateInto: ["en"],
+        spoken: [],
+        device: "",
+        listenIn: "",
+        listenVolume: 1,
+      }),
+    ).toBe(true);
   });
 
   // Translating the microphone lane translates *you*. It is what happens when the system-audio
   // switch is forgotten, and it looks like the feature is broken.
   it("knows when nothing but the local user will be heard", () => {
-    expect(hearsOthers({ lanes: ["mic"], translateInto: ["en"], spoken: [], device: "" })).toBe(
-      false,
-    );
     expect(
-      hearsOthers({ lanes: ["mic", "system"], translateInto: ["en"], spoken: [], device: "" }),
+      hearsOthers({
+        lanes: ["mic"],
+        translateInto: ["en"],
+        spoken: [],
+        device: "",
+        listenIn: "",
+        listenVolume: 1,
+      }),
+    ).toBe(false);
+    expect(
+      hearsOthers({
+        lanes: ["mic", "system"],
+        translateInto: ["en"],
+        spoken: [],
+        device: "",
+        listenIn: "",
+        listenVolume: 1,
+      }),
     ).toBe(true);
   });
 });
@@ -207,5 +240,36 @@ describe("which microphone", () => {
   it("survives a stored value from a build that had no such field", () => {
     store.set("summo.capture", JSON.stringify({ lanes: ["mic"], spoken: ["vi"] }));
     expect(load().device).toBe("");
+  });
+});
+
+describe("hearing the translation", () => {
+  /**
+   * The dead state this rules out: a control that says it is on, a voice loaded, and an hour of
+   * silence — because nothing is producing the language it was asked to speak.
+   */
+  it("drops a language nothing is being translated into", () => {
+    expect(normalize({ translateInto: ["en"], listenIn: "ja" }).listenIn).toBe("");
+    expect(normalize({ translateInto: [], listenIn: "en" }).listenIn).toBe("");
+    expect(normalize({ translateInto: ["en"], listenIn: "en" }).listenIn).toBe("en");
+  });
+
+  /** Turning translation off turns the dub off with it, rather than leaving it pointing at nothing. */
+  it("goes with the target it depended on", () => {
+    const on = normalize({ translateInto: ["en", "ja"], listenIn: "ja" });
+    expect(normalize({ ...on, translateInto: ["en"] }).listenIn).toBe("");
+  });
+
+  /** Matched against a manifest's own spelling, like every other language code here. */
+  it("is lower-cased", () => {
+    expect(normalize({ translateInto: ["en"], listenIn: " EN " }).listenIn).toBe("en");
+  });
+
+  /** A volume above one is distortion and below zero inverts the waveform. Storage is not trusted. */
+  it("clamps the volume rather than trusting what was stored", () => {
+    expect(normalize({ listenVolume: 4 }).listenVolume).toBe(1);
+    expect(normalize({ listenVolume: -1 }).listenVolume).toBe(0);
+    expect(normalize({ listenVolume: Number.NaN }).listenVolume).toBe(1);
+    expect(normalize({ listenVolume: "loud" as never }).listenVolume).toBe(1);
   });
 });
