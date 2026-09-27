@@ -1673,6 +1673,10 @@ fn choose_models(
     // is named, and this named one before it could ever be asked.
     //
     // So it is remembered rather than applied, and `settled_language` below decides.
+    // Whether the *session* named one, asked before anything is copied into it. After the copy the
+    // two are indistinguishable, and a browser that chose the same language as the setting would
+    // have its choice thrown away as though nobody had made it.
+    let named_by_session = spec.language.is_some();
     let preferred = settings
         .models
         .language
@@ -1681,6 +1685,7 @@ fn choose_models(
     if spec.language.is_none() {
         spec.language = preferred.clone();
     }
+    let preferred = if named_by_session { None } else { preferred };
 
     // A model chosen for this language in particular, before the one chosen for everything.
     //
@@ -7697,8 +7702,17 @@ mod resolve_tests {
     /// The hole the language picker left when it was first built: the choice lived in one browser's
     /// `localStorage`, so `/languages` always answered `current: null`, a second browser started
     /// over, and the tray and the CLI never learned it at all.
+    ///
+    /// What it must do has narrowed, and the narrowing is the fix for a report. The setting is
+    /// remembered, and it *chooses a model* — that is the question it is a good answer to. It is no
+    /// longer handed to the live model as "decode as this", because naming a language is how a
+    /// multilingual model stops detecting, and a preference nobody revisited was silently pinning
+    /// every meeting to one language. A meeting is rarely in one.
+    ///
+    /// `/languages` reads the setting directly, so the persistence this test was written for is
+    /// untouched. What changed is only whether the session inherits it as an instruction.
     #[test]
-    fn the_spoken_language_survives_the_browser_that_chose_it() {
+    fn the_spoken_language_is_remembered_without_silencing_a_model_that_detects() {
         let tmp = tempfile::tempdir().unwrap();
         let engine = engine(tmp.path());
         let path = engine.paths().settings();
@@ -7707,16 +7721,31 @@ mod resolve_tests {
         settings.models.language = Some("ja".into());
         settings.save(&path).unwrap();
 
-        // A session that names no language takes it, which is what makes the setting worth writing.
-        let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
-        assert_eq!(resolved.language.as_deref(), Some("ja"));
+        // Still on disk, which is what the tray, the CLI and a second browser read.
+        assert_eq!(
+            summo_core::Settings::load(&path)
+                .unwrap()
+                .models
+                .language
+                .as_deref(),
+            Some("ja")
+        );
 
-        // And clearing it means detection, not the previous answer left behind.
-        let mut settings = summo_core::Settings::load(&path).unwrap();
-        settings.models.language = None;
-        settings.save(&path).unwrap();
+        // A session that names no language is left detecting rather than told what to expect.
         let resolved = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
-        assert_eq!(resolved.language, None);
+        assert_eq!(
+            resolved.language, None,
+            "a preference was handed to the model as an instruction"
+        );
+
+        // A language named for *this* session is a fact about this session, and survives.
+        let mut asked = crate::protocol::SessionSpec::new("");
+        asked.language = Some("ja".into());
+        assert_eq!(
+            resolve_models(&asked, &engine).language.as_deref(),
+            Some("ja"),
+            "the session's own answer was thrown away"
+        );
     }
 
     /// Installing a second speech model used to break recording. With nothing named in the
