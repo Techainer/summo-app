@@ -236,6 +236,32 @@ export function SpokenLanguage({
         </div>
       )}
 
+      {/* A named language whose specialist is not on disk.
+
+          The daemon now loads one specialist per named language rather than one for the first, so
+          the second and third names buy real accuracy — and only if the model exists. Without this
+          the chip appeared, nothing said anything, and that half of the meeting quietly stayed
+          with whatever the multilingual model heard. The offer is the same one the primary gets. */}
+      {extras
+        .map((code) => languages.find((language) => language.code === code))
+        .filter((language): language is Language => !!language && !ready(language))
+        .map((language) => (
+          <div key={language.code} className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-fg-dim text-meta">
+              {t("record.spoken_extra_missing", { language: languageName(language.code, locale) })}
+            </span>
+            <Button
+              onClick={() => void install(language)}
+              disabled={installing !== null}
+              variant="ghost"
+            >
+              {installing?.id === language.model
+                ? t("record.spoken_installing", { pct: String(installing.pct) })
+                : t("record.spoken_install", { size: megabytes(language.size_bytes) })}
+            </Button>
+          </div>
+        ))}
+
       {/* The way out of a list that does not have what somebody wants: the catalogue, filtered to
           the language they just chose. Every model that serves it, with its size, its measured
           accuracy and its page — rather than a picker that can only offer what it already knows. */}

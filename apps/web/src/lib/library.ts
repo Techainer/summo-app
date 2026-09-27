@@ -131,6 +131,76 @@ export interface MeetingDetail {
 
 export type GroupBy = "day" | "week" | "folder" | "none";
 
+/**
+ * How the rows are ordered, inside whatever they are grouped by.
+ *
+ * There was no such control and no such state: the daemon's order stood, and the reported
+ * complaint — *"không filter sort được, mặc định phải date-created sort chứ?"* — was half right.
+ * Filters existed; the order was fixed. Newest first is the default because the meeting somebody
+ * is looking for is nearly always the one that just happened, and it is also what the vault
+ * already returned, so the default changes nothing anybody had learned.
+ *
+ * Ordering happens here rather than in the daemon on purpose. `/library` sends the whole vault —
+ * it has to, because the counters and the folder and tag lists are sums over all of it — so the
+ * rows are already in the browser and a round trip would buy nothing but a spinner.
+ */
+export type SortBy = "recent" | "oldest" | "title" | "longest";
+
+/**
+ * Apply an order to a grouped view.
+ *
+ * Groups are reversed for `oldest` as well as their contents, because a day heading is part of
+ * the order: leaving September above August while the meetings inside each ran upwards would be
+ * two directions on one screen.
+ *
+ * Here rather than in the component so the comparison can be tested without mounting the library —
+ * a test that has to render a screen to check that "longest" puts the long one first is a test
+ * nobody writes.
+ */
+export function ordered(
+  groups: { key: string; meetings: MeetingSummary[] }[],
+  sort: SortBy,
+  locale: string,
+): { key: string; meetings: MeetingSummary[] }[] {
+  const compare = (a: MeetingSummary, b: MeetingSummary) => {
+    switch (sort) {
+      case "recent":
+        return b.date.localeCompare(a.date);
+      case "oldest":
+        return a.date.localeCompare(b.date);
+      case "longest":
+        return b.duration - a.duration;
+      case "title":
+        // The reader's collation, not the code unit order: in Vietnamese `Đ` sorts after `D` and
+        // before `E`, and `localeCompare` is the only thing in the browser that knows that.
+        return a.title.localeCompare(b.title, locale);
+    }
+  };
+  const out = groups.map((group) => ({ ...group, meetings: [...group.meetings].sort(compare) }));
+  return sort === "oldest" ? out.reverse() : out;
+}
+
+/** The lane keys the audio route serves, in the order a player should offer them. */
+const LANES = ["mic", "system", "import"] as const;
+
+export type Lane = (typeof LANES)[number];
+
+/**
+ * The lanes of a meeting that can actually be played, from the files the daemon reports.
+ *
+ * Filtered to the names the audio route serves. Mapping *every* file in the directory to a lane
+ * was fine while the only files were `mic.opus` and `system.opus`, and wrong the moment there were
+ * others: an imported meeting has one file, `import.wav`, so it drew a transport whose only lane
+ * answered `no such lane 'import'`.
+ *
+ * Shared by the meeting screen and the library pane because they are the same question asked
+ * twice, and the second place to ask it is where a copy would have drifted.
+ */
+export function playable(audio: string[]): Lane[] {
+  const keys = audio.map((file) => file.replace(/\.[^.]+$/, ""));
+  return LANES.filter((lane) => keys.includes(lane));
+}
+
 /** What a vault entry is. A recording has a transcript; a note is typed. */
 export type Kind = "meeting" | "note";
 
@@ -203,6 +273,18 @@ export class LibraryClient {
     return json<MeetingDetail>(
       await fetch(url(this.handshake, `/meetings/${encodeURIComponent(id)}`)),
     );
+  }
+
+  /**
+   * Where a lane of a finished meeting can be played from.
+   *
+   * Here rather than in a component so the handshake stays private to this client, which is the
+   * only reason the library pane could not offer playback: it had the file *names* — it printed
+   * "2 recordings" under every meeting — and no way to turn one into a URL. The transcript of an
+   * old meeting was readable and the audio was unreachable from the screen that listed it.
+   */
+  audioUrl(id: string, lane: string): string {
+    return url(this.handshake, `/meetings/${encodeURIComponent(id)}/audio/${lane}`);
   }
 
   private async post<T>(id: string, action: string, body?: unknown): Promise<T> {

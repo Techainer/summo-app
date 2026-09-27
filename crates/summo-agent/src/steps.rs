@@ -31,7 +31,7 @@ pub fn begin_step(paths: &Paths, task: &Task, text: &str) -> Result<Task> {
     });
     if task.status != Status::Doing {
         task.status = Status::Doing;
-        summo_vault::tasks_io::update(paths, &task.id, Some(Status::Doing), None, None)?;
+        summo_vault::tasks_io::update(paths, &task.id, Some(Status::Doing), None, None, None)?;
     }
     write(paths, &task, &task.steps)?;
     Ok(task)

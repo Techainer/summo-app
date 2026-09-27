@@ -417,7 +417,7 @@ impl Tool for UpdateTask {
             .and_then(Value::as_str)
             .map(|o| Some(o.to_string()));
 
-        match summo_vault::tasks_io::update(&self.paths, id, status, owner, None) {
+        match summo_vault::tasks_io::update(&self.paths, id, status, owner, None, None) {
             Ok(task) => ok(format!(
                 "Việc `{}` giờ là {}",
                 task.text,

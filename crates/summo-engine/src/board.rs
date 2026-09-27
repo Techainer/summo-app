@@ -172,7 +172,7 @@ mod tests {
         let dir = vault(&[("a.md", &meeting("01A", TASKS))]);
         let paths = Paths::at(dir.path());
 
-        let moved = update(&paths, "T2", Some(Status::Done), None, None).expect("update");
+        let moved = update(&paths, "T2", Some(Status::Done), None, None, None).expect("update");
         assert_eq!(moved.status, Status::Done);
 
         let board = read(&paths).expect("read");
@@ -184,7 +184,7 @@ mod tests {
     fn moving_a_task_leaves_the_rest_of_the_file_alone() {
         let dir = vault(&[("a.md", &meeting("01A", TASKS))]);
         let paths = Paths::at(dir.path());
-        update(&paths, "T1", Some(Status::Done), None, None).expect("update");
+        update(&paths, "T1", Some(Status::Done), None, None, None).expect("update");
 
         let body = std::fs::read_to_string(paths.meetings().join("a.md")).unwrap();
         assert!(body.contains("- [ ] @binh Gọi khách"), "{body}");
@@ -201,10 +201,10 @@ mod tests {
         let paths = Paths::at(dir.path());
 
         let reassigned =
-            update(&paths, "T2", None, Some(Some("ngoc".into())), None).expect("reassign");
+            update(&paths, "T2", None, Some(Some("ngoc".into())), None, None).expect("reassign");
         assert_eq!(reassigned.owner.as_deref(), Some("ngoc"));
 
-        let cleared = update(&paths, "T2", None, Some(None), None).expect("clear");
+        let cleared = update(&paths, "T2", None, Some(None), None, None).expect("clear");
         assert!(cleared.owner.is_none());
     }
 
@@ -216,6 +216,7 @@ mod tests {
                 &Paths::at(dir.path()),
                 "NOPE",
                 Some(Status::Done),
+                None,
                 None,
                 None
             )

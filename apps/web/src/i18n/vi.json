@@ -100,7 +100,8 @@
     "minimise_pinned": "Ghim trong trang này. Trình duyệt này không hỗ trợ cửa sổ nổi nên không thể nằm trên các ứng dụng khác.",
     "restore": "Quay lại buổi họp",
     "spoken_add": "Thêm ngôn ngữ",
-    "spoken_remove": "Bỏ {language}"
+    "spoken_remove": "Bỏ {language}",
+    "spoken_extra_missing": "{language} chưa có model chuyên — những câu đó vẫn do model đa ngôn ngữ nghe"
   },
   "meeting": {
     "title_label": "Tên cuộc họp",
@@ -167,7 +168,13 @@
     "due_overdue": "{date} — quá hạn",
     "due_on": "hạn {date}",
     "board_empty": "Chưa có việc nào",
-    "board_empty_hint": "Việc xuất hiện khi ai đó nhận trong buổi họp, hoặc khi bạn gõ “- [ ] @tên …” trong ghi chú."
+    "board_empty_hint": "Viết một việc ở trên, chốt một việc trong cuộc họp, hoặc gõ “- [ ] @tên …” trong ghi chú.",
+    "board": "Bảng",
+    "list": "Danh sách",
+    "new_placeholder": "Viết một việc…",
+    "owner_placeholder": "người làm",
+    "edit": "Sửa",
+    "delete_task": "Xoá việc"
   },
   "library": {
     "title": "Thư viện",
@@ -177,6 +184,12 @@
     "by_day": "Ngày",
     "by_week": "Tuần",
     "by_folder": "Thư mục",
+    "by_none": "Danh sách",
+    "sort": "Sắp xếp",
+    "sort_recent": "Mới nhất trước",
+    "sort_oldest": "Cũ nhất trước",
+    "sort_title": "Theo tên",
+    "sort_longest": "Dài nhất trước",
     "by_tag": "Thẻ",
     "filters": "Lọc",
     "more": "Hiện thêm {count} nữa",

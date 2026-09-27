@@ -17,6 +17,7 @@ export function StatusBar({
   connection,
   device,
   memory,
+  numbers,
 }: {
   stat: { rtf: number; rss_mb: number; queue_ms: number } | null;
   speakers: string[];
@@ -24,6 +25,18 @@ export function StatusBar({
   connection: ConnectionState;
   device: string | null;
   memory: Memory | null;
+  /**
+   * Whether to draw the measurements.
+   *
+   * Off by default, because they were in the chrome of every screen — reported as *"nhảy tới nhảy
+   * lui tab lại có cái Summo đang tốn gì hiện ra, wtf?"*. They are still on screen for anyone who
+   * wants them, under Settings → Giao diện, beside the switch that turns this back on.
+   *
+   * It gates the *numbers* and not the warning below them. Falling behind is not a measurement
+   * somebody opted into, it is the recording going wrong, and a preference about clutter must not
+   * be able to hide it.
+   */
+  numbers: boolean;
 }) {
   // `n`, not `t`: English needs "1 speaker" and "2 speakers"; Vietnamese needs one form for both.
   const { t, n } = useI18n();
@@ -58,7 +71,7 @@ export function StatusBar({
           reported zero bytes free, every model was ranked as too large to run, and the figure that
           decided it was nowhere on screen. Hidden on a phone, where the row has no room and the
           operating system shows it anyway. */}
-      {memory && (
+      {numbers && memory && (
         <span
           className="border-line tabular text-micro hidden items-center rounded-full border px-2 py-0.5 sm:inline-flex"
           data-testid="memory"
@@ -66,7 +79,7 @@ export function StatusBar({
           RAM {memory.usedGb.toFixed(1)}/{memory.totalGb.toFixed(0)} GB
         </span>
       )}
-      {stat && (
+      {numbers && stat && (
         <>
           <span
             className={cn(
@@ -79,12 +92,13 @@ export function StatusBar({
           <span className="border-line tabular text-micro inline-flex items-center rounded-full border px-2 py-0.5">
             {stat.rss_mb} MB
           </span>
-          {behind && (
-            <span className="border-line nums border-rec text-rec text-micro inline-flex items-center rounded-full border px-2 py-0.5">
-              {t("status.behind")}
-            </span>
-          )}
         </>
+      )}
+      {/* Outside the gate above. A pipeline that cannot keep up is not a statistic. */}
+      {behind && (
+        <span className="border-line nums border-rec text-rec text-micro inline-flex items-center rounded-full border px-2 py-0.5">
+          {t("status.behind")}
+        </span>
       )}
     </footer>
   );

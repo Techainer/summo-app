@@ -924,6 +924,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
         connection={engine.session.connection}
         device={engine.session.deviceLabel}
         memory={memory}
+        numbers={perfOn}
       />
     </div>
   );

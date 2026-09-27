@@ -199,7 +199,7 @@ impl Server {
             .route("/report", get(report))
             .route("/agents", get(agents))
             .route("/agents/{slug}", get(agent).post(set_agent))
-            .route("/tasks", get(tasks))
+            .route("/tasks", get(tasks).post(create_loose_task))
             .route("/nudges", get(nudges))
             .route("/ask", post(ask))
             .route("/imports", get(list_imports).post(start_import))
@@ -215,7 +215,7 @@ impl Server {
             .route("/meetings/{id}/draft/chat", post(chat_draft))
             .route("/meetings/{id}/draft/confirm", post(confirm_draft))
             .route("/meetings/{id}/draft", axum::routing::delete(discard_draft))
-            .route("/tasks/{id}", post(update_task))
+            .route("/tasks/{id}", post(update_task).delete(delete_task))
             .route("/tasks/{id}/run", post(run_task))
             .route("/meetings/{id}/tasks", post(create_task))
             .route("/templates", get(templates))
@@ -603,12 +603,13 @@ async fn perf(
     if let crate::state::SessionStatus::Recording {
         live_model,
         refine_model,
+        also_refine,
         denoise_model,
         ..
     } = &status
     {
         running.push(serde_json::json!({ "role": "live", "id": live_model }));
-        if let Some(id) = refine_model {
+        for id in refine_model.iter().chain(also_refine) {
             running.push(serde_json::json!({ "role": "refine", "id": id }));
         }
         if let Some(id) = denoise_model {
@@ -1400,11 +1401,12 @@ fn resolve_models(
     resolved
 }
 
-/// A listener that hears every language, and a specialist to revise what it is for.
+/// A listener that hears every language, and a specialist per language to revise what it is for.
 ///
-/// Returns `(live, refine)`. `refine` is `None` when nothing installed specialises in any of the
+/// Returns `(live, refine)`. `refine` is empty when nothing installed specialises in any of the
 /// named languages, which is not a failure: a multilingual model alone still transcribes all of
-/// them, just less well than a specialist would.
+/// them, just less well than a specialist would. It has more than one entry when more than one
+/// named language has a specialist installed, which is the trilingual meeting.
 ///
 /// `None` overall when nothing installed hears every language — there is no multilingual model to
 /// do the detecting, so the caller falls back to the single-language path and the user gets the
@@ -1414,7 +1416,7 @@ fn resolve_models(
 /// label an utterance it was not built for, so it cannot tell "this sentence is not mine" from
 /// "this sentence is mine"; a general model can, which is why it goes first.
 #[cfg(feature = "models")]
-fn bilingual_pair(engine: &EngineState, languages: &[String]) -> Option<(String, Option<String>)> {
+fn bilingual_pair(engine: &EngineState, languages: &[String]) -> Option<(String, Vec<String>)> {
     let installed: Vec<_> = engine
         .store()
         .list()
@@ -1434,7 +1436,7 @@ fn pick_pair(
     installed: &[summo_models::Manifest],
     hw: &summo_models::hw::HwProfile,
     languages: &[String],
-) -> Option<(String, Option<String>)> {
+) -> Option<(String, Vec<String>)> {
     // The *best* multilingual model, not the first one the store happens to list.
     //
     // `find` took whichever came back first, and with two Whispers installed that is store order —
@@ -1486,24 +1488,39 @@ fn pick_pair(
         .id
         .to_string();
 
-    // The specialist for the language named *first*, which is the decision the user already made
-    // by putting it first — their meeting is mostly in that one.
+    // A specialist for *each* named language, in the order the user named them.
     //
-    // Deliberately not "the best specialist across all of them". `Scored::score` says of itself
-    // that it is only comparable within one call, and ranking each language separately and then
-    // comparing the winners is exactly the comparison it rules out. An ordering the user gave is
-    // better than a number that does not mean what it looks like it means.
-    let specialist = languages
+    // This used to be `find_map` — the specialist for `languages[0]` and nothing for the rest. Name
+    // Vietnamese, English and Japanese and the Japanese half of the meeting had no specialist at
+    // all. The `Option` was the only thing between this and the trilingual meeting that was asked
+    // for; `Refiner` holds a list now, so this returns one.
+    //
+    // Still ranked per language rather than across them. `Scored::score` says of itself that it is
+    // only comparable within one call, so the winners of two calls cannot be compared — but they
+    // do not have to be, because each one is now used for the language it won.
+    //
+    // Duplicates are left in rather than filtered here: `Refiner::also` drops a model it already
+    // holds, and it is the half that knows what is actually loaded. Two languages whose best
+    // installed model is the same one are common — a multilingual specialist like
+    // `sense-voice-small` wins `ja`, `ko` and `yue` on its own.
+    let specialists: Vec<String> = languages
         .iter()
-        .find_map(|code| {
+        .filter_map(|code| {
             summo_models::recommend(installed, hw, code)
                 .ranked
                 .into_iter()
                 .find(|s| s.id != general && !claims_everything(installed, &s.id))
+                .map(|s| s.id)
         })
-        .map(|s| s.id);
+        .collect();
 
-    Some((general, specialist))
+    let mut seen = std::collections::BTreeSet::new();
+    let specialists = specialists
+        .into_iter()
+        .filter(|id| seen.insert(id.clone()))
+        .collect();
+
+    Some((general, specialists))
 }
 
 /// Whether an installed manifest claims every language.
@@ -1643,9 +1660,16 @@ fn choose_models(
         && let Some(pair) = bilingual_pair(engine, &spec.languages)
     {
         spec.live_model = pair.0;
+        let mut specialists = pair.1.into_iter();
         if spec.refine_model.is_none() {
-            spec.refine_model = pair.1;
+            spec.refine_model = specialists.next();
         }
+        // The rest of the named languages get their own. A user who named three has said which
+        // three; asking them to also choose three models would be asking the question they came
+        // here to avoid.
+        spec.also_refine = specialists
+            .filter(|id| Some(id.as_str()) != spec.refine_model.as_deref())
+            .collect();
         return spec;
     }
 
@@ -2829,6 +2853,10 @@ struct TaskUpdateBody {
     owner: Option<Option<String>>,
     #[serde(default, deserialize_with = "double_option")]
     due: Option<Option<String>>,
+    /// Reword it. Not a double option: a task with no text is not a task, so there is nothing for
+    /// `null` to mean here and `create` already refuses the same thing.
+    #[serde(default)]
+    text: Option<String>,
 }
 
 /// Distinguish "field absent" from "field set to null".
@@ -2856,6 +2884,48 @@ async fn update_task(
         body.status,
         body.owner,
         body.due,
+        body.text,
+    ))
+}
+
+/// Delete a task.
+///
+/// The board had no way to take one off. A task that turned out not to be a task — the model read
+/// an action item out of a sentence that was not one — could be dragged to "done", which is a lie
+/// in the one place a person looks to find out what they actually finished.
+async fn delete_task(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    as_response(
+        summo_vault::tasks_io::remove(state.engine.paths(), &id).map(|()| serde_json::json!({})),
+    )
+}
+
+/// Write down a task that came out of no meeting.
+///
+/// The counterpart of `create_task`, which needs a meeting id — and which was the only way in, so
+/// the board could show work only if a recording had produced it. See
+/// [`summo_vault::tasks_io::create_loose`] for where such a task lives.
+async fn create_loose_task(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<TokenQuery>,
+    Json(body): Json<TaskCreateBody>,
+) -> impl IntoResponse {
+    if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
+        return rejection.into_response();
+    }
+    as_response(summo_vault::tasks_io::create_loose(
+        state.engine.paths(),
+        &body.text,
+        body.owner.as_deref(),
+        body.due.as_deref(),
     ))
 }
 
@@ -6128,12 +6198,20 @@ async fn set_refine_model(
 
     match built {
         Ok(Ok((decoder, claims, live_claims))) => {
-            active.refiner = Some(crate::refine::Refiner::new(
-                decoder,
-                claims,
-                live_claims,
-                summo_asr::HallucinationFilter::default(),
-            ));
+            // Swapped into the existing refiner rather than replacing it, so the specialists the
+            // meeting's other named languages are relying on survive the change.
+            match active.refiner.as_mut() {
+                Some(held) => held.replace_primary(&wanted, decoder, claims),
+                None => {
+                    active.refiner = Some(crate::refine::Refiner::new(
+                        &wanted,
+                        decoder,
+                        claims,
+                        live_claims,
+                        summo_asr::HallucinationFilter::default(),
+                    ));
+                }
+            }
             active.spec.refine_model = Some(wanted.clone());
             engine.retuned(&active.spec);
             vec![Event::info(format!("now checking the text with {wanted}"))]
@@ -6869,6 +6947,7 @@ fn start_session(
             // because it is the specialist for that answer.
             match crate::runner::load_decoder(id, spec.language.as_deref(), &store, threads) {
                 Ok(decoder) => Some(crate::refine::Refiner::new(
+                    id,
                     decoder,
                     claims,
                     live_claims,
@@ -6882,6 +6961,27 @@ fn start_session(
         }
         _ => None,
     };
+
+    // And a specialist for each of the other named languages.
+    //
+    // Same rules as the one above: a model that will not load costs its language a second opinion
+    // and nothing else. `None` for the language, always — these are chosen precisely because they
+    // hear one language, and the utterances routed to them are the ones already labelled as it.
+    let mut refiner = refiner;
+    if let Some(held) = refiner.as_mut() {
+        let store = engine.store();
+        let threads = engine.hardware().recommended_threads();
+        for id in &spec.also_refine {
+            match crate::runner::load_decoder(id, None, &store, threads) {
+                Ok(decoder) => held.also(id, decoder, claimed_langs(&store, id)),
+                Err(e) => {
+                    tracing::warn!(error = %e, model = %id, "a named language is without its specialist");
+                }
+            }
+        }
+        tracing::info!(models = ?held.models(), "refining with");
+    }
+    let refiner = refiner;
 
     // The dub is deliberately *not* built here. See `attach_live_dub`: loading a voice is nearly
     // two seconds, this function runs on the task that serves the socket, and a socket that stops
@@ -7138,7 +7238,7 @@ mod resolve_tests {
         let (live, refine) =
             pick_pair(&installed, &hw, &["vi".into(), "en".into()]).expect("a pair");
         assert_eq!(live, "whisper-base");
-        assert_eq!(refine.as_deref(), Some("gipformer"));
+        assert_eq!(refine, vec!["gipformer"]);
     }
 
     /// The best multilingual model, not whichever the store lists first.
@@ -7186,10 +7286,14 @@ mod resolve_tests {
         let hw = summo_models::hw::HwProfile::detect();
         let (live, refine) = pick_pair(&installed, &hw, &["vi".into()]).expect("a pair");
         assert!(live.starts_with("whisper"), "{live}");
-        assert_eq!(refine.as_deref(), Some("gipformer"));
+        assert_eq!(refine, vec!["gipformer"]);
     }
 
-    /// The order the user gave is the answer to "which is it mostly in".
+    /// Every named language gets its own specialist, in the order the user named them.
+    ///
+    /// The order still matters — the first is the one the models screen shows and can change — but
+    /// it no longer decides which languages have a specialist at all. That is the trilingual
+    /// meeting: *"tam ngữ cũng được chứ cần gì song ngữ"*.
     #[test]
     fn the_specialist_is_for_the_language_named_first() {
         let installed = [
@@ -7202,16 +7306,34 @@ mod resolve_tests {
         assert_eq!(
             pick_pair(&installed, &hw, &["en".into(), "vi".into()])
                 .expect("a pair")
-                .1
-                .as_deref(),
-            Some("zipformer-en")
+                .1,
+            vec!["zipformer-en", "gipformer"]
         );
         assert_eq!(
             pick_pair(&installed, &hw, &["vi".into(), "en".into()])
                 .expect("a pair")
-                .1
-                .as_deref(),
-            Some("gipformer")
+                .1,
+            vec!["gipformer", "zipformer-en"]
+        );
+    }
+
+    /// And the same model winning two languages is named once.
+    ///
+    /// Common rather than exotic: `sense-voice-small` is the best installed answer for Japanese,
+    /// Korean and Cantonese at the same time. Naming it three times would be three copies of the
+    /// same several hundred megabytes.
+    #[test]
+    fn a_specialist_that_wins_two_languages_is_named_once() {
+        let installed = [
+            speech("whisper-base", &["*"]),
+            speech("sense-voice", &["ja", "ko", "yue"]),
+        ];
+        let hw = summo_models::hw::HwProfile::detect();
+        assert_eq!(
+            pick_pair(&installed, &hw, &["ja".into(), "ko".into()])
+                .expect("a pair")
+                .1,
+            vec!["sense-voice"]
         );
     }
 
@@ -7225,7 +7347,7 @@ mod resolve_tests {
         let (live, refine) =
             pick_pair(&installed, &hw, &["vi".into(), "en".into()]).expect("a pair");
         assert_eq!(live, "whisper-base");
-        assert_eq!(refine, None);
+        assert!(refine.is_empty());
     }
 
     /// Nothing that hears every language means nothing can do the detecting, so this arrangement

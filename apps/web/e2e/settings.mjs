@@ -300,6 +300,31 @@ if ((nav?.height ?? 0) > 120) {
 }
 await page.screenshot({ path: "/tmp/shots/settings-narrow.png" });
 
+// ---- the machine's memory, where it lives now ------------------------------
+//
+// It used to be a chip in the footer of every screen, and was reported as noise there — "nhảy tới
+// nhảy lui tab lại có cái Summo đang tốn gì hiện ra". It is behind the performance switch now, and
+// hiding a number is only acceptable if it is still somewhere. This is the assertion that it is.
+//
+// The number itself matters as much as the place: three releases were spent on a bug whose cause
+// was a 24 GB MacBook reporting zero bytes free, a figure the app read, acted on, and never showed.
+{
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${appUrl}?port=${port}&token=${token}#/settings?section=general`, {
+    waitUntil: "networkidle",
+  });
+  const ram = page.getByTestId("usage-memory");
+  const shown = await ram
+    .waitFor({ timeout: 20_000 })
+    .then(() => ram.innerText())
+    .catch(() => null);
+  if (!shown || !/\d+(\.\d+)? \/ \d+ GB/.test(shown)) {
+    problems.push(`settings does not show the machine's memory: ${JSON.stringify(shown)}`);
+  } else {
+    console.log(`settings usage: RAM ${shown.trim()}`);
+  }
+}
+
 await browser.close();
 engine.stop();
 if (problems.length) {

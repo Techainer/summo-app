@@ -29,9 +29,13 @@ import {
   type Kind,
   type LibraryView,
   type MeetingDetail,
+  ordered,
+  playable,
+  type SortBy,
   type MeetingSummary,
   type SearchHit,
 } from "../lib/library";
+import { Player } from "./meeting/Player";
 import { ColourPicker, Dot, Finder } from "./library/Finder";
 import { GENTLE, listItem, stagger } from "../lib/motion";
 import { useRefresh } from "../lib/use-load";
@@ -64,6 +68,17 @@ const GROUPS: { value: GroupBy; labelKey: string }[] = [
   { value: "day", labelKey: "library.by_day" },
   { value: "week", labelKey: "library.by_week" },
   { value: "folder", labelKey: "library.by_folder" },
+  // One flat list, which `GroupBy` has always had a name for and no control ever offered. Without
+  // it, sorting by title or by length could only ever reorder *within* a day — a sort that cannot
+  // see past the heading above it is not a sort.
+  { value: "none", labelKey: "library.by_none" },
+];
+
+const SORTS: { value: SortBy; labelKey: string }[] = [
+  { value: "recent", labelKey: "library.sort_recent" },
+  { value: "oldest", labelKey: "library.sort_oldest" },
+  { value: "title", labelKey: "library.sort_title" },
+  { value: "longest", labelKey: "library.sort_longest" },
 ];
 
 interface Props {
@@ -135,12 +150,13 @@ export function Library({
   onWrite,
   onOpen,
 }: Props) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const words = useDayWords();
   const narrow = useIsNarrow();
   const say = useErrorText();
   const [view, setView] = useState<LibraryView | null>(null);
   const [group, setGroup] = useState<GroupBy>("day");
+  const [sort, setSort] = useState<SortBy>("recent");
   /**
    * Which kind of thing is being looked at, or all of them.
    *
@@ -204,7 +220,7 @@ export function Library({
    * the wrong filter appearing for a frame.
    */
   const [limit, setLimit] = useState(PAGE);
-  const shape = `${group}|${kind ?? ""}|${folder ?? ""}|${tags.join()}|${colour ?? ""}|${query}`;
+  const shape = `${group}|${sort}|${kind ?? ""}|${folder ?? ""}|${tags.join()}|${colour ?? ""}|${query}`;
   const [seenShape, setSeenShape] = useState(shape);
   if (seenShape !== shape) {
     setSeenShape(shape);
@@ -213,7 +229,10 @@ export function Library({
 
   // The groups, cut to the window. Cut across the groups rather than within each, because a day
   // with four meetings and a day with four hundred are the same list to somebody scrolling it.
-  const groups = view?.groups;
+  const groups = useMemo(
+    () => (view ? ordered(view.groups, sort, locale) : undefined),
+    [view, sort, locale],
+  );
   const windowed = useMemo(() => {
     let left = limit;
     const out = [];
@@ -371,6 +390,28 @@ export function Library({
               </button>
             ))}
           </div>
+        )}
+
+        {/* And the order inside them. A `<select>` rather than a fourth row of pills: four options
+            in a 320 px column is a row that wraps, and unlike "grouped by" this is not a choice
+            somebody switches between while reading. */}
+        {hits === null && (
+          <label className="text-fg-faint text-meta flex items-center gap-2">
+            {t("library.sort")}
+            <Select
+              size="sm"
+              value={sort}
+              aria-label={t("library.sort")}
+              onChange={(e) => setSort(e.target.value as SortBy)}
+              className="flex-1"
+            >
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {t(s.labelKey)}
+                </option>
+              ))}
+            </Select>
+          </label>
         )}
 
         {/* Hidden while searching: a full-text query is its own way of narrowing, and leaving the
@@ -532,6 +573,7 @@ export function Library({
           <MeetingPane
             key={detail.summary.id}
             detail={detail}
+            client={client}
             folders={view?.folders ?? []}
             palette={view?.palette ?? []}
             busy={busy}
@@ -847,6 +889,7 @@ function Tile({
 
 function MeetingPane({
   detail,
+  client,
   folders,
   palette,
   busy,
@@ -857,6 +900,7 @@ function MeetingPane({
   onTrash,
 }: {
   detail: MeetingDetail;
+  client: LibraryClient;
   folders: string[];
   palette: string[];
   busy: boolean;
@@ -881,6 +925,33 @@ function MeetingPane({
   const known = useMemo(
     () => [...new Set([...folders, summary.folder])].sort(),
     [folders, summary.folder],
+  );
+
+  /**
+   * The recordings, as something that plays.
+   *
+   * This pane has always *counted* them — "· 2 bản ghi" under the date — and offered no way to
+   * hear one. The transport existed, the route existed, and the only screen that listed old
+   * meetings could not reach either: reported as *"cũng không nghe được voice meeting cũ"*.
+   *
+   * The same `Player` the meeting screen uses, not a second one. A bare `<audio>` here would have
+   * been fewer lines and would have dropped the lane picker, the speed control and the
+   * unreadable-file notice — all of which a meeting on disk for six months is more likely to need
+   * than one recorded a minute ago.
+   */
+  const lanes = useMemo(
+    () =>
+      playable(detail.audio).map((key) => ({
+        key,
+        label:
+          key === "mic"
+            ? t("record.microphone")
+            : key === "import"
+              ? t("meeting.imported_audio")
+              : t("record.system"),
+        url: client.audioUrl(summary.id, key),
+      })),
+    [detail.audio, client, summary.id, t],
   );
 
   return (
@@ -968,6 +1039,14 @@ function MeetingPane({
           )}
         </div>
       </header>
+
+      {/* Above the summary and the transcript, because a recording is the thing this pane is about
+          and the two blocks below it are things said *in* it. */}
+      {lanes.length > 0 && (
+        <section className="mt-4" data-testid="library-player">
+          <Player lanes={lanes} />
+        </section>
+      )}
 
       {detail.sections.map((s) => (
         <section key={s.heading} className="mt-5">

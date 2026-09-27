@@ -100,7 +100,8 @@
     "minimise_pinned": "Pinned to this page. This browser has no floating-window support, so it cannot stay above other apps.",
     "restore": "Back to the meeting",
     "spoken_add": "Add a language",
-    "spoken_remove": "Remove {language}"
+    "spoken_remove": "Remove {language}",
+    "spoken_extra_missing": "{language} has no specialist installed — those lines stay with the multilingual model"
   },
   "meeting": {
     "title_label": "Meeting title",
@@ -167,7 +168,13 @@
     "due_overdue": "{date} — overdue",
     "due_on": "due {date}",
     "board_empty": "Nothing to do",
-    "board_empty_hint": "Tasks appear when somebody takes one in a meeting, or when you type “- [ ] @name …” in a note."
+    "board_empty_hint": "Write one above, take one in a meeting, or type “- [ ] @name …” in a note.",
+    "board": "Board",
+    "list": "List",
+    "new_placeholder": "Write a task…",
+    "owner_placeholder": "owner",
+    "edit": "Edit",
+    "delete_task": "Delete task"
   },
   "library": {
     "title": "Library",
@@ -177,6 +184,12 @@
     "by_day": "Day",
     "by_week": "Week",
     "by_folder": "Folder",
+    "by_none": "List",
+    "sort": "Sort",
+    "sort_recent": "Newest first",
+    "sort_oldest": "Oldest first",
+    "sort_title": "By title",
+    "sort_longest": "Longest first",
     "by_tag": "Tag",
     "filters": "Filters",
     "more": "Show {count} more",

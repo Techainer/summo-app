@@ -100,7 +100,8 @@
     "minimise_pinned": "已固定在本页。此浏览器不支持浮动窗口，无法置于其他应用之上。",
     "restore": "回到会议",
     "spoken_add": "添加语言",
-    "spoken_remove": "移除{language}"
+    "spoken_remove": "移除{language}",
+    "spoken_extra_missing": "{language} 尚未安装专用模型，这部分仍由多语言模型识别"
   },
   "meeting": {
     "title_label": "会议标题",
@@ -167,7 +168,13 @@
     "due_overdue": "{date} — 已逾期",
     "due_on": "截止 {date}",
     "board_empty": "没有待办",
-    "board_empty_hint": "当有人在会议中认领，或你在笔记里写“- [ ] @名字 …”时，任务会出现在这里。"
+    "board_empty_hint": "在上方写一项，或在会议中认领，或在笔记里输入“- [ ] @名字 …”。",
+    "board": "看板",
+    "list": "列表",
+    "new_placeholder": "写一项任务…",
+    "owner_placeholder": "负责人",
+    "edit": "编辑",
+    "delete_task": "删除任务"
   },
   "library": {
     "title": "资料库",
@@ -177,6 +184,12 @@
     "by_day": "按天",
     "by_week": "按周",
     "by_folder": "按文件夹",
+    "by_none": "列表",
+    "sort": "排序",
+    "sort_recent": "最新优先",
+    "sort_oldest": "最早优先",
+    "sort_title": "按标题",
+    "sort_longest": "最长优先",
     "by_tag": "按标签",
     "filters": "筛选",
     "more": "再显示 {count} 条",

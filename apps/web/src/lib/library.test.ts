@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { dayLabel, groupLabel, localDay, swatch, timeOfDay, timestamp, url } from "./library";
+import {
+  dayLabel,
+  groupLabel,
+  localDay,
+  ordered,
+  playable,
+  swatch,
+  timeOfDay,
+  timestamp,
+  url,
+  type MeetingSummary,
+} from "./library";
 
 /** Vietnamese, because that is what these assertions are written against. */
 const VI = {
@@ -131,5 +142,73 @@ describe("swatch", () => {
    */
   it("accepts a name the theme may not have a token for yet", () => {
     expect(swatch("indigo")).toBe("var(--color-swatch-indigo)");
+  });
+});
+
+/** Enough of a summary for the comparisons under test. */
+function row(over: Partial<MeetingSummary>): MeetingSummary {
+  return {
+    kind: "meeting",
+    id: "x",
+    title: "",
+    folder: "",
+    parent: null,
+    date: "2026-01-01T09:00:00+07:00",
+    day: "2026-01-01",
+    duration: 0,
+    participants: [],
+    tags: [],
+    color: null,
+    has_summary: false,
+    size_bytes: 0,
+    file: "a.md",
+    ...over,
+  };
+}
+
+describe("ordering the library", () => {
+  const march = row({ id: "m", date: "2026-03-01T09:00:00+07:00", title: "Đầu", duration: 60 });
+  const june = row({ id: "j", date: "2026-06-01T09:00:00+07:00", title: "Cuối", duration: 600 });
+  const groups = [
+    { key: "2026-06-01", meetings: [june] },
+    { key: "2026-03-01", meetings: [march] },
+  ];
+
+  it("puts the newest first by default", () => {
+    const out = ordered([{ key: "k", meetings: [march, june] }], "recent", "vi");
+    expect(out[0]?.meetings.map((m) => m.id)).toEqual(["j", "m"]);
+  });
+
+  it("turns the whole view around for oldest first, headings included", () => {
+    // A day heading is part of the order. Leaving June above March while the meetings inside each
+    // ran upwards would be two directions on one screen.
+    const out = ordered(groups, "oldest", "vi");
+    expect(out.map((g) => g.key)).toEqual(["2026-03-01", "2026-06-01"]);
+  });
+
+  it("sorts titles the way the reader's language does", () => {
+    const d = row({ id: "d", title: "Duyệt" });
+    const dd = row({ id: "dd", title: "Đánh giá" });
+    const e = row({ id: "e", title: "Export" });
+    const out = ordered([{ key: "k", meetings: [e, dd, d] }], "title", "vi");
+    // In Vietnamese `Đ` sorts after `D` and before `E`; by code unit it would land after `Z`.
+    expect(out[0]?.meetings.map((m) => m.id)).toEqual(["d", "dd", "e"]);
+  });
+
+  it("sorts by length without touching the dates", () => {
+    const out = ordered([{ key: "k", meetings: [march, june] }], "longest", "vi");
+    expect(out[0]?.meetings.map((m) => m.id)).toEqual(["j", "m"]);
+  });
+});
+
+describe("what a meeting can play", () => {
+  it("offers the lanes the audio route serves", () => {
+    expect(playable(["mic.opus", "system.opus"])).toEqual(["mic", "system"]);
+  });
+
+  it("ignores files that are not lanes", () => {
+    // An imported meeting used to draw a transport whose only lane answered `no such lane`.
+    expect(playable(["summary.json", "import.wav"])).toEqual(["import"]);
+    expect(playable(["notes.md"])).toEqual([]);
   });
 });

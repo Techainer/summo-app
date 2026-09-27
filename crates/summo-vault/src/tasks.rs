@@ -285,6 +285,53 @@ pub fn update(markdown: &str, task: &Task) -> Result<String> {
     Ok(out)
 }
 
+/// Delete a task's line, and the steps indented under it.
+///
+/// By id rather than by line number, for the reason [`crate::tasks_io::update`] gives: a board
+/// rendered a minute ago may describe a file the user has since edited, and deleting a remembered
+/// line number would take an unrelated one.
+///
+/// The indented block goes with it. An agent's plan is written as sub-items of the task it plans,
+/// so leaving them behind would drop a list of half-ticked steps into somebody's notes under
+/// whatever happened to be above them. A document that does not contain the id is returned
+/// unchanged, which is what makes the caller's loop over the vault safe.
+#[must_use]
+pub fn remove(markdown: &str, id: &str) -> String {
+    let lines: Vec<&str> = markdown.lines().collect();
+    let Some(at) = parse(markdown, "")
+        .iter()
+        .find(|t| t.id == id)
+        .map(|t| t.line)
+    else {
+        return markdown.to_string();
+    };
+
+    let indent = |line: &str| line.len() - line.trim_start().len();
+    let own = lines.get(at).map_or(0, |l| indent(l));
+    let mut end = at + 1;
+    // Everything more deeply indented belongs to this task. A blank line inside the block is part
+    // of it too, but a blank line *after* it is the separator before whatever comes next.
+    while end < lines.len()
+        && (indent(lines[end]) > own && !lines[end].trim().is_empty()
+            || lines[end].trim().is_empty() && lines.get(end + 1).is_some_and(|n| indent(n) > own))
+    {
+        end += 1;
+    }
+
+    let mut out = String::with_capacity(markdown.len());
+    for (i, line) in lines.iter().enumerate() {
+        if i >= at && i < end {
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    if !markdown.ends_with('\n') {
+        out.pop();
+    }
+    out
+}
+
 /// Append a task under the document's task heading, adding the heading if it is missing.
 pub fn append(markdown: &str, task: &Task) -> String {
     let heading_at = markdown.lines().position(|line| {
@@ -655,5 +702,32 @@ Không phải việc.
         // The agent writes `running`; the board shows three columns and needs it to land in one.
         let doc = "## Việc cần làm\n- [ ] x <!-- id:1 status:running -->\n";
         assert_eq!(parse(doc, "m.md")[0].status, Status::Doing);
+    }
+
+    /// Deleting a task takes the plan indented under it.
+    ///
+    /// The agent writes its steps as sub-items. Removing only the task's own line would drop a
+    /// list of half-ticked steps into somebody's notes under whatever happened to be above them.
+    #[test]
+    fn removing_a_task_takes_its_steps_with_it() {
+        let doc = "## Việc cần làm\n\
+            - [ ] @agent Tạo lịch <!-- id:A status:running -->\n\
+            \x20 - [x] Quét ghi chú\n\
+            \x20 - [ ] Soạn sự kiện\n\
+            - [ ] @binh Gọi khách <!-- id:B -->\n";
+
+        let out = remove(doc, "A");
+        assert!(!out.contains("Tạo lịch"), "{out}");
+        assert!(!out.contains("Quét ghi chú"), "{out}");
+        assert!(out.contains("- [ ] @binh Gọi khách"), "{out}");
+        assert!(out.contains("## Việc cần làm"), "{out}");
+    }
+
+    /// A document that does not hold the id comes back byte for byte, which is what lets the
+    /// caller sweep the whole vault looking for the one that does.
+    #[test]
+    fn removing_an_absent_task_changes_nothing() {
+        let doc = "## Việc cần làm\n- [ ] x <!-- id:1 -->\n";
+        assert_eq!(remove(doc, "NOPE"), doc);
     }
 }

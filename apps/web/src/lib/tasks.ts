@@ -68,7 +68,7 @@ export class TaskClient {
    */
   async move(
     id: string,
-    patch: { status?: Status; owner?: string | null; due?: string | null },
+    patch: { status?: Status; owner?: string | null; due?: string | null; text?: string },
   ): Promise<Task> {
     return readJson<Task>(
       await fetch(url(this.handshake, `/tasks/${encodeURIComponent(id)}`), {
@@ -95,6 +95,30 @@ export class TaskClient {
         outcome: string;
         steps: Step[];
       }>,
+    );
+  }
+
+  /**
+   * Write down a task that came out of no meeting.
+   *
+   * The board could only show work a recording had produced, because `create` below needs a
+   * meeting id and there was no other way in. Reported as *"Việc cần làm thì không tạo mới riêng
+   * được"*. The daemon files these on a standing list — see `tasks_io::create_loose`.
+   */
+  async add(text: string, owner?: string, due?: string): Promise<Task> {
+    return readJson<Task>(
+      await fetch(url(this.handshake, "/tasks"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, owner, due }),
+      }),
+    );
+  }
+
+  /** Take a task off the board, rather than pretending it was done. */
+  async remove(id: string): Promise<void> {
+    await readJson<unknown>(
+      await fetch(url(this.handshake, `/tasks/${encodeURIComponent(id)}`), { method: "DELETE" }),
     );
   }
 

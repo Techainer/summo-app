@@ -74,7 +74,7 @@ fn perform(paths: &Paths, note: &str, action: &Action) -> Result<Option<String>>
         Action::UpdateTask { id, status, owner } => {
             let status = status.as_deref().and_then(parse_status);
             let owner = owner.clone().map(Some);
-            let task = summo_vault::tasks_io::update(paths, id, status, owner, None)?;
+            let task = summo_vault::tasks_io::update(paths, id, status, owner, None, None)?;
             Ok(Some(task.id))
         }
         Action::SetSection { heading, body } => {

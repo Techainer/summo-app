@@ -94,7 +94,54 @@ for (let i = 0; i < rowCount && lines === 0; i += 1) {
 }
 console.log(`transcript lines in detail view: ${lines}`);
 if (lines === 0) fail("the meeting detail showed no transcript");
+
+// The recordings, as something that plays.
+//
+// This pane has always *counted* them — "· 2 bản ghi" under the date — and offered no way to hear
+// one: "cũng không nghe được voice meeting cũ". The transport and the route both existed; the only
+// screen that lists old meetings could reach neither.
+if ((await page.locator('[data-testid="library-player"]').count()) === 0) {
+  fail("the library pane lists recordings and still offers no way to play them");
+} else {
+  console.log("library pane: the recording can be played");
+}
 await page.screenshot({ path: "/tmp/shots/library-meeting.png" });
+
+// ---- sorting ---------------------------------------------------------------
+//
+// There was no such control: the daemon's order stood and nothing could change it —
+// "không filter sort được, mặc định phải date-created sort chứ?". Filters existed; the order
+// was fixed.
+{
+  const sort = page.getByLabel("Sắp xếp");
+  const newest = await page.locator('[data-testid="meeting-title"]').allInnerTexts();
+  await sort.selectOption("oldest");
+  await page.waitForTimeout(400);
+  const oldest = await page.locator('[data-testid="meeting-title"]').allInnerTexts();
+  if (newest.join("|") === oldest.join("|")) {
+    fail(`asking for oldest first changed nothing: ${JSON.stringify(oldest)}`);
+  } else if (oldest[0] !== newest[newest.length - 1]) {
+    fail(`oldest first did not turn the list around: ${JSON.stringify(oldest)}`);
+  } else {
+    console.log(`sorted oldest first: ${oldest[0]}`);
+  }
+
+  // One flat list, which is what makes sorting by title or length mean anything — inside a day
+  // heading it can only ever reorder that day.
+  await page.getByRole("button", { name: "Danh sách", exact: true }).click();
+  await sort.selectOption("title");
+  await page.waitForTimeout(400);
+  const byTitle = await page.locator('[data-testid="meeting-title"]').allInnerTexts();
+  const expected = [...byTitle].sort((a, b) => a.localeCompare(b, "vi"));
+  if (byTitle.join("|") !== expected.join("|")) {
+    fail(`by title is not in the reader's order: ${JSON.stringify(byTitle)}`);
+  } else {
+    console.log(`sorted by title: ${byTitle.join(" | ")}`);
+  }
+  await sort.selectOption("recent");
+  await page.getByRole("button", { name: "Ngày", exact: true }).click();
+  await page.waitForTimeout(300);
+}
 
 // Rename, and confirm it survives a refetch rather than only living in React state.
 const title = page.getByLabel("Tên cuộc họp");

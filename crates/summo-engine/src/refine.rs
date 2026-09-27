@@ -24,6 +24,23 @@
 //! the language, both models are for it, and skipping would turn the setting off for exactly the
 //! people who configured it most deliberately.
 //!
+//! ## More than one specialist, because a meeting has more than two languages
+//!
+//! This held exactly one decoder, and `pick_pair` chose it for `languages[0]`. Name Vietnamese,
+//! English and Japanese and the Japanese half of the meeting had no specialist at all: it was
+//! whatever the multilingual model heard, which for `sense-voice-small` against `whisper-tiny` is
+//! 8.4 % character error against 39.8 %. The feature the user asked for — *"tam ngữ cũng được chứ
+//! cần gì song ngữ"* — was one `Option` away from existing, and the `Option` was the reason it did
+//! not.
+//!
+//! So a refiner holds a *list* of passes and routes each utterance to the one that names its
+//! language. A pass that names a language beats a pass that claims all of them, which is the same
+//! rule [`Refiner::wants`] already applied between two models, applied between several.
+//!
+//! Each pass has its own decoder and so its own in-flight count. One Vietnamese sentence being
+//! re-heard no longer blocks the Japanese one behind it — they are different models and there was
+//! never a reason beyond the single mutex for them to wait on each other.
+//!
 //! ## Where the work runs
 //!
 //! Not on the audio thread. A refine decode is a second or more and the frame loop has 30 ms, so
@@ -42,20 +59,47 @@ use std::{
 use summo_asr::{Decoder, HallucinationFilter, HybridSession, RefineJob};
 use summo_core::Event;
 
-/// Refine passes allowed to be running at once.
+/// Jobs allowed to be running at once **per pass**.
 ///
 /// One. The decoder holds mutable inference state and cannot be shared, so a second concurrent job
 /// would only wait on the mutex — with the difference that it would hold a blocking thread while it
 /// waited. Jobs past this are dropped by the queue in `stages.rs`, which is the right answer: a
 /// refine model that cannot keep up is not improving the transcript anybody is reading.
+///
+/// Per pass rather than per refiner, since passes are separate decoders holding separate state. A
+/// global count would have made a Japanese sentence wait on a Vietnamese one for no reason but the
+/// counter.
 const MAX_IN_FLIGHT: usize = 1;
 
-/// The slower model, and what it is worth running on.
-pub struct Refiner {
+/// One model, and the languages it was brought in for.
+struct Pass {
+    /// Named so a log line says which model disagreed, which with several of them is the whole
+    /// question.
+    id: String,
     /// Behind a mutex because the work happens on a pool thread and a decoder is not `Sync`.
     decoder: Arc<Mutex<Box<dyn Decoder>>>,
-    /// The languages the refine model's manifest claims. Empty means "no claim on record".
+    /// The languages this model's manifest claims. Empty means "no claim on record".
     claims: Vec<String>,
+    running: Arc<AtomicUsize>,
+}
+
+impl Pass {
+    /// Whether this model names the language rather than claiming every language.
+    ///
+    /// The difference decides which pass gets the utterance. `whisper-base` claims `*` and is
+    /// 44.2 % character error on Vietnamese; `gipformer-65m` claims `vi` and is a twentieth of
+    /// that. Both "want" a Vietnamese sentence under the rules below, and only one of them should
+    /// get it.
+    fn names(&self, code: &str) -> bool {
+        !self.claims.iter().any(|l| l == "*") && summo_models::langs_cover(&self.claims, code)
+    }
+}
+
+/// The slower models, and what each is worth running on.
+pub struct Refiner {
+    /// In the order they were added. The first is the one the session names as *the* second model;
+    /// the rest are the specialists the other named languages asked for.
+    passes: Vec<Pass>,
     /// The languages the **live** model claims, which is the other half of the decision.
     ///
     /// Without it this could only ask "may the second model attempt this language", and the
@@ -66,7 +110,6 @@ pub struct Refiner {
     filter: HallucinationFilter,
     tx: tokio::sync::mpsc::UnboundedSender<Event>,
     rx: tokio::sync::mpsc::UnboundedReceiver<Event>,
-    running: Arc<AtomicUsize>,
     /// Languages already reported as outside this model's claim.
     ///
     /// So the notice below is said once rather than once per sentence. The per-utterance skip stays
@@ -80,6 +123,7 @@ pub struct Refiner {
 impl Refiner {
     #[must_use]
     pub fn new(
+        id: impl Into<String>,
         decoder: Box<dyn Decoder>,
         claims: Vec<String>,
         live_claims: Vec<String>,
@@ -87,15 +131,61 @@ impl Refiner {
     ) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         Self {
-            decoder: Arc::new(Mutex::new(decoder)),
-            claims: claims.into_iter().map(|l| l.to_lowercase()).collect(),
+            passes: vec![Self::pass(id, decoder, claims)],
             live_claims: live_claims.into_iter().map(|l| l.to_lowercase()).collect(),
             filter,
             tx,
             rx,
-            running: Arc::new(AtomicUsize::new(0)),
             told: Mutex::new(BTreeSet::new()),
         }
+    }
+
+    fn pass(id: impl Into<String>, decoder: Box<dyn Decoder>, claims: Vec<String>) -> Pass {
+        Pass {
+            id: id.into(),
+            decoder: Arc::new(Mutex::new(decoder)),
+            claims: claims.into_iter().map(|l| l.to_lowercase()).collect(),
+            running: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    /// Add a specialist for another of the meeting's languages.
+    ///
+    /// Ignored when a pass already claims the same set, which is how the caller may ask for a
+    /// specialist per named language without first working out that two of the names resolve to
+    /// the same model — `vi` and `vi-VN` do, and so does any language whose best installed model is
+    /// the one already loaded. Loading it twice is several hundred megabytes for nothing.
+    pub fn also(&mut self, id: impl Into<String>, decoder: Box<dyn Decoder>, claims: Vec<String>) {
+        let pass = Self::pass(id, decoder, claims);
+        if self.passes.iter().any(|held| held.id == pass.id) {
+            return;
+        }
+        self.passes.push(pass);
+    }
+
+    /// Swap the model the session names as its second one, keeping the extra specialists.
+    ///
+    /// Chosen in front of the meeting on the models screen. Replacing the whole refiner would drop
+    /// the specialists the other named languages are relying on, which is a silent accuracy loss
+    /// on the half of the meeting the user was not thinking about when they changed it.
+    pub fn replace_primary(
+        &mut self,
+        id: impl Into<String>,
+        decoder: Box<dyn Decoder>,
+        claims: Vec<String>,
+    ) {
+        let pass = Self::pass(id, decoder, claims);
+        if self.passes.is_empty() {
+            self.passes.push(pass);
+        } else {
+            self.passes[0] = pass;
+        }
+    }
+
+    /// The models doing the refining, in order. For `/status`, which named only the first.
+    #[must_use]
+    pub fn models(&self) -> Vec<String> {
+        self.passes.iter().map(|p| p.id.clone()).collect()
     }
 
     /// Whether this model is the right one for what was just heard.
@@ -168,17 +258,50 @@ impl Refiner {
     /// length.
     #[must_use]
     pub fn wants_job(&self, language: Option<&str>, seconds: f64) -> bool {
-        if seconds < Self::TRUST_LANGUAGE_ABOVE_S {
-            // Too short to have been labelled reliably. Ask the second model rather than trusting a
-            // coin toss about which language this was.
-            return true;
-        }
-        self.wants(language)
+        self.pick(language, seconds).is_some()
     }
 
     #[must_use]
     pub fn wants(&self, language: Option<&str>) -> bool {
-        if self.second_opinion_only() {
+        self.pick(language, Self::TRUST_LANGUAGE_ABOVE_S).is_some()
+    }
+
+    /// Which pass should hear this utterance, if any.
+    ///
+    /// Two questions in order, because they are different questions. *May* a pass have it — the
+    /// rules in [`Self::wants`], applied to that pass's own claim. Then, among those that may,
+    /// *should* it: a model that names the language beats a model that claims every language,
+    /// every time. Whisper claims `*` and so passes the first test for a Japanese sentence;
+    /// `sense-voice-small` names `ja` and is four times more accurate on it.
+    ///
+    /// With one pass this is exactly the old behaviour, which is why the tests below did not have
+    /// to change.
+    #[must_use]
+    pub fn pick(&self, language: Option<&str>, seconds: f64) -> Option<usize> {
+        let eligible = || {
+            self.passes
+                .iter()
+                .enumerate()
+                .filter(|(_, pass)| self.may(pass, language, seconds))
+        };
+        if let Some(code) = language
+            && let Some((i, _)) = eligible().find(|(_, pass)| pass.names(code))
+        {
+            return Some(i);
+        }
+        eligible().next().map(|(i, _)| i)
+    }
+
+    /// Whether this pass is allowed the utterance at all.
+    fn may(&self, pass: &Pass, language: Option<&str>, seconds: f64) -> bool {
+        if seconds < Self::TRUST_LANGUAGE_ABOVE_S {
+            // Too short to have been labelled reliably. Ask rather than trusting a coin toss about
+            // which language this was. Which pass is asked is still decided by the label, because a
+            // guess is better than an arbitrary choice and `too_quiet_to_be_this_language` throws
+            // out the answer when the guess was wrong.
+            return true;
+        }
+        if self.second_opinion_only(pass) {
             // The specialist already heard this one better, and an utterance it did not label is
             // in the only language it speaks.
             return language
@@ -188,10 +311,10 @@ impl Refiner {
         let Some(language) = language else {
             return true;
         };
-        if self.claims.is_empty() {
+        if pass.claims.is_empty() {
             return true;
         }
-        summo_models::langs_cover(&self.claims, language)
+        summo_models::langs_cover(&pass.claims, language)
     }
 
     /// Whether this pairing is "catch what the live model cannot hear" rather than "hear it again
@@ -199,8 +322,8 @@ impl Refiner {
     ///
     /// A general model under a specialist can only be the first. It knows nothing the specialist
     /// does not about the specialist's own language, and it is measurably worse at it.
-    fn second_opinion_only(&self) -> bool {
-        let general = self.claims.is_empty() || self.claims.iter().any(|l| l == "*");
+    fn second_opinion_only(&self, pass: &Pass) -> bool {
+        let general = pass.claims.is_empty() || pass.claims.iter().any(|l| l == "*");
         let specialist = !self.live_claims.is_empty() && !self.live_claims.iter().any(|l| l == "*");
         general && specialist
     }
@@ -208,7 +331,7 @@ impl Refiner {
     /// Start whichever of these jobs are worth starting.
     pub fn dispatch(&self, jobs: Vec<RefineJob>) {
         for job in jobs {
-            if !self.wants_job(job.language.as_deref(), job.t1 - job.t0) {
+            let Some(chosen) = self.pick(job.language.as_deref(), job.t1 - job.t0) else {
                 tracing::debug!(
                     seq = job.seq,
                     language = ?job.language,
@@ -229,22 +352,25 @@ impl Refiner {
                     );
                 }
                 continue;
-            }
-            if self.running.load(Ordering::Relaxed) >= MAX_IN_FLIGHT {
+            };
+            let pass = &self.passes[chosen];
+            if pass.running.load(Ordering::Relaxed) >= MAX_IN_FLIGHT {
                 // Reported nowhere on purpose. The line the user is reading is correct as far as
                 // the fast model is concerned; that a second opinion was skipped is not news, and
                 // a notice per dropped job during a fast conversation would be a stream of them.
                 tracing::debug!(
                     seq = job.seq,
+                    model = %pass.id,
                     "refine skipped; the model is still on the last one"
                 );
                 continue;
             }
 
-            let decoder = self.decoder.clone();
+            let decoder = pass.decoder.clone();
+            let model = pass.id.clone();
             let filter = self.filter.clone();
             let tx = self.tx.clone();
-            let running = self.running.clone();
+            let running = pass.running.clone();
 
             running.fetch_add(1, Ordering::Relaxed);
             tokio::task::spawn_blocking(move || {
@@ -273,7 +399,7 @@ impl Refiner {
                     // the second model ran and disagreed — the transcript changes under the reader
                     // and nothing else says why — so it belongs in the record a support question
                     // would be answered from, and in the one `bilingual.mjs` asserts on.
-                    tracing::info!(seq = job.seq, "refined an utterance");
+                    tracing::info!(seq = job.seq, model = %model, "refined an utterance");
                     let _ = tx.send(event);
                 }
             });
@@ -316,11 +442,88 @@ mod tests {
     /// A refiner with both halves named: what the second model claims, and what the live one does.
     fn paired(claims: &[&str], live: &[&str]) -> Refiner {
         Refiner::new(
+            claims.join("+"),
             Box::new(Nothing),
             claims.iter().map(|c| (*c).to_string()).collect(),
             live.iter().map(|c| (*c).to_string()).collect(),
             HallucinationFilter::default(),
         )
+    }
+
+    /// A trilingual meeting: a multilingual model listening, one specialist per named language.
+    fn trilingual() -> Refiner {
+        let mut refiner = paired(&["vi"], &["*"]);
+        refiner.also("sense-voice", Box::new(Nothing), vec!["ja".into()]);
+        refiner.also("zipformer-en", Box::new(Nothing), vec!["en".into()]);
+        refiner
+    }
+
+    /// The feature the `Option` was in the way of.
+    ///
+    /// Name three languages and only the first got a specialist; the Japanese half of the meeting
+    /// was whatever the multilingual model heard. `sense-voice-small` is 8.4 % character error on
+    /// Japanese against `whisper-tiny`'s 39.8 %, so this is most of the accuracy of every Japanese
+    /// sentence spoken.
+    #[test]
+    fn every_named_language_reaches_its_own_specialist() {
+        let refiner = trilingual();
+        assert_eq!(refiner.pick(Some("vi"), 4.0), Some(0));
+        assert_eq!(refiner.pick(Some("ja"), 4.0), Some(1));
+        assert_eq!(refiner.pick(Some("en"), 4.0), Some(2));
+    }
+
+    /// And a language nobody named still goes nowhere, rather than to whichever specialist is first.
+    ///
+    /// Three specialists that each claim one language claim nothing between them for a fourth. The
+    /// live model's own text stands, which is the right answer — running a Vietnamese model on
+    /// German returns Vietnamese-shaped noise.
+    #[test]
+    fn a_language_no_specialist_claims_is_left_to_the_live_model() {
+        assert_eq!(trilingual().pick(Some("de"), 4.0), None);
+    }
+
+    /// A model that names the language beats one that claims every language.
+    ///
+    /// Both are eligible under the rules — a general second model may re-hear anything — and only
+    /// one of them should get it. Ordering decided this before, so a general model added first
+    /// would have taken every utterance in the meeting and the specialists would have idled.
+    #[test]
+    fn a_specialist_outranks_a_general_model_that_also_wants_it() {
+        let mut refiner = paired(&["*"], &["*"]);
+        refiner.also("gipformer", Box::new(Nothing), vec!["vi".into()]);
+        assert_eq!(refiner.pick(Some("vi"), 4.0), Some(1));
+        // And what nobody specialises in still has somewhere to go.
+        assert_eq!(refiner.pick(Some("de"), 4.0), Some(0));
+    }
+
+    /// Asking for the same model twice loads it once.
+    ///
+    /// The caller asks for a specialist per named language without working out which names resolve
+    /// to the same model, because that is this function's job and not the caller's. `vi` and
+    /// `vi-VN` are the obvious pair; any two languages whose best installed model is the same one
+    /// are the general case. A duplicate is several hundred megabytes of decoder for nothing.
+    #[test]
+    fn the_same_model_named_twice_is_loaded_once() {
+        let mut refiner = paired(&["vi"], &["*"]);
+        refiner.also("vi+", Box::new(Nothing), vec!["vi".into()]);
+        refiner.also("vi+", Box::new(Nothing), vec!["vi".into()]);
+        assert_eq!(refiner.models().len(), 2);
+    }
+
+    /// Changing the second model in front of the meeting keeps the others.
+    ///
+    /// Rebuilding the refiner was the obvious implementation and would drop the specialists the
+    /// other named languages depend on — a silent accuracy loss on the half of the meeting the
+    /// user was not thinking about when they changed it.
+    #[test]
+    fn swapping_the_named_second_model_keeps_the_other_specialists() {
+        let mut refiner = trilingual();
+        refiner.replace_primary("gipformer-65m", Box::new(Nothing), vec!["vi".into()]);
+        assert_eq!(
+            refiner.models(),
+            vec!["gipformer-65m", "sense-voice", "zipformer-en"]
+        );
+        assert_eq!(refiner.pick(Some("ja"), 4.0), Some(1));
     }
 
     /// The bug a user found by speaking Vietnamese into the app.

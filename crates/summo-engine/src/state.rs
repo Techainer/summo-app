@@ -26,6 +26,13 @@ pub enum SessionStatus {
         live_model: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         refine_model: Option<String>,
+        /// The further specialists, one per named language beyond the first.
+        ///
+        /// Named for the same reason everything else here is, and one more: this is several
+        /// hundred megabytes of decoder each. `/status` exists partly to answer "why is this using
+        /// memory", and a list that mentions one of three loaded models answers it wrongly.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        also_refine: Vec<String>,
         /// The speech enhancer cleaning each utterance, when one was chosen.
         ///
         /// Reported for the reason every other model here is: a setting that changes what the
@@ -289,6 +296,7 @@ impl EngineState {
             elapsed_s: 0.0,
             live_model: spec.live_model.clone(),
             refine_model: spec.refine_model.clone(),
+            also_refine: spec.also_refine.clone(),
             denoise_model: spec.denoise_model.clone(),
             language: spec.language.clone(),
             languages: spec.languages.clone(),
@@ -309,6 +317,7 @@ impl EngineState {
         if let SessionStatus::Recording {
             live_model,
             refine_model,
+            also_refine,
             denoise_model,
             language,
             languages,
@@ -319,6 +328,7 @@ impl EngineState {
         {
             live_model.clone_from(&spec.live_model);
             refine_model.clone_from(&spec.refine_model);
+            also_refine.clone_from(&spec.also_refine);
             denoise_model.clone_from(&spec.denoise_model);
             language.clone_from(&spec.language);
             languages.clone_from(&spec.languages);

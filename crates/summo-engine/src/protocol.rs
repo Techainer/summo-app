@@ -133,6 +133,18 @@ pub struct SessionSpec {
     /// Slower model that re-decodes finished utterances, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refine_model: Option<String>,
+    /// Further specialists, one per named language beyond the first.
+    ///
+    /// Never sent by a client and never a setting: it is worked out by `resolve_models` from
+    /// `languages`, because a user who names three languages has said everything that needs
+    /// saying and should not also have to pick three models. `refine_model` stays the one the
+    /// models screen shows and changes, and these are what the *rest* of the meeting is heard by.
+    ///
+    /// The alternative was to make `refine_model` a list, which would have made a setting a user
+    /// chose and a model the app chose for them indistinguishable in the one field the models
+    /// screen writes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also_refine: Vec<String>,
     /// Which tracks to capture.
     #[serde(default = "default_lanes")]
     pub lanes: Vec<Lane>,
@@ -248,6 +260,7 @@ impl SessionSpec {
         Self {
             live_model: live_model.into(),
             refine_model: None,
+            also_refine: Vec::new(),
             lanes: default_lanes(),
             language: None,
             languages: Vec::new(),

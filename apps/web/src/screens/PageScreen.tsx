@@ -17,7 +17,7 @@ import { TranscriptChips } from "../components/meeting/TranscriptChips";
 import { Button, Card, CardBody, CardHeader, SegmentedControl } from "../components/ui";
 import { useEngine } from "../lib/engine-context";
 import { DraftClient, templates, type Draft } from "../lib/draft";
-import { url, type MeetingDetail } from "../lib/library";
+import { playable, url, type MeetingDetail } from "../lib/library";
 import { NOTES_HEADING, NoteClient } from "../lib/notes";
 import { TaskClient } from "../lib/tasks";
 import { formatDuration } from "../lib/duration";
@@ -144,28 +144,21 @@ export function PageScreen() {
   /**
    * The tracks the player may ask for, from the files the daemon reports.
    *
-   * Filtered to the names the audio route actually serves. It used to map *every* file in the
-   * meeting's directory to a lane, which was fine while the only files were `mic.opus` and
-   * `system.opus` — and wrong the moment there were others. An imported meeting has one file,
-   * `import.wav`, so it drew a player whose only lane answered `no such lane 'import'`: every
-   * imported meeting had a dead transport, and a kept copy of the original would have added a
-   * second dead one.
+   * `playable` decides which files are lanes, shared with the library pane — see its doc for the
+   * imported-meeting case that made the filter necessary.
    */
   const lanes = useMemo(
     () =>
-      (detail?.audio ?? [])
-        .map((file) => file.replace(/\.[^.]+$/, ""))
-        .filter((key) => key === "mic" || key === "system" || key === "import")
-        .map((key) => ({
-          key,
-          label:
-            key === "mic"
-              ? t("record.microphone")
-              : key === "import"
-                ? t("meeting.imported_audio")
-                : t("record.system"),
-          url: url(handshake, `/meetings/${encodeURIComponent(pageId)}/audio/${key}`),
-        })),
+      playable(detail?.audio ?? []).map((key) => ({
+        key,
+        label:
+          key === "mic"
+            ? t("record.microphone")
+            : key === "import"
+              ? t("meeting.imported_audio")
+              : t("record.system"),
+        url: url(handshake, `/meetings/${encodeURIComponent(pageId)}/audio/${key}`),
+      })),
     [detail?.audio, handshake, pageId, t],
   );
 

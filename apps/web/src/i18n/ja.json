@@ -100,7 +100,8 @@
     "minimise_pinned": "このページに固定しています。このブラウザーはフローティングウィンドウに対応していないため、他のアプリの上には表示できません。",
     "restore": "会議に戻る",
     "spoken_add": "言語を追加",
-    "spoken_remove": "{language}を外す"
+    "spoken_remove": "{language}を外す",
+    "spoken_extra_missing": "{language} の専用モデルが未インストールです。その部分は多言語モデルのままになります"
   },
   "meeting": {
     "title_label": "会議のタイトル",
@@ -167,7 +168,13 @@
     "due_overdue": "{date} — 期限切れ",
     "due_on": "期限 {date}",
     "board_empty": "やることはありません",
-    "board_empty_hint": "会議で誰かが引き受けたとき、またはノートに「- [ ] @名前 …」と書いたときに表示されます。"
+    "board_empty_hint": "上で書くか、会議で決めるか、ノートに「- [ ] @名前 …」と書いてください。",
+    "board": "ボード",
+    "list": "リスト",
+    "new_placeholder": "タスクを書く…",
+    "owner_placeholder": "担当",
+    "edit": "編集",
+    "delete_task": "タスクを削除"
   },
   "library": {
     "title": "ライブラリ",
@@ -177,6 +184,12 @@
     "by_day": "日",
     "by_week": "週",
     "by_folder": "フォルダ",
+    "by_none": "一覧",
+    "sort": "並び替え",
+    "sort_recent": "新しい順",
+    "sort_oldest": "古い順",
+    "sort_title": "タイトル順",
+    "sort_longest": "長い順",
     "by_tag": "タグ",
     "filters": "絞り込み",
     "more": "さらに{count}件を表示",

@@ -102,7 +102,25 @@ const press = (page) =>
 // ---- 1. granted, installed, recording ------------------------------------
 {
   const { context, page } = await open();
+
+  // How long "start meeting" takes, measured rather than guessed.
+  //
+  // Reported as slow — "vào app bấm start meeting cũng rất chậm" — and nothing anywhere said how
+  // slow. The press itself is cheap; what is behind it is a decoder being loaded, which is what
+  // the warm slot exists to avoid and what a cold first meeting still pays. Printed every run so
+  // a change that makes it worse shows up in the log of the run that made it worse.
+  const pressed = Date.now();
   await press(page);
+  await page
+    .getByRole("button", { name: /Dừng|Kết thúc/ })
+    .first()
+    .waitFor({ timeout: 30_000 })
+    .catch(() => undefined);
+  const armed = Date.now() - pressed;
+  console.log(`start meeting: ${armed} ms from press to a recording that can be stopped`);
+  if (armed > 8000) {
+    problems.push(`pressing record took ${armed} ms before the meeting was running`);
+  }
 
   let lines = 0;
   for (let i = 0; i < 40; i += 1) {

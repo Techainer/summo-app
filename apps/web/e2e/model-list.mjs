@@ -419,23 +419,26 @@ if (recognises) {
   await context.close();
 }
 
-// ---- 8. the machine's memory is on screen --------------------------------
+// ---- 8. the status bar is not a dashboard ---------------------------------
 //
-// Asked for after three releases spent chasing a bug whose cause was this number, which the app
-// read, acted on, and never showed.
+// The machine's memory used to be a chip here, on every screen, and was reported as noise. It has
+// moved to Settings → Giao diện, behind the switch that turns the readout on; `e2e/settings.mjs`
+// asserts it is there and readable. This asserts it is *not* here by default, because a number
+// that came back to the chrome of every screen is the bug being reintroduced.
 {
   const { context, page } = await screen();
   await open(page);
   await welcome(page);
-  const ram = page.getByTestId("memory");
-  const shown = await ram
-    .waitFor({ timeout: 20000 })
-    .then(() => ram.innerText())
+  const shown = await page
+    .getByTestId("memory")
+    .innerText({ timeout: 2000 })
     .catch(() => null);
-  if (!shown || !/RAM \d+(\.\d+)?\/\d+ GB/.test(shown)) {
-    problems.push(`the status bar does not show the machine's memory: ${JSON.stringify(shown)}`);
+  if (shown !== null) {
+    problems.push(
+      `the status bar is showing measurements nobody asked for: ${JSON.stringify(shown)}`,
+    );
   } else {
-    console.log(`status bar: ${shown.trim()}`);
+    console.log("status bar: no measurements unless asked for");
   }
   await context.close();
 }

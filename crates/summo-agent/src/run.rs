@@ -247,7 +247,7 @@ pub async fn run_as(paths: &Paths, task: &Task, slug: Option<&str>) -> Result<Ra
     // the steps of the run that failed.
     let mut task = task.clone();
     task.steps.clear();
-    summo_vault::tasks_io::update(paths, &task.id, Some(Status::Doing), None, None)?;
+    summo_vault::tasks_io::update(paths, &task.id, Some(Status::Doing), None, None, None)?;
     crate::steps::write(paths, &task, &[])?;
 
     let recorder = Arc::new(StepRecorder::new(paths.clone(), task.clone()));
@@ -351,7 +351,7 @@ pub async fn run_as(paths: &Paths, task: &Task, slug: Option<&str>) -> Result<Ra
     let failed = *recorder.failed.lock().expect("poisoned") || outcome.is_err();
     let status = if failed { Status::Failed } else { Status::Done };
 
-    summo_vault::tasks_io::update(paths, &task.id, Some(status), None, None)?;
+    summo_vault::tasks_io::update(paths, &task.id, Some(status), None, None, None)?;
     crate::steps::write(paths, &finished, &finished.steps)?;
 
     let text = recorder.text.lock().expect("poisoned").trim().to_string();

@@ -107,7 +107,7 @@ function Usage() {
         {t("perf.usage_title")}
       </dt>
       <dt className="text-fg-dim text-meta">{t("perf.usage_ram")}</dt>
-      <dd className="tabular text-meta">
+      <dd className="tabular text-meta" data-testid="usage-memory">
         {memory ? `${memory.usedGb.toFixed(1)} / ${memory.totalGb.toFixed(0)} GB` : "—"}
       </dd>
 
