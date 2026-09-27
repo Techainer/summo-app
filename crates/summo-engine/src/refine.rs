@@ -136,6 +136,46 @@ impl Refiner {
     /// The comparison is [`summo_models::langs_cover`], not a copy of it. This once spelled it
     /// `self.claims.contains(&language)`, which reads every list as literal codes and so answered
     /// "no" to every utterance for the models that publish `langs: ["*"]`.
+    /// Shortest utterance whose detected language is worth believing.
+    ///
+    /// Measured, because this decides whether the bilingual arrangement works at all. Whisper with
+    /// no language named, FLEURS clips cut to length, counting how often the answer came back in
+    /// the language that was spoken:
+    ///
+    /// ```text
+    ///              0.6 s   1.2 s   2.5 s
+    /// whisper-tiny  vi   0%     28%     72%
+    /// whisper-base  vi   0%     28%     76%
+    /// whisper-tiny  en  12%     56%    100%
+    /// whisper-base  en  12%     64%    100%
+    /// ```
+    ///
+    /// Under a second the label is worthless — zero for Vietnamese — and a bigger base model does
+    /// not help, because this is a property of the audio and not of the model. Reported as short
+    /// phrases coming back as confident nonsense: `alo alo` as `Am I wrong? Am I wrong`, `Excuse
+    /// me` as `And over the door`.
+    ///
+    /// Two seconds is where detection stops being a coin toss. Below it the label is ignored and
+    /// the utterance goes to the second model regardless — a wasted decode on a short sentence
+    /// costs 20 ms with a specialist at real-time factor 0.019, and the thing it buys is the half
+    /// of a bilingual meeting that short phrases live in.
+    pub const TRUST_LANGUAGE_ABOVE_S: f64 = 2.0;
+
+    /// Whether this job is worth refining, given how long it is as well as what it claims.
+    ///
+    /// Separate from [`Self::wants`] because the duration is a fact about the *job* and the claim
+    /// is a fact about the pairing, and the tests for the pairing should not have to invent a
+    /// length.
+    #[must_use]
+    pub fn wants_job(&self, language: Option<&str>, seconds: f64) -> bool {
+        if seconds < Self::TRUST_LANGUAGE_ABOVE_S {
+            // Too short to have been labelled reliably. Ask the second model rather than trusting a
+            // coin toss about which language this was.
+            return true;
+        }
+        self.wants(language)
+    }
+
     #[must_use]
     pub fn wants(&self, language: Option<&str>) -> bool {
         if self.second_opinion_only() {
@@ -168,7 +208,7 @@ impl Refiner {
     /// Start whichever of these jobs are worth starting.
     pub fn dispatch(&self, jobs: Vec<RefineJob>) {
         for job in jobs {
-            if !self.wants(job.language.as_deref()) {
+            if !self.wants_job(job.language.as_deref(), job.t1 - job.t0) {
                 tracing::debug!(
                     seq = job.seq,
                     language = ?job.language,
@@ -330,6 +370,28 @@ mod tests {
         let gipformer_under_whisper = paired(&["vi"], &["*"]);
         assert!(gipformer_under_whisper.wants(Some("vi")));
         assert!(!gipformer_under_whisper.wants(Some("en")));
+    }
+
+    /// A short utterance is refined whatever it claims to be, because the claim is a coin toss.
+    ///
+    /// Measured with Whisper and no language named: under a second, Vietnamese came back labelled
+    /// correctly **zero** times out of twenty-five, and a bigger base model scored the same — this
+    /// is a property of short audio, not of the model. Reported as `alo alo` transcribed as `Am I
+    /// wrong? Am I wrong` on a Vietnamese-and-English call.
+    ///
+    /// The cost of being wrong the other way is one decode of a short clip. At real-time factor
+    /// 0.019 that is about twenty milliseconds.
+    #[test]
+    fn a_sentence_too_short_to_label_is_refined_anyway() {
+        let refiner = paired(&["vi"], &["*"]);
+
+        // Long enough to believe, and in a language the specialist does not claim: skipped.
+        assert!(!refiner.wants_job(Some("en"), 4.0));
+        // The same claim on a two-word phrase: not believed, so it is asked rather than assumed.
+        assert!(refiner.wants_job(Some("en"), 0.6));
+        assert!(refiner.wants_job(Some("en"), 1.9));
+        // And the boundary is where the measurement put it.
+        assert!(!refiner.wants_job(Some("en"), Refiner::TRUST_LANGUAGE_ABOVE_S));
     }
 
     /// Two specialists is not a second opinion either way, so the old rule stands.

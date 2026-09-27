@@ -427,6 +427,50 @@ The general lesson is the one this file keeps relearning: a number from the wron
 than no number, because it gets published. The Whisper Vietnamese figure was misread off the wrong
 row; this one would have been right about the arithmetic and wrong about the question.
 
+## Language detection, and why short phrases come back as nonsense
+
+The bilingual arrangement rests on one thing: the multilingual model labelling each utterance with
+the language it was in, so a specialist can be handed the ones it is for. Nothing had measured
+whether that label is worth anything.
+
+Whisper with **no language named**, FLEURS clips cut to length, 25 clips per cell. Counted as
+correct when the answer came back in the language that was actually spoken.
+
+| Model        | Language   |   0.6 s | 1.2 s | 2.5 s |
+| ------------ | ---------- | ------: | ----: | ----: |
+| whisper-tiny | Vietnamese | **0 %** |  28 % |  72 % |
+| whisper-base | Vietnamese | **0 %** |  28 % |  76 % |
+| whisper-tiny | English    |    12 % |  56 % | 100 % |
+| whisper-base | English    |    12 % |  64 % | 100 % |
+
+**Under a second the label is worthless.** Zero out of twenty-five for Vietnamese, both models. This
+is the number behind a report that short phrases on a Vietnamese-and-English call came back as
+confident English: `alo alo` as _"Am I wrong? Am I wrong"_, `Excuse me` as _"And over the door"_.
+
+**A bigger base model does not fix it.** whisper-base scores within four points of whisper-tiny at
+every length. Detection on a short clip is a property of the audio, not of the model — there is not
+enough signal in half a second to tell two languages apart. Upgrading the model is the obvious
+answer and the wrong one.
+
+**Decision: do not trust the label below two seconds.** That is where detection stops being a coin
+toss. Shorter utterances go to the second model whatever they claim to be — see
+`Refiner::TRUST_LANGUAGE_ABOVE_S`. Being wrong that way costs one decode of a short clip, about
+twenty milliseconds at a specialist's real-time factor of 0.019; being wrong the other way costs
+the half of a bilingual meeting that short phrases live in.
+
+### Reproduce
+
+```bash
+# Clips cut to length, both languages.
+for lang in vi en; do for secs in 0.6 1.2 2.5; do
+  mkdir -p detect/$lang-$secs
+  # ...trim the first N seconds of each clip in fleurs-$lang
+done; done
+
+# Transcribe with no --lang, and check which script came back.
+summo transcribe clip.wav --model-dir whisper-base --vad silero_vad.onnx --engine whisper
+```
+
 ## Speech synthesis: can Kokoro say Japanese?
 
 The dubbing feature offers whatever language a voice exists for, and the registry has Vietnamese,

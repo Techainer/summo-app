@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { betterFor, missingFor, type Language } from "./languages";
+import { betterFor, missingFor, quality, type Language } from "./languages";
 
 const language = (over: Partial<Language> = {}): Language => ({
   code: "vi",
@@ -75,5 +75,45 @@ describe("when nothing installed can hear the language at all", () => {
    */
   it("offers nothing for a model that is already on the machine", () => {
     expect(missingFor(language({ serving: null, installed: true }))).toBeUndefined();
+  });
+});
+
+describe("grading the model that is actually listening", () => {
+  const vietnamese = (over: Partial<Language>): Language =>
+    ({
+      code: "vi",
+      name: "Tiếng Việt",
+      accuracy: 0.917,
+      installed: false,
+      multilingual_only: false,
+      model: "gipformer-65m",
+      model_name: "Gipformer",
+      serving: "whisper-tiny",
+      serving_name: "Whisper tiny",
+      serving_accuracy: 0.247,
+      ...over,
+    }) as Language;
+
+  /**
+   * The report this exists for: Vietnamese recorded with `whisper-tiny` came back as English
+   * fragments — `Xin chào tôi tên là Việt` as `Hire whats yo nam` — and the bar said nothing.
+   * It was grading the Gipformer that was not installed.
+   */
+  it("calls a poor model poor even when a better one exists elsewhere", () => {
+    expect(quality(vietnamese({}))).toBe("poor");
+  });
+
+  it("calls a good model good", () => {
+    expect(quality(vietnamese({ serving: "gipformer-65m", serving_accuracy: 0.917 }))).toBe("good");
+  });
+
+  /** Nothing listening yet: grade the language, not a model that is not there. */
+  it("falls back to the language's own number when nothing is serving", () => {
+    expect(quality(vietnamese({ serving: null, serving_accuracy: 0 }))).toBe("good");
+  });
+
+  /** A model with no measurement is not "poor" — that is a claim about a number nobody has. */
+  it("says unmeasured rather than guessing", () => {
+    expect(quality(vietnamese({ serving_accuracy: 0, accuracy: 0 }))).toBe("unmeasured");
   });
 });

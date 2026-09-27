@@ -215,15 +215,22 @@ export function megabytes(bytes: number): string {
 }
 
 /**
- * How to describe the accuracy of a model on a language.
+ * How good the transcript will actually be, in one word.
  *
- * Three bands rather than a number, because the number is a word error rate on one benchmark and
- * reading it as a promise would be wrong in both directions. `unmeasured` is its own band and not
- * the bottom one: nobody has looked, which is different from having looked and found it poor.
+ * Graded on **`serving_accuracy`** — the model doing the listening — and not on `accuracy`, which
+ * is the best model that exists whether or not it is installed. That distinction is the whole of a
+ * report this feature took twice: somebody recording Vietnamese with `whisper-tiny` saw
+ * `Xin chào tôi tên là Việt` come back as `Hire whats yo nam`, with nothing on screen suggesting
+ * anything was wrong. The screen was grading a Gipformer it did not have (92%) while a Whisper it
+ * did have (25%) produced the words.
+ *
+ * `unmeasured` when nothing is serving or nobody has measured it. A model with no number is not a
+ * good one, but saying "poor" about a measurement that does not exist is its own kind of wrong.
  */
 export function quality(language: Language): "good" | "poor" | "unmeasured" {
-  if (language.accuracy <= 0) return "unmeasured";
-  return language.accuracy >= 0.8 ? "good" : "poor";
+  const serving = language.serving ? language.serving_accuracy : language.accuracy;
+  if (serving <= 0) return "unmeasured";
+  return serving >= 0.8 ? "good" : "poor";
 }
 
 /**
