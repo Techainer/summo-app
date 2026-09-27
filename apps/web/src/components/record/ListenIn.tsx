@@ -4,12 +4,22 @@ import { useT } from "../../i18n/context";
 import { Select } from "../ui";
 
 /**
- * Hearing the meeting in another language, rather than reading it.
+ * Reading the translation out loud, rather than only showing it.
  *
  * A different verb from the control beside it, because it is a different thing. *Translate into* is
- * a list — a meeting can have several readers and two subtitles share a screen happily. *Listen in*
- * is one language, because a person has one pair of ears and two voices over each other is nobody's
- * dub.
+ * a list — a meeting can have several readers and two subtitles share a screen happily. This is one
+ * language, because a person has one pair of ears and two voices over each other is nobody's dub.
+ *
+ * ## The name
+ *
+ * It said **"Nghe bằng"** — "listen in" — and that was wrong twice over. It did not say *what* was
+ * being heard, and the same screen already says `Đang nghe bằng {language}` about the language
+ * being *recognised*. One phrase, two meanings, four inches apart: the mistake `in_use_refine` was
+ * renamed for one release earlier.
+ *
+ * So the label names the thing it does to the thing it does it to — the translation, read aloud —
+ * and the dropdown beside it holds the language. A control should be readable by somebody who has
+ * not been told what it is for.
  *
  * ## Only what can actually be spoken
  *
@@ -59,7 +69,9 @@ export function ListenIn({
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <Select
         size={size}
-        aria-label={t("record.listen_in")}
+        // Fuller than the visible label, which sits beside it and is read with it by eye but not
+        // by a screen reader jumping between controls.
+        aria-label={t("record.listen_language")}
         value={on ? value : ""}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
