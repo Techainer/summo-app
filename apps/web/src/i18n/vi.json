@@ -647,6 +647,11 @@
     "waiting": "Đang đo…",
     "busy_imports": "{count} đang nhập",
     "busy_installs": "{count} đang tải",
-    "busy_dubs": "{count} đang lồng tiếng"
+    "busy_dubs": "{count} đang lồng tiếng",
+    "usage_title": "Summo đang dùng gì",
+    "usage_ram": "Bộ nhớ máy",
+    "usage_process": "Summo",
+    "usage_rtf": "Tốc độ nhận dạng",
+    "usage_idle": "Hiện không có gì đang được nhận dạng."
   }
 }

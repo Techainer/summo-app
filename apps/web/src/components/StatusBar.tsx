@@ -1,4 +1,7 @@
+import { useEffect, useState } from "react";
+
 import { cn } from "../lib/cn";
+import { isOn as perfIsOn, onChange as onPerfChange } from "../lib/perf";
 import { useI18n } from "../i18n/context";
 import type { Memory } from "../lib/memory";
 import type { ConnectionState } from "../lib/engine";
@@ -25,6 +28,11 @@ export function StatusBar({
   device: string | null;
   memory: Memory | null;
 }) {
+  // Kept in step with the setting rather than read once: the switch is in Settings, and a footer
+  // that needed a reload to notice would be the same silent disagreement this file exists to end.
+  const [perfOn, setPerfOn] = useState(perfIsOn);
+  useEffect(() => onPerfChange(setPerfOn), []);
+
   // `n`, not `t`: English needs "1 speaker" and "2 speakers"; Vietnamese needs one form for both.
   const { t, n } = useI18n();
   const behind = stat !== null && (stat.rtf >= 1 || stat.queue_ms > 3000);
@@ -58,7 +66,13 @@ export function StatusBar({
           reported zero bytes free, every model was ranked as too large to run, and the figure that
           decided it was nowhere on screen. Hidden on a phone, where the row has no room and the
           operating system shows it anyway. */}
-      {memory && (
+      {/* Only when somebody asked to see it.
+          This sat in the footer of every screen, always, and was reported as noise — "sao không
+          cho nó ở đâu khác". It is not removed, because it exists for a reason: three releases
+          were spent on a bug whose cause was this number, and it was nowhere on screen. So it is
+          behind the switch that already exists for exactly this question, `interface.show_
+          performance`, and the same numbers live in Settings → Interface where the switch is. */}
+      {perfOn && memory && (
         <span
           className="border-line tabular text-micro hidden items-center rounded-full border px-2 py-0.5 sm:inline-flex"
           data-testid="memory"
@@ -66,7 +80,7 @@ export function StatusBar({
           RAM {memory.usedGb.toFixed(1)}/{memory.totalGb.toFixed(0)} GB
         </span>
       )}
-      {stat && (
+      {perfOn && stat && (
         <>
           <span
             className={cn(

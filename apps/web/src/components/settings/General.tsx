@@ -8,6 +8,7 @@ import { SCHEMES, remember as rememberScheme } from "../../lib/theme";
 import { useScheme } from "../../lib/use-scheme";
 import { isOn as perfIsOn, onChange as onPerfChange, show as showPerf } from "../../lib/perf";
 import { url } from "../../lib/library";
+import { useMemory } from "../../lib/memory";
 
 /**
  * The settings about the app rather than about the work: what language it speaks, whether it is
@@ -79,7 +80,47 @@ function PerformanceSetting() {
       <p className="text-fg-faint text-micro mt-1.5 ml-6 leading-normal">
         {t("perf.setting_hint")}
       </p>
+
+      {/* The numbers themselves, here, whether or not the footer is showing them.
+          The footer readout was reported as noise in the chrome of every screen, so it is behind
+          the switch above now — and hiding a number is only acceptable if it is still somewhere.
+          This is that somewhere, next to the switch that decides it. */}
+      <Usage />
     </div>
+  );
+}
+
+/**
+ * What this machine and this process are spending, as plain rows.
+ *
+ * Deliberately not a chart. The question somebody arrives with is "is it using too much" and three
+ * numbers answer it; a graph would be an invitation to watch it.
+ */
+function Usage() {
+  const { t } = useI18n();
+  const { handshake, stat } = useEngine();
+  const memory = useMemory(handshake);
+
+  return (
+    <dl className="border-line mt-4 ml-6 grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1.5 border-t pt-3">
+      <dt className="text-fg-faint text-micro col-span-2 mb-0.5 tracking-wide uppercase">
+        {t("perf.usage_title")}
+      </dt>
+      <dt className="text-fg-dim text-meta">{t("perf.usage_ram")}</dt>
+      <dd className="tabular text-meta">
+        {memory ? `${memory.usedGb.toFixed(1)} / ${memory.totalGb.toFixed(0)} GB` : "—"}
+      </dd>
+
+      <dt className="text-fg-dim text-meta">{t("perf.usage_process")}</dt>
+      <dd className="tabular text-meta">{stat ? `${stat.rss_mb} MB` : "—"}</dd>
+
+      <dt className="text-fg-dim text-meta">{t("perf.usage_rtf")}</dt>
+      <dd className="tabular text-meta">{stat ? stat.rtf.toFixed(3) : "—"}</dd>
+
+      {/* Said rather than left as three dashes: an empty row reads as broken, and "nothing is
+          running" is the ordinary state of this screen. */}
+      {!stat && <p className="text-fg-faint text-micro col-span-2 mt-1">{t("perf.usage_idle")}</p>}
+    </dl>
   );
 }
 

@@ -647,6 +647,11 @@
     "waiting": "Measuring…",
     "busy_imports": "{count} importing",
     "busy_installs": "{count} downloading",
-    "busy_dubs": "{count} dubbing"
+    "busy_dubs": "{count} dubbing",
+    "usage_title": "What Summo is using",
+    "usage_ram": "Machine memory",
+    "usage_process": "Summo",
+    "usage_rtf": "Recognition speed",
+    "usage_idle": "Nothing is being recognised right now."
   }
 }

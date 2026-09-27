@@ -647,6 +647,11 @@
     "waiting": "测量中…",
     "busy_imports": "{count}个导入中",
     "busy_installs": "{count}个下载中",
-    "busy_dubs": "{count}个配音中"
+    "busy_dubs": "{count}个配音中",
+    "usage_title": "Summo 的占用",
+    "usage_ram": "机器内存",
+    "usage_process": "Summo",
+    "usage_rtf": "识别速度",
+    "usage_idle": "当前没有正在识别的内容。"
   }
 }

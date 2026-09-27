@@ -647,6 +647,11 @@
     "waiting": "計測中…",
     "busy_imports": "取り込み{count}件",
     "busy_installs": "ダウンロード{count}件",
-    "busy_dubs": "吹き替え{count}件"
+    "busy_dubs": "吹き替え{count}件",
+    "usage_title": "Summo の使用状況",
+    "usage_ram": "マシンのメモリ",
+    "usage_process": "Summo",
+    "usage_rtf": "認識速度",
+    "usage_idle": "現在、認識中のものはありません。"
   }
 }
