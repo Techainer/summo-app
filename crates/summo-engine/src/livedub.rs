@@ -60,31 +60,29 @@
 //!
 //! ## What is measured
 //!
-//! `apps/web/e2e/listen.mjs` records Vietnamese, asks to hear English and times the socket. On this
-//! machine, continuous speech, one voice:
+//! `apps/web/e2e/listen.mjs` records Vietnamese, asks to hear English and times the socket. Seven
+//! consecutive runs on this machine, continuous speech, one voice:
 //!
 //! ```text
-//! after the line settled       median 0.04 s
-//! after the words appeared     median 2.28 s
-//! 29 chunks over 18 utterances
+//! after the line settled       median 0.06-0.13 s
+//! after the words appeared     median 2.35-2.59 s
+//! 27-30 chunks over 17-18 utterances
 //! ```
 //!
 //! The second row is the one a listener feels, and the first explains it: by the time the gate
-//! decides a sentence is over, most of it has already been spoken. Clauses committed from partials
-//! are what buy that — before they worked, the same measurement read 0.61 s and **3.99 s**, with
-//! exactly one chunk per utterance.
+//! decides a sentence is over, most of it has already been spoken. Before clauses committed from
+//! partials worked, the same measurement read 0.61 s and **3.99 s**, one chunk per utterance.
 //!
 //! ## The open one
 //!
-//! 29 chunks over 18 utterances is 1.6 pieces a sentence, and a long sentence settles more clauses
-//! than that. The rest arrive while the single voice session is busy and are dropped — counted, and
-//! visible, but dropped.
+//! Roughly 1.6 pieces a sentence, and a long sentence settles more than that. The rest arrive while
+//! the single voice session is busy and are dropped — counted by [`Tally`], and dropped.
 //!
 //! Queueing them instead was built and measured before being thrown away: the median went from
 //! 0.6 s to 4.6 s, because each clause then waited out the translation *and* synthesis of the one
 //! before it and the lag compounded. A dub four seconds behind the room is worse than one that
-//! skips. The fix that would work is a second voice session so clauses are spoken in parallel —
-//! memory rather than a rewrite — and that is the next thing to try.
+//! skips. A second voice session would let clauses be spoken in parallel — memory rather than a
+//! rewrite — and that is the next thing to try.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -247,6 +245,22 @@ impl Chunk {
 /// First byte of a dub frame on the socket.
 pub const TAG_DUB: u8 = 0x01;
 
+/// What the dub did with the work it was given.
+///
+/// Reported rather than inferred. Everything here is a count of a decision this module made, so a
+/// measurement run can say which decision is costing the listener.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Tally {
+    /// Pieces the committer settled and handed over.
+    pub committed: usize,
+    /// Sent to be translated and spoken.
+    pub spoken: usize,
+    /// Dropped because the voice was still busy with the piece before.
+    pub busy: usize,
+    /// Dropped because the listener was already too far behind for it to be worth saying.
+    pub behind: usize,
+}
+
 /// A live dub running alongside one recording.
 ///
 /// The same shape as [`crate::live::LiveTranslator`], deliberately: the socket loop calls
@@ -269,8 +283,15 @@ pub struct LiveDub {
     /// chunk. What it does know is how much audio it has sent and how long that takes to say, which
     /// is the same number as long as the client plays back to back — which is what a dub is.
     speaks_until: Option<Instant>,
-    /// Lines not spoken because the dub had fallen too far behind.
+    /// Pieces not spoken because the dub had fallen too far behind.
     skipped: usize,
+    /// Why, split apart, and how much work arrived at all.
+    ///
+    /// One counter was not enough to fix this module and cost a wrong diagnosis: "pieces were
+    /// dropped" is true of two completely different faults — the voice being busy, and the
+    /// listener being too far behind to catch up — and they have opposite fixes. A number that
+    /// cannot distinguish them is a number that sends somebody to the wrong module.
+    tally: Tally,
 }
 
 impl LiveDub {
@@ -292,6 +313,7 @@ impl LiveDub {
             in_flight: Arc::new(AtomicUsize::new(0)),
             speaks_until: None,
             skipped: 0,
+            tally: Tally::default(),
         }
     }
 
@@ -351,15 +373,23 @@ impl LiveDub {
                 continue;
             };
 
+            self.tally.committed += 1;
             if self.in_flight.load(Ordering::Relaxed) >= MAX_IN_FLIGHT {
                 // Dropped, not queued. See `MAX_IN_FLIGHT` — queueing was measured and it made the
                 // dub four seconds later rather than more complete.
                 self.skipped += 1;
+                self.tally.busy += 1;
                 continue;
             }
             match pace(self.backlog_at(now)) {
-                Pace::Skip => self.skipped += 1,
-                Pace::Speak(speed) => self.say(piece.seq, &piece.text, speed),
+                Pace::Skip => {
+                    self.skipped += 1;
+                    self.tally.behind += 1;
+                }
+                Pace::Speak(speed) => {
+                    self.tally.spoken += 1;
+                    self.say(piece.seq, &piece.text, speed);
+                }
             }
         }
         self.collect(now)
@@ -371,6 +401,12 @@ impl LiveDub {
     /// rule the subtitle path applies per target — see `live::for_target`.
     fn skip(&self, segment: &summo_core::segment::Segment) -> bool {
         crate::translate::same_language(segment.language.as_deref(), &self.lang)
+    }
+
+    /// What this dub did with the work it was given, for a measurement run to report.
+    #[must_use]
+    pub fn tally(&self) -> Tally {
+        self.tally
     }
 
     /// How often a final contradicted a clause that had already been spoken.
@@ -450,6 +486,30 @@ impl LiveDub {
                 Err(e) => tracing::warn!(error = %e, seq, "the synthesis thread failed"),
             }
         });
+    }
+}
+
+/// Report what the dub managed, however the session ended.
+///
+/// On `Drop` rather than on the stop command, because the stop command is the tidy path and the
+/// one that does not run when it matters: a client that closes its tab disconnects, the daemon
+/// ends the recording from the socket loop, and `ActiveSession` is simply dropped. A tally logged
+/// only on the clean exit is a tally you do not have on the run you were trying to measure — which
+/// is exactly how this first came back empty.
+impl Drop for LiveDub {
+    fn drop(&mut self) {
+        let t = self.tally;
+        if t.committed == 0 {
+            return;
+        }
+        tracing::info!(
+            committed = t.committed,
+            spoken = t.spoken,
+            dropped_busy = t.busy,
+            dropped_behind = t.behind,
+            revisions = self.committer.revisions(),
+            "live dub finished"
+        );
     }
 }
 

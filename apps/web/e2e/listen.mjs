@@ -155,6 +155,11 @@ const heard = await page.evaluate(() => window.__dub);
 await page.screenshot({ path: "/tmp/shots/listen.png" });
 await browser.close();
 
+// The daemon writes its closing lines when it notices the socket has gone, which is after this
+// process has already closed it. Reading the log immediately is a race, and losing it looks
+// exactly like a daemon that reported nothing.
+await new Promise((resolve) => setTimeout(resolve, 2000));
+
 // ---- what happened -------------------------------------------------------
 
 // Which layer failed, said before anything else. "No dub" is the symptom of a silent
@@ -221,6 +226,23 @@ if (heard.length > 0) {
 
 // What the daemon thought it was doing, in its own words.
 const log = engine.log().replace(/\[[0-9;]*m/g, "");
+
+// The decisions the dub made, split by cause. Without this the only number is "how many chunks
+// arrived", which cannot tell a voice that is busy from a listener who is too far behind — two
+// faults with opposite fixes.
+const tally = log.match(
+  /live dub finished committed=(\d+) spoken=(\d+) dropped_busy=(\d+) dropped_behind=(\d+) revisions=(\d+)/,
+);
+if (tally) {
+  const [, committed, spoken, busy, behind, revisions] = tally.map(Number);
+  console.log(
+    `\n${committed} pieces settled: ${spoken} spoken, ${busy} dropped (voice busy), ` +
+      `${behind} dropped (too far behind)`,
+  );
+  console.log(`  ${revisions} time(s) the final contradicted something already said`);
+} else {
+  console.log("\npieces: not measured — the daemon logged no tally");
+}
 for (const pattern of [/a clause could not be translated/, /a clause could not be spoken/]) {
   const failures = [...log.matchAll(new RegExp(pattern, "g"))].length;
   if (failures > 0) console.log(`  ${failures} clause(s) failed: ${pattern.source}`);

@@ -391,13 +391,19 @@ pub const MAX_IN_FLIGHT: usize = 2;
 
 impl LiveTranslator {
     #[must_use]
-    pub fn new(translator: Translator, config: LiveConfig) -> Self {
+    /// Takes the translator already loaded rather than one of its own.
+    ///
+    /// `Arc` in the signature, not built from an owned value here, because the live dub needs the
+    /// same model and loading a second copy is not a small waste: SMALL100 is 610 MB and several
+    /// seconds of ONNX session construction. Doing that a second time, synchronously, on the task
+    /// that serves the socket is what broke recordings — see `server::start_session`.
+    pub fn new(translator: std::sync::Arc<Translator>, config: LiveConfig) -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         Self {
             batcher: Batcher::new(),
             backlog: VecDeque::new(),
             since: None,
-            translator: std::sync::Arc::new(translator),
+            translator,
             config,
             tx,
             rx,
@@ -574,7 +580,7 @@ mod tests {
 
     fn translator(langs: &[&str]) -> LiveTranslator {
         LiveTranslator::new(
-            Translator::chat(unreachable_provider()).unwrap(),
+            std::sync::Arc::new(Translator::chat(unreachable_provider()).unwrap()),
             LiveConfig {
                 langs: langs.iter().map(|l| (*l).to_string()).collect(),
                 glossary: prompt::Glossary::default(),
@@ -939,7 +945,7 @@ mod backfilling {
 
     fn live(langs: &[&str]) -> LiveTranslator {
         LiveTranslator::new(
-            Translator::chat(unreachable_provider()).unwrap(),
+            std::sync::Arc::new(Translator::chat(unreachable_provider()).unwrap()),
             LiveConfig {
                 langs: langs.iter().map(|l| (*l).to_string()).collect(),
                 glossary: prompt::Glossary::default(),

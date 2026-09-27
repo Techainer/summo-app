@@ -5880,6 +5880,12 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
                             let (events, next) =
                                 handle_command_with_models(&text, &engine, session.take());
                             session = next;
+                            // Speaking the translation, if somebody asked to hear it. After the
+                            // session exists and never inside its construction: the voice takes
+                            // nearly two seconds to load and this is the task that reads the
+                            // socket. See `attach_live_dub`.
+                            #[cfg(feature = "tts")]
+                            attach_live_dub(&engine, session.as_mut()).await;
                             events
                         }
                     },
@@ -5924,6 +5930,23 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
                 break;
             }
         }
+    }
+
+    // What the dub managed, on the way out. Here as well as on `Drop`, because a client closing
+    // its tab is the normal way a session ends and the daemon is usually killed before any
+    // destructor runs — a number reported only on the tidy path is a number missing from every
+    // run worth measuring.
+    #[cfg(all(feature = "models", feature = "tts"))]
+    if let Some(dub) = session.as_ref().and_then(|active| active.dub.as_ref()) {
+        let t = dub.tally();
+        tracing::info!(
+            committed = t.committed,
+            spoken = t.spoken,
+            dropped_busy = t.busy,
+            dropped_behind = t.behind,
+            revisions = dub.revisions(),
+            "live dub finished"
+        );
     }
 
     // A client that vanishes mid-recording must not leave the daemon believing it is still
@@ -6115,7 +6138,7 @@ async fn set_live_translation(
             let by = translator.model().to_string();
             let named = wanted.join(", ");
             let mut live = crate::live::LiveTranslator::new(
-                translator,
+                std::sync::Arc::new(translator),
                 crate::live::LiveConfig {
                     langs: wanted.clone(),
                     glossary: summo_llm::prompt::Glossary::default(),
@@ -6261,6 +6284,11 @@ struct ActiveSession {
     started: std::time::Instant,
     /// Set when the session asked for live translation.
     live: Option<crate::live::LiveTranslator>,
+    /// The translation model, kept so the dub can share it rather than load a second copy.
+    ///
+    /// SMALL100 is 610 MB. Two of them is not a rounding error, and building the second one where
+    /// this code runs is what `attach_live_dub` exists to avoid.
+    translator: Option<std::sync::Arc<crate::translate::Translator>>,
     /// Set when somebody asked to *hear* one of those translations rather than read it.
     ///
     /// Downstream of `live` and not a peer of it: a dub speaks the translation events that one
@@ -6370,6 +6398,23 @@ fn handle_command_with_models(
                 }
 
                 let elapsed = active.started.elapsed().as_secs_f64();
+
+                // What the dub managed. Here rather than only on the way out of `handle_socket`,
+                // because closing a tab sends this command first — the session is consumed here
+                // and the socket loop then finds nothing left to report on. Getting that wrong is
+                // why this number came back missing three times in a row.
+                #[cfg(feature = "tts")]
+                if let Some(dub) = active.dub.as_ref() {
+                    let t = dub.tally();
+                    tracing::info!(
+                        committed = t.committed,
+                        spoken = t.spoken,
+                        dropped_busy = t.busy,
+                        dropped_behind = t.behind,
+                        revisions = dub.revisions(),
+                        "live dub finished"
+                    );
+                }
 
                 // Close the audio first: the transcript's save is the operation allowed to fail
                 // loudly, and it should not run while encoder buffers are still unflushed.
@@ -6579,24 +6624,39 @@ fn start_session(
         .map(|lang| lang.trim().to_string())
         .filter(|lang| !lang.is_empty())
         .collect();
-    let live = if langs.is_empty() {
+    // One translator, shared by everything that needs it.
+    //
+    // Built once and handed round as an `Arc`, because the live dub needs the same model and
+    // building a second one is not a small waste. SMALL100 is 610 MB and several seconds of ONNX
+    // session construction, and this function runs on the task that serves the socket — a second
+    // load here stops the socket being read while the browser goes on pushing a frame every
+    // 100 ms, the connection breaks, and the daemon ends a recording that had produced nothing.
+    //
+    // That is not hypothetical. It is what the dub did to one run in three, and the comment on
+    // `handle_socket` already described the same failure for the first load.
+    let translator = if langs.is_empty() && spec.listen_in.is_none() {
         None
     } else {
         match summo_core::settings::Settings::load(&engine.paths().settings()).and_then(
             |settings| crate::translate::Translator::from_settings(engine.paths(), &settings),
         ) {
-            Ok(translator) => Some(crate::live::LiveTranslator::new(
-                translator,
-                crate::live::LiveConfig {
-                    langs,
-                    glossary: summo_llm::prompt::Glossary::default(),
-                },
-            )),
+            Ok(translator) => Some(std::sync::Arc::new(translator)),
             Err(e) => {
-                tracing::warn!(error = %e, "live translation asked for but no model is configured");
+                tracing::warn!(error = %e, "translation asked for but no model is configured");
                 None
             }
         }
+    };
+
+    let live = match (&translator, langs.is_empty()) {
+        (Some(translator), false) => Some(crate::live::LiveTranslator::new(
+            translator.clone(),
+            crate::live::LiveConfig {
+                langs,
+                glossary: summo_llm::prompt::Glossary::default(),
+            },
+        )),
+        _ => None,
     };
 
     // The second model, when one is named. Built here rather than in the runner because it does
@@ -6635,90 +6695,115 @@ fn start_session(
         _ => None,
     };
 
-    // Hearing one of those translations instead of reading it.
-    //
-    // Built after `live` and conditional on it, because a dub speaks translation events: asking to
-    // hear a language nothing is translating into would load a voice to say nothing. Reported once
-    // here rather than producing an hour of silence somebody has to diagnose.
-    #[cfg(feature = "tts")]
-    let dub = match spec
-        .listen_in
-        .as_deref()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-    {
-        None => None,
-        Some(lang)
-            if !live
-                .as_ref()
-                .is_some_and(|l| l.languages().iter().any(|t| t == lang)) =>
-        {
-            tracing::warn!(
-                lang,
-                "asked to hear a language nothing is being translated into"
-            );
-            None
-        }
-        Some(lang) => build_live_dub(engine, lang),
-    };
-
+    // The dub is deliberately *not* built here. See `attach_live_dub`: loading a voice is nearly
+    // two seconds, this function runs on the task that serves the socket, and a socket that stops
+    // being read while the browser pushes a frame every 100 ms is a recording that ends having
+    // captured nothing. Measured: with a dub asked for, two runs in three transcribed zero lines;
+    // with it off, three in three were fine.
     Ok(ActiveSession {
         spec: spec.clone(),
         runner,
         recorder,
         archive,
         live,
+        translator,
         #[cfg(feature = "tts")]
-        dub,
+        dub: None,
         refiner,
         started: std::time::Instant::now(),
     })
 }
 
-/// Resolve a voice for `lang` and load it, taking the warm one if it is the right one.
+/// Start speaking the translation, once the session is already running.
 ///
-/// A voice that will not load costs the dub, not the meeting — the same bargain the refine model
-/// gets above, and for the same reason: a nice-to-have must not take down the thing it is nice to
-/// have on top of.
+/// Async and off this task on purpose, and the reason is the same one written on `handle_socket`
+/// about translation: loading a voice is 1.7 to 1.9 seconds of ONNX session construction, and this
+/// code runs on the task that reads the socket. Do it inline and the socket stops being read while
+/// the browser goes on sending a frame every 100 ms; the connection breaks, the daemon sees a
+/// client that vanished mid-recording and ends the session. The meeting is then over, having
+/// transcribed nothing, and nothing on screen says why.
+///
+/// That is not a theory. With a dub asked for, two runs in three of `e2e/listen.mjs` produced zero
+/// transcript lines; with the dub off, three of three produced eighteen. Building it here instead
+/// costs the first line nothing — the session is already recording while the voice loads.
+///
+/// A voice that will not load costs the dub, not the meeting: the same bargain the refine model
+/// gets, and for the same reason.
 #[cfg(all(feature = "tts", feature = "models"))]
-fn build_live_dub(engine: &EngineState, lang: &str) -> Option<crate::livedub::LiveDub> {
-    let threads = engine.hardware().recommended_threads();
-
-    // Its own translator handle, for the reason `livedub` gives: a clause is translated as soon as
-    // it settles, which is before the line the subtitle path will translate exists.
-    let translator = match summo_core::settings::Settings::load(&engine.paths().settings())
-        .and_then(|settings| crate::translate::Translator::from_settings(engine.paths(), &settings))
-    {
-        Ok(translator) => std::sync::Arc::new(translator),
-        Err(e) => {
-            tracing::warn!(error = %e, lang, "no translator to speak with");
-            return None;
-        }
+async fn attach_live_dub(engine: &EngineState, session: Option<&mut ActiveSession>) {
+    let Some(active) = session else { return };
+    if active.dub.is_some() {
+        return;
+    }
+    let Some(lang) = active
+        .spec
+        .listen_in
+        .as_deref()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+    else {
+        return;
     };
 
-    let dir = match crate::dub::resolve_voice(engine.paths(), None, lang) {
+    // A dub speaks translation events, so asking to hear a language nothing is translating into
+    // would load a voice to say nothing for an hour. Said once here rather than never.
+    if !active
+        .live
+        .as_ref()
+        .is_some_and(|live| live.languages().contains(&lang))
+    {
+        tracing::warn!(
+            lang,
+            "asked to hear a language nothing is being translated into"
+        );
+        return;
+    }
+    let Some(translator) = active.translator.clone() else {
+        return;
+    };
+
+    let threads = engine.hardware().recommended_threads();
+    let paths = engine.paths().clone();
+    let warm = engine.warm_voice().ready();
+
+    let dir = match crate::dub::resolve_voice(&paths, None, &lang) {
         Ok(dir) => dir,
         Err(e) => {
             tracing::warn!(error = %e, lang, "no voice to speak the translation with");
-            return None;
+            return;
         }
     };
 
     let key = crate::tts_warm::Key::new(&dir, threads);
-    // The whole point of `tts_warm`: loading is 1.7-1.9 s and this is the path a listener is
-    // waiting on. A miss here is not a fault, only a slower first line.
-    let voice = match engine.warm_voice().take(&key) {
-        Some(voice) => voice,
-        None => match crate::tts_warm::build(&dir, threads) {
-            Ok((_, voice)) => voice,
-            Err(e) => {
-                tracing::warn!(error = %e, lang, "the voice would not load");
-                return None;
-            }
-        },
+    let voice = if warm.as_ref() == Some(&key) {
+        engine.warm_voice().take(&key)
+    } else {
+        None
     };
 
-    Some(crate::livedub::LiveDub::new(lang, voice, translator))
+    let voice = match voice {
+        Some(voice) => voice,
+        None => {
+            let building = dir.clone();
+            match tokio::task::spawn_blocking(move || crate::tts_warm::build(&building, threads))
+                .await
+            {
+                Ok(Ok((_, voice))) => voice,
+                Ok(Err(e)) => {
+                    tracing::warn!(error = %e, lang, "the voice would not load");
+                    return;
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, lang, "the voice loader panicked");
+                    return;
+                }
+            }
+        }
+    };
+
+    active.dub = Some(crate::livedub::LiveDub::new(&lang, voice, translator));
+    tracing::info!(lang, "speaking the translation");
 }
 
 /// Audio handling when recognition is compiled in.
