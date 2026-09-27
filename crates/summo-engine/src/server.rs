@@ -5874,7 +5874,6 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
                 // socket.
                 match parse_refine(&text) {
                     Some(id) => set_refine_model(&engine, session.as_mut(), &id).await,
-                    #[cfg(feature = "tts")]
                     None => match parse_listen(&text) {
                         Some(lang) => set_listen(&engine, session.as_mut(), lang).await,
                         None => match parse_translate(&text) {
@@ -6196,7 +6195,7 @@ async fn set_live_translation(
 ///
 /// Read before the general handler for the same reason `parse_translate` is: it loads a model, and
 /// it has to be awaited on the socket task rather than blocking it. See `attach_live_dub`.
-#[cfg(all(feature = "models", feature = "tts"))]
+#[cfg(feature = "models")]
 fn parse_listen(text: &str) -> Option<String> {
     match serde_json::from_str::<Command>(text) {
         Ok(Command::Listen { lang }) => Some(lang),
@@ -6205,57 +6204,75 @@ fn parse_listen(text: &str) -> Option<String> {
 }
 
 /// Turn the spoken translation on or off while a meeting is running.
-#[cfg(all(feature = "models", feature = "tts"))]
+#[cfg(feature = "models")]
 async fn set_listen(
     engine: &EngineState,
     session: Option<&mut ActiveSession>,
     lang: String,
 ) -> Vec<Event> {
-    let lang = lang.trim().to_string();
-    let Some(active) = session else {
-        return vec![Event::error(&summo_core::Error::Config(
-            "no recording to change".into(),
-        ))];
-    };
+    // The body is gated, not the signature — a `#[cfg]` on a *match arm* makes the caller's match
+    // non-exhaustive in the build that lacks the feature, which is how the Android job (models,
+    // no tts) broke on a change that compiled three other ways. And a build that cannot do this
+    // should say so rather than ignore the command.
+    #[cfg(not(feature = "tts"))]
+    {
+        let _ = (engine, session, lang);
+        return vec![Event::Error {
+            message: "this build cannot read a translation aloud. Rebuild with `--features tts`."
+                .into(),
+            transient: false,
+            code: Some("listen.unsupported".into()),
+        }];
+    }
 
-    if lang.is_empty() {
-        // Off, and immediately. Whatever is already synthesised is dropped with the dub rather than
-        // played out over somebody who has just asked for silence.
-        let was = active.dub.take().is_some();
-        active.spec.listen_in = None;
-        engine.retuned(&active.spec);
-        return if was {
-            vec![Event::info(
-                "no longer reading the translation aloud".to_string(),
-            )]
-        } else {
-            Vec::new()
+    #[cfg(feature = "tts")]
+    {
+        let lang = lang.trim().to_string();
+        let Some(active) = session else {
+            return vec![Event::error(&summo_core::Error::Config(
+                "no recording to change".into(),
+            ))];
         };
-    }
 
-    if active.spec.listen_in.as_deref() == Some(lang.as_str()) && active.dub.is_some() {
-        return Vec::new();
-    }
+        if lang.is_empty() {
+            // Off, and immediately. Whatever is already synthesised is dropped with the dub rather than
+            // played out over somebody who has just asked for silence.
+            let was = active.dub.take().is_some();
+            active.spec.listen_in = None;
+            engine.retuned(&active.spec);
+            return if was {
+                vec![Event::info(
+                    "no longer reading the translation aloud".to_string(),
+                )]
+            } else {
+                Vec::new()
+            };
+        }
 
-    active.dub = None;
-    active.spec.listen_in = Some(lang.clone());
-    attach_live_dub(engine, Some(active)).await;
-    engine.retuned(&active.spec);
+        if active.spec.listen_in.as_deref() == Some(lang.as_str()) && active.dub.is_some() {
+            return Vec::new();
+        }
 
-    if active.dub.is_some() {
-        vec![Event::info(format!(
-            "reading the translation aloud in {lang}"
-        ))]
-    } else {
-        // Said rather than silently doing nothing: the two reasons are a language nothing is being
-        // translated into and no voice installed for it, and both are fixable by the person asking.
-        vec![Event::Error {
-            message: format!(
-                "cannot read {lang} aloud: nothing is translating into it, or no voice is installed"
-            ),
-            transient: true,
-            code: Some("listen.unavailable".into()),
-        }]
+        active.dub = None;
+        active.spec.listen_in = Some(lang.clone());
+        attach_live_dub(engine, Some(active)).await;
+        engine.retuned(&active.spec);
+
+        if active.dub.is_some() {
+            vec![Event::info(format!(
+                "reading the translation aloud in {lang}"
+            ))]
+        } else {
+            // Said rather than silently doing nothing: the two reasons are a language nothing is being
+            // translated into and no voice installed for it, and both are fixable by the person asking.
+            vec![Event::Error {
+                message: format!(
+                    "cannot read {lang} aloud: nothing is translating into it, or no voice is installed"
+                ),
+                transient: true,
+                code: Some("listen.unavailable".into()),
+            }]
+        }
     }
 }
 
@@ -6354,6 +6371,9 @@ struct ActiveSession {
     /// Set when the session asked for live translation.
     live: Option<crate::live::LiveTranslator>,
     /// The translation model, kept so the dub can share it rather than load a second copy.
+    ///
+    /// Only the dub reads it back, so it only exists where a dub can.
+    #[cfg(feature = "tts")]
     ///
     /// SMALL100 is 610 MB. Two of them is not a rounding error, and building the second one where
     /// this code runs is what `attach_live_dub` exists to avoid.
@@ -6774,6 +6794,7 @@ fn start_session(
         recorder,
         archive,
         live,
+        #[cfg(feature = "tts")]
         translator,
         #[cfg(feature = "tts")]
         dub: None,
