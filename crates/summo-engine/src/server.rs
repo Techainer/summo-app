@@ -5932,21 +5932,10 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
         }
     }
 
-    // What the dub managed, on the way out. Here as well as on `Drop`, because a client closing
-    // its tab is the normal way a session ends and the daemon is usually killed before any
-    // destructor runs — a number reported only on the tidy path is a number missing from every
-    // run worth measuring.
+    // And for a client that simply vanished, where no stop command ever arrives.
     #[cfg(all(feature = "models", feature = "tts"))]
     if let Some(dub) = session.as_ref().and_then(|active| active.dub.as_ref()) {
-        let t = dub.tally();
-        tracing::info!(
-            committed = t.committed,
-            spoken = t.spoken,
-            dropped_busy = t.busy,
-            dropped_behind = t.behind,
-            revisions = dub.revisions(),
-            "live dub finished"
-        );
+        dub.report();
     }
 
     // A client that vanishes mid-recording must not leave the daemon believing it is still
@@ -6399,21 +6388,12 @@ fn handle_command_with_models(
 
                 let elapsed = active.started.elapsed().as_secs_f64();
 
-                // What the dub managed. Here rather than only on the way out of `handle_socket`,
-                // because closing a tab sends this command first — the session is consumed here
-                // and the socket loop then finds nothing left to report on. Getting that wrong is
-                // why this number came back missing three times in a row.
+                // What the dub managed. Here as well as on the way out of `handle_socket`,
+                // because closing a tab sends this command first and the socket loop then finds
+                // nothing left to report on. `report` is idempotent, so one line either way.
                 #[cfg(feature = "tts")]
                 if let Some(dub) = active.dub.as_ref() {
-                    let t = dub.tally();
-                    tracing::info!(
-                        committed = t.committed,
-                        spoken = t.spoken,
-                        dropped_busy = t.busy,
-                        dropped_behind = t.behind,
-                        revisions = dub.revisions(),
-                        "live dub finished"
-                    );
+                    dub.report();
                 }
 
                 // Close the audio first: the transcript's save is the operation allowed to fail

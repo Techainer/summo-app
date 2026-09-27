@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
-import { daemon as boot } from "./daemon.mjs";
+import { daemon as boot, plain } from "./daemon.mjs";
 import { mirror } from "./mirror.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -177,12 +177,7 @@ if (lines.size === 0) {
 // faults and a suite reporting only the symptom is what makes each of them cost an hour.
 if (problems.length > 0) {
   console.log("--- daemon log, last 4000 characters ---");
-  console.log(
-    engine
-      .log()
-      .replace(/\[[0-9;]*m/g, "")
-      .slice(-4000),
-  );
+  console.log(plain(engine).slice(-4000));
 }
 
 if (heard.length > 0) {
@@ -225,7 +220,10 @@ if (heard.length > 0) {
 }
 
 // What the daemon thought it was doing, in its own words.
-const log = engine.log().replace(/\[[0-9;]*m/g, "");
+const log = plain(engine);
+// The whole thing on disk, because a grep for the one line you expected is how you miss the line
+// that explains why it is not there.
+(await import("node:fs")).writeFileSync("/tmp/listen-daemon.log", log);
 
 // The decisions the dub made, split by cause. Without this the only number is "how many chunks
 // arrived", which cannot tell a voice that is busy from a listener who is too far behind — two

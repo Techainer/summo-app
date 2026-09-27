@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
-import { daemon as boot } from "./daemon.mjs";
+import { daemon as boot, plain } from "./daemon.mjs";
 import { mirror } from "./mirror.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -191,7 +191,7 @@ if (lags.length === 0) {
 // The batch sizes the daemon really used. Colour is stripped first: `tracing` writes the field
 // name, an escape, then `=`, so a plain search for `lines=` finds nothing while the lines are
 // sitting in the buffer. That mistake cost a release's worth of "the daemon logged no decode".
-const log = engine.log().replace(/\[[0-9;]*m/g, "");
+const log = plain(engine);
 const runs = [...log.matchAll(/translating a run lines=(\d+) targets=(\d+) grouped=(\w+)/g)].map(
   (m) => ({ lines: Number(m[1]), targets: Number(m[2]), grouped: m[3] === "true" }),
 );

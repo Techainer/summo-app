@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
-import { daemon as boot } from "./daemon.mjs";
+import { daemon as boot, plain as plainLog } from "./daemon.mjs";
 import { mirror } from "./mirror.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -375,9 +375,9 @@ async function settled(what, check) {
     // Stripped of colour first. `tracing` writes the field name, an escape, then `=` — so a
     // literal `decode_ms=` matches nothing, and the check reported "the daemon logged no decode"
     // while five of them sat in the buffer. A search that cannot fail to find is the useful kind.
-    const plain = engine.log().replace(/\u001b\[[0-9;]*m/g, "");
-    const decodes = [...plain.matchAll(/decode_ms=(\d+)/g)].map((m) => Number(m[1]));
-    const silence = /silence_ms=(\d+)/.exec(plain)?.[1];
+    const stripped = plainLog(engine);
+    const decodes = [...stripped.matchAll(/decode_ms=(\d+)/g)].map((m) => Number(m[1]));
+    const silence = /silence_ms=(\d+)/.exec(stripped)?.[1];
     if (decodes.length > 0) {
       const worst = Math.max(...decodes);
       const median = decodes.slice().sort((a, b) => a - b)[Math.floor(decodes.length / 2)];

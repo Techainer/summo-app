@@ -84,6 +84,23 @@ function daysAgo(n) {
 }
 
 /** Yesterday and the day before, exported so a suite can name the files this wrote. */
+/**
+ * The daemon's log with the colour taken out, so a search for a field name can find one.
+ *
+ * `tracing` writes a field as `ESC[3m` + name + `ESC[0m` + `ESC[2m` + `=` + `ESC[0m` + value, so a
+ * plain search for `decode_ms=` finds nothing while the lines sit in the buffer. That cost a
+ * release once — "the daemon logged no decode", with five of them present — and the fix was copied
+ * into two later suites with the escape character left out of the pattern, which strips `[3m` and
+ * leaves a bare `ESC` between every name and its `=`. The same failure, from the same fix, twice.
+ *
+ * So it lives here, once. `[A-Za-z]` rather than `m` because a terminating letter other than `m` is
+ * still an escape and still in the way.
+ */
+export function plain(engine) {
+  // eslint-disable-next-line no-control-regex
+  return engine.log().replace(/\u001b\[[0-9;?]*[A-Za-z]/g, "");
+}
+
 export const RECENT = daysAgo(1);
 export const EARLIER = daysAgo(2);
 

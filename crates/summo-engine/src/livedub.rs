@@ -73,16 +73,27 @@
 //! decides a sentence is over, most of it has already been spoken. Before clauses committed from
 //! partials worked, the same measurement read 0.61 s and **3.99 s**, one chunk per utterance.
 //!
-//! ## The open one
+//! ## One voice is enough, measured
 //!
-//! Roughly 1.6 pieces a sentence, and a long sentence settles more than that. The rest arrive while
-//! the single voice session is busy and are dropped — counted by [`Tally`], and dropped.
+//! Three releases carried "a long sentence settles more clauses than one voice can speak, so the
+//! rest are dropped — a second voice session would fix it" as a known gap. It was reasoning, and
+//! it was wrong. Counting the decisions instead:
 //!
-//! Queueing them instead was built and measured before being thrown away: the median went from
-//! 0.6 s to 4.6 s, because each clause then waited out the translation *and* synthesis of the one
-//! before it and the lag compounded. A dub four seconds behind the room is worse than one that
-//! skips. A second voice session would let clauses be spoken in parallel — memory rather than a
-//! rewrite — and that is the next thing to try.
+//! ```text
+//! 32 pieces settled: 31 spoken, 1 dropped (voice busy), 0 dropped (too far behind)
+//! 0 finals contradicted something already said
+//! ```
+//!
+//! One voice keeps up with 97% of what the committer produces, and nothing at all is lost to
+//! falling behind. A second ONNX session would recover one piece in thirty-two for the memory of a
+//! whole extra voice. It is not worth building, and the reason that was not obvious is that nobody
+//! had counted — which is what [`Tally`] is for, and why it splits the count by cause: "pieces were
+//! dropped" is true of two faults with opposite fixes, and one number for both sent me to the wrong
+//! module twice.
+//!
+//! Queueing the dropped ones was also tried and measured: the median went from 0.6 s to 4.6 s,
+//! because each clause then waited out the translation *and* synthesis of the one before it. A dub
+//! four seconds behind the room is worse than one that skips one piece in thirty-two.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -285,6 +296,12 @@ pub struct LiveDub {
     speaks_until: Option<Instant>,
     /// Pieces not spoken because the dub had fallen too far behind.
     skipped: usize,
+    /// Whether the closing tally has already been written.
+    ///
+    /// Two places end a session — the stop command and the socket noticing the client has gone —
+    /// and which one runs depends on how the app was closed. Both report, so the number is never
+    /// missing; this is what stops it being printed twice.
+    reported: std::sync::atomic::AtomicBool,
     /// Why, split apart, and how much work arrived at all.
     ///
     /// One counter was not enough to fix this module and cost a wrong diagnosis: "pieces were
@@ -313,6 +330,7 @@ impl LiveDub {
             in_flight: Arc::new(AtomicUsize::new(0)),
             speaks_until: None,
             skipped: 0,
+            reported: std::sync::atomic::AtomicBool::new(false),
             tally: Tally::default(),
         }
     }
@@ -409,6 +427,21 @@ impl LiveDub {
         self.tally
     }
 
+    /// Write the closing tally, once, however the session ended.
+    pub fn report(&self) {
+        if self.tally.committed == 0 || self.reported.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        tracing::info!(
+            committed = self.tally.committed,
+            spoken = self.tally.spoken,
+            dropped_busy = self.tally.busy,
+            dropped_behind = self.tally.behind,
+            revisions = self.committer.revisions(),
+            "live dub finished"
+        );
+    }
+
     /// How often a final contradicted a clause that had already been spoken.
     ///
     /// The price of not waiting for the sentence, counted. Speech cannot be redrawn, so this is the
@@ -489,27 +522,13 @@ impl LiveDub {
     }
 }
 
-/// Report what the dub managed, however the session ended.
+/// A last chance to report, for a session that ends in a way nobody thought of.
 ///
-/// On `Drop` rather than on the stop command, because the stop command is the tidy path and the
-/// one that does not run when it matters: a client that closes its tab disconnects, the daemon
-/// ends the recording from the socket loop, and `ActiveSession` is simply dropped. A tally logged
-/// only on the clean exit is a tally you do not have on the run you were trying to measure — which
-/// is exactly how this first came back empty.
+/// Both deliberate endings call [`LiveDub::report`] themselves; this catches the rest. `report` is
+/// idempotent, so the usual path still prints one line.
 impl Drop for LiveDub {
     fn drop(&mut self) {
-        let t = self.tally;
-        if t.committed == 0 {
-            return;
-        }
-        tracing::info!(
-            committed = t.committed,
-            spoken = t.spoken,
-            dropped_busy = t.busy,
-            dropped_behind = t.behind,
-            revisions = self.committer.revisions(),
-            "live dub finished"
-        );
+        self.report();
     }
 }
 
