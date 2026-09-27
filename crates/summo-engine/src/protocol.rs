@@ -48,6 +48,23 @@ pub enum Command {
         id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         language: Option<String>,
+        /// Every language the meeting turns out to be in, when there is more than one.
+        ///
+        /// The half that was missing, and the one a real meeting needs most. `language` says
+        /// "decode as this" — right for a specialist, and *wrong* for a call that turns out to have
+        /// two languages in it, because every sentence in the other one is then forced through a
+        /// model told to expect the first. A Vietnamese sentence decoded as English does not fail;
+        /// it comes back as confident English words that were never said.
+        ///
+        /// The arrangement this selects — a multilingual model detecting per utterance, with a
+        /// specialist revising the language it is for — has existed and been tested since
+        /// `pick_pair`, and could only be asked for at `session_start`. So the one moment a person
+        /// discovers their meeting is bilingual is the one moment they could not say so.
+        ///
+        /// Several clears `language`; one is the ordinary case and sets it. Empty leaves both as
+        /// they were.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        languages: Vec<String>,
     },
     /// Change what finished lines are translated into, without ending the meeting.
     ///
@@ -331,10 +348,12 @@ mod tests {
             Command::ModelSwap {
                 id: "x".into(),
                 language: None,
+                languages: Vec::new(),
             },
             Command::ModelSwap {
                 id: String::new(),
                 language: Some("en".into()),
+                languages: Vec::new(),
             },
             Command::Ping,
         ];

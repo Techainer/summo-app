@@ -273,7 +273,7 @@ export class Session {
    * somebody noticed, so this leaves the recording, the file and everything transcribed alone and
    * rebuilds only the decoder.
    */
-  retune(change: { language?: string; model?: string }): void {
+  retune(change: { language?: string; languages?: string[]; model?: string }): void {
     if (!this.state.recording) return;
     // Each field is only sent when the caller named it, because on the daemon an absent field means
     // "leave this alone" and an empty one means something else entirely: an empty language is the
@@ -283,6 +283,9 @@ export class Session {
       cmd: "model_swap",
       ...(change.model !== undefined ? { id: change.model } : {}),
       ...(change.language !== undefined ? { language: change.language } : {}),
+      // Several is a different arrangement, not a longer answer: the daemon clears `language` when
+      // it sees more than one, so the live model stops expecting a language and starts detecting.
+      ...(change.languages !== undefined ? { languages: change.languages } : {}),
     });
   }
 

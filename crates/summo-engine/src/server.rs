@@ -1657,8 +1657,29 @@ fn choose_models(
         spec.language = Some(only.clone());
     }
 
+    // The language somebody set once, in settings, for every meeting they will ever record.
+    //
+    // It is used below to *choose a model*. Whether it is also handed to that model as "decode as
+    // this" is a separate question, and answering it "yes" is the bug behind the worst report this
+    // feature has had.
+    //
+    // Naming a language tells a multilingual model to stop detecting. So a setting nobody revisited
+    // silently pinned every meeting to one language — and a meeting is rarely in one. Somebody
+    // speaking Vietnamese and English got every Vietnamese sentence back as confident English words
+    // that were never said: `Xin chào, tôi tên là Việt` came out as `Sing out the dinner field`. A
+    // model told to expect English does not fail on Vietnamese, it invents English.
+    //
+    // It also made the bilingual arrangement unreachable. `pick_pair` fires only when no language
+    // is named, and this named one before it could ever be asked.
+    //
+    // So it is remembered rather than applied, and `settled_language` below decides.
+    let preferred = settings
+        .models
+        .language
+        .clone()
+        .filter(|lang| !lang.trim().is_empty());
     if spec.language.is_none() {
-        spec.language = settings.models.language.clone();
+        spec.language = preferred.clone();
     }
 
     // A model chosen for this language in particular, before the one chosen for everything.
@@ -1736,6 +1757,55 @@ fn choose_models(
         // Nothing covers the language. Recording in the wrong language beats refusing to record:
         // the transcript is visibly wrong and fixable, and the meeting is not repeatable.
         spec.live_model = first.id.to_string();
+    }
+    #[cfg(feature = "models")]
+    let spec = unpin_if_only_a_preference(spec, preferred.as_deref(), engine);
+    // Without a model store there is nothing to look a model's languages up in, and no recognition
+    // to pin in the first place.
+    #[cfg(not(feature = "models"))]
+    let _ = preferred;
+    spec
+}
+
+/// Stop a *setting* from silencing a model that can detect.
+///
+/// `models.language` answers "which language do my meetings tend to be in", and that is the right
+/// question for choosing a model. It is the wrong answer to "what is this meeting in", which is the
+/// question the live model is actually asked — and until now the two were the same field.
+///
+/// A language the **user named for this session** is untouched: somebody who says "this call is in
+/// Japanese" has said something about this call, and a multilingual model told so is more accurate
+/// than one guessing. A language that only ever came from settings is a preference, and a
+/// preference must not turn a detector into a model that has been told the wrong answer.
+///
+/// Only for models that can detect. Pinning a single-language specialist changes nothing — it hears
+/// what it hears — so this leaves those exactly as they were.
+#[cfg(feature = "models")]
+fn unpin_if_only_a_preference(
+    mut spec: crate::protocol::SessionSpec,
+    preferred: Option<&str>,
+    engine: &EngineState,
+) -> crate::protocol::SessionSpec {
+    let Some(preferred) = preferred else {
+        return spec;
+    };
+    if spec.language.as_deref() != Some(preferred) {
+        // The session named its own, or something later changed it. Not ours to undo.
+        return spec;
+    }
+
+    // A model nobody can look up is treated as one that detects, which is the safe direction:
+    // pinning a single-language specialist changes nothing it would have done anyway — it hears
+    // what it hears — while pinning a detector is the fault this exists to stop.
+    let claims = claimed_langs(&engine.store(), &spec.live_model);
+    let detects = claims.is_empty() || claims.iter().any(|lang| lang == "*") || claims.len() > 1;
+    if detects {
+        tracing::debug!(
+            model = %spec.live_model,
+            preferred,
+            "letting the model detect rather than pinning a preference from settings"
+        );
+        spec.language = None;
     }
     spec
 }
@@ -6574,7 +6644,11 @@ fn handle_command_with_models(
         // decoder is rebuilt, so the next utterance is heard by the new one. The open utterance is
         // lost rather than re-decoded — its audio lives inside the pipeline being replaced, and
         // half a sentence transcribed twice is worse than half a sentence missing.
-        Command::ModelSwap { id, language } => {
+        Command::ModelSwap {
+            id,
+            language,
+            languages,
+        } => {
             let Some(mut active) = session else {
                 // Not an error worth failing on: a client that swaps before recording is asking for
                 // the setting, and the setting is an HTTP call away.
@@ -6591,8 +6665,25 @@ fn handle_command_with_models(
             if !id.trim().is_empty() {
                 spec.live_model = id.trim().to_string();
             }
-            if let Some(language) = language {
+            // Several languages is a different arrangement, not a longer answer to the same
+            // question: the live model stops being told what to expect and starts detecting, and a
+            // specialist is paired to revise the language it is for. So `language` is cleared
+            // rather than set alongside — naming one would tell the live model to stop detecting,
+            // which is the single thing this needs it to do.
+            let named: Vec<String> = languages
+                .iter()
+                .map(|lang| lang.trim().to_lowercase())
+                .filter(|lang| !lang.is_empty())
+                .collect();
+            if named.len() > 1 {
+                spec.languages = named;
+                spec.language = None;
+            } else if let Some(only) = named.first() {
+                spec.languages.clear();
+                spec.language = Some(only.clone());
+            } else if let Some(language) = language {
                 let language = language.trim().to_lowercase();
+                spec.languages.clear();
                 spec.language = (!language.is_empty()).then_some(language);
             }
             // An empty model with a new language is the common case — the interface names a
@@ -6610,7 +6701,11 @@ fn handle_command_with_models(
                 Some(engine.warm()),
             ) {
                 Ok(mut runner) => {
-                    let said = spec.language.clone().unwrap_or_else(|| "auto".into());
+                    let said = spec
+                        .language
+                        .clone()
+                        .or_else(|| (!spec.languages.is_empty()).then(|| spec.languages.join(", ")))
+                        .unwrap_or_else(|| "auto".into());
                     runner.resume_from(&carried);
                     active.runner = runner;
                     active.spec = spec.clone();
@@ -9956,6 +10051,7 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
         let swap = serde_json::to_string(&Command::ModelSwap {
             id: String::new(),
             language: Some("en".into()),
+            languages: Vec::new(),
         })
         .unwrap();
         // `handle_command_with_models` and not `handle_command`: the swap belongs to the half of
@@ -9980,9 +10076,72 @@ ATTENDEE:mailto:b@x\r\nEND:VEVENT\r\n",
             serde_json::from_str(r#"{"cmd":"model_swap","language":"en"}"#).expect("parses");
         assert!(matches!(
             parsed,
-            Command::ModelSwap { ref id, ref language }
+            Command::ModelSwap {
+                ref id,
+                ref language,
+                ..
+            }
                 if id.is_empty() && language.as_deref() == Some("en")
         ));
+    }
+
+    /// A setting must not tell a detector what to hear.
+    ///
+    /// Reported twice, the second time sharply: *"cuộc họp làm gì có 1 ngôn ngữ được?"* Somebody
+    /// speaking Vietnamese and English watched every Vietnamese sentence come back as confident
+    /// English words that were never said — `Xin chào, tôi tên là Việt` as `Sing out the dinner
+    /// field`. They had named no language for the meeting. `models.language`, set once and never
+    /// revisited, was being handed to a multilingual model as "decode as this", which is how a
+    /// model that can detect stops detecting.
+    ///
+    /// It also made the bilingual arrangement unreachable: `pick_pair` fires only when no language
+    /// is named, and this named one before anything could ask.
+    #[cfg(feature = "models")]
+    #[test]
+    fn a_language_preference_chooses_a_model_without_silencing_one_that_detects() {
+        let (_tmp, engine) = engine();
+
+        // As `choose_models` leaves it: the preference has already been copied into the spec, which
+        // is the state this function exists to correct. Building it without that copy is a test
+        // that passes by returning early — this one did, first time.
+        let mut spec = crate::protocol::SessionSpec::new("whisper-tiny");
+        spec.language = Some("en".into());
+
+        let multilingual = unpin_if_only_a_preference(spec.clone(), Some("en"), &engine);
+        assert_eq!(
+            multilingual.language, None,
+            "a preference silenced a model that can detect"
+        );
+
+        // A language named for *this* session is a fact about this session, not a preference.
+        let mut asked = spec;
+        asked.language = Some("ja".into());
+        assert_eq!(
+            unpin_if_only_a_preference(asked, Some("en"), &engine).language,
+            Some("ja".into()),
+            "the session's own answer was overwritten"
+        );
+    }
+
+    /// Discovering mid-meeting that the call has two languages in it.
+    ///
+    /// Reported by somebody speaking Vietnamese and English into a session pinned to English: every
+    /// Vietnamese sentence came back as confident English words that were never said — `Xin chào,
+    /// tôi tên là Việt` as `Sing out the dinner field`. A model told to expect one language does
+    /// not fail on another, it invents.
+    ///
+    /// The arrangement that handles it has existed since `pick_pair` and could only be asked for at
+    /// `session_start`, so the one moment a person finds out was the one moment they could not say
+    /// so. This is the wire form of saying so.
+    #[test]
+    fn a_swap_may_name_several_languages_and_that_stops_the_model_expecting_one() {
+        let parsed: Command =
+            serde_json::from_str(r#"{"cmd":"model_swap","languages":["vi","en"]}"#)
+                .expect("parses");
+        let Command::ModelSwap { languages, .. } = parsed else {
+            panic!("not a swap");
+        };
+        assert_eq!(languages, vec!["vi".to_string(), "en".to_string()]);
     }
 
     /// The same contract for translation: no recording, no change, and a sentence pointing at the

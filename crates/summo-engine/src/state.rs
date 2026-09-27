@@ -12,6 +12,12 @@ use crate::protocol::SessionSpec;
 /// Whether a recording is in progress, and with what.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
+// The recording arm carries what a banner has to be able to say — two models, a language, a list of
+// languages, the subtitle targets, the spoken one, a meeting id. `Idle` carries nothing, so clippy
+// sees a large difference and suggests boxing. There is exactly one of these, behind an `RwLock`,
+// read by a status route: the size costs one allocation that never happens in a loop, and boxing
+// would put an indirection in front of every field for it.
+#[allow(clippy::large_enum_variant)]
 pub enum SessionStatus {
     Idle,
     Recording {
@@ -35,6 +41,14 @@ pub enum SessionStatus {
         /// while the daemon confidently decoded Vietnamese.
         #[serde(skip_serializing_if = "Option::is_none")]
         language: Option<String>,
+        /// Every language the meeting is in, when more than one was named.
+        ///
+        /// Reported for the same reason `language` is, and it was the half that was missing: with
+        /// several named the live model is *detecting* and a specialist is paired behind it, which
+        /// is a different arrangement and not a longer answer. A banner reading `language` alone
+        /// showed "automatic" over a session that had been told exactly which two to expect.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        languages: Vec<String>,
         /// What finished lines are being translated into. Empty means no translation.
         ///
         /// Reported for the same reason as `language`, and it was the half that was missing: the
@@ -277,6 +291,7 @@ impl EngineState {
             refine_model: spec.refine_model.clone(),
             denoise_model: spec.denoise_model.clone(),
             language: spec.language.clone(),
+            languages: spec.languages.clone(),
             translate_into: spec.translate_into.clone(),
             listen_in: spec.listen_in.clone(),
             segments: 0,
@@ -296,6 +311,7 @@ impl EngineState {
             refine_model,
             denoise_model,
             language,
+            languages,
             translate_into,
             listen_in,
             ..
@@ -305,6 +321,7 @@ impl EngineState {
             refine_model.clone_from(&spec.refine_model);
             denoise_model.clone_from(&spec.denoise_model);
             language.clone_from(&spec.language);
+            languages.clone_from(&spec.languages);
             translate_into.clone_from(&spec.translate_into);
             listen_in.clone_from(&spec.listen_in);
         }

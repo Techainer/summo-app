@@ -6,7 +6,7 @@ import { cn } from "../../lib/cn";
 import { CatalogueClient, shortName } from "../../lib/catalogue";
 import { useEngine } from "../../lib/engine-context";
 import { readJson, useErrorText } from "../../lib/errors";
-import { AUTO, autoAvailable, languageName, ordered, type Language } from "../../lib/languages";
+import { languageName, ordered } from "../../lib/languages";
 import { url } from "../../lib/library";
 import { fetchPlan } from "../../lib/plan";
 import { useLoad } from "../../lib/use-load";
@@ -14,6 +14,7 @@ import { Select } from "../ui";
 import { useState as useLocalState } from "react";
 
 import { ListenIn } from "./ListenIn";
+import { SpokenLanguage } from "./SpokenLanguage";
 import { load as loadCapture } from "../../lib/capture";
 import { TranslateTargets } from "./TranslateTargets";
 import { voicesFor } from "../../lib/dub";
@@ -54,19 +55,18 @@ export function ListeningPanel({
   spoken,
   into,
   refine,
-  languages,
   listen,
   onChanged,
 }: {
   /** What the daemon says it is decoding with, which is not always what this browser asked for. */
   live_model: string | undefined;
-  spoken: string;
+  /** The languages this meeting is in, most-spoken first. Empty means detect. */
+  spoken: string[];
   into: string[];
   /** The language being read aloud, as the daemon reports it. Empty is off. */
   listen: string;
   /** The second speech model the daemon says it is checking the text with, or `""` for none. */
   refine: string;
-  languages: Language[];
   /** Re-read `/status`; the daemon answers before the pipeline is actually swapped. */
   onChanged: () => void;
 }) {
@@ -119,7 +119,6 @@ export function ListeningPanel({
         ).length > 0,
     )
     .map((code) => ({ code, label: languageName(code, locale) }));
-  const chosen = speech.find((m) => m.id === live_model);
 
   // The model that will do it, named. `using` is the daemon's own answer; the catalogue supplies
   // the readable name for it.
@@ -139,13 +138,6 @@ export function ListeningPanel({
   // right a moment later. Whoever read it in that moment had been told something false.
   const known = plan.data !== null;
   const canTranslate = !known || using !== null || endpoint;
-
-  const spokenOptions = chosen
-    ? ordered(chosen.langs, locale)
-    : ordered(
-        languages.filter((l) => l.installed && l.model && !l.multilingual_only).map((l) => l.code),
-        locale,
-      );
 
   return (
     <div data-testid="listening-panel" className="border-accent/20 mt-2.5 border-t pt-3">
@@ -183,26 +175,26 @@ export function ListeningPanel({
           </Select>
         </Field>
 
-        <Field label={t("record.spoken")} className="lg:order-3">
-          <Select
-            size="sm"
-            aria-label={t("record.spoken")}
+        {/* No `Field` wrapper: `SpokenLanguage` renders its own label, and two elements carrying
+            the same label text make every lookup for it ambiguous — for a screen reader as much as
+            for a test. */}
+        <div className="sm:col-span-2 lg:order-3 lg:col-span-2">
+          {/* Several, not one — the same control the home card uses.
+              This was a single dropdown, so the arrangement for a bilingual meeting could only be
+              asked for before pressing record. Somebody speaking Vietnamese and English into a
+              session pinned to English got every Vietnamese sentence back as confident English
+              words that were never said: a model told to expect one language does not fail on
+              another, it invents. The one moment you find that out is mid-meeting, and it was the
+              one moment there was no way to say so. */}
+          <SpokenLanguage
             value={spoken}
-            onChange={(event) => {
-              retune({ language: event.target.value });
+            compact
+            onChange={(codes) => {
+              retune({ languages: codes });
               onChanged();
             }}
-          >
-            {(chosen ? chosen.langs.length > 1 : autoAvailable(languages)) && (
-              <option value={AUTO}>{t("record.spoken_auto")}</option>
-            )}
-            {spokenOptions.map((each) => (
-              <option key={each.code} value={each.code}>
-                {each.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
+          />
+        </div>
 
         {/* The second speech model, live.
             
@@ -329,11 +321,20 @@ export function ListeningPanel({
           Said, not prevented: a meeting held in English by a Vietnamese speaker who set the spoken
           language wrong has a real reason to want this, and refusing the choice would be guessing
           which of the two settings is the mistake. */}
-      {spoken !== AUTO && into.includes(spoken) && (
-        <p className="text-fg-dim text-micro mt-2">
-          {t("record.translate_same", { language: languageName(spoken, locale) })}
-        </p>
-      )}
+      {/* Only when there is *one* target. With two or more the two-way rule applies — a line is
+          translated into whichever of them it is not — so a meeting in English with Vietnamese and
+          English chosen subtitles every English line in Vietnamese, which is exactly what was
+          wanted. This warning fired there anyway and contradicted the sentence directly above it
+          saying so: two rows of the same panel disagreeing, which is the fault this file already
+          carries a comment about. */}
+      {into.length === 1 &&
+        spoken.length === 1 &&
+        spoken[0] !== undefined &&
+        into.includes(spoken[0]) && (
+          <p className="text-fg-dim text-micro mt-2">
+            {t("record.translate_same", { language: languageName(spoken[0], locale) })}
+          </p>
+        )}
 
       {/* A swap the daemon refused. Without this the dropdown showed the new model and the meeting
           kept translating with the old one — the same silent disagreement between a control and the

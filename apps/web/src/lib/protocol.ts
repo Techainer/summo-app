@@ -102,7 +102,11 @@ export type Command =
   | { cmd: "model_pull"; id: string }
   // Both fields optional on purpose: the interface changes a language and lets the daemon pick the
   // model that hears it, while a client comparing two models names one and keeps the language.
-  | { cmd: "model_swap"; id?: string; language?: string }
+  // `languages` is the bilingual answer and not a longer `language`: several stops the live model
+  // expecting one and starts it detecting, with a specialist paired to revise the language it is
+  // for. It could only be asked for at `session_start`, which is the wrong moment — a meeting is
+  // discovered to be bilingual while it is happening.
+  | { cmd: "model_swap"; id?: string; language?: string; languages?: string[] }
   // The same idea for the other half of the pipeline. Omitted or empty `to` switches translation
   // off, which is as necessary as turning it on: it was previously readable only from
   // `session_start`, so a meeting that turned out not to need it paid for a translator on every

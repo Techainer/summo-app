@@ -87,6 +87,8 @@ export function SessionControls({
         state?: string;
         live_model?: string;
         language?: string;
+        /** Several, when the meeting turned out to be in more than one. */
+        languages?: string[];
         translate_into?: string[];
         // The daemon's own answer about what is being read aloud. Not the browser's copy: a dub is
         // audible, and a control that disagreed with the ears would be the worst of the three.
@@ -109,7 +111,17 @@ export function SessionControls({
   );
   const spoken = named ?? (covered.length === 1 ? (covered[0]?.code ?? AUTO) : AUTO);
   const current = languages.find((language) => language.code === spoken);
-  const label = spoken === AUTO ? t("record.spoken_auto") : languageName(spoken, locale);
+
+  // What the daemon is actually set to, as a list. Several means it is detecting per utterance with
+  // a specialist paired behind it; one means it was told to expect that language. The panel edits
+  // this, so it has to be the daemon's answer rather than the browser's memory of it.
+  const spokenList = recording?.languages?.length ? recording.languages : named ? [named] : [];
+  const label =
+    spokenList.length > 1
+      ? spokenList.map((code) => languageName(code, locale)).join(", ")
+      : spoken === AUTO
+        ? t("record.spoken_auto")
+        : languageName(spoken, locale);
   const into = recording?.translate_into ?? [];
 
   // Kept in step with the daemon for as long as a recording is running.
@@ -187,11 +199,10 @@ export function SessionControls({
         <Suspense fallback={null}>
           <ListeningPanel
             live_model={recording?.live_model}
-            spoken={spoken}
+            spoken={spokenList}
             into={into}
             listen={recording?.listen_in ?? ""}
             refine={recording?.refine_model ?? ""}
-            languages={languages}
             onChanged={settle}
           />
         </Suspense>

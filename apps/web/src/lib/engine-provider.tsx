@@ -166,8 +166,13 @@ export function EngineProvider({ children }: { children: ReactNode }) {
   // daemon owns and the settings screen writes, and mirroring it into the browser's capture
   // preferences would give two places an opinion about the same thing.
   const retune = useCallback(
-    (change: { language?: string; model?: string }) => {
-      if (change.language !== undefined) {
+    (change: { language?: string; languages?: string[]; model?: string }) => {
+      // Several languages replaces the list outright: it is the answer to "what is this meeting
+      // in", and a meeting is not more bilingual because somebody opened the panel twice.
+      if (change.languages !== undefined) {
+        const current = loadCapture();
+        saveCapture({ ...current, spoken: change.languages });
+      } else if (change.language !== undefined) {
         const current = loadCapture();
         // Mid-meeting the user is naming *the* language, so it becomes the primary and the rest
         // stay — correcting "this is Vietnamese actually" should not forget that English is also

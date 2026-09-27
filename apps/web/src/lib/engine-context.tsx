@@ -50,7 +50,14 @@ export interface EngineValue {
    * to Whisper and keep decoding Vietnamese" expressible — the pair a language-only signature could
    * not say, and the reason the in-meeting banner could offer a language and nothing else.
    */
-  retune: (change: { language?: string; model?: string }) => void;
+  /**
+   * Change what is listening, mid-meeting.
+   *
+   * `languages` is the bilingual answer and is not a longer `language`: several stops the model
+   * expecting one and starts it detecting, with a specialist paired to revise the language it is
+   * for. One of them is the ordinary case.
+   */
+  retune: (change: { language?: string; languages?: string[]; model?: string }) => void;
   /** Change the live translation targets mid-meeting; the empty list turns it off. */
   translate: (into: string[]) => void;
   /**
