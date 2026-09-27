@@ -25,7 +25,7 @@
 //! session, when the interface asks — rather than at startup regardless of whether anyone intends
 //! to record.
 
-use std::sync::Mutex;
+use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use summo_asr::Decoder;
@@ -71,23 +71,93 @@ impl Key {
 /// long its 150 MB had been unwanted.
 type Held = (Key, Box<dyn Decoder>, Instant);
 
+/// How long a session will wait for a build that is already running.
+///
+/// Measured, because this decides whether the wait is worth having: building `gipformer-65m` takes
+/// **2.9 seconds**, and a session that starts its own build while one is already running does not
+/// take 2.9 seconds — it takes longer, because the two builds compete for the same cores.
+///
+/// Ten seconds is three times the measured build and short enough that a build which has somehow
+/// hung does not hold a meeting hostage: past it the session loads its own decoder, which is
+/// exactly what it did before this existed.
+const WAIT_FOR_BUILD: Duration = Duration::from_secs(10);
+
+/// What the slot knows: what it holds, and what is on its way.
+#[derive(Default)]
+struct State {
+    held: Option<Held>,
+    /// The key of a build in flight, so a session arriving mid-build can wait for it.
+    building: Option<Key>,
+}
+
 /// The slot.
 #[derive(Default)]
 pub struct Warm {
-    slot: Mutex<Option<Held>>,
+    state: Mutex<State>,
+    /// Signalled whenever `building` resolves, either into a decoder or into nothing.
+    settled: Condvar,
 }
 
 impl Warm {
-    /// Take the decoder if it is the one being asked for.
+    /// Say that a decoder for this key is being built.
+    ///
+    /// The half of the slot that was missing. Warming starts when the record card opens and takes
+    /// about 2.9 seconds; a user who presses record inside that window found an empty slot and
+    /// built a **second** decoder beside the first. Measured on this machine: pressing straight
+    /// away took 3489 ms, pressing two seconds later took 347 ms. The slow case was not "the slot
+    /// was not filled", it was "the slot was being filled and nobody said so".
+    ///
+    /// Every caller that is about to build must say so, and must afterwards either [`Self::put`]
+    /// what it built or [`Self::gave_up`] — otherwise a session would wait [`WAIT_FOR_BUILD`] for
+    /// something that is never coming.
+    pub fn building(&self, key: &Key) {
+        if let Ok(mut state) = self.state.lock() {
+            state.building = Some(key.clone());
+        }
+    }
+
+    /// Say that a build named by [`Self::building`] will not arrive.
+    pub fn gave_up(&self, key: &Key) {
+        if let Ok(mut state) = self.state.lock()
+            && state.building.as_ref() == Some(key)
+        {
+            state.building = None;
+            self.settled.notify_all();
+        }
+    }
+
+    /// Take the decoder if it is the one being asked for, waiting for a build already under way.
     ///
     /// A miss is not an error and not a fallback to something similar: a decoder built for another
     /// language would transcribe the meeting in that language, which is the failure this whole
-    /// area of the app exists to prevent.
+    /// area of the app exists to prevent. A build in flight *for this key* is a different thing
+    /// from a miss, though, and treating them the same is what made pressing record immediately
+    /// after opening the app the slowest way to start a meeting.
     pub fn take(&self, key: &Key) -> Option<Box<dyn Decoder>> {
-        let mut slot = self.slot.lock().ok()?;
-        match slot.as_ref() {
-            Some((held, _, _)) if held == key => slot.take().map(|(_, decoder, _)| decoder),
-            _ => None,
+        let Ok(mut state) = self.state.lock() else {
+            return None;
+        };
+        let deadline = Instant::now() + WAIT_FOR_BUILD;
+        loop {
+            if state.held.as_ref().is_some_and(|(held, _, _)| held == key) {
+                return state.held.take().map(|(_, decoder, _)| decoder);
+            }
+            if state.building.as_ref() != Some(key) {
+                return None;
+            }
+            let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+                // Longer than any build has ever taken. Load our own rather than wait further —
+                // which is what this did before waiting existed, so the worst case is the old one.
+                tracing::warn!(
+                    model = %key.model,
+                    "a warm build has not finished in {WAIT_FOR_BUILD:?}; loading a decoder instead"
+                );
+                return None;
+            };
+            let Ok((next, _)) = self.settled.wait_timeout(state, left) else {
+                return None;
+            };
+            state = next;
         }
     }
 
@@ -96,14 +166,15 @@ impl Warm {
     /// Called on a timer. Returns what it dropped, so the caller can say so in a log rather than
     /// leaving a 150 MB change in resident memory unexplained.
     pub fn evict_idle(&self, now: Instant) -> Option<Key> {
-        let mut slot = self.slot.lock().ok()?;
-        let stale = slot
+        let mut state = self.state.lock().ok()?;
+        let stale = state
+            .held
             .as_ref()
             .is_some_and(|(_, _, since)| now.duration_since(*since) >= IDLE);
         if !stale {
             return None;
         }
-        slot.take().map(|(key, _, _)| key)
+        state.held.take().map(|(key, _, _)| key)
     }
 
     /// Put a freshly built decoder in the slot, replacing whatever was there.
@@ -112,17 +183,32 @@ impl Warm {
     /// recording will want, and holding two models is the memory decision this module exists to
     /// avoid.
     pub fn put(&self, key: Key, decoder: Box<dyn Decoder>) {
-        if let Ok(mut slot) = self.slot.lock() {
-            *slot = Some((key, decoder, Instant::now()));
+        if let Ok(mut state) = self.state.lock() {
+            if state.building.as_ref() == Some(&key) {
+                state.building = None;
+            }
+            state.held = Some((key, decoder, Instant::now()));
+            // Before the guard is dropped, which is allowed and is what every condvar example
+            // does: the waiter cannot run until this scope ends anyway.
+            self.settled.notify_all();
         }
+    }
+
+    /// Whether a build is already in flight, so a second caller does not start one beside it.
+    #[must_use]
+    pub fn busy(&self) -> bool {
+        self.state
+            .lock()
+            .is_ok_and(|state| state.building.is_some())
     }
 
     /// What is ready, for the interface to say so.
     #[must_use]
     pub fn ready(&self) -> Option<Key> {
-        self.slot
+        self.state
             .lock()
             .ok()?
+            .held
             .as_ref()
             .map(|(key, _, _)| key.clone())
     }
@@ -132,8 +218,12 @@ impl Warm {
     /// Called when the model it holds is removed: a warm decoder pointing at deleted blobs is a
     /// crash waiting for the next recording.
     pub fn clear(&self) {
-        if let Ok(mut slot) = self.slot.lock() {
-            *slot = None;
+        if let Ok(mut state) = self.state.lock() {
+            state.held = None;
+            // And anything on its way, so a session does not wait for a decoder built against
+            // blobs that have just been deleted.
+            state.building = None;
+            self.settled.notify_all();
         }
     }
 }
@@ -275,5 +365,100 @@ mod tests {
         warm.put(key.clone(), Box::new(Fake("m")));
         warm.clear();
         assert!(warm.take(&key).is_none());
+    }
+
+    /// The window the whole slot was missing.
+    ///
+    /// Warming starts when the record card opens and takes about 2.9 seconds. Pressing record
+    /// inside that window found an empty slot and built a *second* decoder beside the one already
+    /// being built — measured at 3489 ms, against 347 ms two seconds later. A build in flight for
+    /// the key being asked for is not a miss.
+    #[test]
+    fn a_take_during_a_build_waits_for_it() {
+        let warm = std::sync::Arc::new(Warm::default());
+        let key = Key::new("gipformer-65m", None, 8);
+
+        warm.building(&key);
+        let filling = {
+            let warm = warm.clone();
+            let key = key.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(120));
+                warm.put(key, Box::new(Fake("gipformer-65m")));
+            })
+        };
+
+        let began = Instant::now();
+        let taken = warm.take(&key);
+        assert!(taken.is_some(), "the take did not wait for the build");
+        assert!(
+            began.elapsed() >= Duration::from_millis(100),
+            "it returned before the build could have finished"
+        );
+        filling.join().unwrap();
+    }
+
+    /// A build that fails must not leave a session waiting ten seconds for nothing.
+    #[test]
+    fn a_take_during_a_build_that_fails_stops_waiting() {
+        let warm = std::sync::Arc::new(Warm::default());
+        let key = Key::new("gipformer-65m", None, 8);
+
+        warm.building(&key);
+        let failing = {
+            let warm = warm.clone();
+            let key = key.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(80));
+                warm.gave_up(&key);
+            })
+        };
+
+        let began = Instant::now();
+        assert!(warm.take(&key).is_none());
+        assert!(
+            began.elapsed() < WAIT_FOR_BUILD,
+            "it waited out the whole deadline for a build that had already failed"
+        );
+        failing.join().unwrap();
+    }
+
+    /// A build for *another* language is still a miss, and must not be waited for.
+    ///
+    /// The rule this module exists for: a decoder built for another language transcribes the
+    /// meeting in that language. Waiting three seconds to then miss anyway would be the old bug
+    /// with a delay in front of it.
+    #[test]
+    fn a_build_for_another_language_is_not_waited_for() {
+        let warm = Warm::default();
+        warm.building(&Key::new("gipformer-65m", Some("en".into()), 8));
+
+        let began = Instant::now();
+        assert!(
+            warm.take(&Key::new("gipformer-65m", Some("vi".into()), 8))
+                .is_none()
+        );
+        assert!(began.elapsed() < Duration::from_millis(50));
+    }
+
+    /// Deleting the model releases anyone waiting for a decoder built against its blobs.
+    #[test]
+    fn clearing_the_slot_releases_a_waiter() {
+        let warm = std::sync::Arc::new(Warm::default());
+        let key = Key::new("gipformer-65m", None, 8);
+        warm.building(&key);
+
+        let cleared = {
+            let warm = warm.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(80));
+                warm.clear();
+            })
+        };
+
+        let began = Instant::now();
+        assert!(warm.take(&key).is_none());
+        assert!(began.elapsed() < WAIT_FOR_BUILD);
+        cleared.join().unwrap();
     }
 }

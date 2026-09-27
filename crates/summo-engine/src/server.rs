@@ -4644,6 +4644,55 @@ struct InterfaceBody {
 /// Synchronous: it answers when the model is ready, which is what lets the caller show "ready"
 /// rather than "asked for". Around three and a half seconds.
 #[cfg(feature = "models")]
+/// Build the decoder the next recording will want, off to one side.
+///
+/// Called when a browser connects as well as when the record card asks. The card's nudge arrives
+/// when the *card* renders, and a user who opens the app and presses record immediately beats it:
+/// measured at 3489 ms against 347 ms two seconds later, and the whole difference was a decoder
+/// being built after the press instead of before it.
+///
+/// A connected browser is a person who has Summo open, which is the signal this module's own note
+/// asks for — "filled on demand … when the interface asks" — arriving earlier than the record card
+/// can send it. A daemon nobody has opened still holds nothing.
+///
+/// Silent. Nothing here is the user's business: it either makes the next press instant or it does
+/// not, and a failure leaves exactly the behaviour that existed before the slot did.
+#[cfg(feature = "models")]
+fn warm_ahead(engine: EngineState) {
+    // Already holding one, already building one, or busy recording with the decoder in use.
+    if engine.warm().ready().is_some() || engine.warm().busy() || engine.status().is_recording() {
+        return;
+    }
+    tokio::task::spawn_blocking(move || {
+        let spec = resolve_models(&crate::protocol::SessionSpec::new(""), &engine);
+        if spec.live_model.trim().is_empty() {
+            return;
+        }
+        let claim = crate::warm::Key::new(
+            &spec.live_model,
+            spec.language.clone(),
+            engine.hardware().recommended_threads(),
+        );
+        // Checked again inside the thread: two browsers opening at once would otherwise both pass
+        // the test above and build the same decoder twice.
+        if engine.warm().ready().is_some() || engine.warm().busy() {
+            return;
+        }
+        engine.warm().building(&claim);
+        match crate::warm::build(&spec, &engine.store(), engine.hardware()) {
+            Ok((key, decoder)) => {
+                tracing::info!(model = %key.model, "warmed ahead of the first press");
+                engine.warm().put(key, decoder);
+            }
+            Err(e) => {
+                engine.warm().gave_up(&claim);
+                tracing::debug!(error = %e, "could not warm ahead");
+            }
+        }
+    });
+}
+
+#[cfg(feature = "models")]
 async fn warm_model(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -4677,11 +4726,27 @@ async fn warm_model(
     // On a blocking thread: building a decoder is seconds of CPU inside ONNX Runtime, and holding
     // an async worker for that long starves every other request the daemon is serving.
     let built = tokio::task::spawn_blocking(move || {
-        crate::warm::build(&spec, &engine.store(), engine.hardware()).map(|(key, decoder)| {
-            let described = serde_json::json!({ "model": key.model, "language": key.language });
-            engine.warm().put(key, decoder);
-            described
-        })
+        // Announced before the work starts, so a user who presses record during these three
+        // seconds waits for *this* decoder instead of building a second one beside it. Measured:
+        // pressing straight away took 3489 ms and pressing two seconds later took 347 ms, and the
+        // difference was entirely a build nobody could see.
+        let claim = crate::warm::Key::new(
+            &spec.live_model,
+            spec.language.clone(),
+            engine.hardware().recommended_threads(),
+        );
+        engine.warm().building(&claim);
+        match crate::warm::build(&spec, &engine.store(), engine.hardware()) {
+            Ok((key, decoder)) => {
+                let described = serde_json::json!({ "model": key.model, "language": key.language });
+                engine.warm().put(key, decoder);
+                Ok(described)
+            }
+            Err(e) => {
+                engine.warm().gave_up(&claim);
+                Err(e)
+            }
+        }
     })
     .await;
 
@@ -5145,6 +5210,20 @@ async fn delete_note(
 /// chicken-and-egg, and the assets are the same public bundle anybody can download. Everything the
 /// page then does is authenticated.
 async fn interface(State(state): State<AppState>, uri: axum::http::Uri) -> impl IntoResponse {
+    // The earliest moment the daemon knows a person is here.
+    //
+    // Warming from the websocket was already two seconds earlier than the record card's own nudge,
+    // and still lost to somebody who presses record the moment the window appears — the build
+    // takes 2.9 seconds and the socket opens after the bundle has parsed. The document request is
+    // the first byte of the app, so this is as early as the signal exists.
+    //
+    // Only for the document, not for the hundred asset requests behind it: `warm_ahead` is cheap
+    // to call repeatedly — it returns at once when something is held or being built — but the
+    // condition it reads is worth being asked once rather than per file.
+    #[cfg(feature = "models")]
+    if uri.path() == "/" || uri.path().ends_with(".html") {
+        warm_ahead(state.engine.clone());
+    }
     let port = state.port.load(std::sync::atomic::Ordering::Relaxed);
     crate::assets::serve(uri.path(), port, state.token.as_str())
 }
@@ -5977,6 +6056,9 @@ async fn websocket(
     if let Err(rejection) = state.guard(&headers, q.token.as_deref()) {
         return rejection.into_response();
     }
+    // The app is open, so somebody is here. See `warm_ahead`.
+    #[cfg(feature = "models")]
+    warm_ahead(state.engine.clone());
     upgrade
         .on_upgrade(move |socket| handle_socket(socket, state.engine))
         .into_response()
@@ -6685,11 +6767,21 @@ fn handle_command_with_models(
             if let Some(spec) = finished {
                 let engine = engine.clone();
                 std::thread::spawn(move || {
+                    let claim = crate::warm::Key::new(
+                        &spec.live_model,
+                        spec.language.clone(),
+                        engine.hardware().recommended_threads(),
+                    );
+                    // Claimed here too: somebody who stops one meeting and starts another lands
+                    // in the middle of this rebuild, which is the same window as the one after
+                    // opening the app.
+                    engine.warm().building(&claim);
                     match crate::warm::build(&spec, &engine.store(), engine.hardware()) {
                         Ok((key, decoder)) => engine.warm().put(key, decoder),
                         // Nothing broken: the next recording loads its own decoder exactly as it
                         // did before this optimisation existed.
                         Err(e) => {
+                            engine.warm().gave_up(&claim);
                             tracing::debug!(error = %e, "could not pre-load the next decoder")
                         }
                     }
@@ -6707,6 +6799,12 @@ fn handle_command_with_models(
             let mut spec = crate::protocol::SessionSpec::new(id.trim());
             spec.language = None;
             let spec = resolve_models(&spec, engine);
+            let claim = crate::warm::Key::new(
+                &spec.live_model,
+                spec.language.clone(),
+                engine.hardware().recommended_threads(),
+            );
+            engine.warm().building(&claim);
             match crate::warm::build(&spec, &engine.store(), engine.hardware()) {
                 Ok((key, decoder)) => {
                     let said = key.language.clone().unwrap_or_else(|| "auto".into());
@@ -6717,7 +6815,10 @@ fn handle_command_with_models(
                         session,
                     )
                 }
-                Err(e) => (vec![Event::error(&e)], session),
+                Err(e) => {
+                    engine.warm().gave_up(&claim);
+                    (vec![Event::error(&e)], session)
+                }
             }
         }
 

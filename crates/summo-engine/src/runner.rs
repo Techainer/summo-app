@@ -126,6 +126,19 @@ impl SessionRunner {
         // Taken, not borrowed: whoever gets it owns it, and the slot is refilled afterwards. That
         // keeps every question about a killed recording holding a borrowed decoder from existing.
         let mut ready = warm.and_then(|warm| warm.take(&key));
+        // Whether the slot answered, said once per session.
+        //
+        // This is the difference between a meeting that starts now and one that starts in three
+        // seconds, and until this line there was no way to tell which had happened — a missed
+        // warm slot and a slot nobody filled look identical from outside, and so does a key that
+        // does not match the one the session resolved to.
+        tracing::info!(
+            model = %key.model,
+            language = ?key.language,
+            hit = ready.is_some(),
+            offered = warm.is_some(),
+            "warm slot"
+        );
 
         // A second model, when one is named and it is not the one already decoding. `validate`
         // refuses the identical pair, which would decode everything twice for nothing.
@@ -139,12 +152,27 @@ impl SessionRunner {
 
         let mut lanes = HashMap::new();
         for &lane in &spec.lanes {
+            // Timed per lane and per model, because "starting is slow" is four costs in a trench
+            // coat: a detector per lane, a decoder per lane, and whichever of them the warm slot
+            // already paid for. Which one dominates decides what is worth fixing, and guessing at
+            // it is how the last three performance changes in this repository were wrong.
+            let began = std::time::Instant::now();
             let vad: Box<dyn Vad> = Box::new(SileroVad::load(&vad_model, 1)?);
+            let vad_ms = began.elapsed().as_millis();
             let width = vad.frame_len();
+            let began = std::time::Instant::now();
+            let warmed = ready.is_some();
             let decoder = match ready.take() {
                 Some(decoder) => decoder,
                 None => load_decoder(&spec.live_model, spec.language.as_deref(), store, threads)?,
             };
+            tracing::info!(
+                ?lane,
+                vad_ms,
+                decoder_ms = began.elapsed().as_millis(),
+                warmed,
+                "lane ready"
+            );
 
             let cfg = SessionConfig {
                 lane,

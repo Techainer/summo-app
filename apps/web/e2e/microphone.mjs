@@ -106,9 +106,9 @@ const press = (page) =>
   // How long "start meeting" takes, measured rather than guessed.
   //
   // Reported as slow — "vào app bấm start meeting cũng rất chậm" — and nothing anywhere said how
-  // slow. The press itself is cheap; what is behind it is a decoder being loaded, which is what
-  // the warm slot exists to avoid and what a cold first meeting still pays. Printed every run so
-  // a change that makes it worse shows up in the log of the run that made it worse.
+  // slow. `e2e/start-latency.mjs` takes it apart: building the decoder is 2.9 s of it, and the
+  // warm slot turns a press two seconds after opening into about 300 ms. This is the guard rail
+  // on the worst case, pressing the moment the window appears, where the build cannot be dodged.
   const pressed = Date.now();
   await press(page);
   await page
