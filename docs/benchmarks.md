@@ -458,6 +458,28 @@ toss. Shorter utterances go to the second model whatever they claim to be — se
 twenty milliseconds at a specialist's real-time factor of 0.019; being wrong the other way costs
 the half of a bilingual meeting that short phrases live in.
 
+### A better signal than the label
+
+If the label cannot be trusted, something else has to decide which model was right. Confidence
+would be the obvious answer and is not available — no runtime in this tree populates it; only the
+fake decoder in the tests returns a number.
+
+What is available is what the models produced. `gipformer-65m`, 25 FLEURS clips each:
+
+| Audio | Mean characters | Near-empty |
+|---|---:|---:|
+| Vietnamese | **146** | 0 / 25 |
+| English | **15** | 2 / 25 |
+
+**A specialist fed the wrong language goes quiet.** It does not invent that language; it returns
+almost nothing. Ten to one is a far stronger signal than a label that is right zero percent of the
+time on a short clip, and it costs nothing to compute.
+
+So the routing decision is made on output rather than on detection: a refinement that says a small
+fraction of what the live model said is the wrong model for that sentence and is dropped. A ratio
+rather than a floor, because a genuinely short utterance produces a short refinement from the right
+model too. See `hybrid::too_quiet_to_be_this_language`.
+
 ### Reproduce
 
 ```bash

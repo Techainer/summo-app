@@ -47,6 +47,27 @@ pub struct RefineJob {
     pub text: String,
 }
 
+/// Whether a refinement is so much shorter than the text it would replace that the model plainly
+/// did not understand the audio.
+///
+/// Compared on characters with whitespace removed, so it means the same thing in a script that does
+/// not use spaces.
+///
+/// Two fifths is the threshold. The measured gap between a specialist on its own language and on
+/// another is about ten to one, so anything in that region is unambiguous; the margin is there for
+/// the honest case where two models simply disagree about a few words.
+#[must_use]
+fn too_quiet_to_be_this_language(refined: &str, current: &str) -> bool {
+    let weigh = |text: &str| text.chars().filter(|c| !c.is_whitespace()).count();
+    let current = weigh(current);
+    // Nothing to compare against: the live model said nothing either, so this is not evidence of
+    // the wrong language and the refinement is the only text there is.
+    if current < 12 {
+        return false;
+    }
+    weigh(refined) * 5 < current * 2
+}
+
 /// What one frame produced.
 #[derive(Debug, Default)]
 pub struct HybridOutput {
@@ -182,6 +203,26 @@ impl<D: Decoder> HybridSession<D> {
             return Ok(None);
         }
 
+        // The second model heard a language it does not speak.
+        //
+        // Measured rather than reasoned about: `gipformer-65m` on 25 FLEURS Vietnamese clips
+        // returns a mean of **146 characters**; on 25 English clips, **15**. A specialist fed the
+        // wrong language does not invent that language, it goes quiet. That ten-to-one gap is a
+        // far better signal than the language label the fast model attaches, which is worthless
+        // below two seconds — zero out of twenty-five for Vietnamese — see
+        // `docs/benchmarks.md`.
+        //
+        // So the decision is made on what the two models actually produced rather than on what one
+        // of them guessed the language was. A refinement that says a fraction of what the live
+        // model said is the wrong model for this sentence, and replacing real words with near
+        // silence is the worst thing this path can do.
+        //
+        // A ratio, not a floor: a genuinely short utterance produces a short refinement from the
+        // right model too, and a fixed minimum would throw those away.
+        if too_quiet_to_be_this_language(&transcript.text, current_text) {
+            return Ok(None);
+        }
+
         let mut segment = Segment::new(job.seq, job.lane, transcript.text, job.t0, job.t1);
         segment.source = SegmentSource::Revised;
         segment.conf = transcript.confidence;
@@ -213,6 +254,38 @@ impl<D: Decoder> HybridSession<D> {
 
 #[cfg(test)]
 mod tests {
+
+    /// The measurement this rule comes from: `gipformer-65m` returns a mean of 146 characters on
+    /// Vietnamese audio and 15 on English. A specialist fed the wrong language goes quiet rather
+    /// than inventing that language, which is a far better signal than the language label — that
+    /// is worthless below two seconds, zero out of twenty-five for Vietnamese.
+    #[test]
+    fn a_refinement_that_went_quiet_is_the_wrong_model_for_this_sentence() {
+        let heard = "Many people don't think about them as dinosaurs, but they are";
+        assert!(super::too_quiet_to_be_this_language("nhiều", heard));
+        assert!(super::too_quiet_to_be_this_language("", heard));
+    }
+
+    /// Two models disagreeing about a few words is not the same thing, and the margin is there for
+    /// exactly that case.
+    #[test]
+    fn a_refinement_of_about_the_same_length_is_kept() {
+        let heard = "Tuy nhiên loài chim vẫn có rất nhiều điểm giống với khủng long";
+        let better = "Tuy nhiên, loài chim vẫn có rất nhiều điểm giống với khủng long.";
+        assert!(!super::too_quiet_to_be_this_language(better, heard));
+    }
+
+    /// A short utterance produces a short refinement from the right model too. A fixed minimum
+    /// would have thrown those away, which is why the rule is a ratio — and why there is a floor
+    /// below which there is nothing to compare against at all.
+    #[test]
+    fn a_genuinely_short_utterance_is_not_evidence_of_anything() {
+        assert!(!super::too_quiet_to_be_this_language("Ừ", "Uh"));
+        assert!(!super::too_quiet_to_be_this_language(
+            "Xin chào",
+            "Sin chao"
+        ));
+    }
     use super::*;
     use crate::decoder::{
         Transcript,
