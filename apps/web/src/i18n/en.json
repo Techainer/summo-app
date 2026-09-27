@@ -88,6 +88,7 @@
     "listen_off": "Off",
     "listen_volume": "Voice volume",
     "listen_headphones": "use headphones",
+    "listening_reading": "reading it aloud in {language}",
     "translate_both_ways": "Each line is translated into whichever of these it is not — {languages}.",
     "translate_many_ways": "Each line is translated into every one of these that it is not — {languages}.",
     "translate_needs_model": "No translation model is installed yet.",
@@ -272,7 +273,11 @@
     "loading": "Loading…",
     "saving": "Saving…",
     "dismiss": "Dismiss",
-    "done": "Done"
+    "done": "Done",
+    "crash_title": "Summo hit a problem on this screen",
+    "crash_body": "The recording is not affected — the daemon keeps it. Reloading usually clears this.",
+    "crash_reload": "Reload",
+    "crash_details": "Technical details"
   },
   "setup": {
     "title": "Welcome to Summo",

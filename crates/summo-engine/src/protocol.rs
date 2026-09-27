@@ -75,6 +75,16 @@ pub enum Command {
         )]
         into: Vec<String>,
     },
+    /// Start or stop reading the translation aloud, mid-meeting.
+    ///
+    /// Its own command for the same reason [`Command::Translate`] is: loading a voice takes nearly
+    /// two seconds and is handled on the socket task where it can be awaited off it. An empty
+    /// language turns it off, and that direction is the one that matters most here — a dub is
+    /// audible, so somebody who wants it to stop wants it to stop now.
+    Listen {
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        lang: String,
+    },
     /// Change the second model — the one that re-decodes finished utterances — mid-meeting.
     ///
     /// Its own command rather than a field on [`Command::ModelSwap`] for the reason `Translate` is

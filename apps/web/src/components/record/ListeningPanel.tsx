@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 
 import { useI18n } from "../../i18n/context";
 import { cn } from "../../lib/cn";
-import { CatalogueClient } from "../../lib/catalogue";
+import { CatalogueClient, shortName } from "../../lib/catalogue";
 import { useEngine } from "../../lib/engine-context";
 import { readJson, useErrorText } from "../../lib/errors";
 import { AUTO, autoAvailable, languageName, ordered, type Language } from "../../lib/languages";
@@ -11,7 +11,12 @@ import { url } from "../../lib/library";
 import { fetchPlan } from "../../lib/plan";
 import { useLoad } from "../../lib/use-load";
 import { Select } from "../ui";
+import { useState as useLocalState } from "react";
+
+import { ListenIn } from "./ListenIn";
+import { load as loadCapture } from "../../lib/capture";
 import { TranslateTargets } from "./TranslateTargets";
+import { voicesFor } from "../../lib/dub";
 
 /**
  * Everything about a running recording that can still be changed, in four controls.
@@ -50,12 +55,15 @@ export function ListeningPanel({
   into,
   refine,
   languages,
+  listen,
   onChanged,
 }: {
   /** What the daemon says it is decoding with, which is not always what this browser asked for. */
   live_model: string | undefined;
   spoken: string;
   into: string[];
+  /** The language being read aloud, as the daemon reports it. Empty is off. */
+  listen: string;
   /** The second speech model the daemon says it is checking the text with, or `""` for none. */
   refine: string;
   languages: Language[];
@@ -63,7 +71,20 @@ export function ListeningPanel({
   onChanged: () => void;
 }) {
   const { t, locale } = useI18n();
-  const { handshake, retune, translate, refine: setRefine, transcript } = useEngine();
+  const {
+    handshake,
+    retune,
+    translate,
+    listen: setListen,
+    listenVolume,
+    refine: setRefine,
+    transcript,
+  } = useEngine();
+
+  // The volume lives here while the panel is open. It is a fact about this listener's ears, not
+  // about the meeting, so it never goes to the daemon — see `DubPlayer`.
+  const [volume, setVolume] = useLocalState(() => loadCapture().listenVolume);
+
   const navigate = useNavigate();
   const say = useErrorText();
   // A refused translator swap, said out loud. See `pointTranslatorAt`.
@@ -85,12 +106,28 @@ export function ListeningPanel({
   const models = catalogue.data?.models ?? [];
   const speech = models.filter((m) => m.installed && m.task === "asr");
   const translators = models.filter((m) => m.installed && m.task === "translate");
+
+  // The languages this machine can actually say: being translated into, and with a voice installed
+  // for them. Offering either one alone is the dead end this feature already had — a control
+  // reporting it is on over an hour of silence.
+  const speakable = into
+    .filter(
+      (code) =>
+        voicesFor(
+          models.filter((m) => m.installed),
+          code,
+        ).length > 0,
+    )
+    .map((code) => ({ code, label: languageName(code, locale) }));
   const chosen = speech.find((m) => m.id === live_model);
 
   // The model that will do it, named. `using` is the daemon's own answer; the catalogue supplies
   // the readable name for it.
   const using = plan.data?.translation.using ?? null;
-  const usingName = translators.find((m) => m.id === using)?.name ?? using;
+  const usingName = (() => {
+    const found = translators.find((m) => m.id === using)?.name;
+    return found ? shortName(found) : using;
+  })();
   // An endpoint is a translator too, and one this panel cannot see in the catalogue. Offering the
   // target languages only when a *file* is installed would have refused the one configuration that
   // has always worked.
@@ -215,6 +252,29 @@ export function ListeningPanel({
             }}
           />
         </Field>
+
+        {/* Hearing it, beside reading it.
+            Here and not only on the home card, because this is the panel somebody opens *during*
+            the meeting — and a dub is playing into their ears while it runs. It was reachable only
+            before pressing record, which meant a person hearing a voice they wanted to stop had
+            nowhere to press. A control for something audible has to exist while it is audible. */}
+        {speakable.length > 0 && (
+          <Field label={t("record.listen_in")} className="sm:col-span-2 lg:order-2 lg:col-span-2">
+            <ListenIn
+              value={listen}
+              volume={volume}
+              options={speakable}
+              onChange={(lang) => {
+                setListen(lang);
+                onChanged();
+              }}
+              onVolume={(next) => {
+                setVolume(next);
+                listenVolume(next);
+              }}
+            />
+          </Field>
+        )}
 
         {translators.length > 1 && (
           <Field label={t("settings.mt_model")} className="lg:order-5">

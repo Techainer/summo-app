@@ -480,6 +480,22 @@ export function installedBytes(models: CatalogueModel[]): number {
 }
 
 /** Bytes as something a person reads, matching the onboarding screen's wording. */
+/**
+ * A model's name without the English subtitle the registry attaches to it.
+ *
+ * Catalogue names read `SMALL100 · translation, 100 languages`: a proper noun, a separator, and a
+ * description written in English for the models screen. That is right there and wrong the moment it
+ * is interpolated into a sentence — `SMALL100 · translation, 100 languages sẽ dịch` is a Vietnamese
+ * sentence with an English clause wedged into the middle of it, which is the same fault that was
+ * fixed once for the setup screen's model reasons.
+ *
+ * The proper noun survives translation; the subtitle does not, and does not belong.
+ */
+export function shortName(name: string): string {
+  const [first] = name.split("·");
+  return (first ?? name).trim() || name;
+}
+
 export function size(bytes: number): string {
   if (bytes <= 0) return "";
   const mb = bytes / 1_000_000;

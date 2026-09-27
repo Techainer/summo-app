@@ -29,6 +29,10 @@ export interface EngineValue {
   people: PeopleClient;
   handshake: { port: number; token: string };
   session: SessionState;
+  /** Start or stop reading the translation aloud, mid-meeting. Empty is off. */
+  listen: (lang: string) => void;
+  /** How loud, for this listener only. */
+  listenVolume: (volume: number) => void;
   transcript: TranscriptState;
   elapsed: number;
   level: number;

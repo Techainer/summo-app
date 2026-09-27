@@ -5874,20 +5874,26 @@ async fn handle_socket(mut socket: WebSocket, engine: EngineState) {
                 // socket.
                 match parse_refine(&text) {
                     Some(id) => set_refine_model(&engine, session.as_mut(), &id).await,
-                    None => match parse_translate(&text) {
-                        Some(into) => set_live_translation(&engine, session.as_mut(), into).await,
-                        None => {
-                            let (events, next) =
-                                handle_command_with_models(&text, &engine, session.take());
-                            session = next;
-                            // Speaking the translation, if somebody asked to hear it. After the
-                            // session exists and never inside its construction: the voice takes
-                            // nearly two seconds to load and this is the task that reads the
-                            // socket. See `attach_live_dub`.
-                            #[cfg(feature = "tts")]
-                            attach_live_dub(&engine, session.as_mut()).await;
-                            events
-                        }
+                    #[cfg(feature = "tts")]
+                    None => match parse_listen(&text) {
+                        Some(lang) => set_listen(&engine, session.as_mut(), lang).await,
+                        None => match parse_translate(&text) {
+                            Some(into) => {
+                                set_live_translation(&engine, session.as_mut(), into).await
+                            }
+                            None => {
+                                let (events, next) =
+                                    handle_command_with_models(&text, &engine, session.take());
+                                session = next;
+                                // Speaking the translation, if somebody asked to hear it. After the
+                                // session exists and never inside its construction: the voice takes
+                                // nearly two seconds to load and this is the task that reads the
+                                // socket. See `attach_live_dub`.
+                                #[cfg(feature = "tts")]
+                                attach_live_dub(&engine, session.as_mut()).await;
+                                events
+                            }
+                        },
                     },
                 }
             }
@@ -6186,6 +6192,73 @@ async fn set_live_translation(
     }
 }
 
+/// Whether this is a `listen` command, and the language it names.
+///
+/// Read before the general handler for the same reason `parse_translate` is: it loads a model, and
+/// it has to be awaited on the socket task rather than blocking it. See `attach_live_dub`.
+#[cfg(all(feature = "models", feature = "tts"))]
+fn parse_listen(text: &str) -> Option<String> {
+    match serde_json::from_str::<Command>(text) {
+        Ok(Command::Listen { lang }) => Some(lang),
+        _ => None,
+    }
+}
+
+/// Turn the spoken translation on or off while a meeting is running.
+#[cfg(all(feature = "models", feature = "tts"))]
+async fn set_listen(
+    engine: &EngineState,
+    session: Option<&mut ActiveSession>,
+    lang: String,
+) -> Vec<Event> {
+    let lang = lang.trim().to_string();
+    let Some(active) = session else {
+        return vec![Event::error(&summo_core::Error::Config(
+            "no recording to change".into(),
+        ))];
+    };
+
+    if lang.is_empty() {
+        // Off, and immediately. Whatever is already synthesised is dropped with the dub rather than
+        // played out over somebody who has just asked for silence.
+        let was = active.dub.take().is_some();
+        active.spec.listen_in = None;
+        engine.retuned(&active.spec);
+        return if was {
+            vec![Event::info(
+                "no longer reading the translation aloud".to_string(),
+            )]
+        } else {
+            Vec::new()
+        };
+    }
+
+    if active.spec.listen_in.as_deref() == Some(lang.as_str()) && active.dub.is_some() {
+        return Vec::new();
+    }
+
+    active.dub = None;
+    active.spec.listen_in = Some(lang.clone());
+    attach_live_dub(engine, Some(active)).await;
+    engine.retuned(&active.spec);
+
+    if active.dub.is_some() {
+        vec![Event::info(format!(
+            "reading the translation aloud in {lang}"
+        ))]
+    } else {
+        // Said rather than silently doing nothing: the two reasons are a language nothing is being
+        // translated into and no voice installed for it, and both are fixable by the person asking.
+        vec![Event::Error {
+            message: format!(
+                "cannot read {lang} aloud: nothing is translating into it, or no voice is installed"
+            ),
+            transient: true,
+            code: Some("listen.unavailable".into()),
+        }]
+    }
+}
+
 fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
     let command: Command = match serde_json::from_str(text) {
         Ok(c) => c,
@@ -6254,6 +6327,13 @@ fn handle_command(text: &str, engine: &EngineState) -> Vec<Event> {
         Command::Translate { .. } => vec![Event::Error {
             message: "cannot translate: this binary was built without recognition support. \
                       Rebuild with `--features models`."
+                .into(),
+            transient: false,
+            code: None,
+        }],
+        Command::Listen { .. } => vec![Event::Error {
+            message: "cannot read a translation aloud: this binary was built without recognition \
+                      support. Rebuild with `--features models,tts`."
                 .into(),
             transient: false,
             code: None,
@@ -6539,6 +6619,14 @@ fn handle_command_with_models(
         Command::Translate { .. } => (
             vec![Event::error(&summo_core::Error::Other(
                 "translation is applied on the socket task, not here".into(),
+            ))],
+            session,
+        ),
+        // Same arrangement again: attaching a dub loads a voice, and it is awaited where the
+        // socket can still be served.
+        Command::Listen { .. } => (
+            vec![Event::error(&summo_core::Error::Other(
+                "the spoken translation is applied on the socket task, not here".into(),
             ))],
             session,
         ),

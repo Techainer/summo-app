@@ -44,6 +44,14 @@ pub enum SessionStatus {
         /// to say why.
         #[serde(skip_serializing_if = "Vec::is_empty")]
         translate_into: Vec<String>,
+        /// The language being read aloud, when somebody asked to hear the translation.
+        ///
+        /// Reported for the third time for the same reason as the two above, and the omission had
+        /// the sharpest edge yet: a dub is *audible*. It played into somebody's headphones with
+        /// nothing anywhere on screen saying it was on, which language it was, or how to stop it —
+        /// the interface could not say because the daemon never told it.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        listen_in: Option<String>,
         /// Utterances committed so far.
         segments: u64,
         /// The document this session is writing into.
@@ -270,6 +278,7 @@ impl EngineState {
             denoise_model: spec.denoise_model.clone(),
             language: spec.language.clone(),
             translate_into: spec.translate_into.clone(),
+            listen_in: spec.listen_in.clone(),
             segments: 0,
             meeting,
         };
@@ -288,6 +297,7 @@ impl EngineState {
             denoise_model,
             language,
             translate_into,
+            listen_in,
             ..
         } = &mut *status
         {
@@ -296,6 +306,7 @@ impl EngineState {
             denoise_model.clone_from(&spec.denoise_model);
             language.clone_from(&spec.language);
             translate_into.clone_from(&spec.translate_into);
+            listen_in.clone_from(&spec.listen_in);
         }
     }
 

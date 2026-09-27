@@ -88,6 +88,9 @@ export function SessionControls({
         live_model?: string;
         language?: string;
         translate_into?: string[];
+        // The daemon's own answer about what is being read aloud. Not the browser's copy: a dub is
+        // audible, and a control that disagreed with the ears would be the worst of the three.
+        listen_in?: string;
         refine_model?: string;
       };
     }, [handshake]),
@@ -153,6 +156,14 @@ export function SessionControls({
                 language: into.map((code) => languageName(code, locale)).join(", "),
               })}`
             : ""}
+          {/* And whether any of it is being *spoken*. The loudest thing this feature does was the
+              one thing this line could not say: a voice played into somebody's headphones with
+              nothing on screen naming it, naming its language, or hinting where to stop it. */}
+          {recording?.listen_in
+            ? ` · ${t("record.listening_reading", {
+                language: languageName(recording.listen_in, locale),
+              })}`
+            : ""}
         </span>
 
         {extras}
@@ -178,6 +189,7 @@ export function SessionControls({
             live_model={recording?.live_model}
             spoken={spoken}
             into={into}
+            listen={recording?.listen_in ?? ""}
             refine={recording?.refine_model ?? ""}
             languages={languages}
             onChanged={settle}

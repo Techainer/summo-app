@@ -1,3 +1,4 @@
+import { Crashed } from "./components/shell/Crashed";
 import {
   Outlet,
   createHashHistory,
@@ -315,6 +316,10 @@ export const router = createRouter({
   // second of the pending component, which is right here: locally a chunk arrives in a few
   // milliseconds, so the screen simply appears and this is never rendered.
   defaultPendingComponent: ScreenPending,
+  // Shown when a screen throws. The router's own default is one line of English over the whole
+  // app — see `Crashed` for why that is the worst possible place for the wrong language, and for
+  // the sentence it was missing about the recording being safe.
+  defaultErrorComponent: ({ error }) => <Crashed error={error} />,
 });
 
 declare module "@tanstack/react-router" {

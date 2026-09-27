@@ -108,6 +108,9 @@ export type Command =
   // `session_start`, so a meeting that turned out not to need it paid for a translator on every
   // line until it ended.
   | { cmd: "translate"; into: string[] }
+  // Reading it aloud, on or off, without ending the meeting. An empty language is off — the
+  // direction that matters most for a dub, because it is playing into somebody's ears right now.
+  | { cmd: "listen"; lang: string }
   | { cmd: "refine_swap"; id: string }
   | { cmd: "ping" };
 

@@ -88,6 +88,7 @@
     "listen_off": "关闭",
     "listen_volume": "朗读音量",
     "listen_headphones": "请戴耳机",
+    "listening_reading": "正在用{language}朗读",
     "translate_both_ways": "每一句都会翻译成这些语言中它本身不是的那一个 — {languages}。",
     "translate_many_ways": "每一句都会翻译成这些语言中除它本身以外的全部 — {languages}。",
     "translate_needs_model": "尚未安装任何翻译模型。",
@@ -272,7 +273,11 @@
     "loading": "加载中…",
     "saving": "保存中…",
     "dismiss": "关闭",
-    "done": "完成"
+    "done": "完成",
+    "crash_title": "此页面出现问题",
+    "crash_body": "录音不受影响，守护进程仍在保存。重新加载通常即可恢复。",
+    "crash_reload": "重新加载",
+    "crash_details": "技术细节"
   },
   "setup": {
     "title": "欢迎使用 Summo",

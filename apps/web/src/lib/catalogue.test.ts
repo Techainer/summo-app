@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { byTask, canRun, current, roleFor, type CatalogueModel, type Task } from "./catalogue";
+import {
+  byTask,
+  canRun,
+  current,
+  roleFor,
+  shortName,
+  type CatalogueModel,
+  type Task,
+} from "./catalogue";
 
 /** A card with only the fields under test filled in. */
 function model(over: Partial<CatalogueModel> = {}): CatalogueModel {
@@ -183,5 +191,29 @@ describe("models a newer one replaced", () => {
   it("keeps one whose replacement is not published", () => {
     const shown = current([model("gipformer-65m", { superseded_by: "gipformer-2" })]);
     expect(shown.map((each: CatalogueModel) => each.id)).toEqual(["gipformer-65m"]);
+  });
+});
+
+describe("naming a model inside a sentence", () => {
+  /**
+   * The registry writes `SMALL100 · translation, 100 languages` — a proper noun, a separator, and
+   * an English description meant for the models screen. Interpolated into `{model} sẽ dịch.` it
+   * produces a Vietnamese sentence with an English clause in the middle of it, which is the fault
+   * that was fixed once for the setup screen's model reasons and came back somewhere else.
+   */
+  it("drops the English subtitle the registry attaches", () => {
+    expect(shortName("SMALL100 · translation, 100 languages")).toBe("SMALL100");
+    expect(shortName("Whisper base · 99 languages")).toBe("Whisper base");
+  });
+
+  /** A name with no subtitle is already the name. */
+  it("leaves a plain name alone", () => {
+    expect(shortName("Gipformer 65M")).toBe("Gipformer 65M");
+  });
+
+  /** And never returns nothing, which would print an empty sentence. */
+  it("never empties a name", () => {
+    expect(shortName("· only a subtitle")).toBe("· only a subtitle");
+    expect(shortName("")).toBe("");
   });
 });

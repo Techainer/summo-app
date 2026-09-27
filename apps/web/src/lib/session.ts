@@ -311,6 +311,20 @@ export class Session {
   }
 
   /**
+   * Start or stop reading the translation aloud, mid-meeting.
+   *
+   * The daemon is the one that decides whether it can — it owns the voices — so this asks rather
+   * than assumes, and the answer arrives as an event. The player is opened here either way,
+   * because a device acquired on the first chunk is a first line that stutters.
+   */
+  listen(lang: string): void {
+    if (!this.state.recording) return;
+    this.client?.send({ cmd: "listen", lang });
+    if (lang) void this.player.start().catch(() => undefined);
+    else void this.player.stop();
+  }
+
+  /**
    * How loud the dub is, while it is playing.
    *
    * Not a command to the daemon: the audio is already here and the volume is this listener's, not

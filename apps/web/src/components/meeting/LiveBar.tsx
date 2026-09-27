@@ -43,7 +43,13 @@ export function LiveBar() {
       data-testid="live-bar"
       className="border-rec/30 bg-rec-soft rounded-card border px-4 py-2.5"
     >
-      <div className="flex items-center gap-3">
+      {/* Wraps, and the meter takes a line of its own on a phone.
+          At 390 px this was one unwrapping row: the label, the clock, the minimise button and a
+          flexible meter between them, all squeezed until they drew over each other. Nothing
+          overflowed the viewport, so the overflow guard saw nothing wrong — the screenshot did.
+          The meter is the one part that can move: it has no words in it, and a full-width strip
+          under the clock reads better on a phone than a sliver between two labels. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* Two circles: a solid dot and a ring expanding out of it. The ring is what carries at the
           edge of vision — a dot that only changes opacity reads as a static bullet point. */}
         <span
@@ -54,8 +60,17 @@ export function LiveBar() {
           <span className="bg-rec/60 absolute inline-flex size-3 rounded-full motion-safe:animate-ping" />
         </span>
 
-        <div className="min-w-0">
-          <p className="text-rec text-meta leading-none font-medium">{t("record.recording_now")}</p>
+        {/* A floor, not a preference. With `min-w-0` this was allowed to shrink to **2 px** at
+            390 px — measured, not guessed — so the one thing the bar exists to say disappeared on
+            a phone while the clock and the buttons kept their space. A minimum makes the row wrap
+            instead of crushing it. */}
+        <div className="min-w-[7rem] flex-1 sm:flex-none">
+          {/* `truncate` on both lines, not only the device. "Đang ghi" wrapping to two lines is
+              what started the collision above — a label that grows taller pushes everything
+              beside it out of alignment. */}
+          <p className="text-rec text-meta truncate leading-none font-medium">
+            {t("record.recording_now")}
+          </p>
           <p className="text-fg-dim text-micro mt-1 truncate leading-none">
             {session.deviceLabel ?? t("record.microphone")}
           </p>
@@ -65,7 +80,7 @@ export function LiveBar() {
           only part that moves with the room rather than with the clock. */}
         {/* A height, because the bars are sized by percentage: a flex child with no height of its own
           collapses, and the meter draws nothing. */}
-        <div className="h-8 min-w-0 flex-1">
+        <div className="order-last h-8 w-full min-w-0 sm:order-none sm:w-auto sm:flex-1">
           <Waveform level={level} active />
         </div>
 

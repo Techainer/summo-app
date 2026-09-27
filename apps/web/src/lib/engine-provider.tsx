@@ -197,6 +197,28 @@ export function EngineProvider({ children }: { children: ReactNode }) {
     [controller],
   );
 
+  // Reading the translation aloud, on or off, mid-meeting. Remembered for the next meeting the
+  // same way the language and the targets are: somebody who turns a voice off has said they do not
+  // want it, not that they do not want it for the next four minutes.
+  const listen = useCallback(
+    (lang: string) => {
+      const current = loadCapture();
+      saveCapture({ ...current, listenIn: lang });
+      controller?.listen(lang);
+    },
+    [controller],
+  );
+
+  /** How loud, for this listener. Never sent to the daemon: the audio is already here. */
+  const listenVolume = useCallback(
+    (volume: number) => {
+      const current = loadCapture();
+      saveCapture({ ...current, listenVolume: volume });
+      controller?.setListenVolume(volume);
+    },
+    [controller],
+  );
+
   // Not remembered locally, unlike the language: which model checks the text belongs to
   // `settings.models.refine`, which the daemon owns and the models screen writes.
   const refine = useCallback((id: string) => controller?.refine(id), [controller]);
@@ -275,6 +297,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       toggle,
       retune,
       translate,
+      listen,
+      listenVolume,
       refine,
       notes,
     }),
@@ -293,6 +317,8 @@ export function EngineProvider({ children }: { children: ReactNode }) {
       toggle,
       retune,
       translate,
+      listen,
+      listenVolume,
       refine,
       notes,
     ],

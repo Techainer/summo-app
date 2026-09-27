@@ -151,8 +151,59 @@ while (Date.now() - started < 80_000) {
   await page.waitForTimeout(100);
 }
 
+// Whether the app is showing its own failure screen rather than the meeting.
+const crashed = await page
+  .locator("text=/Something went wrong|Đã xảy ra lỗi/i")
+  .first()
+  .textContent({ timeout: 500 })
+  .catch(() => null);
+
 const heard = await page.evaluate(() => window.__dub);
 await page.screenshot({ path: "/tmp/shots/listen.png" });
+
+// And the panel a person opens mid-meeting to change any of this, which is where the control for
+// something audible has to be.
+// The meeting's bar opens its panel by default — `LiveBar` passes `expanded`, so the controls are
+// already on screen and the button beside them says "done", not "change". A first version of this
+// clicked that button, closed the panel it meant to photograph, and reported the controls missing.
+const panel = page.getByTestId("live-bar");
+if ((await panel.getByLabel(/đọc thành tiếng|read aloud/i).count()) === 0) {
+  problems.push("the meeting bar has no way to stop the voice that is playing");
+}
+if ((await panel.getByTestId("listen-volume").count()) === 0) {
+  problems.push("the voice is playing with no volume control beside it");
+}
+
+await page.screenshot({ path: "/tmp/shots/listen-panel.png" });
+for (const width of [390, 768]) {
+  await page.setViewportSize({ width, height: 900 });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `/tmp/shots/listen-panel-${width}.png` });
+
+  // The bar exists to answer "is it recording, and can it hear me". At 390 px the row used to
+  // squeeze until the label, the clock and the buttons drew over each other — nothing overflowed
+  // the viewport, so the overflow guard saw nothing and only a screenshot did. These are the two
+  // things that must survive the squeeze.
+  const box = await panel
+    .getByText(/^Đang ghi$/)
+    .first()
+    .boundingBox()
+    .catch(() => null);
+  if (!box || box.width < 40 || box.height < 8) {
+    problems.push(
+      `at ${width}px the recording label is ${box ? `${Math.round(box.width)}px` : "gone"}`,
+    );
+  }
+  const clock = await panel
+    .getByLabel(/Thời gian|Elapsed/i)
+    .first()
+    .boundingBox()
+    .catch(() => null);
+  if (box && clock && box.y === clock.y && box.x + box.width > clock.x) {
+    problems.push(`at ${width}px the label and the clock overlap`);
+  }
+}
+await page.setViewportSize({ width: 1180, height: 900 });
 await browser.close();
 
 // The daemon writes its closing lines when it notices the socket has gone, which is after this
@@ -167,7 +218,13 @@ await new Promise((resolve) => setTimeout(resolve, 2000));
 // somebody to read the wrong module — it did exactly that once.
 console.log(`\ntranscript: ${lines.size} line(s)`);
 
-if (lines.size === 0) {
+// An app that has crashed is not an app that transcribed nothing, and it reads identically from
+// out here. React's error boundary catches the throw, so `pageerror` never fires and the only sign
+// is a screen saying so — which this suite happily reported as a silent recogniser, sending me to
+// read the wrong module for the third time in one night.
+if (crashed) {
+  problems.push(`the interface crashed: ${crashed}`);
+} else if (lines.size === 0) {
   problems.push("nothing was transcribed — the failure is upstream of the dub");
 } else if (heard.length === 0) {
   problems.push("nothing was ever spoken — the dub did not arrive");
