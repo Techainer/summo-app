@@ -157,9 +157,30 @@ await browser.close();
 
 // ---- what happened -------------------------------------------------------
 
-if (heard.length === 0) {
+// Which layer failed, said before anything else. "No dub" is the symptom of a silent
+// recogniser as often as of a broken dub, and a suite that only reports the last stage sends
+// somebody to read the wrong module — it did exactly that once.
+console.log(`\ntranscript: ${lines.size} line(s)`);
+
+if (lines.size === 0) {
+  problems.push("nothing was transcribed — the failure is upstream of the dub");
+} else if (heard.length === 0) {
   problems.push("nothing was ever spoken — the dub did not arrive");
-} else {
+}
+
+// The daemon's own account, whichever layer failed. Silence is the symptom of a dozen different
+// faults and a suite reporting only the symptom is what makes each of them cost an hour.
+if (problems.length > 0) {
+  console.log("--- daemon log, last 4000 characters ---");
+  console.log(
+    engine
+      .log()
+      .replace(/\[[0-9;]*m/g, "")
+      .slice(-4000),
+  );
+}
+
+if (heard.length > 0) {
   // One entry per utterance: the first chunk for a sequence number is when the listener started
   // hearing that line. Later chunks for it are the rest of the sentence.
   const first = new Map();

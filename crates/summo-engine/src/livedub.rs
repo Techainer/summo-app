@@ -58,30 +58,33 @@
 //! amounts of context and can word the same sentence differently. Both are right; they are not
 //! identical.
 //!
-//! ## What is measured, and what is still open
+//! ## What is measured
 //!
 //! `apps/web/e2e/listen.mjs` records Vietnamese, asks to hear English and times the socket. On this
 //! machine, continuous speech, one voice:
 //!
 //! ```text
-//! after the line settled      median 0.6 s
-//! after the words appeared    median 3.8 s
-//! about one chunk per utterance
+//! after the line settled       median 0.04 s
+//! after the words appeared     median 2.28 s
+//! 29 chunks over 18 utterances
 //! ```
 //!
-//! "One chunk per utterance" is the open problem and it is stated rather than hidden. The committer
-//! settles several clauses in a long sentence, and all but one of them arrive while the single voice
-//! session is busy and are dropped. So the clause machinery is doing its job and the dub is not yet
-//! getting the benefit — it behaves about as a sentence-shaped dub would, at a latency that is good.
+//! The second row is the one a listener feels, and the first explains it: by the time the gate
+//! decides a sentence is over, most of it has already been spoken. Clauses committed from partials
+//! are what buy that — before they worked, the same measurement read 0.61 s and **3.99 s**, with
+//! exactly one chunk per utterance.
 //!
-//! Queueing them instead was the obvious fix and it was measured: the median went from 0.6 s to
-//! **4.6 s**, because each clause then waited out the translation *and* synthesis of the one before
-//! it and the lag compounded. A dub four seconds behind the room is worse than an incomplete one.
+//! ## The open one
 //!
-//! The fix that would actually work is more than one voice session, so clauses are spoken in
-//! parallel rather than in sequence — a second ONNX session is memory rather than a rewrite. That is
-//! the next thing to try, and until somebody tries it this module speaks about one piece per
-//! sentence and says so.
+//! 29 chunks over 18 utterances is 1.6 pieces a sentence, and a long sentence settles more clauses
+//! than that. The rest arrive while the single voice session is busy and are dropped — counted, and
+//! visible, but dropped.
+//!
+//! Queueing them instead was built and measured before being thrown away: the median went from
+//! 0.6 s to 4.6 s, because each clause then waited out the translation *and* synthesis of the one
+//! before it and the lag compounded. A dub four seconds behind the room is worse than one that
+//! skips. The fix that would work is a second voice session so clauses are spoken in parallel —
+//! memory rather than a rewrite — and that is the next thing to try.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};

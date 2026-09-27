@@ -16,9 +16,22 @@
 //! nothing to compute. So: keep the longest prefix the last two partials agree on, and hand out
 //! whatever new *clauses* it contains.
 //!
-//! Clauses, not words. A clause boundary is a place the model has already decided a phrase ends, so
-//! cutting there never splits a word and rarely splits a thought — and a translator handed half a
-//! phrase produces half a translation, confidently.
+//! ## Where to cut, when the model gives you nothing to cut on
+//!
+//! A clause boundary is the best place: the model has already decided a phrase ends there, so
+//! cutting never splits a word and rarely splits a thought — and a translator handed half a phrase
+//! produces half a translation, confidently.
+//!
+//! The first version of this module cut *only* on punctuation, and measured end to end it handed
+//! over about one piece per sentence — it had quietly become the thing it was written to replace.
+//! The reason was not subtle once looked for: `gipformer-65m`, the Vietnamese model this product
+//! recommends, emits **no punctuation at all**. Over 100 FLEURS clips, not one full stop, comma or
+//! question mark. Neither do the zipformer transducers. Whisper punctuates; the fast models people
+//! actually record with do not.
+//!
+//! So punctuation is a preference, not a requirement. With none available, a run of agreed words
+//! is handed over once it is long enough to be worth translating on its own — see
+//! [`RUN_ON_WEIGHT`] — cut at the last space so a word is never split.
 //!
 //! ## What this guarantees, and what it does not
 //!
@@ -43,6 +56,19 @@
 /// commit nothing at all in Japanese or Chinese — the languages where waiting for the end of the
 /// sentence costs the most, since their word order defers the verb.
 const BOUNDARIES: [char; 11] = ['.', ',', ';', '?', '!', '…', '。', '、', '；', '？', '！'];
+
+/// Weight past which a settled run is handed over even with no punctuation in it.
+///
+/// Punctuation is the best place to cut and it is not always available. `gipformer-65m` — the
+/// Vietnamese model this product recommends — emits **none at all**: measured over 100 FLEURS
+/// clips, not one full stop, comma or question mark. Neither do the zipformer transducers. So a
+/// committer that waits for a boundary waits forever on the models most people run, hands over
+/// nothing until the sentence ends, and quietly becomes the thing it was written to replace.
+///
+/// Three times [`MIN_WEIGHT`], about two and a half seconds of speech. Long enough that what goes
+/// to the translator is a substantial run of words rather than a fragment, short enough to be worth
+/// committing before the speaker stops.
+pub const RUN_ON_WEIGHT: usize = MIN_WEIGHT * 3;
 
 /// Shortest piece worth handing out on its own, in the units of [`weight`].
 ///
@@ -121,9 +147,11 @@ impl Committer {
         let agreed = common_prefix(&self.previous, text);
         self.previous = text.to_string();
 
-        // Only up to the last boundary inside the agreed prefix. Past it the words are agreed but
-        // the phrase is not finished, and half a phrase translates into half a thought.
-        let upto = last_boundary(&text[..agreed])?;
+        // Only up to a cut inside the agreed prefix. Past it the words are agreed but the phrase
+        // is not finished, and half a phrase translates into half a thought.
+        let settled = &text[..agreed];
+        let already = common_prefix(&self.given, settled);
+        let upto = cut(settled, already)?;
         self.hand_out(seq, &text[..upto], false)
     }
 
@@ -230,12 +258,36 @@ fn common_prefix(a: &str, b: &str) -> usize {
     shared
 }
 
-/// Byte offset just past the last clause boundary in `text`, if there is one.
+/// Where to cut a settled prefix, given how much of it has already been handed over.
+///
+/// A clause boundary if there is one, because that is a place the model has already decided a
+/// phrase ends. Failing that — which is the normal case for a transducer, none of which punctuate —
+/// the last word boundary, but only once enough has accumulated to be worth translating on its own.
+///
+/// `None` means "not yet": wait for more agreement rather than hand over a fragment.
 #[must_use]
-fn last_boundary(text: &str) -> Option<usize> {
-    text.char_indices()
+fn cut(text: &str, already: usize) -> Option<usize> {
+    if let Some(at) = text
+        .char_indices()
         .rfind(|(_, c)| BOUNDARIES.contains(c))
         .map(|(i, c)| i + c.len_utf8())
+        .filter(|at| *at > already)
+    {
+        return Some(at);
+    }
+
+    let pending = text.get(already..)?;
+    if weight(pending) < RUN_ON_WEIGHT {
+        return None;
+    }
+
+    // The last space, so a word is never split in half. Scripts written without spaces have none to
+    // find, and there a character boundary is a word boundary often enough — waiting for a space
+    // that is never coming is how this would commit nothing at all in Chinese and Japanese.
+    match pending.rfind(char::is_whitespace) {
+        Some(space) => Some(already + space),
+        None => Some(text.len()),
+    }
 }
 
 #[cfg(test)]
@@ -418,6 +470,55 @@ mod tests {
         assert!(weight("Ừ,") < MIN_WEIGHT);
         // Vietnamese and English are counted as themselves.
         assert_eq!(weight("ngan sach"), 9);
+    }
+
+    /// The defect the end-to-end measurement found: cutting only on punctuation means never
+    /// cutting at all with the models most people record with.
+    #[test]
+    fn a_long_run_of_agreed_words_is_handed_over_without_any_punctuation() {
+        let said = "chúng ta cần bàn về ngân sách quý ba và tôi nghĩ con số đang sai";
+        let pieces = run(
+            1,
+            &[
+                "chúng ta cần bàn về ngân sách quý ba",
+                "chúng ta cần bàn về ngân sách quý ba và tôi",
+                "chúng ta cần bàn về ngân sách quý ba và tôi nghĩ",
+            ],
+            said,
+        );
+        assert!(
+            pieces.len() >= 2,
+            "nothing was committed before the sentence ended: {pieces:?}"
+        );
+        assert!(!pieces[0].last);
+        // Cut at a space, never inside a word.
+        assert!(
+            !said[pieces[0].text.len()..].starts_with(|c: char| c.is_alphanumeric())
+                || said.starts_with(&pieces[0].text),
+            "a word was split: {:?}",
+            pieces[0].text
+        );
+        assert_eq!(joined(&pieces), said);
+    }
+
+    /// And a short run still waits. Handing over three words costs a request and a synthesis to
+    /// save less time than either takes.
+    #[test]
+    fn a_short_run_with_no_punctuation_still_waits() {
+        let mut committer = Committer::new();
+        committer.partial(1, "chúng ta cần");
+        assert_eq!(committer.partial(1, "chúng ta cần"), None);
+    }
+
+    /// Chinese and Japanese have no spaces to cut at. Waiting for one is how this would commit
+    /// nothing at all in the languages where waiting costs the most.
+    #[test]
+    fn a_script_without_spaces_is_cut_at_a_character() {
+        let said = "今日は第三四半期の予算について話したいと思います";
+        let mut committer = Committer::new();
+        committer.partial(1, said);
+        let piece = committer.partial(1, said);
+        assert!(piece.is_some(), "an unspaced run was never committed");
     }
 
     /// Multi-byte text must not be cut between the bytes of a character.
