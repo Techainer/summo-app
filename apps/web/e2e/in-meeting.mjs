@@ -122,6 +122,16 @@ const browser = await chromium.launch({
 // Vietnamese, because every label this suite selects by is Vietnamese. Without it the app honours
 // the machine's locale — correctly — and every selector here misses.
 const context = await browser.newContext({
+  // Animations off, and not only to stop this racing them.
+  //
+  // Playwright waits for an element to be "stable" before clicking it, and a spring that is still
+  // settling never is. On a loaded runner the PiP panel's entrance animation outlived the wait and
+  // the suite failed on a button that was on screen the whole time — a flake that only appears
+  // under load, which is the worst kind to chase.
+  //
+  // The app gates every animation on `motion-safe`, so this exercises the reduced-motion path at
+  // the same time. Nothing covered it before.
+  reducedMotion: "reduce",
   locale: "vi-VN",
   permissions: ["microphone"],
   viewport: { width: 1180, height: 820 },
