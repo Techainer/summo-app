@@ -49,6 +49,7 @@ const BY_HAND = {
   "site-shots": "writes to the site repo",
   "subtitle-latency": "measures rather than asserts; a threshold here would be re-run until green",
   listen: "measures rather than asserts, and needs a voice as well as a translator",
+  multilingual: "drives real mixed-language audio and two model downloads; run beside `bilingual`",
   mislabelled:
     "needs a real recording and four model downloads; run beside `bilingual` when touching routing",
   "start-latency":

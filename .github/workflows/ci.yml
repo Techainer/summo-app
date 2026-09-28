@@ -1015,6 +1015,19 @@ jobs:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
           GITHUB_TOKEN: ${{ github.token }}
 
+      # The same claim on real mixed-language audio, with the worst model listening.
+      #
+      # `bilingual` pairs `whisper-base` with a specialist, which is a good combination.
+      # `trilingual` counts loaded models and plays no audio. Neither drives what people actually
+      # have: `whisper-tiny` listening to a meeting in two languages. Every defect of the last
+      # three releases was in that combination, so it is driven end to end here — no line filed
+      # under a language nobody declared, both languages present, the Vietnamese from the model
+      # that can hear it, and nothing looping.
+      - run: pnpm -C apps/web e2e:multilingual
+        env:
+          SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+          GITHUB_TOKEN: ${{ github.token }}
+
       # Noise suppression, from a card on a screen to the audio a decoder hears. Out here with the
       # other three for the same reason: it needs a real recording, with a real enhancer in front of
       # a real decoder.

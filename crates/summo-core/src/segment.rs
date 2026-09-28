@@ -180,6 +180,20 @@ impl Segment {
         if !incoming.words.is_empty() {
             self.words.clone_from(&incoming.words);
         }
+        // The language, when the incoming segment knows one.
+        //
+        // This was missing, and it quietly undid a whole release. A second model that hears a line
+        // better also knows what language it was — that is most of why it was asked — and the
+        // revision carried the answer to a `merge` that copied the text and dropped it. So the
+        // file kept the fast model's guess: a Vietnamese sentence `whisper-tiny` had labelled `ru`
+        // stayed `ru` after `gipformer` rescued the words. Found by running real bilingual audio
+        // through the arrangement rather than by reading it.
+        //
+        // Guarded like `speaker` and `conf` above: a model that reports nothing must not erase an
+        // answer somebody else already gave.
+        if incoming.language.is_some() {
+            self.language.clone_from(&incoming.language);
+        }
         true
     }
 }
@@ -239,5 +253,34 @@ mod tests {
             assert_eq!(Lane::from_tag(lane.tag()), Some(lane));
         }
         assert_eq!(Lane::from_tag(9), None);
+    }
+
+    /// A second model that heard the line better also knows what language it was.
+    ///
+    /// `merge` copied the text and dropped the language, so every correction a specialist made was
+    /// discarded at the file — and the label is what decides which way a line is translated. A
+    /// Vietnamese sentence the fast model called Russian stayed Russian after the Vietnamese model
+    /// rescued its words.
+    #[test]
+    fn a_revision_corrects_the_language_as_well_as_the_words() {
+        let mut heard = seg(SegmentSource::Final, "KHÁC");
+        heard.language = Some("ru".into());
+
+        let mut rescued = seg(SegmentSource::Revised, "phương tiện di chuyển khác");
+        rescued.language = Some("vi".into());
+
+        assert!(heard.merge(&rescued));
+        assert_eq!(heard.language.as_deref(), Some("vi"));
+    }
+
+    /// And a model that reports nothing does not erase an answer somebody else gave.
+    #[test]
+    fn a_revision_with_no_language_leaves_the_one_already_known() {
+        let mut heard = seg(SegmentSource::Final, "xin chào");
+        heard.language = Some("vi".into());
+        let quiet = seg(SegmentSource::Revised, "xin chào các bạn");
+
+        assert!(heard.merge(&quiet));
+        assert_eq!(heard.language.as_deref(), Some("vi"));
     }
 }

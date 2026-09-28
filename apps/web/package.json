@@ -23,6 +23,7 @@
     "e2e:bilingual": "node e2e/bilingual.mjs",
     "e2e:trilingual": "node e2e/trilingual.mjs",
     "e2e:mislabelled": "node e2e/mislabelled.mjs",
+    "e2e:multilingual": "node e2e/multilingual.mjs",
     "e2e:denoise": "node e2e/denoise.mjs",
     "e2e:dub": "node e2e/dub.mjs",
     "e2e:ui": "node e2e/ui-shots.mjs"
