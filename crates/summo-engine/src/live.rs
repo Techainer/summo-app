@@ -52,6 +52,48 @@ pub const MAX_WAIT_MS: u64 = 4_000;
 /// it back — dropping is what keeps the remaining subtitles near the audio.
 pub const MAX_QUEUE: usize = BATCH * 2;
 
+/// Longest pause that still counts as being inside one sentence.
+///
+/// The recogniser cuts on **silence**, not on sentence ends — `min_silence_s` is 400 ms — so what
+/// arrives is very often half a thought: `Hoặc là anh bảo việt anh bận tí thì`. Translating that
+/// produces a translation of half a thought, which is the reported complaint: *"dịch 1 câu thì dễ
+/// sai… dịch thì phải dịch đủ câu"*.
+///
+/// The boundary is the **pause**, not punctuation. Punctuation is unavailable where it is needed
+/// most: `gipformer` emits none at all — measured, `docs/benchmarks.md` — so a rule that waits for
+/// a full stop would wait forever on a Vietnamese meeting. The gap between one utterance ending
+/// and the next beginning is on every segment already and does not depend on the model.
+///
+/// 700 ms: longer than the breath inside a clause, shorter than the pause at the end of a thought.
+pub const SENTENCE_GAP_MS: u64 = 700;
+
+/// How much text is worth translating on its own.
+///
+/// A fragment below this waits for its continuation; a line above it is a clause that stands up by
+/// itself and goes immediately. This is what keeps the common case free: `gipformer` returns whole
+/// clauses, so nearly every line is over the threshold and nothing is delayed at all.
+pub const STANDALONE_CHARS: usize = 45;
+
+/// Longest a fragment waits for a continuation that may never come.
+///
+/// The speaker stopped mid-thought. A late subtitle of half a sentence beats none.
+pub const SENTENCE_WAIT_MS: u64 = 1_200;
+
+/// Characters that end a sentence, in the scripts this app transcribes.
+const ENDS: [char; 8] = ['.', '!', '?', '…', '。', '！', '？', '؟'];
+
+/// Whether this line ends a sentence rather than stopping in the middle of one.
+///
+/// Only ever used to send **sooner**. A model that punctuates gets its sentences out without
+/// waiting for the pause; a model that does not is no worse off than before.
+#[must_use]
+pub fn finishes_a_sentence(text: &str) -> bool {
+    text.trim_end()
+        .chars()
+        .last()
+        .is_some_and(|last| ENDS.contains(&last))
+}
+
 /// One line waiting to be translated.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pending {
@@ -74,6 +116,11 @@ pub struct Pending {
 #[derive(Debug, Default)]
 pub struct Batcher {
     queue: VecDeque<Pending>,
+    /// A sentence being assembled out of the fragments the recogniser cut it into.
+    ///
+    /// Deliberately not part of `queue`: these are not ready to translate, and a `ready` that
+    /// counted them would send half a sentence the moment the batch filled.
+    hold: Vec<Pending>,
     /// Lines thrown away because the model could not keep up, since the last time it was reported.
     dropped: usize,
 }
@@ -82,6 +129,89 @@ impl Batcher {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Queue an utterance, assembling it with its neighbours into a sentence first.
+    ///
+    /// The entry point a live recording uses. [`Self::push`] below is the plain queueing
+    /// primitive and stays that way: it is what the batching rules are written against, and what
+    /// the offline backfill uses, where every line is already whole.
+    ///
+    /// `gap_ms` is the silence between the previous utterance ending and this one starting. See
+    /// [`SENTENCE_GAP_MS`] for why that, and not punctuation, is the boundary.
+    pub fn utterance(
+        &mut self,
+        seq: u64,
+        text: &str,
+        language: Option<String>,
+        gap_ms: u64,
+    ) -> bool {
+        let text = text.trim();
+        if text.is_empty() {
+            return true;
+        }
+
+        // A long pause, or a different speaker's language, closes whatever was being assembled.
+        // Two people taking turns is the ordinary case and is not one sentence.
+        let broken = self
+            .hold
+            .first()
+            .is_some_and(|held| held.language != language);
+        if !self.hold.is_empty() && (gap_ms > SENTENCE_GAP_MS || broken) {
+            self.flush();
+        }
+
+        self.hold.push(Pending {
+            seq,
+            text: text.to_string(),
+            language,
+        });
+
+        let joined: usize = self
+            .hold
+            .iter()
+            .map(|p| p.text.chars().filter(|c| !c.is_whitespace()).count())
+            .sum();
+        if finishes_a_sentence(text) || joined >= STANDALONE_CHARS {
+            return self.flush();
+        }
+        true
+    }
+
+    /// Whether a sentence is part-assembled, so the caller knows speech is still coming.
+    #[must_use]
+    pub fn holding(&self) -> bool {
+        !self.hold.is_empty()
+    }
+
+    /// Give up waiting for the rest of a sentence that is not coming.
+    pub fn settle(&mut self, quiet_ms: u64) {
+        if quiet_ms >= SENTENCE_WAIT_MS {
+            self.flush();
+        }
+    }
+
+    /// Move the held fragments into the queue as one line.
+    ///
+    /// Joined rather than queued separately, which is the whole point: one request, one sentence,
+    /// and a translator that can see the subject the second half is about.
+    ///
+    /// Numbered by the **last** fragment, because that is where the sentence finished and so where
+    /// a reader arrives at the translation. Attaching it to the first would put a whole sentence's
+    /// translation above half of the words it translates.
+    fn flush(&mut self) -> bool {
+        let joined: Vec<Pending> = std::mem::take(&mut self.hold);
+        let Some(last) = joined.last() else {
+            return true;
+        };
+        let text = joined
+            .iter()
+            .map(|p| p.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let seq = last.seq;
+        let language = last.language.clone();
+        self.push(seq, &text, language)
     }
 
     /// Queue a line. Returns `false` if an older line had to be dropped to make room.
@@ -140,7 +270,10 @@ impl Batcher {
     }
 
     /// Take everything, for the end of a session.
+    ///
+    /// Flushes first: a meeting that ends mid-sentence must still get that sentence translated.
     pub fn drain(&mut self) -> Vec<Pending> {
+        self.flush();
         self.queue.drain(..).collect()
     }
 
@@ -375,6 +508,11 @@ pub struct LiveTranslator {
     backlog: VecDeque<Pending>,
     /// When the oldest queued line arrived, for the deadline.
     since: Option<std::time::Instant>,
+    /// Where the last utterance ended, on the meeting's clock, so the gap before the next one is
+    /// about the speaker rather than about how long a decode took.
+    heard_until: Option<f64>,
+    /// When a line last arrived, so a fragment nobody finished stops waiting.
+    last_arrival: Option<std::time::Instant>,
     translator: std::sync::Arc<Translator>,
     config: LiveConfig,
     tx: tokio::sync::mpsc::UnboundedSender<Vec<Event>>,
@@ -403,6 +541,8 @@ impl LiveTranslator {
             batcher: Batcher::new(),
             backlog: VecDeque::new(),
             since: None,
+            heard_until: None,
+            last_arrival: None,
             translator,
             config,
             tx,
@@ -424,6 +564,7 @@ impl LiveTranslator {
     pub fn offer(&mut self, events: &[Event]) -> Vec<Event> {
         use std::sync::atomic::Ordering;
 
+        let mut arrived = false;
         for event in events {
             let Event::Final(segment) = event else {
                 continue;
@@ -431,9 +572,25 @@ impl LiveTranslator {
             if self.since.is_none() {
                 self.since = Some(std::time::Instant::now());
             }
+            // The silence before this utterance, from the meeting's own clock rather than the wall
+            // clock: a decode that took a second must not read as a second of silence.
+            let gap_ms = self
+                .heard_until
+                .map_or(0, |end| ((segment.t0 - end).max(0.0) * 1000.0) as u64);
+            self.heard_until = Some(segment.t1);
             self.batcher
-                .push(segment.seq, &segment.text, segment.language.clone());
+                .utterance(segment.seq, &segment.text, segment.language.clone(), gap_ms);
+            arrived = true;
         }
+        if arrived {
+            self.last_arrival = Some(std::time::Instant::now());
+        }
+        // A sentence the speaker never finished. `offer` runs once per frame, so this is asked ten
+        // times a second and costs one comparison.
+        self.batcher.settle(
+            self.last_arrival
+                .map_or(0, |t| t.elapsed().as_millis() as u64),
+        );
 
         let waited = self.since.map_or(0, |t| t.elapsed().as_millis() as u64);
         let out = self.in_flight.load(Ordering::Relaxed);
@@ -452,7 +609,14 @@ impl LiveTranslator {
         // take the remaining slot on the strength of an empty queue would put a minute-old sentence
         // in front of the one being spoken — the exact failure this module refuses, arriving by a
         // new route.
-        if self.batcher.is_empty() && self.in_flight.load(Ordering::Relaxed) == 0 {
+        // And not while a sentence is still being assembled. A held fragment means the speaker is
+        // mid-thought and its request is a moment away; letting the backlog take the slots now
+        // would put a minute-old sentence in front of it, which is this rule arriving by a third
+        // route rather than a new rule.
+        if self.batcher.is_empty()
+            && !self.batcher.holding()
+            && self.in_flight.load(Ordering::Relaxed) == 0
+        {
             let take = self.backlog.len().min(BATCH);
             if take > 0 {
                 let batch: Vec<Pending> = self.backlog.drain(..take).collect();
@@ -619,7 +783,7 @@ mod tests {
 
         // The final does. It leaves the queue immediately now rather than waiting for company —
         // see `Batcher::ready` — so what proves it was taken is the request, not the backlog.
-        live.offer(&[final_of(2, "xong rồi")]);
+        live.offer(&[final_of(2, "xong rồi.")]);
         assert_eq!(live.in_flight.load(std::sync::atomic::Ordering::Relaxed), 1);
     }
 
@@ -634,7 +798,7 @@ mod tests {
         use std::sync::atomic::Ordering;
         let mut live = translator(&["en"]);
 
-        live.offer(&[final_of(0, "câu")]);
+        live.offer(&[final_of(0, "câu.")]);
         assert_eq!(
             live.in_flight.load(Ordering::Relaxed),
             1,
@@ -644,8 +808,8 @@ mod tests {
 
         // Two more while that one is out. `MAX_IN_FLIGHT` is 2, so the second batch goes and the
         // third line waits — which is the trade working as intended rather than a deadline.
-        live.offer(&[final_of(1, "câu")]);
-        live.offer(&[final_of(2, "câu")]);
+        live.offer(&[final_of(1, "câu.")]);
+        live.offer(&[final_of(2, "câu.")]);
         assert!(live.in_flight.load(Ordering::Relaxed) <= MAX_IN_FLIGHT);
     }
 
@@ -1030,5 +1194,122 @@ mod backfilling {
             12,
             "a backlog run should take a full batch, not one line"
         );
+    }
+
+    /// Half a thought is not a sentence, and translating it produces half a translation.
+    ///
+    /// The recogniser cuts on silence, not on sentence ends, so `Hoặc là anh bảo việt` arrives as
+    /// a line of its own. Reported as *"dịch 1 câu thì dễ sai… dịch thì phải dịch đủ câu"*.
+    #[test]
+    fn a_fragment_waits_for_the_rest_of_its_sentence() {
+        let mut b = Batcher::new();
+        b.utterance(1, "Hoặc là anh bảo", Some("vi".into()), 0);
+        assert!(b.take().is_empty(), "half a sentence was sent anyway");
+        assert!(b.holding());
+
+        b.utterance(
+            2,
+            "việt là anh bận tí thì để mai mình làm nốt phần đó",
+            Some("vi".into()),
+            200,
+        );
+        let out = b.take();
+        assert_eq!(out.len(), 1, "one sentence is one request");
+        assert_eq!(
+            out[0].text,
+            "Hoặc là anh bảo việt là anh bận tí thì để mai mình làm nốt phần đó"
+        );
+        // Numbered where the sentence finished, so the translation sits under the last of the
+        // words it translates rather than above half of them.
+        assert_eq!(out[0].seq, 2);
+    }
+
+    /// A pause long enough to be the end of a thought closes the sentence.
+    ///
+    /// The boundary is the gap, not punctuation, because `gipformer` emits no punctuation at all —
+    /// measured, see `docs/benchmarks.md` — and it is the model most Vietnamese meetings use.
+    #[test]
+    fn a_long_pause_ends_the_sentence_even_with_no_punctuation() {
+        let mut b = Batcher::new();
+        b.utterance(1, "thì cái đó", Some("vi".into()), 0);
+        b.utterance(
+            2,
+            "mai mình bàn tiếp",
+            Some("vi".into()),
+            SENTENCE_GAP_MS + 1,
+        );
+
+        let out = b.take();
+        assert_eq!(out.len(), 1, "the pause did not close the first fragment");
+        assert_eq!(out[0].text, "thì cái đó");
+        assert!(b.holding(), "and the second one is now being assembled");
+    }
+
+    /// A line long enough to stand on its own never waits.
+    ///
+    /// This is what keeps the common case free: `gipformer` returns whole clauses, so nearly every
+    /// line is over the threshold and nothing is delayed. Without it, every Vietnamese subtitle
+    /// would pay the timeout — which is why the first attempt at this was thrown away.
+    #[test]
+    fn a_line_that_stands_on_its_own_goes_immediately() {
+        let mut b = Batcher::new();
+        b.utterance(
+            1,
+            "chiến lược trong thời gian tới của mình chỉ tập trung vào ba việc",
+            Some("vi".into()),
+            0,
+        );
+        assert_eq!(b.take().len(), 1);
+        assert!(!b.holding());
+    }
+
+    /// A model that punctuates gets its sentences out without waiting for the pause.
+    #[test]
+    fn punctuation_sends_sooner_when_there_is_any() {
+        let mut b = Batcher::new();
+        b.utterance(1, "xong rồi.", Some("vi".into()), 0);
+        assert_eq!(b.take().len(), 1);
+    }
+
+    /// The speaker stopped mid-thought. A late subtitle of half a sentence beats none.
+    #[test]
+    fn a_fragment_nobody_finished_is_sent_anyway() {
+        let mut b = Batcher::new();
+        b.utterance(1, "thì cái đó", Some("vi".into()), 0);
+        b.settle(SENTENCE_WAIT_MS - 1);
+        assert!(b.take().is_empty());
+
+        b.settle(SENTENCE_WAIT_MS);
+        assert_eq!(b.take().len(), 1);
+    }
+
+    /// Two speakers taking turns is two sentences, however short the gap.
+    #[test]
+    fn a_change_of_language_ends_the_sentence() {
+        let mut b = Batcher::new();
+        b.utterance(1, "tôi nghĩ mình nên", Some("vi".into()), 0);
+        b.utterance(2, "yes I agree", Some("en".into()), 0);
+
+        let out = b.take();
+        assert_eq!(out.len(), 1, "the Vietnamese half was not closed off");
+        assert_eq!(out[0].text, "tôi nghĩ mình nên");
+        assert_eq!(out[0].language.as_deref(), Some("vi"));
+    }
+
+    /// A meeting that ends mid-sentence still gets that sentence.
+    #[test]
+    fn draining_sends_what_was_still_being_assembled() {
+        let mut b = Batcher::new();
+        b.utterance(1, "chưa nói hết thì", Some("vi".into()), 0);
+        assert_eq!(b.drain().len(), 1);
+    }
+
+    #[test]
+    fn a_sentence_end_is_recognised_in_every_script_this_app_hears() {
+        assert!(finishes_a_sentence("xong rồi."));
+        assert!(finishes_a_sentence("本当ですか？"));
+        assert!(finishes_a_sentence("好了。"));
+        assert!(!finishes_a_sentence("hoặc là,"));
+        assert!(!finishes_a_sentence("không có dấu"));
     }
 }
