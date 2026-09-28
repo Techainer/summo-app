@@ -619,3 +619,50 @@ It is a smoke test over the real path. The deterministic guards are
 and not handled, and
 `recorder.rs::a_revision_fixes_the_language_and_takes_the_wrong_subtitle_with_it`, which drives the
 whole chain and fails without the fix.
+
+## Japanese, Korean, Chinese and Cantonese: which model to use
+
+Asked for directly: _"thêm ngôn ngữ xem, jp xem model nào tốt, rồi tiếng trung nữa"_.
+
+The registry had Chinese for all three models and Japanese for **one**. A blank is not neutral —
+`pick_pair` ranks the multilingual models on their measured accuracy for the languages declared, so
+a Japanese meeting had nothing to rank on and fell through to store order. The model list said
+"never measured on this language" and left the user to guess.
+
+**Method:** `summo-bench asr --dataset fleurs-<lang> --lang <lang> --threads 8`, 100 FLEURS clips
+per language, `int8` exports, this machine. The Chinese column reproduced the figures already in
+the registry to the decimal, which is what makes the new columns worth publishing.
+
+|           | whisper-tiny | whisper-base | sense-voice-small |
+| --------- | -----------: | -----------: | ----------------: |
+| Japanese  |   **55.7 %** |   **30.0 %** |             8.4 % |
+| Korean    |   **32.8 %** |   **25.2 %** |             8.5 % |
+| Chinese   |       51.8 % |       44.2 % |             7.4 % |
+| Cantonese |    _refused_ |    _refused_ |             8.4 % |
+
+Character error rate; **bold is new**. Word error rate is not quoted for Japanese, Chinese or
+Cantonese: those scripts have no spaces between words, so every model scores above 100 % WER and
+the number means nothing. `sense-voice-small` returned 127 % WER on Japanese at 8.4 % CER, which is
+the clearest possible demonstration.
+
+**What this changes.** `sense-voice-small` is between three and six times more accurate than the
+best Whisper on every language it covers, and it is smaller in memory than `whisper-base` while
+running it. For any meeting in Chinese, Japanese, Korean or Cantonese it is not a preference, it is
+the answer. Those figures are in the registry now, so the app ranks on them rather than on store
+order.
+
+### Whisper cannot do Cantonese at all
+
+```
+offline-whisper-greedy-search-decoder.cc:Decode:39 Invalid language: yue
+```
+
+Not a bad score — a refusal. Cantonese is not among Whisper's languages, and `whisper-*.json`
+declares `langs: ["*"]`, which is a claim on every language and is therefore false. Nothing crashes:
+a decode that fails costs that line its second opinion and the recording continues. But a Cantonese
+meeting with only Whisper installed will produce nothing usable, and the catalogue currently offers
+it as though it would work.
+
+Left as a finding rather than a fix: correcting it means either enumerating Whisper's ninety-nine
+languages in the manifest or teaching the loader which codes a runtime refuses, and both are their
+own piece of work. Written down here so the next person does not rediscover it from a user report.
