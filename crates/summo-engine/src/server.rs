@@ -1104,6 +1104,12 @@ fn claimed_langs(store: &summo_models::ModelStore, id: &str) -> Vec<String> {
 /// The live subtitle on a mislabelled line is still sent to both targets. That is a real remaining
 /// cost, and the honest one: at the moment it is sent, nothing better is known.
 ///
+/// **What clearing it now means.** `Segment::merge` only copies a language when the incoming
+/// segment has one, so setting this to `None` does not blank the line — it withdraws the second
+/// model's opinion and leaves whatever was already there. That is the right outcome and it is not
+/// obvious from reading this function alone: the alternative reading, that a cleared label reaches
+/// the file as "unknown", was true until `merge` learned to carry the field at all.
+///
 /// Only when something was declared. With no declaration there is nothing better than the guess.
 #[cfg(feature = "models")]
 fn forget_invented_labels(events: &mut [summo_core::Event], declared: &[String]) {

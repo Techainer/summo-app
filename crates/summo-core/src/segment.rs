@@ -283,4 +283,65 @@ mod tests {
         assert!(heard.merge(&quiet));
         assert_eq!(heard.language.as_deref(), Some("vi"));
     }
+
+    /// Every field a revision carries is either taken or deliberately refused.
+    ///
+    /// This is a compile-time guard as much as a test. `merge` dropped `language` for two releases
+    /// — three features read it afterwards and all three silently did nothing — and nothing failed,
+    /// because each of those features was correct on its own and no test spanned them.
+    ///
+    /// The destructuring below has no `..`, so **adding a field to `Segment` stops compiling here**
+    /// until somebody decides what a merge does with it. That decision is the thing that was
+    /// missing; forcing it is worth more than any assertion underneath.
+    #[test]
+    fn merging_decides_about_every_field_there_is() {
+        let mut existing = Segment::new(7, Lane::Mic, "nghe nhầm", 1.0, 2.0);
+        existing.source = SegmentSource::Final;
+        existing.speaker = Some(SpeakerId::auto(0));
+        existing.conf = Some(0.1);
+        existing.language = Some("ru".into());
+
+        let mut incoming = Segment::new(7, Lane::Mic, "nghe đúng rồi", 1.0, 2.5);
+        incoming.source = SegmentSource::Revised;
+        incoming.speaker = Some(SpeakerId::auto(1));
+        incoming.conf = Some(0.9);
+        incoming.language = Some("vi".into());
+        incoming.words = vec![Word {
+            text: "nghe".into(),
+            t0: 1.0,
+            t1: 1.2,
+            conf: None,
+        }];
+
+        assert!(existing.merge(&incoming));
+
+        let Segment {
+            seq,
+            lane,
+            text,
+            t0,
+            t1,
+            source,
+            speaker,
+            conf,
+            words,
+            language,
+        } = existing;
+
+        // Identity. A merge finds its target by these; changing them would move the line.
+        assert_eq!(seq, 7);
+        assert_eq!(lane, Lane::Mic);
+        // Where the line began is a fact about the audio, not about who decoded it.
+        assert!((t0 - 1.0).abs() < f64::EPSILON);
+
+        // Taken from the better answer.
+        assert_eq!(text, "nghe đúng rồi");
+        assert!((t1 - 2.5).abs() < f64::EPSILON);
+        assert_eq!(source, SegmentSource::Revised);
+        assert_eq!(speaker, Some(SpeakerId::auto(1)));
+        assert_eq!(conf, Some(0.9));
+        assert_eq!(words.len(), 1);
+        // The one that was missing.
+        assert_eq!(language.as_deref(), Some("vi"));
+    }
 }

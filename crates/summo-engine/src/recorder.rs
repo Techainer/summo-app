@@ -696,4 +696,77 @@ mod tests {
             .into_owned();
         assert_eq!(name, "2026-08-10-weekly-sync.md");
     }
+
+    /// The whole label chain, end to end, in the order a meeting produces it.
+    ///
+    /// This is the test that did not exist, and its absence cost two releases. Three separate
+    /// features — a specialist stamping the language it speaks, forgetting a label nobody
+    /// declared, and dropping a subtitle in the language a line turned out to be in — all read
+    /// `Segment::language` *after* a revision merged, and `merge` did not copy it. Each feature
+    /// had passing unit tests. Each unit was correct. Nothing spanned them, so the chain was
+    /// broken for two releases and only real audio showed it.
+    ///
+    /// The sequence below is exactly what a real meeting does:
+    ///
+    /// 1. the fast model hears a Vietnamese sentence and calls it Russian,
+    /// 2. live translation renders it into Vietnamese, because `ru` is not `vi`,
+    /// 3. the specialist hears it properly and says it was Vietnamese all along,
+    /// 4. the file must then hold a Vietnamese line with **no** Vietnamese subtitle.
+    #[test]
+    fn a_revision_fixes_the_language_and_takes_the_wrong_subtitle_with_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut rec = recorder(dir.path());
+
+        let mut misheard = segment(0, "KHÁC", 0.0, SegmentSource::Final);
+        misheard.language = Some("ru".into());
+        rec.apply(&Event::Final(misheard));
+
+        // Both targets, because `ru` is neither of them. This is correct at the time it happens:
+        // nothing yet knows better.
+        rec.apply(&Event::Translation {
+            seq: 0,
+            lang: "vi".into(),
+            text: "Carregla".into(),
+        });
+        rec.apply(&Event::Translation {
+            seq: 0,
+            lang: "en".into(),
+            text: "Other".into(),
+        });
+
+        let mut rescued = segment(
+            0,
+            "và nhiều phương tiện di chuyển khác",
+            0.0,
+            SegmentSource::Revised,
+        );
+        rescued.language = Some("vi".into());
+        rec.apply(&Event::Revise(rescued));
+        rec.save().unwrap();
+
+        let line = &rec.document().transcript[0];
+        assert_eq!(line.text, "và nhiều phương tiện di chuyển khác");
+        assert_eq!(
+            line.language.as_deref(),
+            Some("vi"),
+            "the revision knew the language and the merge threw it away"
+        );
+
+        // And the subtitle that was written against the wrong label is gone, while the one a
+        // reader still needs is not.
+        let vietnamese = rec
+            .translations
+            .get("vi")
+            .map(|t| t.lines.len())
+            .unwrap_or_default();
+        assert_eq!(
+            vietnamese, 0,
+            "a Vietnamese line kept a Vietnamese subtitle"
+        );
+        assert_eq!(
+            rec.translations.get("en").map(|t| t.lines.len()),
+            Some(1),
+            "the subtitle somebody actually needs was dropped too"
+        );
+    }
 }

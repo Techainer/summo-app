@@ -575,3 +575,47 @@ optimisation level, no `optimized_model_filepath`. So the build is a fixed ~2.7 
 person is present and is never duplicated. Anybody who pauses even a moment before pressing gets
 about a third of a second. Pressing the instant the window appears still waits out one build, and
 shrinking that means going below sherpa-rs — its own piece of work.
+
+## A meeting in two languages, end to end
+
+Asked whether any of this had been driven on real multilingual audio. It had not:
+`e2e/bilingual.mjs` pairs `whisper-base` with a specialist, `e2e/trilingual.mjs` plays no audio,
+and `e2e/mislabelled.mjs` uses a one-language clip. The combination the reports came from —
+**`whisper-tiny` listening to a meeting in two languages** — had never been run.
+
+**Method:** `pnpm -C apps/web e2e:multilingual`. `fixtures/bilingual.wav` is four FLEURS clips,
+Vietnamese and English alternating, with silence between them; the fixture README records what was
+said, so the right answer is known. `whisper-tiny` is pinned as the live model, `vi` and `en` are
+declared, `gipformer-1.5-68m` is installed and nothing specialises in English.
+
+What the daemon arranges:
+
+```
+refining with models=["gipformer-1.5-68m", "whisper-tiny[en]"]
+```
+
+Vietnamese gets its specialist; English, which nothing specialises in, gets the general model
+pinned to it. The transcript on disk:
+
+| said (ground truth)                                               | written                                                                                       |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| _Many people don't think about them as dinosaurs…_                | `[en] Many people don't think about them as senators because they have feathers and conflag.` |
+| _Tuy nhiên loài chim vẫn có rất nhiều điểm giống với khủng long._ | `[vi] Tuy nhiên loài chim vẫn có rất nhiều điểm giống với khủng long`                         |
+| _This is an important way to distinguish between some verbs…_     | `[en] This is an important way to distinguish between some verbs and objects.`                |
+
+The Vietnamese line is exact — `gipformer` rescued it from what `whisper-tiny` heard. The English
+lines are `whisper-tiny` quality, which is what that model is; both are correctly labelled and in
+the declared set.
+
+**What the first run found.** Before the fix in 0.37.1 the same audio produced `[ru] KHÁC` for a
+Vietnamese sentence: `Segment::merge` copied a revision's text and dropped its `language`, so every
+correction a specialist made to a label was discarded at the file. Three features read that field
+after the merge and all three silently did nothing for two releases, each with passing unit tests.
+
+**What this suite is not.** Which language `whisper-tiny` guesses on a given clip varies between
+runs. The fix was reverted and the suite re-run: it still passed, because that run guessed right.
+It is a smoke test over the real path. The deterministic guards are
+`segment.rs::merging_decides_about_every_field_there_is`, which stops compiling if a field is added
+and not handled, and
+`recorder.rs::a_revision_fixes_the_language_and_takes_the_wrong_subtitle_with_it`, which drives the
+whole chain and fails without the fix.
