@@ -165,9 +165,17 @@ await page
   // earlier attempt did exactly that: two buttons named "Đổi", ambiguous to a reader and fatal to
   // this selector.
   //
-  // Open already, and only one of them. They start expanded on this page — a person on a live call
-  // reported that the place to change the model, the language and the translation had been removed,
-  // and it had not: it was one unlabelled click away on the screen that exists to run the meeting.
+  // One click away, and only one of them.
+  //
+  // They used to start expanded here, and that was its own complaint: four rows of pickers between
+  // the recording header and the words, so the transcript was a sliver — "Đang ghi + config to quá
+  // không xem được transcribe". The guarantee this suite exists for is that the controls are *in
+  // the meeting* rather than in a banner a click can dismiss; open is a different claim and the
+  // wrong one. So this opens them, which is what a person does, and then asserts.
+  const open = page.getByTestId("live-bar").getByTestId("listening-change");
+  await open.waitFor({ timeout: 10000 });
+  await open.click();
+
   const panel = page.getByTestId("live-bar").getByTestId("listening-panel");
   await panel.waitFor({ timeout: 10000 });
   if ((await page.getByTestId("listening-panel").count()) !== 1) {

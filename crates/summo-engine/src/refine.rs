@@ -107,6 +107,19 @@ impl Pass {
     }
 }
 
+/// One model about to be asked about one utterance.
+///
+/// Named rather than a tuple because it is built on the socket task and read on a pool thread,
+/// and four anonymous fields crossing that boundary is the kind of thing that gets reordered
+/// silently.
+struct Attempt {
+    model: String,
+    decoder: Arc<Mutex<Box<dyn Decoder>>>,
+    /// The single language this model speaks, when it speaks exactly one.
+    speaks: Option<String>,
+    running: Arc<AtomicUsize>,
+}
+
 /// The slower models, and what each is worth running on.
 pub struct Refiner {
     /// In the order they were added. The first is the one the session names as *the* second model;
@@ -338,7 +351,7 @@ impl Refiner {
     #[must_use]
     pub fn candidates(&self, language: Option<&str>, seconds: f64) -> Vec<usize> {
         let mut out: Vec<usize> = Vec::new();
-        let mut push = |i: usize, out: &mut Vec<usize>| {
+        let push = |i: usize, out: &mut Vec<usize>| {
             if !out.contains(&i) {
                 out.push(i);
             }
@@ -467,27 +480,22 @@ impl Refiner {
 
             // Each candidate's decoder, pulled out before the thread starts so the borrow of
             // `self` ends here.
-            let attempts: Vec<(
-                String,
-                Arc<Mutex<Box<dyn Decoder>>>,
-                Option<String>,
-                Arc<AtomicUsize>,
-            )> = free
+            let attempts: Vec<Attempt> = free
                 .iter()
                 .map(|&i| {
                     let pass = &self.passes[i];
                     pass.running.fetch_add(1, Ordering::Relaxed);
-                    (
-                        pass.id.clone(),
-                        pass.decoder.clone(),
+                    Attempt {
+                        model: pass.id.clone(),
+                        decoder: pass.decoder.clone(),
                         // The one language this pass speaks, when it speaks exactly one. A
                         // specialist reports no language per utterance, and without this the
                         // revision kept the *fast* model's guess — which is how a Vietnamese
                         // line rescued by `gipformer` ended up labelled `zh` and then
                         // translated into Vietnamese.
-                        pass.sole(),
-                        pass.running.clone(),
-                    )
+                        speaks: pass.sole(),
+                        running: pass.running.clone(),
+                    }
                 })
                 .collect();
 
@@ -503,7 +511,13 @@ impl Refiner {
                 // Vietnamese audio and 15 on English. So the arbitration is the *output*, and the
                 // label that has been wrong all along never gets a vote on who is refused.
                 let mut winner = None;
-                for (model, decoder, speaks, running) in &attempts {
+                for Attempt {
+                    model,
+                    decoder,
+                    speaks,
+                    running,
+                } in &attempts
+                {
                     if winner.is_none() {
                         let revised = decoder
                             .lock()
