@@ -7137,6 +7137,51 @@ fn start_session(
                 }
             }
         }
+
+        // And the general model, pinned, for every declared language nothing specialises in.
+        //
+        // This is the answer to "khai vi+en thì chạy whisper vi+en thôi, chạy zh he ja làm gì?".
+        // Whisper's `language` is the decoder's prompt, not a label: left empty it detects across
+        // ninety-nine languages and decodes as whichever it picked, so a Vietnamese sentence it
+        // guessed was Chinese arrives *in Chinese characters* and no amount of correcting the
+        // label afterwards un-writes it. sherpa-onnx takes one language string and offers no way
+        // to say "only these", so the way to hold it to the declared set is one pinned decoder per
+        // declared language.
+        //
+        // Only for the languages left over. A language with a specialist already has a better
+        // model than a pinned Whisper, and loading both would be a few hundred megabytes to lose a
+        // comparison. On the meeting that produced this, Vietnamese had `gipformer` and English
+        // had nothing — so the English half was the half with no rescue, and this is it.
+        //
+        // Driven by `spec.languages`, so it is whatever the user declared rather than any fixed
+        // pair.
+        let unserved: Vec<String> = spec
+            .languages
+            .iter()
+            .filter(|code| !code.trim().is_empty())
+            .filter(|code| !held.hears(code))
+            .cloned()
+            .collect();
+        for code in unserved {
+            match crate::runner::load_decoder(&spec.live_model, Some(&code), &store, threads) {
+                Ok(decoder) => {
+                    tracing::info!(
+                        model = %spec.live_model,
+                        language = %code,
+                        "pinning the general model to a declared language nothing specialises in"
+                    );
+                    held.pinned_to(
+                        &spec.live_model,
+                        &code,
+                        decoder,
+                        claimed_langs(&store, &spec.live_model),
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, language = %code, "could not pin a decoder to this language");
+                }
+            }
+        }
         tracing::info!(models = ?held.models(), "refining with");
     }
     let refiner = refiner;

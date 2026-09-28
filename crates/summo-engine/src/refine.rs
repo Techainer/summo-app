@@ -80,6 +80,28 @@ struct Pass {
     decoder: Arc<Mutex<Box<dyn Decoder>>>,
     /// The languages this model's manifest claims. Empty means "no claim on record".
     claims: Vec<String>,
+    /// The one language this pass was *built* to hear, when it was built for one.
+    ///
+    /// For a specialist this is its sole claim. For a multilingual model it is the language it was
+    /// **forced** to, which is a different thing from what it claims: `whisper-tiny` claims every
+    /// language and, told `en`, decodes as English and nothing else.
+    ///
+    /// That distinction is the whole of this release. Whisper's `language` is not a label, it is
+    /// the decoder's prompt: left empty it detects across ninety-nine languages and then decodes
+    /// as whichever it picked, so a Vietnamese sentence it guessed was Chinese comes back *in
+    /// Chinese characters*. No amount of correcting the label afterwards un-writes the text.
+    /// Reported exactly that way: "lọc ra ok nhưng mà không đúng, phải align whisper bắt vi+en?".
+    ///
+    /// sherpa-onnx takes one language string and offers no way to say "only these". So a language
+    /// nothing specialises in gets the general model *pinned to it*, and the arbitration that
+    /// already existed picks between the results.
+    speaks: Option<String>,
+    /// Whether [`Pass::speaks`] came from pinning rather than from the manifest.
+    ///
+    /// Only for naming. A specialist's id already says which language it is for; a general model
+    /// pinned twice is two passes under one id, and a list reading `whisper-tiny, whisper-tiny`
+    /// would explain nothing.
+    pinned: bool,
     running: Arc<AtomicUsize>,
 }
 
@@ -91,7 +113,14 @@ impl Pass {
     /// that. Both "want" a Vietnamese sentence under the rules below, and only one of them should
     /// get it.
     fn names(&self, code: &str) -> bool {
-        !self.claims.iter().any(|l| l == "*") && summo_models::langs_cover(&self.claims, code)
+        match &self.speaks {
+            // Built for one language, whether by specialising in it or by being pinned to it.
+            Some(only) => summo_models::langs_cover(std::slice::from_ref(only), code),
+            None => {
+                !self.claims.iter().any(|l| l == "*")
+                    && summo_models::langs_cover(&self.claims, code)
+            }
+        }
     }
 
     /// The single language this model speaks, when it speaks exactly one.
@@ -100,10 +129,7 @@ impl Pass {
     /// and `None` for a manifest claiming several — `sense-voice-small` covers five, so which one
     /// a given sentence was is a question only its own output can answer.
     fn sole(&self) -> Option<String> {
-        match self.claims.as_slice() {
-            [only] if only != "*" => Some(only.clone()),
-            _ => None,
-        }
+        self.speaks.clone()
     }
 }
 
@@ -115,7 +141,7 @@ impl Pass {
 struct Attempt {
     model: String,
     decoder: Arc<Mutex<Box<dyn Decoder>>>,
-    /// The single language this model speaks, when it speaks exactly one.
+    /// The single language this model was built to hear, when it was built for one.
     speaks: Option<String>,
     running: Arc<AtomicUsize>,
 }
@@ -186,10 +212,33 @@ impl Refiner {
     }
 
     fn pass(id: impl Into<String>, decoder: Box<dyn Decoder>, claims: Vec<String>) -> Pass {
+        Self::pinned(id, decoder, claims, None)
+    }
+
+    /// A pass, optionally pinned to one language.
+    fn pinned(
+        id: impl Into<String>,
+        decoder: Box<dyn Decoder>,
+        claims: Vec<String>,
+        forced: Option<String>,
+    ) -> Pass {
+        let claims: Vec<String> = claims.into_iter().map(|l| l.to_lowercase()).collect();
+        // A model pinned to a language speaks that one. Otherwise, a model claiming exactly one
+        // language speaks it — which is the specialist case and how this behaved before pinning
+        // existed.
+        let pinned = forced.is_some();
+        let speaks = forced
+            .map(|l| l.trim().to_lowercase())
+            .or_else(|| match claims.as_slice() {
+                [only] if only != "*" => Some(only.clone()),
+                _ => None,
+            });
         Pass {
             id: id.into(),
             decoder: Arc::new(Mutex::new(decoder)),
-            claims: claims.into_iter().map(|l| l.to_lowercase()).collect(),
+            claims,
+            speaks,
+            pinned,
             running: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -201,8 +250,42 @@ impl Refiner {
     /// the same model — `vi` and `vi-VN` do, and so does any language whose best installed model is
     /// the one already loaded. Loading it twice is several hundred megabytes for nothing.
     pub fn also(&mut self, id: impl Into<String>, decoder: Box<dyn Decoder>, claims: Vec<String>) {
-        let pass = Self::pass(id, decoder, claims);
-        if self.passes.iter().any(|held| held.id == pass.id) {
+        self.add(Self::pass(id, decoder, claims));
+    }
+
+    /// Add the general model, pinned to one language.
+    ///
+    /// For a declared language nothing specialises in. `whisper-tiny` told `en` decodes English
+    /// and only English — it can no longer wander into Chinese on a sentence it mishears, which is
+    /// what it did on the meeting that produced this. The result competes with every other pass on
+    /// the same terms: whichever output survives `too_quiet_to_be_this_language` wins.
+    pub fn pinned_to(
+        &mut self,
+        id: impl Into<String>,
+        language: &str,
+        decoder: Box<dyn Decoder>,
+        claims: Vec<String>,
+    ) {
+        self.add(Self::pinned(
+            id,
+            decoder,
+            claims,
+            Some(language.to_string()),
+        ));
+    }
+
+    /// Keep a pass unless an identical one is already held.
+    ///
+    /// Identity is the model **and** the language it was built for, not the model alone. The same
+    /// `whisper-tiny` pinned to `en` and pinned to `ja` are two different decoders answering two
+    /// different questions, and keying on the id would have silently kept only the first — which
+    /// is the shape of bug this file has now fixed twice.
+    fn add(&mut self, pass: Pass) {
+        if self
+            .passes
+            .iter()
+            .any(|held| held.id == pass.id && held.speaks == pass.speaks)
+        {
             return;
         }
         self.passes.push(pass);
@@ -239,10 +322,29 @@ impl Refiner {
             .collect();
     }
 
+    /// Whether some pass is already built to hear this language.
+    ///
+    /// Asked before pinning the general model to a declared language: a language with a specialist
+    /// has a better model than a pinned Whisper already, and loading both would be a few hundred
+    /// megabytes spent to lose a comparison.
+    #[must_use]
+    pub fn hears(&self, code: &str) -> bool {
+        self.passes.iter().any(|pass| pass.names(code))
+    }
+
     /// The models doing the refining, in order. For `/status`, which named only the first.
     #[must_use]
     pub fn models(&self) -> Vec<String> {
-        self.passes.iter().map(|p| p.id.clone()).collect()
+        self.passes
+            .iter()
+            .map(|p| match (&p.speaks, p.pinned) {
+                // Named with the language only when it was pinned: the same model pinned twice is
+                // two passes under one id, and a list reading `whisper-tiny, whisper-tiny` would
+                // explain nothing. A specialist's id already says what it is for.
+                (Some(code), true) => format!("{}[{code}]", p.id),
+                _ => p.id.clone(),
+            })
+            .collect()
     }
 
     /// Whether this model is the right one for what was just heard.
@@ -911,5 +1013,70 @@ mod tests {
         // `ko` has no specialist; the Vietnamese one is offered because Vietnamese is declared,
         // and `too_quiet_to_be_this_language` is what will refuse its answer on Korean audio.
         assert_eq!(refiner.candidates(Some("ko"), 4.0), vec![0]);
+    }
+
+    /// The other half of the user's question, and the half a label filter cannot reach.
+    ///
+    /// *"Khai vi+en thì chạy whisper vi+en thôi, chạy zh he ja làm gì? Lọc ra ok nhưng mà không
+    /// đúng."* Correct: whisper's `language` is the decoder's prompt, so a sentence it guesses is
+    /// Chinese comes back **in Chinese characters**, and correcting the label afterwards changes
+    /// nothing about the text. A declared language nothing specialises in gets the general model
+    /// pinned to it instead, and then it cannot wander.
+    #[test]
+    fn a_pinned_general_model_hears_only_what_it_was_pinned_to() {
+        let mut refiner = paired(&["vi"], &["*"]);
+        refiner.pinned_to("whisper-tiny", "en", Box::new(Nothing), vec!["*".into()]);
+        refiner.declared(&["vi".into(), "en".into()]);
+
+        // English reaches the pinned Whisper, Vietnamese reaches the specialist.
+        assert_eq!(refiner.candidates(Some("en"), 4.0).first(), Some(&1));
+        assert_eq!(refiner.candidates(Some("vi"), 4.0).first(), Some(&0));
+        // And a Vietnamese line the fast model called Chinese still reaches both, in that order,
+        // with the output deciding — which is the arrangement this file already had.
+        assert_eq!(refiner.candidates(Some("zh"), 4.0), vec![0, 1]);
+    }
+
+    /// The same model pinned to two languages is two passes, not one.
+    ///
+    /// Deduplication used to key on the model id. `whisper-tiny[en]` and `whisper-tiny[ja]` are
+    /// one id and two different questions, and keying on the id would have kept the first and
+    /// silently dropped the second — the shape of bug this file has now fixed twice.
+    #[test]
+    fn one_model_pinned_to_two_languages_is_two_passes() {
+        let mut refiner = paired(&["vi"], &["*"]);
+        refiner.pinned_to("whisper-tiny", "en", Box::new(Nothing), vec!["*".into()]);
+        refiner.pinned_to("whisper-tiny", "ja", Box::new(Nothing), vec!["*".into()]);
+        refiner.declared(&["vi".into(), "en".into(), "ja".into()]);
+
+        assert_eq!(
+            refiner.models(),
+            vec!["vi", "whisper-tiny[en]", "whisper-tiny[ja]"]
+        );
+        assert_eq!(refiner.candidates(Some("ja"), 4.0).first(), Some(&2));
+    }
+
+    /// Pinning the same model to the same language twice loads it once.
+    #[test]
+    fn pinning_the_same_language_twice_is_one_pass() {
+        let mut refiner = paired(&["vi"], &["*"]);
+        refiner.pinned_to("whisper-tiny", "en", Box::new(Nothing), vec!["*".into()]);
+        refiner.pinned_to("whisper-tiny", "en", Box::new(Nothing), vec!["*".into()]);
+        assert_eq!(refiner.models().len(), 2);
+    }
+
+    /// A language that already has a specialist is not pinned as well.
+    ///
+    /// `hears` is what the caller asks before spending a few hundred megabytes on a decoder that
+    /// would lose the comparison anyway.
+    #[test]
+    fn a_language_with_a_specialist_needs_no_pinned_model() {
+        let mut refiner = paired(&["vi"], &["*"]);
+        refiner.also("sense-voice", Box::new(Nothing), vec!["ja".into()]);
+
+        assert!(refiner.hears("vi"));
+        assert!(refiner.hears("ja"));
+        assert!(!refiner.hears("en"), "nothing here was built for English");
+        // A regional spelling is the same language.
+        assert!(refiner.hears("vi-VN"));
     }
 }

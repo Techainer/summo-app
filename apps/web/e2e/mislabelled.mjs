@@ -137,6 +137,32 @@ for (const line of said) console.log(`  ${line}`);
 
 // The assertion. `model=` on the refine line names which one produced the revision, and it must be
 // the specialist — not the multilingual model that mislabelled the sentence in the first place.
+// Every declared language has a decoder built for it, and the one nothing specialises in has the
+// general model **pinned** to it rather than left free to wander.
+//
+// This is the question the user asked: "khai vi+en thì chạy whisper vi+en thôi, chạy zh he ja làm
+// gì?". Whisper's language is the decoder's prompt, so left free it decodes as whatever it
+// guessed — Chinese characters on Vietnamese speech. Pinned, it cannot.
+// Greedy to the end of the list, not to the first `]`: a pinned pass is named `whisper-tiny[en]`,
+// so a lazy match stops inside the name it is looking for.
+const refining = log.match(/refining with models=\[(.*)\]/);
+console.log(`  refining with: ${refining?.[1] ?? "nothing"}`);
+if (!refining) {
+  problems.push("the daemon never said what it is refining with");
+} else {
+  if (!refining[1].includes("gipformer")) {
+    problems.push(
+      `Vietnamese was declared and has a specialist, which is not loaded: ${refining[1]}`,
+    );
+  }
+  // English has no specialist in the registry, so it must be the general model pinned to `en`.
+  if (!/whisper[^",]*\[en\]/.test(refining[1])) {
+    problems.push(
+      `English was declared, nothing specialises in it, and no decoder was pinned to it: ${refining[1]}`,
+    );
+  }
+}
+
 const refined = [...log.matchAll(/refined an utterance.*model=(\S+)/g)].map((m) => m[1]);
 if (refined.length === 0) {
   problems.push(
