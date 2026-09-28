@@ -256,6 +256,7 @@ export function SpokenLanguage({
               {t("record.spoken_extra_missing", { language: languageName(language.code, locale) })}
             </span>
             <Button
+              size="sm"
               onClick={() => void install(language)}
               disabled={installing !== null}
               variant="ghost"
@@ -312,7 +313,14 @@ export function SpokenLanguage({
 
       {chosen && !ready(chosen) && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
+          {/* Small in the record bar, where every other control is.
+           *
+           * It was the default size, so on the panel over a running meeting it drew as a line of
+           * large bold text floating in a grid cell with nothing beside it — it read as a heading
+           * rather than as something to press. Seen in a screenshot; nothing about the markup says
+           * it. */}
           <Button
+            size={compact ? "sm" : undefined}
             onClick={() => void install(chosen)}
             disabled={installing !== null}
             variant={compact ? "ghost" : "primary"}

@@ -72,8 +72,17 @@ export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
           than your content" — so one long transcript line made this column as wide as the line and
           the page scrolled sideways under it. The `min-h-0` beside it is the same rule in the other
           axis, and it was already here. */}
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
-        <section className="flex min-h-0 min-w-0 flex-col gap-2.5">
+      {/* The transcript gets the larger half, and on a narrow screen it comes first.
+       *
+       * An even split put an **empty** note box beside arriving words on a wide screen, and
+       * directly *above* them on a narrow one — 210 px of blank field between the recording bar
+       * and the thing the recording produces. Both were visible the moment anybody looked at a
+       * screenshot, which is how they were found.
+       *
+       * Notes still matter, which is why this is a ratio rather than a collapse: somebody typing
+       * during a meeting is the other half of what this screen is for. */}
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <section className="order-last flex min-h-0 min-w-0 flex-col gap-2.5 lg:order-none">
           <SectionTitle>{t("meeting.your_notes")}</SectionTitle>
           <div className="border-line bg-bg-raised rounded-card min-h-0 flex-1 overflow-y-auto border shadow-[var(--shadow-card)]">
             {plain ? (
@@ -98,7 +107,7 @@ export function LiveMeeting({ initialNotes = "" }: { initialNotes?: string }) {
           </div>
         </section>
 
-        <section className="flex min-h-0 min-w-0 flex-col gap-2.5">
+        <section className="order-first flex min-h-0 min-w-0 flex-col gap-2.5 lg:order-none">
           <SectionTitle>{t("meeting.transcript")}</SectionTitle>
           <div className="min-h-0 min-w-0 flex-1">
             {transcript.segments.length === 0 ? (

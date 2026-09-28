@@ -190,9 +190,18 @@ await page
 
   await page.screenshot({ path: "/tmp/shots/in-meeting-config.png" });
   await page.getByLabel("Ngôn ngữ nói").selectOption("vi");
-  await page.waitForTimeout(3000);
 
-  const after = await (await fetch(at("/status"))).json();
+  // Polled, not slept.
+  //
+  // Changing the language mid-meeting builds a decoder, and a cold build is about 2.7 seconds on
+  // this machine — measured, `docs/benchmarks.md`. A flat three-second wait sat right on top of
+  // that and failed roughly one run in four with "the daemon did not take the new language",
+  // which is a true statement about a daemon that was three hundred milliseconds from taking it.
+  let after = await (await fetch(at("/status"))).json();
+  for (let i = 0; i < 40 && after.language !== "vi"; i += 1) {
+    await page.waitForTimeout(500);
+    after = await (await fetch(at("/status"))).json();
+  }
   console.log(
     `language mid-meeting: ${before.language ?? "(model's own)"} → ${after.language}, ` +
       `segments ${before.segments} → ${after.segments}, still ${after.state}`,

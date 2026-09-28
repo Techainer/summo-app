@@ -80,7 +80,13 @@ export function LiveBar() {
           only part that moves with the room rather than with the clock. */}
         {/* A height, because the bars are sized by percentage: a flex child with no height of its own
           collapses, and the meter draws nothing. */}
-        <div className="order-last h-8 w-full min-w-0 sm:order-none sm:w-auto sm:flex-1">
+        {/* `lg`, not `sm`. The meter's bars have a minimum width each, so below about a thousand
+            pixels the row could not give it enough and it overflowed its box — at 820 px it drew
+            straight through the clock, which then read as `|||||D0b1Q|||||`. Found by looking at a
+            screenshot rather than by reading the flex rules, which say it should have fitted.
+            `overflow-hidden` is the belt to that braces: a meter that cannot fit should be cut
+            off, never drawn over the one number on this bar that has to be legible. */}
+        <div className="order-last h-8 w-full min-w-0 overflow-hidden lg:order-none lg:w-auto lg:flex-1">
           <Waveform level={level} active />
         </div>
 
