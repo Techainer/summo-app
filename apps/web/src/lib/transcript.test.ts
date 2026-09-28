@@ -167,3 +167,88 @@ describe("live translation", () => {
     expect(state.segments[0]?.translations?.[0]?.text).toBe("hello");
   });
 });
+
+describe("a subtitle in the language the line turned out to be in", () => {
+  /**
+   * Live translation runs on the line as first heard, and a second model may correct which
+   * language that was afterwards. By then the subtitle has been requested and drawn.
+   *
+   * Reported from a real meeting: "đang ở vi sao còn dịch vi nữa" — a Vietnamese sentence with a
+   * Vietnamese subtitle of unrelated words under it.
+   */
+  it("is dropped when a revision says what the line actually was", () => {
+    let state = apply(empty(), {
+      kind: "final",
+      seq: 1,
+      lane: "mic",
+      text: "Các cái nguồn lực",
+      t0: 0,
+      t1: 1,
+      language: "en",
+    } as never);
+    state = apply(state, { kind: "translation", seq: 1, lang: "vi", text: "Carregla" } as never);
+    state = apply(state, { kind: "translation", seq: 1, lang: "ja", text: "リソース" } as never);
+    expect(state.segments[0]?.translations?.map((t) => t.lang)).toEqual(["vi", "ja"]);
+
+    // The specialist heard it and says it was Vietnamese all along.
+    state = apply(state, {
+      kind: "revise",
+      seq: 1,
+      lane: "mic",
+      text: "Các cái nguồn lực",
+      t0: 0,
+      t1: 1,
+      language: "vi",
+    } as never);
+
+    expect(state.segments[0]?.language).toBe("vi");
+    expect(state.segments[0]?.translations?.map((t) => t.lang)).toEqual(["ja"]);
+  });
+
+  /** A region tag is a spelling of a language, not a different one. */
+  it("treats a region tag as its language", () => {
+    let state = apply(empty(), {
+      kind: "final",
+      seq: 1,
+      lane: "mic",
+      text: "hello",
+      t0: 0,
+      t1: 1,
+    } as never);
+    state = apply(state, { kind: "translation", seq: 1, lang: "en", text: "hello" } as never);
+    state = apply(state, {
+      kind: "revise",
+      seq: 1,
+      lane: "mic",
+      text: "hello",
+      t0: 0,
+      t1: 1,
+      language: "en-US",
+    } as never);
+    expect(state.segments[0]?.translations ?? []).toEqual([]);
+  });
+
+  /** And a subtitle in another language is left exactly where it was. */
+  it("leaves the subtitles a reader still needs", () => {
+    let state = apply(empty(), {
+      kind: "final",
+      seq: 1,
+      lane: "mic",
+      text: "xin chào",
+      t0: 0,
+      t1: 1,
+      language: "vi",
+    } as never);
+    state = apply(state, { kind: "translation", seq: 1, lang: "en", text: "hello" } as never);
+    state = apply(state, {
+      kind: "revise",
+      seq: 1,
+      lane: "mic",
+      text: "xin chào các bạn",
+      t0: 0,
+      t1: 1,
+      language: "vi",
+    } as never);
+    expect(state.segments[0]?.translations?.map((t) => t.lang)).toEqual(["en"]);
+  });
+});

@@ -161,12 +161,24 @@ await page
 
 // ---- the controls are in the meeting, and there is one of them ------------
 {
-  // Open already, without anybody pressing anything.
+  // One click away, and the click says what it opens.
   //
-  // They used to be behind a small "Đổi" link, and the report that made this an assertion was a
-  // person on a live call saying the place to change the model, the language and the translation
-  // had been removed. It had not; it was one unlabelled click away on the screen whose entire
-  // purpose is running the meeting.
+  // The report that made this an assertion was a person on a live call saying the place to change
+  // the model, the language and the translation had been removed. It had not; it was one
+  // **unlabelled** click away — a link reading "Đổi". The answer then was to open the panel by
+  // default, and that turned out to cost the transcript: four rows of pickers between the header
+  // and the words, reported as "Đang ghi + config to quá không xem được transcribe".
+  //
+  // So it is folded again and the control is named instead. Both halves are asserted: the label
+  // says what is behind it, and what is behind it is one press away and inside the meeting.
+  const open = page.getByTestId("listening-change");
+  await open.waitFor({ timeout: 10000 });
+  const label = await open.innerText();
+  if (!/mô hình/i.test(label)) {
+    problems.push(`the way into the live controls does not say what it opens: ${label.trim()}`);
+  }
+  await open.click();
+
   const panel = page.getByTestId("listening-panel");
   await panel.waitFor({ timeout: 10000 });
   if ((await page.getByTestId("live-bar").getByTestId("listening-panel").count()) !== 1) {

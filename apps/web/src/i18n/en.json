@@ -69,7 +69,7 @@
     "spoken_wait": "Recording works as soon as it finishes.",
     "spoken_default": "As configured",
     "listening_in": "Listening in {language}",
-    "listening_change": "Change",
+    "listening_change": "Change model, language, translation",
     "listening_note": "Changes take effect immediately; nothing already recorded is lost.",
     "spoken_multi": "Several languages (detected)",
     "warm_ready": "Ready to record.",

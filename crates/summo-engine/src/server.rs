@@ -1086,15 +1086,23 @@ fn claimed_langs(store: &summo_models::ModelStore, id: &str) -> Vec<String> {
 ///
 /// A multilingual model answers "which language was that" for every utterance, and on short or
 /// accented speech the answer is often invented. On a Vietnamese-and-English call `whisper-tiny`
-/// returned `zh`, `he`, `ja` and `ru`; one of those lines was a Vietnamese sentence, and because
-/// the label said otherwise it was translated **into Vietnamese** — the transcript showed a
-/// Vietnamese line with an unrelated Vietnamese subtitle beneath it. Reported from a real meeting.
+/// returned `zh`, `he`, `ja` and `ru`; those labels reach the file, and the file is what a reader
+/// comes back to.
 ///
-/// `None` rather than a better guess. The label decides which direction a line is translated in,
-/// and `translate::same_language` treats an unknown language as "translate it into everything",
-/// which is the honest answer when we do not know: the reader sees both and can tell. Substituting
-/// the first declared language would be inventing a different label with more confidence than
-/// anybody has.
+/// **Applied to revisions only, and that boundary was measured rather than chosen.** The first
+/// version cleared the label on live `Final` events too, which reads as the stricter and therefore
+/// safer thing to do. It is not: `translate::same_language` treats an unknown language as
+/// "translate into every target", so clearing a wrong label immediately produced the exact symptom
+/// this was written to remove — a Vietnamese line with a Vietnamese subtitle under it.
+/// `e2e/bilingual.mjs` caught it on the first run.
+///
+/// A revision is different in the one way that matters: a specialist has answered, and
+/// `too_quiet_to_be_this_language` has already refused the answer if the model could not hear it.
+/// So on a revision the label is either the specialist's own or a guess we now have grounds to
+/// disbelieve, and that is the copy the vault keeps.
+///
+/// The live subtitle on a mislabelled line is still sent to both targets. That is a real remaining
+/// cost, and the honest one: at the moment it is sent, nothing better is known.
 ///
 /// Only when something was declared. With no declaration there is nothing better than the guess.
 #[cfg(feature = "models")]
@@ -1103,9 +1111,8 @@ fn forget_invented_labels(events: &mut [summo_core::Event], declared: &[String])
         return;
     }
     for event in events.iter_mut() {
-        let segment = match event {
-            summo_core::Event::Final(segment) | summo_core::Event::Revise(segment) => segment,
-            _ => continue,
+        let summo_core::Event::Revise(segment) = event else {
+            continue;
         };
         let invented = segment
             .language
@@ -7284,10 +7291,6 @@ fn handle_audio_with_models(
             engine.advance(0.0, finals as u64);
 
             let mut events = events;
-            // A language nobody said this meeting was in is not a language, it is a guess that
-            // went wrong. See `forget_invented_labels`.
-            forget_invented_labels(&mut events, &active.spec.languages);
-
             // Live translation rides the same connection. It never blocks: `offer` queues the
             // finals, may spawn a request, and returns whatever earlier requests have already sent
             // back — so a slow model delays subtitles, never audio.
@@ -7456,10 +7459,13 @@ mod resolve_tests {
     fn a_language_the_meeting_was_never_declared_to_be_in_is_forgotten() {
         let declared = vec!["vi".to_string(), "en".to_string()];
         let mut events = vec![
-            summo_core::Event::Final(labelled(1, "Các cái nguồn lực", Some("zh"))),
-            summo_core::Event::Final(labelled(2, "Hello there", Some("en-US"))),
-            summo_core::Event::Final(labelled(3, "Không sao đâu", Some("vi"))),
-            summo_core::Event::Final(labelled(4, "nobody guessed", None)),
+            summo_core::Event::Revise(labelled(1, "Các cái nguồn lực", Some("zh"))),
+            summo_core::Event::Revise(labelled(2, "Hello there", Some("en-US"))),
+            summo_core::Event::Revise(labelled(3, "Không sao đâu", Some("vi"))),
+            summo_core::Event::Revise(labelled(4, "nobody guessed", None)),
+            // A live line is left alone: clearing its label makes every target valid, which is
+            // the symptom rather than the cure. See the function's own note.
+            summo_core::Event::Final(labelled(5, "Các cái nguồn lực", Some("zh"))),
         ];
         forget_invented_labels(&mut events, &declared);
 
@@ -7471,12 +7477,17 @@ mod resolve_tests {
         );
         assert_eq!(said(&events[2]), Some("vi"));
         assert_eq!(said(&events[3]), None);
+        assert_eq!(
+            said(&events[4]),
+            Some("zh"),
+            "a live line keeps what it was given"
+        );
     }
 
     /// With nothing declared there is nothing better than the guess, so it stands.
     #[test]
     fn with_no_declaration_every_label_is_kept() {
-        let mut events = vec![summo_core::Event::Final(labelled(1, "x", Some("zh")))];
+        let mut events = vec![summo_core::Event::Revise(labelled(1, "x", Some("zh")))];
         forget_invented_labels(&mut events, &[]);
         assert_eq!(said(&events[0]), Some("zh"));
     }

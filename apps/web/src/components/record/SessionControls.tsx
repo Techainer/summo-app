@@ -192,6 +192,13 @@ export function SessionControls({
 
         {extras}
 
+        {/* Named, because it is folded.
+        
+            The panel used to open on its own on the meeting page, and folding it again risks the
+            report that made it open in the first place: somebody on a live call said the place to
+            change the model, the language and the translation had been removed, when it was one
+            **unlabelled** click away. "Đổi" was that unlabelled click. A folded control is fine;
+            a folded control that does not say what is behind it is the old complaint. */}
         <button
           type="button"
           data-testid="listening-change"

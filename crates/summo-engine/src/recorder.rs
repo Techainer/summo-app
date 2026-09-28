@@ -203,6 +203,27 @@ impl Recorder {
             // cannot disagree about which text won.
             Some(existing) => {
                 existing.merge(incoming);
+                // A subtitle into the language the line turned out to be in.
+                //
+                // Live translation runs on the line as first heard, and a second model may
+                // correct which language that was several hundred milliseconds later. Until it
+                // does, a Vietnamese sentence the fast model called English is rendered *into*
+                // Vietnamese and the result sits under it — which is what a user reported:
+                // "đang ở vi sao còn dịch vi nữa". `e2e/bilingual.mjs` asserts against exactly
+                // this and caught it the first time a specialist was allowed to correct a label.
+                //
+                // Dropped rather than left, because the rule already exists and is applied on the
+                // way in — `translate::same_language` refuses these before they are requested.
+                // This is the same rule applied again once the language is known, which is the
+                // only moment it can be applied correctly.
+                if let Some(code) = existing.language.clone() {
+                    let seq = existing.seq;
+                    for (lang, translation) in &mut self.translations {
+                        if crate::translate::same_language(Some(&code), lang) {
+                            translation.lines.retain(|line| line.seq != seq);
+                        }
+                    }
+                }
             }
             None => {
                 let position = self.doc.transcript.partition_point(|s| s.t0 <= incoming.t0);

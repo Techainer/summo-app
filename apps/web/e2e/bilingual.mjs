@@ -318,6 +318,21 @@ const base = (code) => (code ?? "").toLowerCase().split(/[-_]/)[0];
   }
 }
 
+/**
+ * Open the live controls, which are folded.
+ *
+ * They used to render expanded, so this suite reached straight for the pickers inside them. That
+ * cost the transcript four rows of screen — "Đang ghi + config to quá không xem được transcribe"
+ * — so they fold now and the control that opens them says what it opens. Idempotent, because this
+ * is called before each change and the panel stays open between them.
+ */
+async function openControls() {
+  const panel = page.getByTestId("listening-panel");
+  if (await panel.isVisible().catch(() => false)) return;
+  await page.getByTestId("listening-change").first().click();
+  await panel.waitFor({ timeout: 10_000 });
+}
+
 // ---- two languages means each line into the other one ----------------------
 //
 // The rule arrived on the offline path and the live path never read it: `Pending` carried a
@@ -330,6 +345,7 @@ const base = (code) => (code ?? "").toLowerCase().split(/[-_]/)[0];
 // either way and the count of subtitles is not the rule — a line in a third language legitimately
 // gets both.
 {
+  await openControls();
   await page.getByLabel("Dịch trực tiếp").selectOption("vi");
   const refused = await page
     .locator("text=/local-mt|in-process/")
@@ -441,6 +457,7 @@ const base = (code) => (code ?? "").toLowerCase().split(/[-_]/)[0];
 //
 // Japanese and English on a Vietnamese line: both apply, so both must be on screen at once.
 {
+  await openControls();
   await page.getByLabel("Dịch trực tiếp").selectOption("en");
   await page.getByLabel("Thêm một ngôn ngữ nữa").selectOption("ja");
 

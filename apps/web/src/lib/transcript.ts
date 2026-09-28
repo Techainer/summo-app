@@ -46,13 +46,42 @@ export function apply(state: TranscriptState, event: Event): TranscriptState {
   if (!current || !accepts(current.source, incoming.source)) return state;
 
   const segments = state.segments.slice();
+  const language = incoming.language ?? current.language;
   segments[existing] = {
     ...current,
     ...incoming,
     // A revision without a speaker must not erase one diarization already assigned.
     speaker: incoming.speaker ?? current.speaker,
+    // Nor a subtitle into a language the line has turned out not to need.
+    //
+    // Live translation runs on the line as first heard. A second model may correct which language
+    // that was several hundred milliseconds later, and by then the subtitle has been requested,
+    // paid for and drawn. So a Vietnamese sentence the fast model called English arrives with a
+    // Vietnamese "translation" underneath it — reported as "đang ở vi sao còn dịch vi nữa".
+    //
+    // The daemon already refuses these on the way out; `translate::same_language` is the rule.
+    // This is the same rule applied at the only other moment it can be: once the language is
+    // known. Dropping is right rather than hiding — the line is the translation.
+    translations: sameLanguage(language, current.translations),
   };
   return { segments, index: state.index };
+}
+
+/**
+ * Subtitles that are not in the language the line was spoken in.
+ *
+ * Region is a spelling of a language, not a different one: a line heard as `en-US` does not need
+ * an `en` subtitle. The daemon compares them the same way — see `translate::same_language`.
+ */
+function sameLanguage(
+  spoken: string | undefined,
+  translations: Segment["translations"],
+): Segment["translations"] {
+  if (!spoken || !translations?.length) return translations;
+  const base = (code: string) => code.toLowerCase().split(/[-_]/)[0] ?? "";
+  const heard = base(spoken);
+  const kept = translations.filter((each) => base(each.lang) !== heard);
+  return kept.length === translations.length ? translations : kept;
 }
 
 /**

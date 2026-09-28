@@ -69,7 +69,7 @@
     "spoken_wait": "下载完成即可开始录音。",
     "spoken_default": "按设置",
     "listening_in": "正在以{language}聆听",
-    "listening_change": "更改",
+    "listening_change": "更改模型、语言、翻译",
     "listening_note": "立即生效，已录制的内容不会丢失。",
     "spoken_multi": "多种语言（自动识别）",
     "warm_ready": "可以开始录音。",
