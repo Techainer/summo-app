@@ -101,7 +101,8 @@
     "restore": "回到会议",
     "spoken_add": "添加语言",
     "spoken_remove": "移除{language}",
-    "spoken_extra_missing": "{language} 尚未安装专用模型，这部分仍由多语言模型识别"
+    "spoken_extra_missing": "{language} 尚未安装专用模型，这部分仍由多语言模型识别",
+    "spoken_extra_none": "没有专门识别{language}的模型，这部分由多语言模型识别"
   },
   "meeting": {
     "title_label": "会议标题",

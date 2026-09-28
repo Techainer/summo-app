@@ -94,6 +94,7 @@ export function SessionControls({
         // audible, and a control that disagreed with the ears would be the worst of the three.
         listen_in?: string;
         refine_model?: string;
+        also_refine?: string[];
       };
     }, [handshake]),
     [handshake, session.recording, generation],
@@ -123,6 +124,10 @@ export function SessionControls({
         ? t("record.spoken_auto")
         : languageName(spoken, locale);
   const into = recording?.translate_into ?? [];
+  /** Every second model the daemon says it is refining with, not only the first. */
+  const specialists = [recording?.refine_model, ...(recording?.also_refine ?? [])].filter(
+    (id): id is string => !!id,
+  );
 
   // Kept in step with the daemon for as long as a recording is running.
   //
@@ -151,6 +156,13 @@ export function SessionControls({
         <span className={quiet ? "text-fg-faint text-micro" : "text-fg-dim"}>
           {t("record.listening_in", { language: label })}
           {recording?.live_model ? ` · ${recording.live_model}` : ""}
+          {/* And the specialists behind it, named.
+
+              The header said `whisper-tiny` and stopped, on a meeting where `gipformer` was
+              rescuing every Vietnamese line and nothing was rescuing the English ones. "Why is
+              half of this right and half of it nonsense" was unanswerable from the screen, and it
+              is the first question a bilingual meeting raises. */}
+          {specialists.length > 0 ? ` + ${specialists.join(", ")}` : ""}
           {current && quality(current) === "poor" ? ` · ${t("record.spoken_poor")}` : ""}
           {/* Whether anything is being translated, which this could not say before. Silence here
               used to be indistinguishable from a translator that was quietly failing. */}

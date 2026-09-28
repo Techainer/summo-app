@@ -244,7 +244,12 @@ export function SpokenLanguage({
           with whatever the multilingual model heard. The offer is the same one the primary gets. */}
       {extras
         .map((code) => languages.find((language) => language.code === code))
-        .filter((language): language is Language => !!language && !ready(language))
+        // A model that exists and is not installed. A language with no specialist at all is a
+        // different sentence and gets one below — offering "Tải model (0 MB)" for it was a button
+        // that reported nothing to download and then did nothing when pressed.
+        .filter(
+          (language): language is Language => !!language && !!language.model && !ready(language),
+        )
         .map((language) => (
           <div key={language.code} className="mt-2 flex flex-wrap items-center gap-2">
             <span className="text-fg-dim text-meta">
@@ -260,6 +265,21 @@ export function SpokenLanguage({
                 : t("record.spoken_install", { size: megabytes(language.size_bytes) })}
             </Button>
           </div>
+        ))}
+
+      {/* And the languages nothing on the registry specialises in.
+      
+          Said rather than left silent, because a named language with no specialist is heard by
+          the multilingual model and that is worth knowing — but said *without* a download button,
+          which is what shipped: `megabytes(0)` rendered "Tải model (0 MB)" and pressing it
+          returned immediately, because there was no model id to install. */}
+      {extras
+        .map((code) => languages.find((language) => language.code === code))
+        .filter((language): language is Language => !!language && !language.model)
+        .map((language) => (
+          <p key={language.code} className="text-fg-dim text-meta mt-2">
+            {t("record.spoken_extra_none", { language: languageName(language.code, locale) })}
+          </p>
         ))}
 
       {/* The way out of a list that does not have what somebody wants: the catalogue, filtered to

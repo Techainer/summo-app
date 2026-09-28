@@ -192,6 +192,7 @@ impl<D: Decoder> HybridSession<D> {
         decoder: &mut dyn Decoder,
         filter: &HallucinationFilter,
         current_text: &str,
+        speaks: Option<&str>,
     ) -> Result<Option<Event>> {
         let transcript = decoder.decode(&job.pcm)?;
         decoder.reset();
@@ -227,11 +228,24 @@ impl<D: Decoder> HybridSession<D> {
         segment.source = SegmentSource::Revised;
         segment.conf = transcript.confidence;
         segment.words = transcript.words;
-        // What the *second* model heard, falling back to what the first one reported for this
-        // utterance. This is the line a bilingual meeting most needs labelled: the live specialist
-        // could not hear it, the second pass could, and the direction to translate it in follows
-        // from which language it turned out to be.
-        segment.language = transcript.language.clone().or_else(|| job.language.clone());
+        // What the *second* model heard; then, if it does not report languages, the one language
+        // it speaks; and only then what the first model guessed.
+        //
+        // `speaks` is the middle term and it is the one that was missing. A specialist reports no
+        // language — there is nothing for it to choose between — so this fell through to the fast
+        // model's guess, and a Vietnamese line that `gipformer` had just rescued kept whisper's
+        // label of `zh`. That label is what decides the direction of translation, so the line was
+        // then translated *into Vietnamese*, and the transcript showed a Vietnamese sentence with
+        // a Vietnamese subtitle of unrelated words under it. Reported from a real meeting.
+        //
+        // A specialist that got past `too_quiet_to_be_this_language` is the better authority than
+        // a guess: it did not go quiet, so this is the language it speaks. See that function for
+        // the measurement — 146 characters against 15.
+        segment.language = transcript
+            .language
+            .clone()
+            .or_else(|| speaks.map(str::to_string))
+            .or_else(|| job.language.clone());
         Ok(Some(Event::Revise(segment)))
     }
 
@@ -358,6 +372,7 @@ mod tests {
             &mut slow,
             s.filter(),
             "toi nghi minh nen",
+            None,
         )
         .unwrap()
         .expect("a better transcript should produce a revision");
@@ -379,9 +394,14 @@ mod tests {
         let (_, jobs) = run(&mut s, &[(true, 100), (false, 60)]);
 
         let mut slow = FixedDecoder::new("đã đúng rồi");
-        let event =
-            HybridSession::<FixedDecoder>::refine(&jobs[0], &mut slow, s.filter(), "đã đúng rồi")
-                .unwrap();
+        let event = HybridSession::<FixedDecoder>::refine(
+            &jobs[0],
+            &mut slow,
+            s.filter(),
+            "đã đúng rồi",
+            None,
+        )
+        .unwrap();
 
         assert!(
             event.is_none(),
@@ -414,6 +434,7 @@ mod tests {
             &mut Hallucinator,
             s.filter(),
             "nội dung thật",
+            None,
         )
         .unwrap();
 

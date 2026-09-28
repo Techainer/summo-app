@@ -226,7 +226,12 @@ export function Transcript({
                       // its container as wide as itself. The panel then pushed the whole page
                       // sideways. `shots.mjs` has checked for exactly that since it was written and
                       // never saw it, because no suite has ever rendered a long line.
-                      "mt-0.5 mb-0 leading-relaxed break-words",
+                      // A measure, not the window. A transcript on a 1280 px screen ran the full
+                      // width of the pane, which is around 140 characters a line — roughly twice
+                      // what anybody reads without losing their place, and this is a panel people
+                      // read *while* something else is happening. Reported as "UI tệ quá đọc
+                      // không ra thì họp mẹ gì nữa".
+                      "mt-0.5 mb-0 max-w-[68ch] leading-relaxed break-words",
                       // Partial text is dimmed rather than hidden, so the eye can follow it
                       // without trusting it yet.
                       segment.source === "partial" ? "text-fg-dim" : "text-fg",
@@ -261,7 +266,12 @@ export function Transcript({
                       data-testid="transcript-translation"
                       lang={translation.lang}
                       className={cn(
-                        "text-fg-dim mt-0.5 mb-0 leading-relaxed break-words opacity-[0.72]",
+                        // Set in from the original and against a rule, rather than distinguished
+                        // by opacity alone. With two targets a line became three paragraphs of
+                        // near-identical grey and the eye had nothing to hold on to — which of
+                        // them was said and which were produced could not be seen at a glance.
+                        "text-fg-dim border-line/60 mt-1 mb-0 max-w-[68ch] border-s-2 ps-2.5",
+                        "leading-relaxed break-words opacity-[0.72]",
                         italicise(translation.lang) && "italic",
                       )}
                     >
@@ -272,7 +282,10 @@ export function Transcript({
                           because `lang` above is the same fact stated properly — announcing "EN"
                           before every English sentence is noise. */}
                       {(segment.translations?.length ?? 0) > 1 && (
-                        <span aria-hidden="true" className="text-fg-faint me-1.5 uppercase">
+                        <span
+                          aria-hidden="true"
+                          className="border-line text-fg-faint text-micro rounded-pill me-1.5 border px-1.5 py-px align-[0.1em] uppercase"
+                        >
                           {translation.lang}
                         </span>
                       )}

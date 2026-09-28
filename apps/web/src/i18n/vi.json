@@ -101,7 +101,8 @@
     "restore": "Quay lại buổi họp",
     "spoken_add": "Thêm ngôn ngữ",
     "spoken_remove": "Bỏ {language}",
-    "spoken_extra_missing": "{language} chưa có model chuyên — những câu đó vẫn do model đa ngôn ngữ nghe"
+    "spoken_extra_missing": "{language} chưa có model chuyên — những câu đó vẫn do model đa ngôn ngữ nghe",
+    "spoken_extra_none": "Chưa có model nào chuyên {language}; model đa ngôn ngữ sẽ nghe phần đó"
   },
   "meeting": {
     "title_label": "Tên cuộc họp",

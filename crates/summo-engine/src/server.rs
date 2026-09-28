@@ -1082,6 +1082,46 @@ fn claimed_langs(store: &summo_models::ModelStore, id: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Drop a language label the meeting was never declared to be in.
+///
+/// A multilingual model answers "which language was that" for every utterance, and on short or
+/// accented speech the answer is often invented. On a Vietnamese-and-English call `whisper-tiny`
+/// returned `zh`, `he`, `ja` and `ru`; one of those lines was a Vietnamese sentence, and because
+/// the label said otherwise it was translated **into Vietnamese** — the transcript showed a
+/// Vietnamese line with an unrelated Vietnamese subtitle beneath it. Reported from a real meeting.
+///
+/// `None` rather than a better guess. The label decides which direction a line is translated in,
+/// and `translate::same_language` treats an unknown language as "translate it into everything",
+/// which is the honest answer when we do not know: the reader sees both and can tell. Substituting
+/// the first declared language would be inventing a different label with more confidence than
+/// anybody has.
+///
+/// Only when something was declared. With no declaration there is nothing better than the guess.
+#[cfg(feature = "models")]
+fn forget_invented_labels(events: &mut [summo_core::Event], declared: &[String]) {
+    if declared.is_empty() {
+        return;
+    }
+    for event in events.iter_mut() {
+        let segment = match event {
+            summo_core::Event::Final(segment) | summo_core::Event::Revise(segment) => segment,
+            _ => continue,
+        };
+        let invented = segment
+            .language
+            .as_deref()
+            .is_some_and(|code| !summo_models::langs_cover(declared, code));
+        if invented {
+            tracing::debug!(
+                seq = segment.seq,
+                said = ?segment.language,
+                "forgetting a language this meeting was never declared to be in"
+            );
+            segment.language = None;
+        }
+    }
+}
+
 /// Which model fills each role, as the interface reads it.
 ///
 /// One function, because two callers need the identical answer and one of them was building its
@@ -6892,6 +6932,12 @@ fn handle_command_with_models(
                         .unwrap_or_else(|| "auto".into());
                     runner.resume_from(&carried);
                     active.runner = runner;
+                    // The declaration follows the change. Somebody who adds a language mid-meeting
+                    // — which is exactly what `ModelSwap` is for — must get that language's
+                    // specialist on the sentences after it, not only on the next recording.
+                    if let Some(held) = active.refiner.as_mut() {
+                        held.declared(&spec.languages);
+                    }
                     active.spec = spec.clone();
                     // So `/status` — and the banner reading it — says what is true now.
                     engine.retuned(&spec);
@@ -7070,6 +7116,10 @@ fn start_session(
     // hear one language, and the utterances routed to them are the ones already labelled as it.
     let mut refiner = refiner;
     if let Some(held) = refiner.as_mut() {
+        // What the user said the meeting is in. Routing consults this before it consults the fast
+        // model's per-utterance guess — see `Refiner::candidates` for the meeting that made the
+        // difference matter.
+        held.declared(&spec.languages);
         let store = engine.store();
         let threads = engine.hardware().recommended_threads();
         for id in &spec.also_refine {
@@ -7233,10 +7283,14 @@ fn handle_audio_with_models(
                 .count();
             engine.advance(0.0, finals as u64);
 
+            let mut events = events;
+            // A language nobody said this meeting was in is not a language, it is a guess that
+            // went wrong. See `forget_invented_labels`.
+            forget_invented_labels(&mut events, &active.spec.languages);
+
             // Live translation rides the same connection. It never blocks: `offer` queues the
             // finals, may spawn a request, and returns whatever earlier requests have already sent
             // back — so a slow model delays subtitles, never audio.
-            let mut events = events;
             if let Some(live) = active.live.as_mut() {
                 events.extend(live.offer(&events));
             }
@@ -7245,7 +7299,9 @@ fn handle_audio_with_models(
             // back now, so a slow refine model delays revisions and never audio.
             if let Some(refiner) = active.refiner.as_mut() {
                 refiner.dispatch(active.runner.take_refine_jobs());
-                events.extend(refiner.collect());
+                let mut revised = refiner.collect();
+                forget_invented_labels(&mut revised, &active.spec.languages);
+                events.extend(revised);
             }
 
             // Everything the client is about to be shown, and not a line less.
@@ -7388,6 +7444,57 @@ mod resolve_tests {
         let (live, refine) = pick_pair(&installed, &hw, &["vi".into()]).expect("a pair");
         assert!(live.starts_with("whisper"), "{live}");
         assert_eq!(refine, vec!["gipformer"]);
+    }
+
+    /// A label nobody declared is dropped rather than believed.
+    ///
+    /// The line that produced this: a Vietnamese sentence on a Vietnamese-and-English call, which
+    /// `whisper-tiny` labelled `zh`. Both declared languages are then valid targets, so it was
+    /// translated *into Vietnamese* and the reader saw a Vietnamese line with an unrelated
+    /// Vietnamese subtitle under it.
+    #[test]
+    fn a_language_the_meeting_was_never_declared_to_be_in_is_forgotten() {
+        let declared = vec!["vi".to_string(), "en".to_string()];
+        let mut events = vec![
+            summo_core::Event::Final(labelled(1, "Các cái nguồn lực", Some("zh"))),
+            summo_core::Event::Final(labelled(2, "Hello there", Some("en-US"))),
+            summo_core::Event::Final(labelled(3, "Không sao đâu", Some("vi"))),
+            summo_core::Event::Final(labelled(4, "nobody guessed", None)),
+        ];
+        forget_invented_labels(&mut events, &declared);
+
+        assert_eq!(said(&events[0]), None, "an invented label is dropped");
+        assert_eq!(
+            said(&events[1]),
+            Some("en-US"),
+            "a region tag is its language"
+        );
+        assert_eq!(said(&events[2]), Some("vi"));
+        assert_eq!(said(&events[3]), None);
+    }
+
+    /// With nothing declared there is nothing better than the guess, so it stands.
+    #[test]
+    fn with_no_declaration_every_label_is_kept() {
+        let mut events = vec![summo_core::Event::Final(labelled(1, "x", Some("zh")))];
+        forget_invented_labels(&mut events, &[]);
+        assert_eq!(said(&events[0]), Some("zh"));
+    }
+
+    fn labelled(seq: u64, text: &str, language: Option<&str>) -> summo_core::segment::Segment {
+        let mut segment =
+            summo_core::segment::Segment::new(seq, summo_core::segment::Lane::Mic, text, 0.0, 1.0);
+        segment.language = language.map(str::to_string);
+        segment
+    }
+
+    fn said(event: &summo_core::Event) -> Option<&str> {
+        match event {
+            summo_core::Event::Final(segment) | summo_core::Event::Revise(segment) => {
+                segment.language.as_deref()
+            }
+            _ => None,
+        }
     }
 
     /// Every named language gets its own specialist, in the order the user named them.

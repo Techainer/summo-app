@@ -623,17 +623,49 @@ export function RootLayout({ children }: { children: ReactNode }) {
           elapsed={engine.elapsed}
           onToggle={engine.toggle}
         />
-        <Waveform level={engine.level} active={engine.session.recording} />
-        <p
-          className={cn(
-            "text-meta min-w-0 flex-1 truncate",
-            // On top of a film the line has to be readable against anything, so it gets its own
-            // plate rather than relying on whatever is behind it.
-            overlay ? "text-fg bg-bg/75 rounded-control px-2 py-1 backdrop-blur" : "text-fg-dim",
-          )}
-        >
-          {latest?.text ?? t("record.listening")}
-        </p>
+        {/* Wrapped, and narrow on purpose.
+         *
+         * `.waveform` is `width: 100%; height: 100%` — it is sized by whatever contains it. As a
+         * bare flex child it took the whole strip and squeezed the line beside it to nothing, so
+         * the compact window showed a meter and no words at all: "sao thu nhỏ, mà nó không có
+         * text gì nhỉ?". `LiveBar` wraps it for the height half of exactly this reason and says
+         * so; this is the width half.
+         *
+         * A fixed 4 rem rather than a share of the row. At this size the words are the feature
+         * and the meter is reassurance that the microphone is live. */}
+        <div className="h-6 w-16 shrink-0">
+          <Waveform level={engine.level} active={engine.session.recording} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p
+            className={cn(
+              "text-meta truncate",
+              // On top of a film the line has to be readable against anything, so it gets its own
+              // plate rather than relying on whatever is behind it.
+              overlay ? "text-fg bg-bg/75 rounded-control px-2 py-1 backdrop-blur" : "text-fg-dim",
+            )}
+          >
+            {latest?.text ?? t("record.listening")}
+          </p>
+          {/* The translation, which is the whole reason somebody shrinks this window: sitting in a
+           * call held in a language they half-follow. Showing only the original strips the strip
+           * of the one thing it was made for. */}
+          {latest?.translations?.map((translation) => (
+            <p
+              key={translation.lang}
+              lang={translation.lang}
+              data-testid="compact-translation"
+              className={cn(
+                "text-micro truncate",
+                overlay
+                  ? "text-fg bg-bg/75 rounded-control mt-0.5 px-2 py-0.5 backdrop-blur"
+                  : "text-fg-faint",
+              )}
+            >
+              {translation.text}
+            </p>
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => setOverlay((was) => !was)}

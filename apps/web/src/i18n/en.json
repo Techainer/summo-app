@@ -101,7 +101,8 @@
     "restore": "Back to the meeting",
     "spoken_add": "Add a language",
     "spoken_remove": "Remove {language}",
-    "spoken_extra_missing": "{language} has no specialist installed — those lines stay with the multilingual model"
+    "spoken_extra_missing": "{language} has no specialist installed — those lines stay with the multilingual model",
+    "spoken_extra_none": "Nothing specialises in {language}; the multilingual model will hear those lines"
   },
   "meeting": {
     "title_label": "Meeting title",

@@ -101,7 +101,8 @@
     "restore": "会議に戻る",
     "spoken_add": "言語を追加",
     "spoken_remove": "{language}を外す",
-    "spoken_extra_missing": "{language} の専用モデルが未インストールです。その部分は多言語モデルのままになります"
+    "spoken_extra_missing": "{language} の専用モデルが未インストールです。その部分は多言語モデルのままになります",
+    "spoken_extra_none": "{language} の専用モデルは存在しません。その部分は多言語モデルが聞き取ります"
   },
   "meeting": {
     "title_label": "会議のタイトル",

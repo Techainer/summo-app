@@ -93,6 +93,18 @@ impl Pass {
     fn names(&self, code: &str) -> bool {
         !self.claims.iter().any(|l| l == "*") && summo_models::langs_cover(&self.claims, code)
     }
+
+    /// The single language this model speaks, when it speaks exactly one.
+    ///
+    /// `None` for a multilingual model, which answers for itself per utterance and needs no help,
+    /// and `None` for a manifest claiming several — `sense-voice-small` covers five, so which one
+    /// a given sentence was is a question only its own output can answer.
+    fn sole(&self) -> Option<String> {
+        match self.claims.as_slice() {
+            [only] if only != "*" => Some(only.clone()),
+            _ => None,
+        }
+    }
 }
 
 /// The slower models, and what each is worth running on.
@@ -107,6 +119,22 @@ pub struct Refiner {
     /// model *better placed* than the one that already heard it", and that is a question about
     /// both. See [`Refiner::wants`].
     live_claims: Vec<String>,
+    /// The languages the *user* said this meeting is in.
+    ///
+    /// The half that was missing, and the reason a real meeting came back as Chinese. Routing
+    /// asked the fast model which language each sentence was and refused every specialist that did
+    /// not claim the answer. On a Vietnamese-and-English call `whisper-tiny` answered `zh`, `he`
+    /// and `ja`; no specialist claims those, so the rescue path was locked shut by exactly the
+    /// guess it exists to correct, and the transcript kept `大家看今天今天今天…`.
+    ///
+    /// A declared language is a fact the user gave us. A per-utterance label is a guess that is
+    /// worthless under a second — zero out of twenty-five for Vietnamese, see `docs/benchmarks.md`
+    /// — and, as that meeting showed, wrong well above it too. So the declaration decides *who
+    /// runs* and the guess only decides *who runs first*.
+    ///
+    /// Empty means nobody declared anything, and then the old rule stands: there is nothing better
+    /// than the label to go on.
+    declared: Vec<String>,
     filter: HallucinationFilter,
     tx: tokio::sync::mpsc::UnboundedSender<Event>,
     rx: tokio::sync::mpsc::UnboundedReceiver<Event>,
@@ -118,6 +146,8 @@ pub struct Refiner {
     /// thing nobody could see: a refine model that never runs looks exactly like one that runs and
     /// agrees. `/status` names it either way.
     told: Mutex<BTreeSet<String>>,
+    /// Utterances that reached no model because every candidate was busy.
+    missed: Arc<AtomicUsize>,
 }
 
 impl Refiner {
@@ -133,6 +163,8 @@ impl Refiner {
         Self {
             passes: vec![Self::pass(id, decoder, claims)],
             live_claims: live_claims.into_iter().map(|l| l.to_lowercase()).collect(),
+            declared: Vec::new(),
+            missed: Arc::new(AtomicUsize::new(0)),
             filter,
             tx,
             rx,
@@ -180,6 +212,18 @@ impl Refiner {
         } else {
             self.passes[0] = pass;
         }
+    }
+
+    /// Say which languages the user declared this meeting to be in.
+    ///
+    /// Separate from [`Self::new`] because the declaration belongs to the session and the models
+    /// belong to the pairing, and every existing test describes the pairing.
+    pub fn declared(&mut self, languages: &[String]) {
+        self.declared = languages
+            .iter()
+            .map(|l| l.trim().to_lowercase())
+            .filter(|l| !l.is_empty())
+            .collect();
     }
 
     /// The models doing the refining, in order. For `/status`, which named only the first.
@@ -278,18 +322,68 @@ impl Refiner {
     /// to change.
     #[must_use]
     pub fn pick(&self, language: Option<&str>, seconds: f64) -> Option<usize> {
-        let eligible = || {
-            self.passes
-                .iter()
-                .enumerate()
-                .filter(|(_, pass)| self.may(pass, language, seconds))
+        self.candidates(language, seconds).into_iter().next()
+    }
+
+    /// Every pass worth asking about this utterance, best first.
+    ///
+    /// A list rather than a choice, because the label cannot be trusted to make the choice. The
+    /// caller runs them in order and keeps the first answer that is not the silence a specialist
+    /// gives when fed a language it does not speak — see `too_quiet_to_be_this_language`, which
+    /// measured that silence at 15 characters against 146.
+    ///
+    /// Order: a pass that *names* the reported language first, since when the label is right it is
+    /// the cheapest way to be right; then the rest of the declared languages, in the order the
+    /// user named them, which is their own answer to "what is this meeting mostly in".
+    #[must_use]
+    pub fn candidates(&self, language: Option<&str>, seconds: f64) -> Vec<usize> {
+        let mut out: Vec<usize> = Vec::new();
+        let mut push = |i: usize, out: &mut Vec<usize>| {
+            if !out.contains(&i) {
+                out.push(i);
+            }
         };
-        if let Some(code) = language
-            && let Some((i, _)) = eligible().find(|(_, pass)| pass.names(code))
-        {
-            return Some(i);
+
+        // The label's own pick, when it has one and something claims it.
+        if let Some(code) = language {
+            for (i, pass) in self.passes.iter().enumerate() {
+                if pass.names(code) && self.may(pass, language, seconds) {
+                    push(i, &mut out);
+                }
+            }
         }
-        eligible().next().map(|(i, _)| i)
+
+        // Then every specialist for a language the user declared. This is the part that was
+        // missing: it does not consult the label at all, so a sentence mislabelled `zh` still
+        // reaches the Vietnamese model that can hear it.
+        for (i, pass) in self.passes.iter().enumerate() {
+            if self
+                .declared
+                .iter()
+                .any(|code| pass.names(code) && !self.live_hears_only(code))
+            {
+                push(i, &mut out);
+            }
+        }
+
+        // And finally whatever the old rule allows, so a meeting with nothing declared behaves
+        // exactly as it did.
+        for (i, pass) in self.passes.iter().enumerate() {
+            if self.may(pass, language, seconds) {
+                push(i, &mut out);
+            }
+        }
+        out
+    }
+
+    /// Whether the live model is itself the specialist for this language.
+    ///
+    /// A specialist listening live has already given its best answer; running a second model over
+    /// its own language is the pairing this file spent a release getting backwards.
+    fn live_hears_only(&self, code: &str) -> bool {
+        !self.live_claims.is_empty()
+            && !self.live_claims.iter().any(|l| l == "*")
+            && summo_models::langs_cover(&self.live_claims, code)
     }
 
     /// Whether this pass is allowed the utterance at all.
@@ -331,11 +425,12 @@ impl Refiner {
     /// Start whichever of these jobs are worth starting.
     pub fn dispatch(&self, jobs: Vec<RefineJob>) {
         for job in jobs {
-            let Some(chosen) = self.pick(job.language.as_deref(), job.t1 - job.t0) else {
+            let candidates = self.candidates(job.language.as_deref(), job.t1 - job.t0);
+            if candidates.is_empty() {
                 tracing::debug!(
                     seq = job.seq,
                     language = ?job.language,
-                    "refine skipped; the second model does not claim this language"
+                    "refine skipped; no second model is for this language"
                 );
                 // And once, loudly, per language. A pairing that will never run is a decision the
                 // user made and got no reply to; this is the line a support question is answered
@@ -352,49 +447,93 @@ impl Refiner {
                     );
                 }
                 continue;
-            };
-            let pass = &self.passes[chosen];
-            if pass.running.load(Ordering::Relaxed) >= MAX_IN_FLIGHT {
-                // Reported nowhere on purpose. The line the user is reading is correct as far as
-                // the fast model is concerned; that a second opinion was skipped is not news, and
-                // a notice per dropped job during a fast conversation would be a stream of them.
+            }
+
+            // Only the ones that are free. A busy pass is skipped rather than queued behind
+            // itself — but with several candidates, busy no longer means the sentence goes
+            // unrescued, which is what made `MAX_IN_FLIGHT` quietly expensive.
+            let free: Vec<usize> = candidates
+                .into_iter()
+                .filter(|&i| self.passes[i].running.load(Ordering::Relaxed) < MAX_IN_FLIGHT)
+                .collect();
+            if free.is_empty() {
+                self.missed.fetch_add(1, Ordering::Relaxed);
                 tracing::debug!(
                     seq = job.seq,
-                    model = %pass.id,
-                    "refine skipped; the model is still on the last one"
+                    "refine skipped; every model for this sentence is still on the last one"
                 );
                 continue;
             }
 
-            let decoder = pass.decoder.clone();
-            let model = pass.id.clone();
+            // Each candidate's decoder, pulled out before the thread starts so the borrow of
+            // `self` ends here.
+            let attempts: Vec<(
+                String,
+                Arc<Mutex<Box<dyn Decoder>>>,
+                Option<String>,
+                Arc<AtomicUsize>,
+            )> = free
+                .iter()
+                .map(|&i| {
+                    let pass = &self.passes[i];
+                    pass.running.fetch_add(1, Ordering::Relaxed);
+                    (
+                        pass.id.clone(),
+                        pass.decoder.clone(),
+                        // The one language this pass speaks, when it speaks exactly one. A
+                        // specialist reports no language per utterance, and without this the
+                        // revision kept the *fast* model's guess — which is how a Vietnamese
+                        // line rescued by `gipformer` ended up labelled `zh` and then
+                        // translated into Vietnamese.
+                        pass.sole(),
+                        pass.running.clone(),
+                    )
+                })
+                .collect();
+
             let filter = self.filter.clone();
             let tx = self.tx.clone();
-            let running = pass.running.clone();
 
-            running.fetch_add(1, Ordering::Relaxed);
             tokio::task::spawn_blocking(move || {
-                let revised = decoder
-                    .lock()
-                    .map_err(|_| ())
-                    .and_then(|mut held| {
-                        HybridSession::<Box<dyn Decoder>>::refine(
-                            &job,
-                            held.as_mut(),
-                            &filter,
-                            &job.text,
-                        )
-                        .map_err(|e| {
-                            // A failed refinement costs one line its second opinion. The recording
-                            // continues and the fast model's text stands, which is why this is a
-                            // log rather than an error event: there is nothing for the user to do.
-                            tracing::warn!(error = %e, seq = job.seq, "refine pass failed");
-                        })
-                    })
-                    .ok()
-                    .flatten();
-                running.fetch_sub(1, Ordering::Relaxed);
-                if let Some(event) = revised {
+                // Tried in order, stopping at the first answer that is not silence.
+                //
+                // `refine` already returns `None` when the model it was given cannot hear this
+                // language — that is `too_quiet_to_be_this_language`, and it is a measurement
+                // rather than a guess: `gipformer-65m` returns a mean of 146 characters on
+                // Vietnamese audio and 15 on English. So the arbitration is the *output*, and the
+                // label that has been wrong all along never gets a vote on who is refused.
+                let mut winner = None;
+                for (model, decoder, speaks, running) in &attempts {
+                    if winner.is_none() {
+                        let revised = decoder
+                            .lock()
+                            .map_err(|_| ())
+                            .and_then(|mut held| {
+                                HybridSession::<Box<dyn Decoder>>::refine(
+                                    &job,
+                                    held.as_mut(),
+                                    &filter,
+                                    &job.text,
+                                    speaks.as_deref(),
+                                )
+                                .map_err(|e| {
+                                    // A failed refinement costs one line its second opinion. The
+                                    // recording continues and the fast model's text stands, which
+                                    // is why this is a log rather than an error event: there is
+                                    // nothing for the user to do.
+                                    tracing::warn!(error = %e, seq = job.seq, "refine pass failed");
+                                })
+                            })
+                            .ok()
+                            .flatten();
+                        if let Some(event) = revised {
+                            winner = Some((model.clone(), event));
+                        }
+                    }
+                    running.fetch_sub(1, Ordering::Relaxed);
+                }
+
+                if let Some((model, event)) = winner {
                     // Logged, and at info rather than debug. This is the one observable sign that
                     // the second model ran and disagreed — the transcript changes under the reader
                     // and nothing else says why — so it belongs in the record a support question
@@ -404,6 +543,17 @@ impl Refiner {
                 }
             });
         }
+    }
+
+    /// How many utterances went unrefined because every model for them was busy.
+    ///
+    /// Read by the status line. A dropped refine used to be `debug` only, on the grounds that the
+    /// fast model's text is still correct — which stopped being true when the fast model is the
+    /// one producing `今天今天今天`. A sentence nobody rescued is now counted where the count can
+    /// be seen.
+    #[must_use]
+    pub fn missed(&self) -> usize {
+        self.missed.load(Ordering::Relaxed)
     }
 
     /// Revisions that have come back since the last call.
@@ -676,5 +826,76 @@ mod tests {
     fn a_region_tag_matches_the_language_it_is_a_region_of() {
         assert!(refiner(&["en"]).wants(Some("en-US")));
         assert!(!refiner(&["en"]).wants(Some("de-DE")));
+    }
+
+    /// The bug a real meeting produced, in one assertion.
+    ///
+    /// Vietnamese and English declared, `whisper-tiny` listening, `gipformer` installed for
+    /// Vietnamese. Whisper labelled Vietnamese speech `zh`, `he` and `ja` — no specialist claims
+    /// those — so the rescue path refused every one of them and the transcript kept
+    /// `大家看今天今天今天…` and `- Now, הנה, הנה,`.
+    ///
+    /// The declaration is a fact the user gave us. The label is a guess that this meeting proved
+    /// wrong well above the two seconds it was trusted from.
+    #[test]
+    fn a_declared_language_reaches_its_specialist_whatever_the_label_says() {
+        let mut refiner = paired(&["vi"], &["*"]);
+        refiner.declared(&["vi".into(), "en".into()]);
+
+        for invented in ["zh", "he", "ja", "ru"] {
+            assert_eq!(
+                refiner.candidates(Some(invented), 4.0),
+                vec![0],
+                "a line labelled {invented} never reached the Vietnamese model"
+            );
+        }
+    }
+
+    /// And the label still goes first when it names something.
+    ///
+    /// Being right cheaply matters: when the guess is correct, trying that model first saves every
+    /// other decode. It only stops being allowed to *refuse*.
+    #[test]
+    fn the_label_still_orders_the_attempts() {
+        let mut refiner = paired(&["vi"], &["*"]);
+        refiner.also("zipformer-en", Box::new(Nothing), vec!["en".into()]);
+        refiner.declared(&["vi".into(), "en".into()]);
+
+        assert_eq!(refiner.candidates(Some("en"), 4.0).first(), Some(&1));
+        assert_eq!(refiner.candidates(Some("vi"), 4.0).first(), Some(&0));
+        // And both are tried, because either could be the one that hears it.
+        assert_eq!(refiner.candidates(Some("en"), 4.0).len(), 2);
+    }
+
+    /// A specialist listening live is not second-guessed on its own language.
+    ///
+    /// The pairing this file spent a release getting backwards: Gipformer live with Whisper
+    /// second, and Whisper re-decoding every Vietnamese line at 44.2 % character error. Declaring
+    /// Vietnamese must not reopen that door.
+    #[test]
+    fn declaring_a_language_the_live_model_specialises_in_changes_nothing() {
+        let mut refiner = paired(&["*"], &["vi"]);
+        refiner.declared(&["vi".into()]);
+        assert!(refiner.candidates(Some("vi"), 4.0).is_empty());
+        // The sentence it *cannot* hear still goes to the general model. That is the pairing.
+        assert_eq!(refiner.candidates(Some("en"), 4.0), vec![0]);
+    }
+
+    /// Declaring nothing leaves the old behaviour exactly as it was.
+    #[test]
+    fn with_nothing_declared_the_label_still_decides() {
+        let refiner = paired(&["vi"], &["*"]);
+        assert_eq!(refiner.candidates(Some("vi"), 4.0), vec![0]);
+        assert!(refiner.candidates(Some("en"), 4.0).is_empty());
+    }
+
+    /// A declared language nothing specialises in is still nobody's job.
+    #[test]
+    fn declaring_a_language_no_model_speaks_summons_nothing() {
+        let mut refiner = paired(&["vi"], &["*"]);
+        refiner.declared(&["vi".into(), "ko".into()]);
+        // `ko` has no specialist; the Vietnamese one is offered because Vietnamese is declared,
+        // and `too_quiet_to_be_this_language` is what will refuse its answer on Korean audio.
+        assert_eq!(refiner.candidates(Some("ko"), 4.0), vec![0]);
     }
 }

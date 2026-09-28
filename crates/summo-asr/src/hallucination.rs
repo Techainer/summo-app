@@ -153,7 +153,16 @@ fn normalize(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut last_was_space = true;
     for ch in text.chars() {
-        if ch.is_alphanumeric() {
+        if scriptless(ch) {
+            // A character in a script that does not separate words. Given a token of its own, or
+            // the repetition check below sees one enormous word and finds nothing.
+            if !last_was_space {
+                out.push(' ');
+            }
+            out.push(ch);
+            out.push(' ');
+            last_was_space = true;
+        } else if ch.is_alphanumeric() {
             out.extend(ch.to_lowercase());
             last_was_space = false;
         } else if !last_was_space {
@@ -162,6 +171,26 @@ fn normalize(text: &str) -> String {
         }
     }
     out.trim_end().to_string()
+}
+
+/// Whether this character belongs to a script written without spaces between words.
+///
+/// Han and kana. Not Hangul: Korean is written with spaces, so its words already tokenise, and
+/// splitting every syllable would make an ordinary sentence look like a run of one-character
+/// tokens.
+///
+/// This exists because [`is_looping`] splits on whitespace, and a Whisper stuck in a loop on
+/// Chinese emits `今天今天今天今天…` — no spaces anywhere, so the whole loop arrived as a single
+/// token, the length check refused anything under four, and the worst hallucination the filter
+/// exists to catch was the one it could not see. Reported from a real meeting, where it then
+/// acquired translations: `Hôm nay, hôm nay, hôm nay…` for twenty-four repeats.
+fn scriptless(ch: char) -> bool {
+    matches!(ch as u32,
+        0x3040..=0x30FF   // hiragana and katakana
+        | 0x3400..=0x4DBF // CJK extension A
+        | 0x4E00..=0x9FFF // CJK unified ideographs
+        | 0xF900..=0xFAFF // CJK compatibility ideographs
+    )
 }
 
 /// Whether the whole utterance is one subtitle annotation rather than speech.
@@ -246,6 +275,26 @@ fn is_looping(normalized: &str, max_token_repeats: usize, max_repeat_ratio: f64)
             .chunks(cycle)
             .take_while(|chunk| *chunk == pattern)
             .count();
+        if repeats >= 3 && (repeats * cycle) as f64 / tokens.len() as f64 >= max_repeat_ratio {
+            return true;
+        }
+    }
+
+    // And a loop that starts partway through, which the check above cannot see because it tiles
+    // from the first token. A decoder does not usually begin stuck; it says something, then jams
+    // — `大家看今天` and then `今天` twenty-two more times, or `Now, we will measure` and then
+    // `measure` eleven more. Counting the cycle backwards from the end finds both, and finds them
+    // however the utterance began.
+    for cycle in 1..=8.min(tokens.len() / 3) {
+        let tail = &tokens[tokens.len() - cycle..];
+        let mut repeats = 1;
+        while (repeats + 1) * cycle <= tokens.len() {
+            let at = tokens.len() - (repeats + 1) * cycle;
+            if &tokens[at..at + cycle] != tail {
+                break;
+            }
+            repeats += 1;
+        }
         if repeats >= 3 && (repeats * cycle) as f64 / tokens.len() as f64 >= max_repeat_ratio {
             return true;
         }
@@ -565,5 +614,105 @@ mod streak_tests {
             assert!(!streak.stuck("   "));
         }
         assert_eq!(streak.run(), 0);
+    }
+
+    /// The worst hallucination the filter exists to catch was the one it could not see.
+    ///
+    /// Whisper stuck in a loop on Chinese emits `今天今天今天…` with no spaces anywhere, so
+    /// `split_whitespace` found one token, the length guard refused anything under four, and the
+    /// line went straight to the transcript. Reported from a real Vietnamese meeting, where it
+    /// then acquired a Vietnamese subtitle of twenty-four `hôm nay` and an English one of
+    /// forty-four `today`.
+    #[test]
+    fn a_loop_in_a_script_without_spaces_is_caught() {
+        let filter = HallucinationFilter::default();
+        let looped = "大家看今天大家看今天今天今天今天今天今天今天今天今天今天今天今天今天今天今天今天今天今天今天今天今天";
+        assert_eq!(
+            filter.judge(&Transcript {
+                text: looped.into(),
+                ..Transcript::default()
+            }),
+            Verdict::Repetition
+        );
+    }
+
+    /// And Japanese, which is the same problem in a different script.
+    #[test]
+    fn a_kana_loop_is_caught() {
+        let filter = HallucinationFilter::default();
+        assert_eq!(
+            filter.judge(&Transcript {
+                text: "ありがとうございますございますございますございますございますございます"
+                    .into(),
+                ..Transcript::default()
+            }),
+            Verdict::Repetition
+        );
+    }
+
+    /// An ordinary Chinese sentence is not a loop, which is the half that makes the fix safe.
+    ///
+    /// Tokenising every ideograph separately would be easy to turn into "any short Chinese
+    /// sentence looks repetitive". These are real lines; none of them may be suppressed.
+    #[test]
+    fn ordinary_chinese_and_japanese_survive() {
+        let filter = HallucinationFilter::default();
+        for text in [
+            "這個題目是這個",
+            "大家好，今天我们讨论一下预算的问题",
+            "こんにちは、今日は会議の予算について話します",
+        ] {
+            assert_eq!(
+                filter.judge(&Transcript {
+                    text: text.into(),
+                    ..Transcript::default()
+                }),
+                Verdict::Keep,
+                "{text}"
+            );
+        }
+    }
+
+    /// A loop that starts partway through the utterance.
+    ///
+    /// The phrase check tiles from the first token, so it could only see a decoder that was stuck
+    /// before it said anything. A decoder does not usually begin stuck: it says something, then
+    /// jams. Both of these are real lines from the same meeting.
+    #[test]
+    fn a_loop_that_starts_partway_through_is_caught() {
+        let filter = HallucinationFilter::default();
+        for text in [
+            "Now, we will measure, measure, measure, measure, measure, measure, measure, measure, measure, measure, measure, measure,",
+            "Now, specialists, specialists, specialists, specialists, specialists, specialists, specialists, specialists, specialists,",
+        ] {
+            assert_eq!(
+                filter.judge(&Transcript {
+                    text: text.into(),
+                    ..Transcript::default()
+                }),
+                Verdict::Repetition,
+                "{text}"
+            );
+        }
+    }
+
+    /// A sentence that repeats a word twice is a sentence, not a loop.
+    #[test]
+    fn saying_something_twice_is_not_a_loop() {
+        let filter = HallucinationFilter::default();
+        for text in [
+            "rất rất nhiều người đã đến",
+            "no no, that is not what I meant at all",
+            "we will measure it, and then measure it again next quarter",
+        ] {
+            assert_eq!(
+                filter.judge(&Transcript {
+                    text: text.into(),
+                    ..Transcript::default()
+                }),
+                Verdict::Keep,
+                "{text}"
+            );
+        }
     }
 }
