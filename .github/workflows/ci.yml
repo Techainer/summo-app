@@ -1003,6 +1003,18 @@ jobs:
           SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
           GITHUB_TOKEN: ${{ github.token }}
 
+      # And the same claim for three languages, which is where it was false.
+      #
+      # A meeting could name any number of languages and got a specialist for the first one. The
+      # unit tests in `refine.rs` cover which model an utterance is routed to and cannot cover the
+      # half that was broken — whether the models are loaded at all, which is four files agreeing.
+      # This counts what the daemon says it is running, so a list that resolves correctly and loads
+      # one model fails here rather than in somebody's Japanese meeting.
+      - run: pnpm -C apps/web e2e:trilingual
+        env:
+          SUMMO_REGISTRY_DIR: ${{ github.workspace }}/.registry
+          GITHUB_TOKEN: ${{ github.token }}
+
       # Noise suppression, from a card on a screen to the audio a decoder hears. Out here with the
       # other three for the same reason: it needs a real recording, with a real enhancer in front of
       # a real decoder.

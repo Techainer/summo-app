@@ -29,3 +29,11 @@ sherpa-rs = { workspace = true, optional = true }
 pretty_assertions.workspace = true
 tempfile.workspace = true
 hound.workspace = true
+
+# Needs a real ONNX Runtime to time: the whole question is how long sherpa takes to build a
+# session, and without the feature the example does not compile at all. Declared here rather than
+# guarded with `#[cfg]` inside the file, so `cargo test --workspace` on a default build skips it
+# instead of failing on it.
+[[example]]
+name = "load-time"
+required-features = ["sherpa"]

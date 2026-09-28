@@ -466,10 +466,10 @@ fake decoder in the tests returns a number.
 
 What is available is what the models produced. `gipformer-65m`, 25 FLEURS clips each:
 
-| Audio | Mean characters | Near-empty |
-|---|---:|---:|
-| Vietnamese | **146** | 0 / 25 |
-| English | **15** | 2 / 25 |
+| Audio      | Mean characters | Near-empty |
+| ---------- | --------------: | ---------: |
+| Vietnamese |         **146** |     0 / 25 |
+| English    |          **15** |     2 / 25 |
 
 **A specialist fed the wrong language goes quiet.** It does not invent that language; it returns
 almost nothing. Ten to one is a far stronger signal than a label that is right zero percent of the
@@ -529,3 +529,49 @@ should keep saying no voice speaks Japanese, because none does.
 # transcribe the result — never judge a voice by its waveform:
 summo transcribe out.wav --model-dir <sense-voice> --vad <silero> --engine sense-voice --lang ja
 ```
+
+## Starting a meeting: where the three seconds go
+
+Reported as _"vào app bấm start meeting cũng rất chậm"_. The complaint had never been taken apart,
+only timed — 2977 ms in `e2e/microphone.mjs`.
+
+**Method:** `pnpm -C apps/web e2e:start` drives four cases against a real daemon and reads the
+daemon's own log rather than a wall clock around the press, because a wall clock cannot tell a
+warm slot that missed from one that was slow. Two lines at `info` carry the evidence: `warm slot`
+with `hit`, and `lane ready` with `vad_ms` and `decoder_ms`.
+
+| when record was pressed | before  | after       | warm slot  |
+| ----------------------- | ------- | ----------- | ---------- |
+| straight away           | 3489 ms | **3000 ms** | miss → hit |
+| 2 s after opening       | 347 ms  | **269 ms**  | hit        |
+| 5 s after opening       | 298 ms  | **321 ms**  | hit        |
+| slot filled first       | 245 ms  | **299 ms**  | hit        |
+
+The voice detector is 137 ms of it. Everything else is one decoder: **2907 ms** when the press had
+to build one.
+
+Two things were wrong. A press during a build started a _second_ build, because `Warm` tracked what
+it held and not what was coming. And warming began when the record card rendered, which is later
+than the daemon can know a person is here — the document request for the app itself is earlier.
+
+**Is the build itself reducible?** No, not from this repository.
+`cargo run -p summo-asr --features sherpa --example load-time -- <model-dir>`, best of three per
+row, `gipformer-65m`:
+
+| threads | load    |
+| ------- | ------- |
+| 1       | 2636 ms |
+| 2       | 2722 ms |
+| 4       | 2704 ms |
+| 8       | 2741 ms |
+| 16      | 2680 ms |
+
+Flat. It is not thread-pool construction, and `warm.rs` already records that it is not disk — the
+second build in a process costs the same as the first. It is ONNX Runtime building the graph, and
+sherpa-rs 0.6's `TransducerConfig` exposes `num_threads` and `provider` and nothing else: no
+optimisation level, no `optimized_model_filepath`. So the build is a fixed ~2.7 s here.
+
+**Decision: move the cost, do not shrink it.** Warming is now started at the earliest signal a
+person is present and is never duplicated. Anybody who pauses even a moment before pressing gets
+about a third of a second. Pressing the instant the window appears still waits out one build, and
+shrinking that means going below sherpa-rs — its own piece of work.
